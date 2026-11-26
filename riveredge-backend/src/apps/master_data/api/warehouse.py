@@ -554,6 +554,99 @@ async def delete_storage_area(
 
 # ==================== 库位相关接口 ====================
 
+storage_location_sync_service = None
+
+
+def _storage_location_sync_service():
+    from apps.common.inbound_sync_gate import inbound_sync_service
+
+    global storage_location_sync_service
+    if storage_location_sync_service is None:
+        storage_location_sync_service = inbound_sync_service(
+            "storage_location_sync_service", "StorageLocationSyncService"
+        )
+    return storage_location_sync_service
+
+
+@router.get(
+    "/storage-locations/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="库位同步绑定配置",
+)
+async def get_storage_location_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _storage_location_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/storage-locations/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存库位同步绑定配置",
+)
+async def put_storage_location_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _storage_location_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.get(
+    "/storage-locations/sync-run-history",
+    summary="库位入站同步运行历史（core_sync_run_logs）",
+)
+async def list_storage_location_sync_run_history(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    from apps.kuaizhizao.api.document_push.document_push import (
+        DocumentPushRunHistoryItem,
+        DocumentPushRunHistoryListResponse,
+    )
+    from core.services.data.sync_run_history_service import list_inbound_entity_sync_run_history_rows
+
+    rows, total = await list_inbound_entity_sync_run_history_rows(
+        tenant_id, "storage_location", skip=skip, limit=limit
+    )
+    return DocumentPushRunHistoryListResponse(
+        data=[DocumentPushRunHistoryItem.model_validate(row) for row in rows],
+        total=total,
+        success=True,
+    )
+
+
+@router.post(
+    "/storage-locations/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步库位",
+)
+async def sync_storage_locations_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    stream: bool = Query(False, description="为 true 时以 NDJSON 流式返回进度"),
+):
+    from apps.master_data.api._sync_from_source_run_log import master_data_sync_from_source_with_run_log
+    from apps.master_data.models.master_data_sync_binding import StorageLocationSyncBinding
+
+    try:
+        return await master_data_sync_from_source_with_run_log(
+            tenant_id=tenant_id,
+            entity_type="storage_location",
+            binding_model=StorageLocationSyncBinding,
+            stream=stream,
+            run_sync=lambda: _storage_location_sync_service().sync_from_source(
+                tenant_id, current_user, body
+            ),
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
 @router.post("/storage-locations", response_model=StorageLocationResponse, summary="Create storage location")
 async def create_storage_location(
     data: StorageLocationCreate,

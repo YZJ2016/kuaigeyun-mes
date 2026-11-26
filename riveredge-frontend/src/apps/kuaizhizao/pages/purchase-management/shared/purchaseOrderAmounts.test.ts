@@ -7,6 +7,8 @@ import {
   purchaseStoredExclAsFormItemAmount,
   readPurchaseOrderEnteredUnitPrice,
   resolvePurchaseOrderDisplayAmount,
+  resolvePurchaseOrderLineTaxPercent,
+  resolvePurchaseReceiptLineTaxPercent,
   resolvePurchaseOrderLineAmounts,
 } from './purchaseOrderAmounts';
 
@@ -34,6 +36,12 @@ describe('purchaseOrderTaxRateToPercent', () => {
     expect(line.excl).toBe(100);
     expect(line.tax).toBe(1);
     expect(line.incl).toBe(101);
+  });
+
+  it('keeps an explicit 0% line instead of falling back to the header rate', () => {
+    expect(resolvePurchaseOrderLineTaxPercent({ tax_rate: 0 }, 0.13)).toBe(0);
+    expect(resolvePurchaseReceiptLineTaxPercent(0, 13)).toBe(0);
+    expect(resolvePurchaseReceiptLineTaxPercent(undefined, 13)).toBe(13);
   });
 });
 
@@ -80,6 +88,18 @@ describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
     expect(line.incl).toBe(60);
     expect(line.excl).toBeCloseTo(53.1, 2);
     expect(line.tax).toBeCloseTo(6.9, 2);
+  });
+
+  it('purchase receipt tax_inclusive form row without display_unit_price uses unit_price as gross unit', () => {
+    const line = computePurchaseReceiptFormLineAmounts(
+      { receipt_quantity: 3, unit_price: 55, tax_rate: 13 },
+      13,
+      'tax_inclusive',
+      null,
+    );
+    expect(line.incl).toBe(165);
+    expect(line.excl).toBeCloseTo(146.02, 2);
+    expect(line.tax).toBeCloseTo(18.98, 2);
   });
 
   it('purchase receipt API row uses display_unit_price not stored excl unit', () => {

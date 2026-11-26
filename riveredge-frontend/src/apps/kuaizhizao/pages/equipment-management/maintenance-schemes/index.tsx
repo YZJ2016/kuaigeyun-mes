@@ -4,17 +4,23 @@ import {
   ActionType,
   ProColumns,
   ProDescriptionsItemProps,
+  ProFormDependency,
   ProFormDigit,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Modal, Row, Col } from 'antd';
+import { App, Form, Input, Row, Col } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
+import {
+  FormListDetailTable,
+  type FormListDetailTableHandle,
+} from '../../../../../components/form-list-detail-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import CodeField from '../../../../../components/code-field';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -36,18 +42,37 @@ import {
   renderEquipmentMasterRowActions,
   renderIsActiveTag,
 } from '../shared/equipmentMasterDataDetail';
+import {
+  EquipmentMaintenanceItemQuickCreateModal,
+  type EquipmentMaintenanceItemCreated,
+} from '../shared/EquipmentMaintenanceItemQuickCreateModal';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  CYCLE_TYPE_COUNT,
+  CYCLE_TYPE_RUNTIME,
+  CYCLE_TYPE_TIME,
+  TIME_CYCLE_UNITS,
+  isTimeCycleType,
+  resolveCycleTypeDefault,
+  resolveMaintenanceTypeDefaultCycle,
+} from './maintenanceTypeCycleDefaults';
 
 const P = 'app.kuaizhizao.equipmentOps.maintenanceScheme';
+const ITEM_P = 'app.kuaizhizao.equipmentOps.maintenanceItem';
 const RESOURCE = 'kuaizhizao:equipment-maintenance-scheme';
+const ITEM_RESOURCE = 'kuaizhizao:equipment-maintenance-item';
 
 interface SchemeLine {
   item_id?: number;
   sort_order?: number;
   item_code?: string;
   item_name?: string;
+  requirement?: string;
+  remark?: string;
 }
+
+type ItemMeta = { label: string; value: number; remark?: string };
 
 interface MaintenanceScheme {
   id?: number;
@@ -67,44 +92,134 @@ const MaintenanceSchemesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const itemPerms = useResourcePermissions(ITEM_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+  const linesTableRef = useRef<FormListDetailTableHandle>(null);
+  const itemQuickCreateTargetRef = useRef<'bulk' | number | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MaintenanceScheme | null>(null);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
     undefined,
   );
-  const [itemOptions, setItemOptions] = useState<{ label: string; value: number }[]>([]);
+  const [itemOptions, setItemOptions] = useState<ItemMeta[]>([]);
+  const [itemQuickCreateOpen, setItemQuickCreateOpen] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState<MaintenanceScheme | null>(null);
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
+
+  const itemRemarkById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const opt of itemOptions) {
+      if (opt.remark) map.set(opt.value, opt.remark);
+    }
+    return map;
+  }, [itemOptions]);
+
+  const openItemQuickCreate = useCallback((target: 'bulk' | number) => {
+    itemQuickCreateTargetRef.current = target;
+    setItemQuickCreateOpen(true);
+  }, []);
+
+  const handleItemQuickCreated = useCallback((item: EquipmentMaintenanceItemCreated) => {
+    const remark = item.remark ? String(item.remark) : undefined;
+    setItemOptions((prev) => {
+      if (prev.some((opt) => opt.value === item.id)) return prev;
+      return [
+        ...prev,
+        {
+          label: `${item.code} - ${item.name}`,
+          value: item.id,
+          remark,
+        },
+      ];
+    });
+    const target = itemQuickCreateTargetRef.current;
+    itemQuickCreateTargetRef.current = null;
+    if (target === 'bulk') {
+      linesTableRef.current?.pickBulkValue(item.id);
+    } else if (typeof target === 'number') {
+      formRef.current?.setFieldValue(['lines', target, 'item_id'], item.id);
+      if (remark) {
+        formRef.current?.setFieldValue(['lines', target, 'remark'], remark);
+      }
+    }
+  }, []);
+
+  const itemQuickCreateConfig = useMemo(
+    () =>
+      itemPerms.canCreate
+        ? {
+            label: t(`${ITEM_P}.quickCreate`),
+            onClick: () => openItemQuickCreate('bulk'),
+          }
+        : undefined,
+    [itemPerms.canCreate, openItemQuickCreate, t],
+  );
 
   const loadItemOptions = async () => {
     const res = await maintenanceItemsApi.list({ limit: 1000, is_active: true });
     setItemOptions(
-      (res.items ?? []).map((it: { id: number; code: string; name: string }) => ({
-        label: `${it.code} - ${it.name}`,
-        value: it.id,
-      })),
+      (res.items ?? []).map(
+        (it: { id: number; code: string; name: string; remark?: string }) => ({
+          label: `${it.code} - ${it.name}`,
+          value: it.id,
+          remark: it.remark ? String(it.remark) : undefined,
+        }),
+      ),
     );
   };
 
   const handleCreate = () => {
     setIsEdit(false);
     setCurrent(null);
+    setCreateCodeSessionKey((k) => k + 1);
+    const defaultCycle = resolveMaintenanceTypeDefaultCycle('日常保养');
     setFormInitialValues({
       is_active: true,
       maintenance_type: '日常保养',
       cycle_type: '按时间',
-      cycle_value: 30,
-      cycle_unit: '天',
+      cycle_value: defaultCycle?.cycle_value ?? 1,
+      cycle_unit: defaultCycle?.cycle_unit ?? '天',
       lines: [{ sort_order: 0 }],
     });
     setModalVisible(true);
     void loadItemOptions();
   };
   useNewShortcut(handleCreate);
+
+  const applyCycleFromMaintenanceType = useCallback((maintenanceType: string) => {
+    const cycleType = formRef.current?.getFieldValue('cycle_type');
+    if (!isTimeCycleType(cycleType)) return;
+    const preset = resolveMaintenanceTypeDefaultCycle(maintenanceType);
+    if (!preset) return;
+    formRef.current?.setFieldsValue({
+      cycle_value: preset.cycle_value,
+      cycle_unit: preset.cycle_unit,
+    });
+  }, []);
+
+  const applySettingsFromCycleType = useCallback((cycleType: string) => {
+    if (isTimeCycleType(cycleType)) {
+      const maintenanceType =
+        formRef.current?.getFieldValue('maintenance_type') || '日常保养';
+      const preset = resolveMaintenanceTypeDefaultCycle(maintenanceType);
+      formRef.current?.setFieldsValue({
+        maintenance_type: maintenanceType,
+        cycle_value: preset?.cycle_value ?? 1,
+        cycle_unit: preset?.cycle_unit ?? '天',
+      });
+      return;
+    }
+    const preset = resolveCycleTypeDefault(cycleType);
+    formRef.current?.setFieldsValue({
+      maintenance_type: undefined,
+      cycle_value: preset?.cycle_value ?? 100,
+      cycle_unit: preset?.cycle_unit ?? (cycleType === CYCLE_TYPE_COUNT ? '次' : '小时'),
+    });
+  }, []);
 
   const handleEdit = async (record: MaintenanceScheme) => {
     if (!record.id) return;
@@ -117,6 +232,7 @@ const MaintenanceSchemesPage: React.FC = () => {
         lines: (loaded.lines ?? []).map((l: SchemeLine, i: number) => ({
           item_id: l.item_id,
           sort_order: l.sort_order ?? i,
+          remark: l.remark ?? '',
         })),
       });
       setModalVisible(true);
@@ -156,11 +272,22 @@ const MaintenanceSchemesPage: React.FC = () => {
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
+    const cycleType = String(values.cycle_type || '');
+    const timeBased = isTimeCycleType(cycleType);
     const payload = {
       ...values,
+      maintenance_type: timeBased ? values.maintenance_type : null,
+      cycle_unit: timeBased
+        ? values.cycle_unit
+        : cycleType === CYCLE_TYPE_COUNT
+          ? '次'
+          : cycleType === CYCLE_TYPE_RUNTIME
+            ? '小时'
+            : values.cycle_unit,
       lines: ((values.lines as SchemeLine[]) ?? []).map((l, i) => ({
         item_id: l.item_id,
         sort_order: l.sort_order ?? i,
+        remark: l.remark != null ? String(l.remark) : undefined,
       })),
     };
     if (isEdit && current?.id) {
@@ -183,7 +310,6 @@ const MaintenanceSchemesPage: React.FC = () => {
     () => [
       { title: t('common.code'), dataIndex: 'code' },
       { title: t('common.name'), dataIndex: 'name' },
-      { title: t(`${P}.col.maintenanceType`), dataIndex: 'maintenance_type' },
       {
         title: t(`${P}.col.cycle`),
         dataIndex: 'cycle_type',
@@ -191,6 +317,14 @@ const MaintenanceSchemesPage: React.FC = () => {
           [r.cycle_type, r.cycle_value != null ? `${r.cycle_value}${r.cycle_unit ?? ''}` : undefined]
             .filter(Boolean)
             .join(' ') || '-',
+      },
+      {
+        title: t(`${P}.col.maintenanceType`),
+        dataIndex: 'maintenance_type',
+        render: (_, r) =>
+          r.maintenance_type != null && r.maintenance_type !== ''
+            ? String(r.maintenance_type)
+            : '-',
       },
       { title: t('common.remark'), dataIndex: 'description', span: 2 },
       buildIsActiveDescriptionColumn<MaintenanceScheme>(t),
@@ -200,7 +334,23 @@ const MaintenanceSchemesPage: React.FC = () => {
 
   const detailLineColumns = useMemo<ColumnsType<SchemeLine>>(
     () => [
-      { title: t(`${P}.form.item`), key: 'item', render: (_, row) => `${row.item_code ?? '-'} - ${row.item_name ?? '-'}` },
+      {
+        title: t(`${P}.form.item`),
+        key: 'item',
+        render: (_, row) => `${row.item_code ?? '-'} - ${row.item_name ?? '-'}`,
+      },
+      {
+        title: t(`${ITEM_P}.col.requirement`),
+        dataIndex: 'requirement',
+        ellipsis: true,
+        render: (v) => (v != null && String(v) !== '' ? String(v) : '-'),
+      },
+      {
+        title: t('common.remark'),
+        dataIndex: 'remark',
+        ellipsis: true,
+        render: (v) => (v != null && String(v) !== '' ? String(v) : '-'),
+      },
       { title: t(`${P}.form.sortOrder`), dataIndex: 'sort_order', width: 80, align: 'right' },
     ],
     [t],
@@ -247,19 +397,6 @@ const MaintenanceSchemesPage: React.FC = () => {
         hideInSearch: true,
       },
       {
-        title: t(`${P}.col.maintenanceType`),
-        dataIndex: 'maintenance_type',
-        width: 110,
-        minWidth: 110,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, r) =>
-          r.maintenance_type != null && r.maintenance_type !== ''
-            ? String(r.maintenance_type)
-            : '-',
-      },
-      {
         title: t(`${P}.col.cycle`),
         dataIndex: 'cycle_type',
         width: 140,
@@ -271,6 +408,19 @@ const MaintenanceSchemesPage: React.FC = () => {
           [r.cycle_type, r.cycle_value != null ? `${r.cycle_value}${r.cycle_unit ?? ''}` : undefined]
             .filter(Boolean)
             .join(' ') || '-',
+      },
+      {
+        title: t(`${P}.col.maintenanceType`),
+        dataIndex: 'maintenance_type',
+        width: 110,
+        minWidth: 110,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) =>
+          r.maintenance_type != null && r.maintenance_type !== ''
+            ? String(r.maintenance_type)
+            : '-',
       },
       {
         title: t(`${P}.col.lineCount`),
@@ -412,7 +562,22 @@ const MaintenanceSchemesPage: React.FC = () => {
       >
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `maintenance-scheme-code-edit-${current?.id ?? 'none'}`
+                  : `maintenance-scheme-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-equipment-maintenance-scheme"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
           </Col>
           <Col span={12}>
             <ProFormText name="name" label={t('common.name')} rules={[{ required: true }]} />
@@ -421,56 +586,101 @@ const MaintenanceSchemesPage: React.FC = () => {
         <Row gutter={16}>
           <Col span={12}>
             <ProFormSelect
-              name="maintenance_type"
-              label={t(`${P}.col.maintenanceType`)}
-              rules={[{ required: true, message: t(`${P}.form.maintenanceTypeRequired`) }]}
-              options={[
-                { label: t(`${P}.maintenanceType.daily`), value: '日常保养' },
-                { label: t(`${P}.maintenanceType.minor`), value: '小修' },
-                { label: t(`${P}.maintenanceType.medium`), value: '中修' },
-                { label: t(`${P}.maintenanceType.overhaul`), value: '大修' },
-              ]}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
               name="cycle_type"
               label={t(`${P}.col.cycleType`)}
               rules={[{ required: true, message: t(`${P}.form.cycleTypeRequired`) }]}
               options={[
-                { label: t(`${P}.cycleType.byTime`), value: '按时间' },
-                { label: t(`${P}.cycleType.byRuntime`), value: '按运行时长' },
-                { label: t(`${P}.cycleType.byCount`), value: '按使用次数' },
+                { label: t(`${P}.cycleType.byTime`), value: CYCLE_TYPE_TIME },
+                { label: t(`${P}.cycleType.byRuntime`), value: CYCLE_TYPE_RUNTIME },
+                { label: t(`${P}.cycleType.byCount`), value: CYCLE_TYPE_COUNT },
               ]}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormDigit
-              name="cycle_value"
-              label={t(`${P}.form.cycleValue`)}
-              min={1}
-              rules={[{ required: true, message: t(`${P}.form.cycleValueRequired`) }]}
+              fieldProps={{
+                onChange: (value: string) => {
+                  applySettingsFromCycleType(value);
+                },
+              }}
             />
           </Col>
           <Col span={12}>
-            <ProFormSelect
-              name="cycle_unit"
-              label={t(`${P}.form.cycleUnit`)}
-              rules={[{ required: true, message: t(`${P}.form.cycleUnitRequired`) }]}
-              options={[
-                { label: t(`${P}.cycleUnit.day`), value: '天' },
-                { label: t(`${P}.cycleUnit.week`), value: '周' },
-                { label: t(`${P}.cycleUnit.month`), value: '月' },
-                { label: t(`${P}.cycleUnit.year`), value: '年' },
-                { label: t(`${P}.cycleUnit.hour`), value: '小时' },
-                { label: t(`${P}.cycleUnit.count`), value: '次' },
-              ]}
-            />
+            <ProFormDependency name={['cycle_type']}>
+              {({ cycle_type }) =>
+                isTimeCycleType(cycle_type) ? (
+                  <ProFormSelect
+                    name="maintenance_type"
+                    label={t(`${P}.col.maintenanceType`)}
+                    rules={[
+                      { required: true, message: t(`${P}.form.maintenanceTypeRequired`) },
+                    ]}
+                    options={[
+                      { label: t(`${P}.maintenanceType.daily`), value: '日常保养' },
+                      { label: t(`${P}.maintenanceType.monthly`), value: '月度' },
+                      { label: t(`${P}.maintenanceType.quarterly`), value: '季度' },
+                      { label: t(`${P}.maintenanceType.semiAnnual`), value: '半年度' },
+                      { label: t(`${P}.maintenanceType.annual`), value: '年度' },
+                    ]}
+                    fieldProps={{
+                      onChange: (value: string) => {
+                        applyCycleFromMaintenanceType(value);
+                      },
+                    }}
+                  />
+                ) : null
+              }
+            </ProFormDependency>
           </Col>
         </Row>
+        <ProFormDependency name={['cycle_type']}>
+          {({ cycle_type }) => {
+            const timeBased = isTimeCycleType(cycle_type);
+            const valueLabel =
+              cycle_type === CYCLE_TYPE_COUNT
+                ? t(`${P}.form.cycleValueCount`)
+                : cycle_type === CYCLE_TYPE_RUNTIME
+                  ? t(`${P}.form.cycleValueRuntime`)
+                  : t(`${P}.form.cycleValue`);
+            const unitOptions = timeBased
+              ? TIME_CYCLE_UNITS.map((unit) => ({
+                  label: t(
+                    `${P}.cycleUnit.${
+                      unit === '天'
+                        ? 'day'
+                        : unit === '周'
+                          ? 'week'
+                          : unit === '月'
+                            ? 'month'
+                            : 'year'
+                    }`,
+                  ),
+                  value: unit,
+                }))
+              : cycle_type === CYCLE_TYPE_COUNT
+                ? [{ label: t(`${P}.cycleUnit.count`), value: '次' }]
+                : [{ label: t(`${P}.cycleUnit.hour`), value: '小时' }];
+            return (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <ProFormDigit
+                    name="cycle_value"
+                    label={valueLabel}
+                    min={1}
+                    rules={[{ required: true, message: t(`${P}.form.cycleValueRequired`) }]}
+                  />
+                </Col>
+                <Col span={12}>
+                  <ProFormSelect
+                    name="cycle_unit"
+                    label={t(`${P}.form.cycleUnit`)}
+                    rules={[{ required: true, message: t(`${P}.form.cycleUnitRequired`) }]}
+                    options={unitOptions}
+                    fieldProps={{ allowClear: timeBased }}
+                  />
+                </Col>
+              </Row>
+            );
+          }}
+        </ProFormDependency>
         <FormListDetailTable
+          ref={linesTableRef}
           name="lines"
           label={t(`${P}.form.lines`)}
           addButtonText={t(`${P}.form.addLine`)}
@@ -479,26 +689,74 @@ const MaintenanceSchemesPage: React.FC = () => {
             title: t('common.bulkAddPickTitle', { item: t(`${P}.form.item`) }),
             options: itemOptions,
             valueField: 'item_id',
+            quickCreate: itemQuickCreateConfig,
           }}
           columns={[
             {
               title: t(`${P}.form.item`),
               key: 'item_id',
+              width: 200,
               render: (field) => (
-                <ProFormSelect
+                <Form.Item
                   name={[field.name, 'item_id']}
-                  options={itemOptions}
-                  rules={[{ required: true }]}
-                  showSearch
-                  formItemProps={{ noStyle: true }}
-                  fieldProps={{ style: { width: '100%' }, placeholder: t('common.select') }}
-                />
+                  rules={[{ required: true, message: t('common.required') }]}
+                  noStyle
+                >
+                  <UniDropdown
+                    options={itemOptions}
+                    showSearch
+                    optionFilterProp="label"
+                    style={{ width: '100%' }}
+                    placeholder={t('common.select')}
+                    onChange={(val) => {
+                      const itemId = Number(val);
+                      const currentRemark = formRef.current?.getFieldValue([
+                        'lines',
+                        field.name,
+                        'remark',
+                      ]);
+                      if (
+                        Number.isFinite(itemId) &&
+                        (currentRemark == null || String(currentRemark).trim() === '')
+                      ) {
+                        const fromItem = itemRemarkById.get(itemId);
+                        if (fromItem) {
+                          formRef.current?.setFieldValue(
+                            ['lines', field.name, 'remark'],
+                            fromItem,
+                          );
+                        }
+                      }
+                    }}
+                    quickCreate={
+                      itemPerms.canCreate
+                        ? {
+                            label: t(`${ITEM_P}.quickCreate`),
+                            onClick: () => openItemQuickCreate(field.name),
+                          }
+                        : undefined
+                    }
+                  />
+                </Form.Item>
+              ),
+            },
+            {
+              title: t('common.remark'),
+              key: 'remark',
+              width: 280,
+              render: (field) => (
+                <Form.Item name={[field.name, 'remark']} noStyle>
+                  <Input
+                    allowClear
+                    placeholder={t('common.enterField', { field: t('common.remark') })}
+                  />
+                </Form.Item>
               ),
             },
             {
               title: t(`${P}.form.sortOrder`),
               key: 'sort_order',
-              width: 100,
+              width: 88,
               align: 'right',
               render: (field) => (
                 <ProFormDigit
@@ -520,6 +778,15 @@ const MaintenanceSchemesPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <EquipmentMaintenanceItemQuickCreateModal
+        open={itemQuickCreateOpen}
+        onClose={() => {
+          setItemQuickCreateOpen(false);
+          itemQuickCreateTargetRef.current = null;
+        }}
+        onCreated={handleItemQuickCreated}
+      />
     </>
   );
 };

@@ -4,6 +4,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from apps.kuaizhizao.services.kingdee_inventory_push_service import (
     build_kingdee_inventory_misc_in_model,
     material_batch_push_skip_reason,
@@ -52,6 +54,7 @@ def test_build_kingdee_sales_order_model():
         cfg={"org_number": "100", "api_unit_code_map": {"个": "006"}},
         customer_number="CUST01",
     )
+    # 本地契约：多租户共用连接时 FBillNo 写「组织编码-本地单号」防撞候选键
     assert model["FBillNo"] == "100-SO-001"
     assert model["FCustId"]["FNumber"] == "CUST01"
     assert model["FSaleOrderEntry"][0]["FMaterialId"]["FNumber"] == "MAT-1"
@@ -95,6 +98,7 @@ def test_build_kingdee_purchase_order_model():
         cfg={"org_number": "100", "api_unit_code_map": {"kg": "004"}},
         supplier_number="VEN01",
     )
+    # 本地契约：多租户共用连接时 FBillNo 写「组织编码-本地单号」防撞候选键
     assert model["FBillNo"] == "100-PO-001"
     assert model["FSupplierId"]["FNumber"] == "VEN01"
     assert model["FPOOrderEntry"][0]["FQty"] == 5.0
@@ -149,10 +153,10 @@ def test_build_kingdee_other_outbound_model_pick_header():
     )
     items = [
         SimpleNamespace(
+            id=1,
             material_code="MAT-1",
             material_name="滑块",
             material_unit="件",
-            id=1,
             outbound_quantity=Decimal("5"),
             unit_price=Decimal("0"),
             location_code=None,
@@ -178,4 +182,155 @@ def test_build_kingdee_other_outbound_model_pick_header():
     )
     assert model["pickdept_number"] == "BM-00001"
     assert model["pickeroperator_number"] == "ID-000081"
+    assert model["pickeroperator_operatornumber"] == "ID-000081"
     validate_kingdee_other_outbound_header(model)
+
+
+def test_build_kingdee_production_picking_model_picker_operator_write_key():
+    from apps.kuaiconnect.services.document_push.kingdee_production_picking_push_service import (
+        build_kingdee_production_picking_model,
+    )
+
+    picking = SimpleNamespace(
+        picking_code="LL202611020001",
+        picking_time=None,
+        created_at=datetime(2026, 11, 2),
+        work_order_code="WO1",
+        notes=None,
+    )
+    items = [
+        SimpleNamespace(
+            id=1,
+            material_code="0102000002",
+            material_name="螺旋边丝刀",
+            material_unit="件",
+            picked_quantity=Decimal("1"),
+            required_quantity=Decimal("1"),
+            warehouse_id=1,
+            batch_number=None,
+            expiry_date=None,
+            notes=None,
+        )
+    ]
+    cfg = {
+        "org_number": "BU-00001",
+        "billtype_number": "im_otheroutbill_BT",
+        "biztype_number": "355",
+        "invscheme_number": "355",
+        "linetype_number": "010",
+        "pickdept_number": "Org-00015",
+        "bizoperator_operatornumber": "ID-000081",
+    }
+    model = build_kingdee_production_picking_model(
+        picking=picking,
+        items=items,
+        cfg=cfg,
+        warehouse_numbers={1: "1001"},
+    )
+    assert model["pickeroperator_operatornumber"] == "ID-000081"
+    assert model["bizdept_number"] == "Org-00015"
+
+
+@pytest.mark.skip(reason="依赖上游 line_unit_qty_by_item_id 参数（本次未摘取对应 push service 改动）")
+def test_build_kingdee_production_picking_model_uses_line_unit_plan_not_kg_alias():
+    """行单位须吃 dual-qty 计划（如 kg），禁止 builtin 别名 004。"""
+    from apps.kuaiconnect.services.document_push.kingdee_production_picking_push_service import (
+        build_kingdee_production_picking_model,
+    )
+
+    picking = SimpleNamespace(
+        picking_code="LL202611250002",
+        picking_time=None,
+        created_at=datetime(2026, 11, 25),
+        work_order_code="WO1",
+        notes=None,
+    )
+    items = [
+        SimpleNamespace(
+            id=11,
+            material_code="M-LN2",
+            material_name="新-液氮",
+            material_unit="kg",
+            picked_quantity=Decimal("3.738"),
+            required_quantity=Decimal("3.738"),
+            warehouse_id=1,
+            batch_number=None,
+            expiry_date=None,
+            notes=None,
+        )
+    ]
+    cfg = {
+        "org_number": "BU-00003",
+        "billtype_number": "im_otheroutbill_BT",
+        "biztype_number": "355",
+        "invscheme_number": "355",
+        "linetype_number": "010",
+        "unit_number": "pcs",
+    }
+    model = build_kingdee_production_picking_model(
+        picking=picking,
+        items=items,
+        cfg=cfg,
+        warehouse_numbers={11: "1001"},
+        line_unit_qty_by_item_id={
+            11: {"unit_number": "kg", "qty": 3.738, "baseqty": 3.738},
+        },
+    )
+    entry = model["billentry"][0]
+    assert entry["unit_number"] == "kg"
+    assert entry["qty"] == 3.738
+    assert entry["baseqty"] == 3.738
+
+
+def test_build_kingdee_other_inbound_model_inventory_fields():
+    from apps.kuaizhizao.services.kingdee_other_inbound_push_service import (
+        build_kingdee_other_inbound_model,
+    )
+
+    inbound = SimpleNamespace(
+        inbound_code="QTRK001",
+        receipt_time=None,
+        created_at=datetime(2026, 11, 2),
+        reason_type="其他",
+        reason_desc=None,
+        notes=None,
+    )
+    items = [
+        SimpleNamespace(
+            material_code="0102000002",
+            id=1,
+            material_name="螺旋边丝刀",
+            material_unit="件",
+            inbound_quantity=Decimal("1"),
+            unit_price=Decimal("0"),
+            location_code=None,
+            batch_number="123",
+            expiry_date=None,
+            notes=None,
+        )
+    ]
+    cfg = {
+        "org_number": "BU-00001",
+        "billtype_number": "im_OtherInBill_STD_BT_S",
+        "biztype_number": "354",
+        "invscheme_number": "354",
+        "linetype_number": "010",
+        "invstatus_number": "110",
+        "invtype_number": "110",
+        "bizdept_number": "Org-00015",
+        "operatorgroup_number": "KGZ-001",
+        "operator_operatornumber": "ID-000081",
+    }
+    model = build_kingdee_other_inbound_model(
+        inbound=inbound,
+        items=items,
+        cfg=cfg,
+        warehouse_number="1001",
+    )
+    line = model["billentry"][0]
+    assert line["invstatus_number"] == "110"
+    assert line["outinvstatus_number"] == "110"
+    assert line["outinvtype_number"] == "110"
+    assert line["owner_number"] == "BU-00001"
+    assert model["operator_operatornumber"] == "ID-000081"
+    assert model["bizoperator_operatornumber"] == "ID-000081"

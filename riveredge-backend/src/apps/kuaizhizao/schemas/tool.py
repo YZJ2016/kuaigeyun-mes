@@ -104,6 +104,8 @@ class ToolResponse(ToolBase):
     current_borrow_at: Optional[datetime] = None
     last_return_at: Optional[datetime] = None
     last_return_by_name: Optional[str] = None
+    # 在途领用单数（status=领用中）；非 ORM 字段，由 list/get 聚合写入
+    borrowed_quantity: int = Field(default=0, description="领用数量（未归还领用单数）")
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None

@@ -162,18 +162,34 @@ export function buildFactoryImportTemplate(
   };
 }
 
+/** 与 UniImport 一致：去掉表头内换行，便于匹配「1月份\\n工资」类客户模板 */
+function normalizeImportHeaderKey(name: unknown): string {
+  return String(name ?? '')
+    .replace(/[\r\n\u2028\u2029]+/g, '')
+    .replace(/[\t\u00a0]+/g, ' ')
+    .trim()
+    .replace(/^\*+/, '')
+    .trim();
+}
+
 /** 根据表头行解析列索引（支持中/英文表头及带 * 的必填列）。 */
 export function resolveFactoryImportHeaderIndexMap(
   headers: string[],
   importHeaderMap: Record<string, string>,
 ): Record<string, number> {
+  const normalizedMap: Record<string, string> = {};
+  Object.entries(importHeaderMap).forEach(([key, field]) => {
+    const nk = normalizeImportHeaderKey(key);
+    if (nk) normalizedMap[nk] = field;
+  });
   const headerIndexMap: Record<string, number> = {};
   headers.forEach((header, index) => {
-    const normalizedHeader = String(header || '').trim();
-    let field = importHeaderMap[normalizedHeader];
-    if (!field) {
-      const withoutStar = normalizedHeader.replace(/^\*+/, '').trim();
-      field = importHeaderMap[withoutStar] ?? importHeaderMap[`*${withoutStar}`];
+    const normalizedHeader = normalizeImportHeaderKey(header);
+    let field =
+      normalizedMap[normalizedHeader] ||
+      importHeaderMap[String(header || '').trim()];
+    if (!field && normalizedHeader) {
+      field = normalizedMap[`*${normalizedHeader}`] || importHeaderMap[`*${normalizedHeader}`];
     }
     if (field) {
       headerIndexMap[field] = index;

@@ -32,6 +32,10 @@ def _quota_mocks(work_order, policy):
             "apps.kuaizhizao.services.inspection_policy_service.get_fqc_inbound_remaining_quantity",
             new=AsyncMock(return_value=Decimal("0")),
         ),
+        patch(
+            "infra.services.business_config_service.BusinessConfigService.get_finished_goods_inbound_limit_mode",
+            new=AsyncMock(return_value="work_order_quantity"),
+        ),
     )
 
 
@@ -40,7 +44,7 @@ def test_inbound_quota_pending_not_capped_by_fqc_when_no_inspection():
     work_order = MagicMock(id=10, product_id=99, quantity=Decimal("2"))
 
     mocks = _quota_mocks(work_order, ("none", None, "material"))
-    with mocks[0], mocks[1], mocks[2], mocks[3], mocks[4]:
+    with mocks[0], mocks[1], mocks[2], mocks[3], mocks[4], mocks[5]:
         quota = asyncio.run(
             FinishedGoodsReceiptService()._get_work_order_inbound_quota(1, 10)
         )
@@ -54,7 +58,7 @@ def test_inbound_quota_pending_capped_by_fqc_when_required_without_inspection():
     work_order = MagicMock(id=10, product_id=99, quantity=Decimal("2"))
 
     mocks = _quota_mocks(work_order, ("none", None, "default_none"))
-    with mocks[0], mocks[1], mocks[2], mocks[3], mocks[4]:
+    with mocks[0], mocks[1], mocks[2], mocks[3], mocks[4], mocks[5]:
         quota = asyncio.run(
             FinishedGoodsReceiptService()._get_work_order_inbound_quota(1, 10)
         )

@@ -7,6 +7,7 @@ import { Space, Typography } from 'antd';
 import { SecureImage } from '../secure-image';
 import { getFileByUuid, getFileDownloadUrlWithToken } from '../../services/file';
 import { normalizeCustomFieldFileUuids } from './customFieldFileUtils';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 
 interface CustomFieldFileDetailProps {
   value: unknown;
@@ -55,7 +56,7 @@ export const CustomFieldFileDetail: React.FC<CustomFieldFileDetailProps> = ({
   }, [uuids.join(','), image]);
 
   if (uuids.length === 0) {
-    return <Typography.Text type="secondary">-</Typography.Text>;
+    return <Typography.Text type="secondary">{EMPTY_VALUE_PLACEHOLDER}</Typography.Text>;
   }
 
   if (image) {

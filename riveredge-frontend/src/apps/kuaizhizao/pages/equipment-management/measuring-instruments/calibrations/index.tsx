@@ -30,7 +30,10 @@ import { ActionConfirmPopconfirm } from '../../../../../../components/action-con
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import DocumentAttachmentsField from '../../../../components/DocumentAttachmentsField';
 import LineAttachmentsUpload from '../../../../components/LineAttachmentsUpload';
-import { normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+} from '../../../../utils/documentAttachments';
 import { equipmentApi } from '../../../../services/equipment';
 import { useEquipmentDetailDrawer } from '../../shared/equipmentMasterDataDetail';
 import { formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../../utils/formDate';
@@ -75,6 +78,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
     useEquipmentDetailDrawer<CalibrationRecord>();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CalibrationRecord | null>(null);
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>();
   const formRef = useRef<any>(null);
   const [instrumentOptions, setInstrumentOptions] = useState<{ label: string; value: string }[]>([]);
 
@@ -94,9 +98,14 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
 
   const handleCreate = () => {
     setEditingRecord(null);
+    // FormModalTemplate destroyOnHidden：打开瞬间 form 未挂载，须走 initialValues
+    setFormInitialValues({
+      calibration_date: dayjs(),
+      result: '合格',
+      plan_type: 'external',
+      attachments: [],
+    });
     setModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ calibration_date: dayjs(), result: '合格', plan_type: 'external' });
   };
 
   useNewShortcut(handleCreate);
@@ -111,8 +120,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
 
   const handleEdit = useCallback((record: CalibrationRecord) => {
     setEditingRecord(record);
-    setModalVisible(true);
-    formRef.current?.setFieldsValue({
+    setFormInitialValues({
       equipment_uuid: record.equipment_uuid,
       plan_type: record.plan_type || 'external',
       calibration_date: record.calibration_date ? dayjs(record.calibration_date) : undefined,
@@ -120,8 +128,9 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
       result: record.result,
       certificate_no: record.certificate_no,
       remark: record.remark,
-      attachments: record.attachments || [],
+      attachments: mapAttachmentsToUploadList(record.attachments),
     });
+    setModalVisible(true);
   }, []);
 
   const handleDelete = useCallback(
@@ -165,6 +174,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
       messageApi.success(t(`${P}.saveSuccess`));
       setModalVisible(false);
       setEditingRecord(null);
+      setFormInitialValues(undefined);
       actionRef.current?.reload();
     } catch (e: unknown) {
       const err = e as { message?: string };
@@ -377,7 +387,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments.calibrations-v5"
           actionRef={actionRef}
           permissionResource={RESOURCE}
-          enableRowSelection={perms.canExport}
+          enableRowSelection={perms.canExport || perms.canDelete}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           rowKey="uuid"
@@ -387,6 +397,21 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
           showCreateButton={perms.canCreate}
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
+          showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
+          onDelete={async (keys) => {
+            try {
+              for (const key of keys) {
+                await equipmentApi.deleteCalibrationRecord(String(key));
+              }
+              messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+              setSelectedRowKeys([]);
+              actionRef.current?.reload();
+            } catch (e: unknown) {
+              const err = e as { message?: string };
+              messageApi.error(err?.message || t('common.deleteFailed'));
+            }
+          }}
           showExportButton={perms.canExport}
           onExport={async (type, keys, pageData) => {
             try {
@@ -452,11 +477,13 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setEditingRecord(null);
+          setFormInitialValues(undefined);
         }}
         onFinish={handleSubmit}
         isEdit={Boolean(editingRecord)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
+        initialValues={formInitialValues}
         grid={false}
       >
         <Row gutter={16}>

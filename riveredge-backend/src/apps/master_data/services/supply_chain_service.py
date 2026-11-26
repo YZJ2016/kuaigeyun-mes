@@ -36,6 +36,7 @@ from apps.master_data.services.master_data_list_core import (
     apply_master_crud_list_filters,
     resolve_master_crud_order_clause,
 )
+from core.utils.search_utils import is_pinyin_keyword, page_queryset_by_keyword
 
 _CUSTOMER_SUPPLIER_KEYWORD_FIELDS = [
     "code",
@@ -212,9 +213,19 @@ def _format_customer_delete_guard_message(customer_name: str, summary: Dict[str,
     return f"客户「{customer_name}」存在业务单据（{labels_text}），无法删除。请先处理相关单据后再删除。"
 
 
-async def _assert_can_assign_customer_ownership(user: User, tenant_id: int) -> None:
-    if user.is_tenant_admin or user.is_infra_admin:
+async def _assert_can_assign_customer_ownership(
+    user: User,
+    tenant_id: int,
+    *,
+    target_salesman_id: Optional[int] = None,
+) -> None:
+    if await UserPermissionService.is_admin_bypass(user, tenant_id):
         return
+    if target_salesman_id is not None and int(target_salesman_id) == int(user.id):
+        if await UserPermissionService.has_permission(
+            user.id, tenant_id, "kuaizhizao:customer-pool:claim"
+        ):
+            return
     if await UserPermissionService.has_permission(
         user.id, tenant_id, "kuaizhizao:customer-pool:assign"
     ):
@@ -223,7 +234,7 @@ async def _assert_can_assign_customer_ownership(user: User, tenant_id: int) -> N
 
 
 async def _assert_can_release_customer_ownership(user: User, tenant_id: int) -> None:
-    if user.is_tenant_admin or user.is_infra_admin:
+    if await UserPermissionService.is_admin_bypass(user, tenant_id):
         return
     if await UserPermissionService.has_permission(
         user.id, tenant_id, "kuaizhizao:customer-pool:release"
@@ -313,6 +324,19 @@ def _partner_contacts_for_response(entity: Customer | Supplier) -> List[Dict[str
         }
     )
     return [legacy] if legacy else []
+
+
+def _partner_contacts_stored_only(entity: Customer | Supplier) -> List[Dict[str, Optional[str]]]:
+    """仅返回 contacts 明细表数据，不含 legacy 头字段回填（单据选联系人勿用地址联系人快照）。"""
+    stored = entity.contacts
+    if not isinstance(stored, list) or not stored:
+        return []
+    rows: List[Dict[str, Optional[str]]] = []
+    for row in stored:
+        item = _normalize_partner_contact_row(row)
+        if item:
+            rows.append(item)
+    return rows
 
 
 def _normalize_partner_settlement_account_row(row: Any) -> Optional[Dict[str, Any]]:
@@ -663,7 +687,9 @@ class SupplyChainService:
             raise
 
         if salesman_id:
-            await _assert_can_assign_customer_ownership(current_user, tenant_id)
+            await _assert_can_assign_customer_ownership(
+                current_user, tenant_id, target_salesman_id=int(salesman_id)
+            )
             target_user = await User.filter(id=salesman_id, tenant_id=tenant_id).first()
             if not target_user:
                 raise ValidationError(f"业务员不存在: {salesman_id}")
@@ -772,9 +798,11 @@ class SupplyChainService:
         if salesman_id is not None:
             query = query.filter(salesman_id=salesman_id)
 
+        keyword_text = (keyword or "").strip()
+        use_pinyin = is_pinyin_keyword(keyword_text)
         query, order_expr = apply_master_crud_list_filters(
             query,
-            keyword=keyword,
+            keyword=None if use_pinyin else keyword,
             code=code,
             name=name,
             keyword_fields=_CUSTOMER_SUPPLIER_KEYWORD_FIELDS,
@@ -797,9 +825,18 @@ class SupplyChainService:
                 resource=scope_key,
             )
 
-        total = await query.count()
-
-        customers = await query.offset(skip).limit(limit).order_by(order_expr).all()
+        if use_pinyin:
+            customers, total = await page_queryset_by_keyword(
+                query,
+                keyword=keyword_text,
+                fields=_CUSTOMER_SUPPLIER_KEYWORD_FIELDS,
+                offset=skip,
+                page_size=limit,
+                order_by=(order_expr,),
+            )
+        else:
+            total = await query.count()
+            customers = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         return [_to_customer_response(c) for c in customers], total
     
@@ -887,7 +924,9 @@ class SupplyChainService:
 
         if salesman_changed:
             if salesman_change:
-                await _assert_can_assign_customer_ownership(current_user, tenant_id)
+                await _assert_can_assign_customer_ownership(
+                    current_user, tenant_id, target_salesman_id=int(salesman_change)
+                )
                 target_user = await User.filter(id=salesman_change, tenant_id=tenant_id).first()
                 if not target_user:
                     raise ValidationError(f"业务员不存在: {salesman_change}")
@@ -1146,9 +1185,11 @@ class SupplyChainService:
         if qualification_status is not None and str(qualification_status).strip():
             query = query.filter(qualification_status=str(qualification_status).strip().lower())
 
+        keyword_text = (keyword or "").strip()
+        use_pinyin = is_pinyin_keyword(keyword_text)
         query, order_expr = apply_master_crud_list_filters(
             query,
-            keyword=keyword,
+            keyword=None if use_pinyin else keyword,
             code=code,
             name=name,
             keyword_fields=_CUSTOMER_SUPPLIER_KEYWORD_FIELDS,
@@ -1169,9 +1210,18 @@ class SupplyChainService:
                 resource=RESOURCE_SUPPLIER,
             )
 
-        total = await query.count()
-
-        suppliers = await query.offset(skip).limit(limit).order_by(order_expr).all()
+        if use_pinyin:
+            suppliers, total = await page_queryset_by_keyword(
+                query,
+                keyword=keyword_text,
+                fields=_CUSTOMER_SUPPLIER_KEYWORD_FIELDS,
+                offset=skip,
+                page_size=limit,
+                order_by=(order_expr,),
+            )
+        else:
+            total = await query.count()
+            suppliers = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
         return [_to_supplier_response(s) for s in suppliers], total
     

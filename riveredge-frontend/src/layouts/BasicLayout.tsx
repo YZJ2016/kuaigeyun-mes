@@ -30,7 +30,7 @@ import {
   PlayCircleOutlined,
   SendOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, Typography, Empty, Divider, Modal, Grid, Skeleton } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, Typography, Empty, Divider, Modal, Grid, Skeleton, Popover } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +56,7 @@ import { prefetchPlugin } from '../utils/pluginLoader';
 import { prefetchKuaizhizaoRoute, schedulePrefetchKuaizhizaoTopRoutes } from '../apps/kuaizhizao/routePrefetch';
 import { prefetchMasterDataRoute } from '../apps/master-data/routePrefetch';
 import { prefetchSystemRoute, prefetchSystemRoutes } from '../routes/systemRoutePrefetch';
-import { PRO_APP_CODES } from '../pages/system/applications/proAppCatalog';
+import { isSidebarProAppCode } from '../pages/system/applications/proAppCatalog';
 import { layoutShellQueryOptions } from '../config/reactQuery';
 import { useDocumentVisible } from '../hooks/useDocumentVisible';
 import { useRealtimeInbox } from '../hooks/useRealtimeInbox';
@@ -76,6 +76,10 @@ import {
   type SidebarSearchBgFollow,
 } from './basicLayout/sidebarSearchBgFollow';
 import { readSidebarMenuDensityPref } from './basicLayout/sidebarMenuDensity';
+import {
+  KuaiconnectLockedPopoverContent,
+  KuaiconnectLockedPopoverTitle,
+} from './basicLayout/KuaiconnectLockedPopoverContent';
 import dayjs from 'dayjs';
 import { nextSiteLogoUrlAfterImageError } from '../constants/siteAssets';
 import { useSiteLogoUrl } from '../hooks/useSiteLogoUrl';
@@ -144,6 +148,7 @@ import {
 } from '../services/menu';
 import { useUnifiedMenuData } from '../hooks/useUnifiedMenuData';
 import { ManufacturingIcons, resolveMenuIconComponent } from '../utils/manufacturingIcons';
+import { MenuMorphIcon } from '../components/menu-morph-icon/MenuMorphIcon';
 import { getAvatarUrl, getAvatarText, getAvatarFontSize, getCachedAvatarUrl, toRelativeIfLocalhost, isTextAvatarDisplay, getTextAvatarCircleStyle, getImageAvatarCircleStyle } from '../utils/avatar';
 import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
@@ -151,7 +156,14 @@ import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { swallowRequestCancellation } from '../utils/requestCancellation';
 import { prefetchNumericPrecision } from '../hooks/useNumericPrecision';
-import { getInstalledApplicationList } from '../services/application';
+import {
+  getInstalledApplicationList,
+  installedApplicationsQueryKey,
+} from '../services/application';
+import {
+  isDataCenterSystemPath,
+  isKuaiconnectReady,
+} from '../utils/kuaiconnectAccess';
 import { getChatIntegrationStatus } from '../services/deepseekChat';
 import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
 import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
@@ -192,6 +204,13 @@ function resolveSidebarAppGroupCode(item: {
   }
 
   return extractAppCodeFromPath(path);
+}
+
+function extractAppRootCodeFromMenuPath(path: string | undefined): string | null {
+  if (!path) return null;
+  const normalized = path.replace(/\/$/, '');
+  const match = normalized.match(/^\/apps\/([^/]+)$/);
+  return match?.[1] ?? null;
 }
 
 function isSidebarAppGroupTitleItem(item: { key?: React.Key; className?: string }): boolean {
@@ -263,6 +282,7 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   '/apps/kuaizhizao/purchase-management/purchase-order-changes': 'purchase_order_change',
   '/apps/kuaizhizao/purchase-management/receipt-notices': 'receipt_notice',
   '/apps/kuaizhizao/purchase-management/purchase-returns': 'purchase_return',
+  '/apps/kuaizhizao/purchase-management/outbound': 'purchase_return',
   '/apps/kuaizhizao/purchase-management/logistics-tracking': 'freight_tracking',
   // 生产
   '/apps/kuaizhizao/production-execution/work-orders': 'work_order',
@@ -589,7 +609,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     };
 
   if (pathMap[menuPath]) {
-    return React.createElement(pathMap[menuPath], { size: 16 });
+    return <MenuMorphIcon lucideComponent={pathMap[menuPath]} size={16} />;
   }
 
   if (process.env.NODE_ENV === 'development') {
@@ -767,7 +787,6 @@ const getMenuConfig = (
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/open-api', name: t('menu.infra.open-api'), icon: getMenuIcon(t('menu.infra.open-api'), '/infra/open-api') },
       { path: '/infra/official-api-library', name: t('menu.infra.official-api-library'), icon: getMenuIcon(t('menu.infra.official-api-library'), '/infra/official-api-library') },
-      { path: '/infra/open-api', name: t('menu.infra.open-api'), icon: getMenuIcon(t('menu.infra.open-api'), '/infra/open-api') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
       { path: '/infra/license-management', name: t('menu.infra.license-management'), icon: getMenuIcon(t('menu.infra.license-management'), '/infra/license-management') },
       ...(options?.showSensitiveWordBlacklist
@@ -1158,7 +1177,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     if (rawIcon) {
       const IconComponent = resolveMenuIconComponent(rawIcon);
       if (IconComponent) {
-        iconElement = React.createElement(IconComponent, { size: 16 });
+        iconElement = <MenuMorphIcon iconKey={rawIcon} size={16} />;
       } else if (process.env.NODE_ENV === 'development') {
         console.error(
           `[sidebar-menu] icon "${rawIcon}" 未登记 ManufacturingIcons（path=${menu.path ?? ''}）。请改 manifest 为预置键，禁止兜底。`,
@@ -1196,8 +1215,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         ? menu.children.map(child => convertMenuTreeToMenuDataItem(child, isAppMenu, depth + 1))
         : undefined,
     };
-    if (menu.permission_code) {
-      (menuItem as any).permissionCodes = [menu.permission_code];
+    const metaAnyOf = meta?.menu_permission_any_of;
+    if (Array.isArray(metaAnyOf) && metaAnyOf.length > 0) {
+      (menuItem as PermissionMenuDataItem).permissionCodes = metaAnyOf.map((code) => String(code));
+    } else if (menu.permission_code) {
+      (menuItem as PermissionMenuDataItem).permissionCodes = [menu.permission_code];
     }
 
     // 如果菜单没有 path，说明是分组标题，需要特殊处理
@@ -1320,10 +1342,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             child.path !== '/system/launch-progress'
         );
         const itemCount = items.length;
+        const rawKey = String(group.key || group.name || `system-group-${index}`);
         // 每个分组固定显示为两行：列数按数量自动计算
         const itemCols = Math.max(2, Math.ceil(itemCount / 2));
         // 组宽度按设计占位，确保每行总占位凑满 12，避免右侧空白列
-        const rawKey = String(group.key || group.name || `system-group-${index}`);
         const groupSpan = spanByKey[rawKey] ?? Math.min(6, Math.max(3, itemCols + 1));
         // 数据中心后续将剥离为 PRO；浮层组标题与侧栏同款 PRO 徽标
         const groupNameText = typeof group.name === 'string' ? group.name : '';
@@ -1419,16 +1441,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     );
   }, [systemSettingsPanelGridColumns]);
 
-  const handleSystemSettingsNavigate = useCallback((path?: string) => {
-    if (!path) return;
-    unmountSystemSettingsPanel();
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      window.open(path, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    navigate(path);
-  }, [navigate, unmountSystemSettingsPanel]);
-
   const getSystemPanelIcon = useCallback((path?: string): React.ReactNode => {
     if (!path) return <IconifyIcon icon="fluent-color:apps-24" />;
     const iconMap: Record<string, string> = {
@@ -1475,14 +1487,30 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   }, []);
 
   const { data: installedApps } = useQuery({
-    queryKey: [
-      'installedApplications',
-      { is_active: true, tenantId: tenantIdStrForHome },
-    ],
+    queryKey: installedApplicationsQueryKey(tenantIdStrForHome),
     queryFn: () => getInstalledApplicationList({ is_active: true }),
     ...layoutShellQueryOptions,
     staleTime: 5 * 60 * 1000,
   });
+
+  // 用布局已拉的启用应用列表判定：未就绪始终锁定；已就绪不因浮层二次请求闪锁定
+  const kuaiconnectReady = useMemo(
+    () => isKuaiconnectReady(installedApps),
+    [installedApps],
+  );
+
+  const handleSystemSettingsNavigate = useCallback((path?: string) => {
+    if (!path) return;
+    if (isDataCenterSystemPath(path) && !kuaiconnectReady) {
+      return;
+    }
+    unmountSystemSettingsPanel();
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      window.open(path, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    navigate(path);
+  }, [navigate, unmountSystemSettingsPanel, kuaiconnectReady]);
 
   const hasAiAssistantEntry = useMemo(() => {
     const kuaiaiApp = (installedApps ?? []).find((app) => app.code === 'kuaiai');
@@ -1854,15 +1882,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 接管 F1 控制，开关 AI 助手抽屉（仅在 AI 应用已启用时）
+      // 接管 F1 控制，开启 AI 助手（仅在 AI 应用已启用时）
       if (e.key === 'F1' && hasAiAssistantEntry) {
         e.preventDefault();
         e.stopPropagation();
-        if (aiAssistantOpen) {
-          setAiAssistantOpen(false);
-        } else {
-          openAiAssistant();
-        }
+        openAiAssistant();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -1906,7 +1930,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [hasAiAssistantEntry, openAiAssistant, aiAssistantOpen]);
+  }, [hasAiAssistantEntry, openAiAssistant]);
 
   useEffect(() => {
     if (!hasAiAssistantEntry) return;
@@ -2602,11 +2626,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const { shellStyles, themeStyles } = useBasicLayoutInlineStyles(layoutStyleContext);
 
   useLayoutEffect(() => {
-    const logoTitleColor = isDarkMode
-      ? '#ffffff'
-      : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)');
+    const logoTitleColor = isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : '#ffffff';
     document.documentElement.style.setProperty('--riveredge-logo-title-color', logoTitleColor);
-  }, [isDarkMode, isLightModeLightBg]);
+  }, [isLightModeLightBg]);
 
   const sidebarSearchExtra = useMemo(() => {
     return (
@@ -2989,6 +3011,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   onClick: handleUserMenuClick,
                 }}
                 placement="bottomRight"
+                // 关闭滑入缩放动画，避免下拉面板打开时轻微形变
+                transitionName=""
+                classNames={{ root: 'riveredge-header-user-dropdown' }}
               >
                 <Space
                   size={8}
@@ -3062,30 +3087,41 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         menuDataRender={() => siderMenuDataForRender}
         menuTextRender={(item: any, defaultText: React.ReactNode) => {
-          // 应用分组标题：全部套主色样式；PRO 徽标仅对 PRO 应用
-          if (!isSidebarAppGroupTitleItem(item)) {
-            if (showMenuProBadge && item?.meta?.is_pro === true) {
-              return (
-                <>
-                  {defaultText}
-                  <span className="menu-item-badge menu-item-badge-pro">PRO</span>
-                </>
-              );
-            }
-            return defaultText;
+          // 应用分组标题：全部套主色样式；PRO 徽标仅对 PRO 应用（受组织 show_pro_badge 开关约束）
+          if (isSidebarAppGroupTitleItem(item)) {
+            const appCode = resolveSidebarAppGroupCode(item);
+            const showPro = showMenuProBadge && isSidebarProAppCode(appCode);
+            return (
+              <span
+                className="menu-group-title-app-label"
+                data-app-menu-group={appCode || '1'}
+                style={APP_GROUP_TITLE_TEXT_STYLE}
+              >
+                {defaultText}
+                {showPro ? <span className="menu-item-badge menu-item-badge-pro">PRO</span> : null}
+              </span>
+            );
           }
-          const appCode = resolveSidebarAppGroupCode(item);
-          const showPro = showMenuProBadge && Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
-          return (
-            <span
-              className="menu-group-title-app-label"
-              data-app-menu-group={appCode || '1'}
-              style={APP_GROUP_TITLE_TEXT_STYLE}
-            >
-              {defaultText}
-              {showPro ? <span className="menu-item-badge menu-item-badge-pro">PRO</span> : null}
-            </span>
+          if (showMenuProBadge && item?.meta?.is_pro === true) {
+            return (
+              <>
+                {defaultText}
+                <span className="menu-item-badge menu-item-badge-pro">PRO</span>
+              </>
+            );
+          }
+          const rootAppCode = extractAppRootCodeFromMenuPath(
+            typeof item.path === 'string' ? item.path : undefined,
           );
+          if (showMenuProBadge && rootAppCode && isSidebarProAppCode(rootAppCode)) {
+            return (
+              <>
+                {defaultText}
+                <span className="menu-item-badge menu-item-badge-pro">PRO</span>
+              </>
+            );
+          }
+          return defaultText;
         }}
         menuProps={{
           mode: 'inline',
@@ -3192,7 +3228,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             const groupTitle = appCode
               ? resolveAppMenuGroupDisplayName(appCode, fallback, t)
               : fallback;
-            const showPro = showMenuProBadge && Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
+            const showPro = showMenuProBadge && isSidebarProAppCode(appCode);
 
             return (
               <div
@@ -3429,21 +3465,58 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                       style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}
                     >
                       {group.items.map((child) => {
-                        return (
+                        const path = child.path as string | undefined;
+                        const dataCenterLocked =
+                          group.key === 'data-center-group' &&
+                          isDataCenterSystemPath(path) &&
+                          !kuaiconnectReady;
+
+                        const itemKey = String(child.key || child.path);
+                        const itemButton = (
                           <button
-                            key={String(child.key || child.path)}
                             type="button"
-                            className="riveredge-system-settings-item"
-                            onClick={() => handleSystemSettingsNavigate(child.path)}
+                            className={`riveredge-system-settings-item${dataCenterLocked ? ' riveredge-system-settings-item--locked' : ''}`}
+                            onClick={() => handleSystemSettingsNavigate(path)}
                             title={typeof child.name === 'string' ? child.name : undefined}
                           >
-                            <span
-                              className="riveredge-system-settings-item-icon"
-                            >
-                              {getSystemPanelIcon(child.path)}
+                            <span className="riveredge-system-settings-item-icon">
+                              {getSystemPanelIcon(path)}
+                              {dataCenterLocked ? (
+                                <span className="riveredge-system-settings-item-icon-lock" aria-hidden>
+                                  <LockOutlined />
+                                </span>
+                              ) : null}
                             </span>
-                            <span className="riveredge-system-settings-item-label">{child.name as React.ReactNode}</span>
+                            <span className="riveredge-system-settings-item-label">
+                              {child.name as React.ReactNode}
+                            </span>
                           </button>
+                        );
+
+                        if (!dataCenterLocked) {
+                          return <React.Fragment key={itemKey}>{itemButton}</React.Fragment>;
+                        }
+
+                        return (
+                          <Popover
+                            key={itemKey}
+                            trigger="click"
+                            placement="top"
+                            getPopupContainer={() => document.body}
+                            zIndex={1350}
+                            title={<KuaiconnectLockedPopoverTitle featurePath={path} />}
+                            content={
+                              <KuaiconnectLockedPopoverContent
+                                featurePath={path}
+                                onGoAppCenter={() => {
+                                  unmountSystemSettingsPanel();
+                                  navigate('/system/applications');
+                                }}
+                              />
+                            }
+                          >
+                            {itemButton}
+                          </Popover>
                         );
                       })}
                     </div>

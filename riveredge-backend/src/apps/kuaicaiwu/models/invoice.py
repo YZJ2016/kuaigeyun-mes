@@ -50,6 +50,11 @@ class Invoice(BaseModel):
 
     # 状态
     status = fields.CharField(max_length=20, default="DRAFT", description="状态")
+    review_status = fields.CharField(
+        max_length=20,
+        default="草稿",
+        description="审核状态：草稿/SUBMITTED/待审核/已审核/驳回。销项审核通过后 status=已审核",
+    )
     verification_date = fields.DateField(null=True, description="认证日期(进项)")
 
     source_document_code = fields.CharField(max_length=100, null=True, description="来源单据号")

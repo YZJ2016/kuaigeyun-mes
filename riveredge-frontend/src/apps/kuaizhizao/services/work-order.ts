@@ -432,6 +432,12 @@ export const workOrderApi = {
   getKittingAnalysis: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/kitting-analysis`, { method: 'GET' }),
 
+  previewBomLines: async (data: Record<string, unknown>) =>
+    apiRequest<Array<Record<string, unknown>>>('/apps/kuaizhizao/work-orders/bom-lines/preview', {
+      method: 'POST',
+      data,
+    }),
+
   previewPushPurchaseRequisition: async (id: string | number) =>
     apiRequest<{
       work_order_id: number
@@ -554,6 +560,16 @@ export const workOrderApi = {
     }),
   getGroupDetail: async (groupId: number) =>
     apiRequest<WorkOrderGroup>(`/apps/kuaizhizao/work-order-groups/${groupId}`, { method: 'GET' }),
+  commit: (id: number) =>
+    apiRequest(`/core/uni-audit/work_order/${id}/submit`, { method: 'POST' }),
+  submitForReview: (id: number) =>
+    apiRequest(`/core/uni-audit/work_order/${id}/submit_review`, { method: 'POST' }),
+  withdrawSubmit: (id: number) =>
+    apiRequest(`/core/uni-audit/work_order/${id}/withdraw`, { method: 'POST' }),
+  approve: (id: number) =>
+    apiRequest(`/core/uni-audit/work_order/${id}/approve`, { method: 'POST' }),
+  revokeApproval: (id: number) =>
+    apiRequest(`/core/uni-audit/work_order/${id}/revoke`, { method: 'POST' }),
 };
 
 export interface ReworkOrderListParams {
@@ -640,6 +656,15 @@ export const reworkOrderApi = {
       `/apps/kuaizhizao/work-orders/${workOrderId}/rework-preview`,
       { method: 'GET', params },
     ),
+  assign: async (
+    id: string,
+    data: {
+      assigned_worker_ids?: number[];
+      assigned_worker_id?: number;
+      assigned_team_id?: number;
+      work_order_operation_link_id?: number;
+    },
+  ) => apiRequest(`/apps/kuaizhizao/rework-orders/${id}/assign`, { method: 'PATCH', data }),
   getReportingOptions: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/reporting-options`, { method: 'GET' }),
   report: async (id: string, data: any) =>
@@ -648,6 +673,16 @@ export const reworkOrderApi = {
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/release`, { method: 'POST' }),
   submit: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/submit`, { method: 'POST' }),
+  commit: async (id: number) =>
+    apiRequest(`/core/uni-audit/rework_order/${id}/submit`, { method: 'POST' }),
+  submitForReview: async (id: number) =>
+    apiRequest(`/core/uni-audit/rework_order/${id}/submit_review`, { method: 'POST' }),
+  withdrawSubmit: async (id: number) =>
+    apiRequest(`/core/uni-audit/rework_order/${id}/withdraw`, { method: 'POST' }),
+  approveViaAudit: async (id: number) =>
+    apiRequest(`/core/uni-audit/rework_order/${id}/approve`, { method: 'POST' }),
+  revokeApproval: async (id: number) =>
+    apiRequest(`/core/uni-audit/rework_order/${id}/revoke`, { method: 'POST' }),
   approve: async (id: string) =>
     apiRequest(`/apps/kuaizhizao/rework-orders/${id}/approve`, { method: 'POST' }),
   reject: async (id: string) =>

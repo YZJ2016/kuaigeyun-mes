@@ -1037,11 +1037,115 @@ REWORK_ORDER_FLOW_LABELS = {
 }
 
 
+REWORK_SIGNOFF_MAIN_STAGES = [
+    {"key": "draft", "label": "草稿"},
+    {"key": "committed", "label": "已提交"},
+    {"key": "signoff", "label": "会签中"},
+    {"key": "pending", "label": "待审核"},
+    {"key": "closed", "label": "已关闭"},
+]
+
+REWORK_SIGNOFF_FLOW_LABELS = {
+    "draft": "草稿",
+    "committed": "已提交",
+    "signoff": "会签中",
+    "pending": "待审核",
+    "closed": "已关闭",
+    "cancelled": "已取消",
+}
+
+
+def _build_rework_signoff_lifecycle(
+    rework_order: Any,
+    *,
+    milestones: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.constants import is_pending_review_status, is_submitted_status
+
+    status_raw = _norm(getattr(rework_order, "status", None))
+    status_key = status_raw.lower() if status_raw else "draft"
+    review = _norm(getattr(rework_order, "review_status", None))
+
+    if status_key == "cancelled":
+        return {
+            "status_class": status_raw,
+            "flow_class": "cancelled",
+            "current_stage_key": "cancelled",
+            "current_stage_name": "已取消",
+            "status": "exception",
+            "main_stages": [
+                {"key": s["key"], "label": s["label"], "status": "pending"}
+                for s in REWORK_SIGNOFF_MAIN_STAGES
+            ]
+            + [{"key": "cancelled", "label": "已取消", "status": "active"}],
+            "next_step_suggestions": [],
+            "milestones": milestones or [],
+        }
+
+    if status_key == "closed":
+        visual_key = "closed"
+    elif _is_rejected(review):
+        visual_key = "draft"
+    elif is_submitted_status(review):
+        visual_key = "committed"
+    elif is_pending_review_status(review) or _is_pending_review(review):
+        visual_key = "pending"
+    elif _is_approved(review):
+        visual_key = "signoff"
+    else:
+        visual_key = "draft"
+
+    stage_name = REWORK_SIGNOFF_FLOW_LABELS.get(visual_key, "草稿")
+    order_keys = [s["key"] for s in REWORK_SIGNOFF_MAIN_STAGES]
+    cur_idx = order_keys.index(visual_key) if visual_key in order_keys else 0
+    main_stages = []
+    for idx, stage in enumerate(REWORK_SIGNOFF_MAIN_STAGES):
+        st = "pending"
+        if idx < cur_idx:
+            st = "done"
+        elif idx == cur_idx:
+            st = "active"
+        main_stages.append({"key": stage["key"], "label": stage["label"], "status": st})
+
+    suggestions_map = {
+        "draft": ["提交"],
+        "committed": ["提交审核"],
+        "pending": ["审核"],
+        "signoff": ["会签", "关闭"],
+        "closed": [],
+    }
+    return {
+        "status_class": status_raw,
+        "flow_class": visual_key,
+        "current_stage_key": visual_key,
+        "current_stage_name": stage_name,
+        "status": (
+            "success"
+            if visual_key == "closed"
+            else "active"
+            if visual_key in ("committed", "signoff", "pending")
+            else "normal"
+        ),
+        "main_stages": main_stages,
+        "next_step_suggestions": list(suggestions_map.get(visual_key, [])),
+        "milestones": milestones or [],
+    }
+
+
 def get_rework_order_lifecycle(
     rework_order: Any,
     milestones: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """返工单生命周期计算"""
+    from apps.kuaizhizao.constants.rework_business_types import (
+        REWORK_BUSINESS_INVENTORY_VERIFY,
+        REWORK_BUSINESS_MULTI_SIGNOFF,
+    )
+
+    bt = str(getattr(rework_order, "business_type", None) or "").strip().lower()
+    if bt in (REWORK_BUSINESS_MULTI_SIGNOFF, REWORK_BUSINESS_INVENTORY_VERIFY):
+        return _build_rework_signoff_lifecycle(rework_order, milestones=milestones)
+
     status_raw = _norm(getattr(rework_order, "status", None))
     status_key = status_raw.lower() if status_raw else "draft"
     if status_key == "cancelled":

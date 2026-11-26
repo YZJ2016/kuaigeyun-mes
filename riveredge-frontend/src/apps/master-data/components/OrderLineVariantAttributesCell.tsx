@@ -10,8 +10,8 @@ import type { FormInstance } from 'antd/es/form';
 import { VariantSkuPickerPanel } from '../../../components/uni-variant-sku-batch-picker/VariantSkuPickerPanel';
 import {
   getMaterialVariantAttrs,
-  isVariantMasterMaterial,
   normalizeScalarAttrs,
+  resolveMaterialVariantManaged,
 } from './MaterialVariantCombinationsTable';
 import { variantAttributeApi } from '../services/variant-attribute';
 import type { Material } from '../types/material';
@@ -95,8 +95,9 @@ export const OrderLineVariantAttributesCell: React.FC<OrderLineVariantAttributes
   );
 
   const st = sourceType ?? material?.sourceType ?? (material as any)?.source_type;
+  const variantManaged = resolveMaterialVariantManaged(material);
   const showEditor =
-    st === 'Configure' || isVariantMasterMaterial(material) || isPrecombinedSku(material);
+    st === 'Configure' || variantManaged || isPrecombinedSku(material);
   const resolvedMasterUuid = masterMaterialUuid || material?.uuid;
 
   const applyAttributes = (next: Record<string, unknown> | undefined) => {

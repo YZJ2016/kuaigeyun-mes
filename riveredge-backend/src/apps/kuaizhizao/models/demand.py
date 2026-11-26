@@ -71,7 +71,7 @@ class Demand(BaseModel):
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
-    review_status = fields.CharField(max_length=20, default=ReviewStatus.PENDING, description="审核状态")
+    review_status = fields.CharField(max_length=20, default=ReviewStatus.DRAFT, description="审核状态（草稿/待审核/已通过；已提交看 status=SUBMITTED）")
     review_remarks = fields.TextField(null=True, description="审核备注")
     
     # 销售信息（销售订单专用）

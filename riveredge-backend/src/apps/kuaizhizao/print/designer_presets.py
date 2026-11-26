@@ -13,6 +13,17 @@ from apps.kuaizhizao.print.document_qrcode import (
 from core.schemas.print_template import PrintTemplateCompileRequest
 from core.services.print.print_template_service import PrintTemplateService
 
+# 打印字号层级：标题 16 / 正文与明细 12 / 页脚说明 10（避免标题过大、表体过小）
+PRINT_TITLE_FONT_SIZE = "16px"
+PRINT_BODY_FONT_SIZE = "12px"
+DOC_TITLE_TEXT_STYLE: dict[str, Any] = {
+    "fontSize": PRINT_TITLE_FONT_SIZE,
+    "fontWeight": "700",
+    "color": "#0f4c81",
+    "margin": "0",
+}
+PRINT_FOOTER_FONT_SIZE = "10px"
+
 TABLE_STYLE = {
     "headerBgColor": "#0f4c81",
     "headerTextColor": "#ffffff",
@@ -38,13 +49,20 @@ def _text(content: str, *, tag: str = "div", style: dict[str, Any] | None = None
     return blk
 
 
-def _field(key: str, label: str, *, show_label: bool = True) -> dict[str, Any]:
+def _field(
+    key: str,
+    label: str,
+    *,
+    show_label: bool = True,
+    style: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
         "id": _id("fld"),
         "type": "field",
         "key": key,
         "label": label,
         "showLabel": show_label,
+        "style": style if style is not None else {"fontSize": PRINT_BODY_FONT_SIZE},
     }
 
 
@@ -185,6 +203,40 @@ def _seal_overlay_block(
     }
 
 
+# 签核栏标签 → 打印数据字段。有值则带出姓名，空则保留签字下划线。
+SIGN_LABEL_FIELD_KEYS: dict[str, str] = {
+    "采购员": "purchaser_name",
+    "采购人": "purchaser_name",
+    "审核人": "reviewer_name",
+    "审批人": "reviewer_name",
+    "销售员": "salesman_name",
+    "申请人": "applicant_name",
+    "制单人": "created_by_name",
+    "制单": "created_by_name",
+    "编制人": "created_by_name",
+    "领料人": "picker_name",
+    "退料人": "returner_name",
+    "借料人": "borrower_name",
+    "归还人": "returner_name",
+    "经办人": "operator_name",
+    "付款人": "payer_name",
+    "出纳": "payer_name",
+    "质检": "inspector_name",
+    "质检员": "inspector_name",
+    "检验员": "inspector_name",
+}
+
+SIGN_BLANK_LINE = "________________"
+
+
+def sign_label_content(label: str, field_key: str | None = None) -> str:
+    """签核栏文案：有绑定字段则 Jinja 带出姓名，否则纯下划线。"""
+    key = field_key if field_key is not None else SIGN_LABEL_FIELD_KEYS.get(label)
+    if key:
+        return f"{label}：{{{{ {key} or '{SIGN_BLANK_LINE}' }}}}"
+    return f"{label}：{SIGN_BLANK_LINE}"
+
+
 def _sign_row(labels: tuple[str, ...]) -> dict[str, Any]:
     return {
         "id": _id("sign"),
@@ -193,11 +245,26 @@ def _sign_row(labels: tuple[str, ...]) -> dict[str, Any]:
             {
                 "id": _id("c"),
                 "width": "1",
-                "blocks": [_seal_overlay_block(f"{label}：________________")],
+                "blocks": [_seal_overlay_block(sign_label_content(label))],
             }
             for label in labels
         ],
     }
+
+
+def site_name_in_header_field(*, text_align: str = "left") -> dict[str, Any]:
+    """单据标题区内的站点名（与单据名同字体层级，紧贴标题之上）。"""
+    style = {
+        **DOC_TITLE_TEXT_STYLE,
+        "textAlign": text_align,
+        "marginBottom": "2px",
+    }
+    return _field("site_name", "", show_label=False, style=style)
+
+
+def site_name_header_block() -> dict[str, Any]:
+    """兼容旧补丁：等价于独立站点名块，新模板请用 _header_block 内嵌。"""
+    return site_name_in_header_field(text_align="left")
 
 
 def _qrcode_block(key: str, *, size: int = 72) -> dict[str, Any]:
@@ -228,11 +295,8 @@ def _header_block(title: str, *, qrcode_key: str | None = None) -> dict[str, Any
                 "id": _id("c"),
                 "width": "2",
                 "blocks": [
-                    _text(
-                        title,
-                        tag="h1",
-                        style={"fontSize": "20px", "fontWeight": "700", "color": "#0f4c81", "margin": "0"},
-                    )
+                    site_name_in_header_field(text_align="left"),
+                    _text(title, tag="h1", style=dict(DOC_TITLE_TEXT_STYLE)),
                 ],
             },
             {

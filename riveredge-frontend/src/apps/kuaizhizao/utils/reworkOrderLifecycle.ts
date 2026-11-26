@@ -14,6 +14,8 @@ import { parseSalesReportDateRange } from '../services/reports';
 
 const REWORK_ORDER_STAGE_KEYS = new Set([
   'draft',
+  'committed',
+  'signoff',
   'pending',
   'approved',
   'released',

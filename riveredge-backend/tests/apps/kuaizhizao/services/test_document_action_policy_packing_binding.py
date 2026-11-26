@@ -30,3 +30,12 @@ def test_assert_delete_on_deleted_raises():
             SimpleNamespace(deleted_at=datetime.now()),
             "delete",
         )
+
+
+def test_consumed_binding_denied():
+    caps = derive_packing_binding_capabilities(
+        SimpleNamespace(deleted_at=None, consumed_at=datetime.now(), seal_status="sealed")
+    )
+    assert not caps.update.allowed
+    assert not caps.delete.allowed
+    assert caps.print.allowed

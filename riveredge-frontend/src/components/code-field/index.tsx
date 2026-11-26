@@ -306,6 +306,15 @@ const CodeField: React.FC<CodeFieldProps> = ({
     : undefined;
   const inputDisabled = disabled || codeEditLocked;
 
+  /** 未受控时勿写入 value/onChange，否则会盖住 Form.Item 对 ProFormText 的绑定 */
+  const controlFieldProps = {
+    ...fieldProps,
+    ...(value !== undefined ? { value } : {}),
+    ...(onChange
+      ? { onChange: (e: any) => onChange(e?.target?.value ?? e) }
+      : {}),
+  };
+
   if (!pageConfig || !pageConfig.autoGenerate) {
     return (
       <ProFormText
@@ -316,11 +325,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
         disabled={inputDisabled}
         colProps={colProps}
         extra={lockedExtra}
-        fieldProps={{
-          ...fieldProps,
-          value: value,
-          onChange: (e: any) => onChange?.(e.target.value),
-        }}
+        fieldProps={controlFieldProps}
       />
     );
   }
@@ -328,7 +333,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
   const canEdit = pageConfig.allowManualEdit !== false;
 
   const mergedFieldProps = {
-    ...fieldProps,
+    ...controlFieldProps,
     ...(showGenerateButton ? {
       suffix: (
         <Space>
@@ -356,11 +361,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
       disabled={inputDisabled || (!canEdit && !!value)}
       colProps={colProps}
       extra={lockedExtra}
-      fieldProps={{
-        ...mergedFieldProps,
-        value: value,
-        onChange: (e: any) => onChange?.(e.target.value),
-      }}
+      fieldProps={mergedFieldProps}
     />
   );
 };

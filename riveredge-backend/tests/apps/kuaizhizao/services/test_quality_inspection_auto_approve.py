@@ -14,7 +14,7 @@ from apps.kuaizhizao.services.quality_service import (
 @pytest.mark.asyncio
 async def test_initial_review_fields_when_audit_off():
     with patch(
-        "apps.kuaizhizao.services.quality_service._is_quality_audit_required",
+        "apps.kuaizhizao.services.quality_inspection_helpers._is_quality_audit_required",
         new=AsyncMock(return_value=False),
     ):
         fields = await _quality_inspection_initial_review_fields(1, "process_inspection")
@@ -24,7 +24,7 @@ async def test_initial_review_fields_when_audit_off():
 @pytest.mark.asyncio
 async def test_initial_review_fields_when_audit_on():
     with patch(
-        "apps.kuaizhizao.services.quality_service._is_quality_audit_required",
+        "apps.kuaizhizao.services.quality_inspection_helpers._is_quality_audit_required",
         new=AsyncMock(return_value=True),
     ):
         fields = await _quality_inspection_initial_review_fields(1, "process_inspection")
@@ -34,7 +34,7 @@ async def test_initial_review_fields_when_audit_on():
 @pytest.mark.asyncio
 async def test_conduct_finalize_auto_approve_when_audit_off_and_qualified():
     with patch(
-        "apps.kuaizhizao.services.quality_service._is_quality_audit_required",
+        "apps.kuaizhizao.services.quality_inspection_helpers._is_quality_audit_required",
         new=AsyncMock(return_value=False),
     ):
         fields = await _quality_inspection_conduct_finalize_fields(
@@ -54,7 +54,7 @@ async def test_conduct_finalize_auto_approve_when_audit_off_and_qualified():
 @pytest.mark.asyncio
 async def test_conduct_finalize_stays_inspected_when_audit_on():
     with patch(
-        "apps.kuaizhizao.services.quality_service._is_quality_audit_required",
+        "apps.kuaizhizao.services.quality_inspection_helpers._is_quality_audit_required",
         new=AsyncMock(return_value=True),
     ):
         fields = await _quality_inspection_conduct_finalize_fields(
@@ -70,7 +70,7 @@ async def test_conduct_finalize_stays_inspected_when_audit_on():
 @pytest.mark.asyncio
 async def test_conduct_finalize_unqualified_stays_inspected_when_audit_off():
     with patch(
-        "apps.kuaizhizao.services.quality_service._is_quality_audit_required",
+        "apps.kuaizhizao.services.quality_inspection_helpers._is_quality_audit_required",
         new=AsyncMock(return_value=False),
     ):
         fields = await _quality_inspection_conduct_finalize_fields(

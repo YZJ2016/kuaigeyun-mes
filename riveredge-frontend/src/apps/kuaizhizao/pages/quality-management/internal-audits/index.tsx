@@ -9,7 +9,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Empty, Row, Tag } from 'antd';
+import { App, Alert, Button, Col, Empty, Row, Tag } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import CodeField from '../../../../../components/code-field';
@@ -33,6 +33,7 @@ import {
   QMS_AUDIT_STATUS_OPTIONS,
 } from '../qms/qmsMeta';
 import QmsClauseSelect from '../qms/QmsClauseSelect';
+import InternalAuditChecklistPanel from './InternalAuditChecklistPanel';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:quality-management-internal-audits';
@@ -288,6 +289,8 @@ const InternalAuditsPage: React.FC = () => {
               };
               delete (payload as any).training_refs_text;
               delete (payload as any).calibration_refs_text;
+              delete (payload as any).checklist;
+              delete (payload as any).findings;
               if (editing?.id) {
                 await qualityQmsApi.internalAudits.update(editing.id, payload);
               } else {
@@ -361,12 +364,53 @@ const InternalAuditsPage: React.FC = () => {
             <Col span={24}>
               <ProFormTextArea name="audit_team" label={t('app.kuaizhizao.quality.qms.auditTeam')} fieldProps={{ rows: 2 }} />
             </Col>
-            <Col span={24}>
-              <ProFormTextArea name="checklist" label={t('app.kuaizhizao.quality.qms.checklist')} fieldProps={{ rows: 3 }} />
-            </Col>
-            <Col span={24}>
-              <ProFormTextArea name="findings" label={t('app.kuaizhizao.quality.qms.findings')} fieldProps={{ rows: 3 }} />
-            </Col>
+            {editing?.checklist || editing?.findings ? (
+              <Col span={24}>
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 8 }}
+                  title={t('app.kuaizhizao.quality.qms.checklist.legacyReadonly')}
+                />
+                {editing.checklist ? (
+                  <ProFormTextArea
+                    name="checklist"
+                    label={t('app.kuaizhizao.quality.qms.checklist')}
+                    fieldProps={{ rows: 2, readOnly: true }}
+                  />
+                ) : null}
+                {editing.findings ? (
+                  <ProFormTextArea
+                    name="findings"
+                    label={t('app.kuaizhizao.quality.qms.findings')}
+                    fieldProps={{ rows: 2, readOnly: true }}
+                  />
+                ) : null}
+              </Col>
+            ) : null}
+            {editing?.id ? (
+              <Col span={24}>
+                <ProFormDependency name={['standard_id', 'status']}>
+                  {({ standard_id, status }) => (
+                    <InternalAuditChecklistPanel
+                      auditId={editing.id}
+                      standardId={standard_id}
+                      canUpdate={canUpdate}
+                      readOnly={status === 'closed'}
+                      onChanged={() => actionRef.current?.reload()}
+                    />
+                  )}
+                </ProFormDependency>
+              </Col>
+            ) : (
+              <Col span={24}>
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('app.kuaizhizao.quality.qms.checklist.saveFirst')}
+                />
+              </Col>
+            )}
             <Col span={24}>
               <ProFormTextArea name="conclusion" label={t('app.kuaizhizao.quality.qms.conclusion')} fieldProps={{ rows: 2 }} />
             </Col>

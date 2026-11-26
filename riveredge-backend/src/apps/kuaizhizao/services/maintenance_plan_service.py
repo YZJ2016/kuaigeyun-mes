@@ -214,7 +214,7 @@ class MaintenancePlanService:
     ) -> List[dict[str, Any]]:
         uuids = list(dict.fromkeys(str(u).strip() for u in equipment_uuids if str(u).strip()))
         if not uuids:
-            raise ValidationError("请至少选择一台设备")
+            return []
 
         rows = await Equipment.filter(
             tenant_id=tenant_id,
@@ -301,8 +301,6 @@ class MaintenancePlanService:
             scheme = await MaintenancePlanService._resolve_maintenance_scheme(
                 tenant_id, int(scheme_id)
             )
-            if not equipment_uuids:
-                raise ValidationError("请至少选择一台设备")
             equipment_items = await MaintenancePlanService._resolve_equipment_scope(
                 tenant_id,
                 int(scheme_id),
@@ -530,10 +528,7 @@ class MaintenancePlanService:
             bound = await MaintenancePlanService._list_bound_equipment(
                 tenant_id, int(scheme_id)
             )
-            if not bound:
-                raise ValidationError(
-                    "该保养方案暂无绑定设备，请先在设备台账绑定保养方案"
-                )
+            # 方案暂无设备也可保存；提醒在无绑定设备时自动跳过
             MaintenancePlanService._apply_equipment_snapshots(plan, bound)
 
         for key, value in update_data.items():

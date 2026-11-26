@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { Button } from 'antd';
@@ -26,6 +27,7 @@ import {
 } from '../shared/equipmentMasterDataDetail';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import { buildOpsOpenCreateQuery } from '../shared/opsDocumentOpenCreate';
 
 interface MoldMaintenanceReminder {
   mold_uuid?: string;
@@ -43,7 +45,9 @@ const RESOURCE = 'kuaizhizao:mold-maintenance-reminder';
 
 const MoldMaintenanceRemindersPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const perms = useResourcePermissions(RESOURCE);
+  const maintPerms = useResourcePermissions('kuaizhizao:mold-maintenance');
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
@@ -61,6 +65,20 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
       void openDetail(async () => record as MoldMaintenanceReminder);
     },
     [openDetail],
+  );
+
+  const handleGoExecute = useCallback(
+    (record: MoldMaintenanceReminder) => {
+      if (!record.mold_uuid || !maintPerms.canCreate) return;
+      void (async () => {
+        const mold = await moldApi.get(record.mold_uuid!);
+        if (mold.id == null) return;
+        navigate(
+          `/apps/kuaizhizao/equipment-management/mold-maintenances?${buildOpsOpenCreateQuery({ mold_id: mold.id })}`,
+        );
+      })();
+    },
+    [maintPerms.canCreate, navigate],
   );
 
   const detailColumns: ProDescriptionsItemProps<MoldMaintenanceReminder>[] = useMemo(
@@ -206,11 +224,20 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
                 <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
                   {t('common.detail')}
                 </Button>,
+                maintPerms.canCreate ? (
+                  <Button
+                    key="execute"
+                    {...rowActionKind('update')}
+                    onClick={() => handleGoExecute(record)}
+                  >
+                    {t(`${P}.action.goExecute`)}
+                  </Button>
+                ) : null,
               ]
             : null,
       },
     ],
-    [t, perms.canRead, handleDetail],
+    [t, perms.canRead, maintPerms.canCreate, handleDetail, handleGoExecute],
   );
 
   if (!perms.canRead) return null;

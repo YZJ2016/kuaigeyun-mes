@@ -1,16 +1,18 @@
 /**
- * 产品工艺 — 为自制件指派工艺路线并维护序列、资源、工价
+ * 产品工艺 — 按物料或物料分组指派工艺路线并维护序列、资源、工价
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { Alert, App, Empty, Select, Spin, Tag, Typography } from 'antd';
+import { Alert, App, Empty, Spin, Tag, Typography } from 'antd';
 import { ListPageTemplate, TwoColumnLayout } from '../../../../../components/layout-templates';
-import { materialApi } from '../../../services/material';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
+import { materialApi, materialGroupApi } from '../../../services/material';
 import { processRouteApi } from '../../../services/process';
 import { productProcessApi } from '../../../services/productProcess';
-import type { Material } from '../../../types/material';
+import type { Material, MaterialGroup } from '../../../types/material';
+import { formatMaterialGroupLabel } from '../../../types/material';
 import type { ProcessRoute } from '../../../types/process';
 import { ProductProcessPanel } from '../../../components/ProductProcessPanel';
 import {
@@ -21,8 +23,42 @@ import {
 } from '../../../utils/productProcessMaterialUtils';
 
 type AssignFilter = 'all' | 'assigned' | 'unassigned';
+type ListScope = 'material' | 'group';
+
+type ProductProcessRouteByGroupUuid = Record<string, string>;
 
 const API_LIST_LIMIT = 1000;
+
+function effectiveGroupRouteLabel(
+  group: MaterialGroup,
+  processRoutes: ProcessRoute[],
+  notSetText: string,
+  productProcessGroupRouteByUuid: ProductProcessRouteByGroupUuid,
+): string {
+  const fromProductProcess = productProcessGroupRouteByUuid[group.uuid];
+  if (fromProductProcess) {
+    const pr = processRoutes.find((r) => r.uuid === fromProductProcess);
+    if (pr) return `${pr.code} - ${pr.name}`;
+  }
+  const prId = group.processRouteId ?? group.process_route_id;
+  if (prId != null) {
+    const pr = processRoutes.find((r) => r.id === prId);
+    if (pr) return `${pr.code} - ${pr.name}`;
+  }
+  return notSetText;
+}
+
+function groupHasEffectiveProcessRoute(
+  group: MaterialGroup,
+  processRoutes: ProcessRoute[],
+  productProcessGroupRouteByUuid: ProductProcessRouteByGroupUuid,
+): boolean {
+  if (productProcessGroupRouteByUuid[group.uuid]) {
+    return true;
+  }
+  const prId = group.processRouteId ?? group.process_route_id;
+  return prId != null && processRoutes.some((r) => r.id === prId);
+}
 
 const ProductProcessPage: React.FC = () => {
   const { t } = useTranslation();
@@ -30,9 +66,13 @@ const ProductProcessPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
   const materialUuidFromUrl = searchParams.get('materialUuid') ?? undefined;
+  const groupUuidFromUrl = searchParams.get('groupUuid') ?? undefined;
   const routeUuidFromUrl = searchParams.get('routeUuid') ?? undefined;
 
+  const initialScope: ListScope = groupUuidFromUrl ? 'group' : 'material';
+
   const [keyword, setKeyword] = useState('');
+  const [listScope, setListScope] = useState<ListScope>(initialScope);
   const [assignFilter, setAssignFilter] = useState<AssignFilter>('all');
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsTotal, setMaterialsTotal] = useState(0);
@@ -40,10 +80,17 @@ const ProductProcessPage: React.FC = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
 
+  const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<MaterialGroup | null>(null);
+  const [groupDetailLoading, setGroupDetailLoading] = useState(false);
+
   const [processRoutes, setProcessRoutes] = useState<ProcessRoute[]>([]);
   const [processRoutesLoading, setProcessRoutesLoading] = useState(false);
   const [productProcessRouteByMaterialUuid, setProductProcessRouteByMaterialUuid] =
     useState<ProductProcessRouteByMaterialUuid>({});
+  const [productProcessGroupRouteByUuid, setProductProcessGroupRouteByUuid] =
+    useState<ProductProcessRouteByGroupUuid>({});
 
   const filterRoute = useMemo(
     () => (routeUuidFromUrl ? processRoutes.find((r) => r.uuid === routeUuidFromUrl) : undefined),
@@ -55,7 +102,7 @@ const ProductProcessPage: React.FC = () => {
   const loadProcessRoutes = useCallback(async () => {
     setProcessRoutesLoading(true);
     try {
-      const result = await processRouteApi.list({ limit: API_LIST_LIMIT, is_active: true });
+      const result = await processRouteApi.list({ limit: API_LIST_LIMIT, isActive: true });
       const list = Array.isArray(result) ? result : result?.data ?? [];
       setProcessRoutes(list);
     } catch (e: unknown) {
@@ -85,6 +132,26 @@ const ProductProcessPage: React.FC = () => {
     }
   }, [messageApi, t]);
 
+  const loadProductProcessGroupRouteAssignments = useCallback(async () => {
+    try {
+      const items = await productProcessApi.listGroupRouteAssignments();
+      const next: ProductProcessRouteByGroupUuid = {};
+      items.forEach((item) => {
+        const groupUuid =
+          item.materialGroupUuid ?? (item as { material_group_uuid?: string }).material_group_uuid;
+        const routeUuid =
+          item.processRouteUuid ?? (item as { process_route_uuid?: string }).process_route_uuid;
+        if (groupUuid && routeUuid) {
+          next[groupUuid] = routeUuid;
+        }
+      });
+      setProductProcessGroupRouteByUuid(next);
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('common.loadFailed'));
+      setProductProcessGroupRouteByUuid({});
+    }
+  }, [messageApi, t]);
+
   const loadMaterials = useCallback(
     async (searchKeyword = '') => {
       setMaterialsLoading(true);
@@ -111,14 +178,41 @@ const ProductProcessPage: React.FC = () => {
     [messageApi, t],
   );
 
+  const loadMaterialGroups = useCallback(
+    async (searchKeyword = '') => {
+      setGroupsLoading(true);
+      try {
+        const kw = searchKeyword.trim().toLowerCase();
+        const list = await materialGroupApi.list({ limit: API_LIST_LIMIT, isActive: true });
+        const filtered = kw
+          ? list.filter((g) =>
+              `${g.code ?? ''} ${g.name ?? ''} ${g.alias ?? ''}`.toLowerCase().includes(kw),
+            )
+          : list;
+        setMaterialGroups(filtered);
+      } catch (e: unknown) {
+        messageApi.error((e as Error).message || t('common.loadFailed'));
+        setMaterialGroups([]);
+      } finally {
+        setGroupsLoading(false);
+      }
+    },
+    [messageApi, t],
+  );
+
   useEffect(() => {
     void loadProcessRoutes();
     void loadProductProcessRouteAssignments();
-  }, [loadProcessRoutes, loadProductProcessRouteAssignments]);
+    void loadProductProcessGroupRouteAssignments();
+  }, [loadProcessRoutes, loadProductProcessRouteAssignments, loadProductProcessGroupRouteAssignments]);
 
   useEffect(() => {
-    void loadMaterials();
-  }, [loadMaterials]);
+    if (listScope === 'material') {
+      void loadMaterials();
+    } else {
+      void loadMaterialGroups();
+    }
+  }, [listScope, loadMaterials, loadMaterialGroups]);
 
   const selectMaterial = useCallback(
     async (record: Material) => {
@@ -126,8 +220,10 @@ const ProductProcessPage: React.FC = () => {
       try {
         const detail = await materialApi.get(record.uuid);
         setSelectedMaterial(detail);
+        setSelectedGroup(null);
         const next = new URLSearchParams(searchParams);
         next.set('materialUuid', record.uuid);
+        next.delete('groupUuid');
         setSearchParams(next, { replace: true });
       } catch (e: unknown) {
         messageApi.error((e as Error).message || t('common.loadFailed'));
@@ -138,8 +234,28 @@ const ProductProcessPage: React.FC = () => {
     [messageApi, searchParams, setSearchParams, t],
   );
 
+  const selectGroup = useCallback(
+    async (record: MaterialGroup) => {
+      setGroupDetailLoading(true);
+      try {
+        const detail = await materialGroupApi.get(record.uuid);
+        setSelectedGroup(detail);
+        setSelectedMaterial(null);
+        const next = new URLSearchParams(searchParams);
+        next.set('groupUuid', record.uuid);
+        next.delete('materialUuid');
+        setSearchParams(next, { replace: true });
+      } catch (e: unknown) {
+        messageApi.error((e as Error).message || t('common.loadFailed'));
+      } finally {
+        setGroupDetailLoading(false);
+      }
+    },
+    [messageApi, searchParams, setSearchParams, t],
+  );
+
   useEffect(() => {
-    if (!materialUuidFromUrl || materialsLoading) return;
+    if (listScope !== 'material' || !materialUuidFromUrl || materialsLoading) return;
     const inList = materials.find((m) => m.uuid === materialUuidFromUrl);
     if (inList && selectedMaterial?.uuid !== materialUuidFromUrl) {
       void selectMaterial(inList);
@@ -155,7 +271,42 @@ const ProductProcessPage: React.FC = () => {
         .catch((e: Error) => messageApi.error(e.message || t('common.loadFailed')))
         .finally(() => setSelectedLoading(false));
     }
-  }, [materialUuidFromUrl, materials, materialsLoading, selectMaterial, selectedMaterial?.uuid, selectedLoading, messageApi, t]);
+  }, [
+    listScope,
+    materialUuidFromUrl,
+    materials,
+    materialsLoading,
+    selectMaterial,
+    selectedMaterial?.uuid,
+    selectedLoading,
+    messageApi,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (listScope !== 'group' || !groupUuidFromUrl || groupsLoading) return;
+    const inList = materialGroups.find((g) => g.uuid === groupUuidFromUrl);
+    if (inList && selectedGroup?.uuid !== groupUuidFromUrl) {
+      void selectGroup(inList);
+    } else if (!inList && groupUuidFromUrl && !groupDetailLoading) {
+      setGroupDetailLoading(true);
+      materialGroupApi
+        .get(groupUuidFromUrl)
+        .then((detail) => setSelectedGroup(detail))
+        .catch((e: Error) => messageApi.error(e.message || t('common.loadFailed')))
+        .finally(() => setGroupDetailLoading(false));
+    }
+  }, [
+    groupDetailLoading,
+    groupUuidFromUrl,
+    groupsLoading,
+    listScope,
+    materialGroups,
+    messageApi,
+    selectGroup,
+    selectedGroup?.uuid,
+    t,
+  ]);
 
   const displayedMaterials = useMemo(() => {
     let rows = materials;
@@ -177,6 +328,46 @@ const ProductProcessPage: React.FC = () => {
     }
     return rows;
   }, [materials, assignFilter, filterRoute, processRoutes, productProcessRouteByMaterialUuid]);
+
+  const displayedGroups = useMemo(() => {
+    let rows = materialGroups;
+    if (filterRoute) {
+      rows = rows.filter(
+        (g) =>
+          (productProcessGroupRouteByUuid[g.uuid] ?? '') === filterRoute.uuid
+          || processRoutes.find((r) => r.id === (g.processRouteId ?? g.process_route_id))?.uuid
+            === filterRoute.uuid,
+      );
+    }
+    if (assignFilter === 'assigned') {
+      rows = rows.filter((g) =>
+        groupHasEffectiveProcessRoute(g, processRoutes, productProcessGroupRouteByUuid),
+      );
+    } else if (assignFilter === 'unassigned') {
+      rows = rows.filter(
+        (g) => !groupHasEffectiveProcessRoute(g, processRoutes, productProcessGroupRouteByUuid),
+      );
+    }
+    return rows;
+  }, [assignFilter, filterRoute, materialGroups, processRoutes, productProcessGroupRouteByUuid]);
+
+  const handleScopeChange = (value: string | number) => {
+    const nextScope = value as ListScope;
+    setListScope(nextScope);
+    setKeyword('');
+    setAssignFilter('all');
+    if (nextScope === 'material') {
+      setSelectedGroup(null);
+      const next = new URLSearchParams(searchParams);
+      next.delete('groupUuid');
+      setSearchParams(next, { replace: true });
+    } else {
+      setSelectedMaterial(null);
+      const next = new URLSearchParams(searchParams);
+      next.delete('materialUuid');
+      setSearchParams(next, { replace: true });
+    }
+  };
 
   const clearRouteFilter = () => {
     const next = new URLSearchParams(searchParams);
@@ -233,6 +424,55 @@ const ProductProcessPage: React.FC = () => {
     </div>
   );
 
+  const leftGroupList = (
+    <div className="product-process-material-list">
+      {groupsLoading ? (
+        <div className="product-process-material-list__loading">
+          <Spin />
+        </div>
+      ) : displayedGroups.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.productProcess.noGroups')} />
+      ) : (
+        displayedGroups.map((g) => {
+          const hasRoute = groupHasEffectiveProcessRoute(g, processRoutes, productProcessGroupRouteByUuid);
+          const routeLabel = effectiveGroupRouteLabel(
+            g,
+            processRoutes,
+            notSetText,
+            productProcessGroupRouteByUuid,
+          );
+          const active = selectedGroup?.uuid === g.uuid;
+          return (
+            <button
+              key={g.uuid}
+              type="button"
+              className={`product-process-material-list__item${active ? ' product-process-material-list__item--active' : ''}`}
+              onClick={() => void selectGroup(g)}
+            >
+              <div className="product-process-material-list__row">
+                <span className="product-process-material-list__code">{g.code}</span>
+                <Tag
+                  variant="filled"
+                  color={hasRoute ? 'processing' : 'default'}
+                  className="product-process-material-list__tag"
+                >
+                  {routeLabel}
+                </Tag>
+              </div>
+              <div className="product-process-material-list__name" title={g.name}>
+                {formatMaterialGroupLabel(g)}
+              </div>
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
+
+  const rightLoading = listScope === 'material' ? selectedLoading : groupDetailLoading;
+  const listCount = listScope === 'material' ? displayedMaterials.length : displayedGroups.length;
+  const listTotal = listScope === 'material' ? materialsTotal : materialGroups.length;
+
   return (
     <ListPageTemplate fillMain>
       {filterRoute ? (
@@ -257,26 +497,49 @@ const ProductProcessPage: React.FC = () => {
         layoutPersistenceId="apps.master-data.pages.process.product-process"
         leftPanel={{
           search: {
-            placeholder: t('app.master-data.productProcess.searchMaterial'),
+            placeholder:
+              listScope === 'material'
+                ? t('app.master-data.productProcess.searchMaterial')
+                : t('app.master-data.productProcess.searchGroup'),
             value: keyword,
             onChange: setKeyword,
-            onSearch: (v) => void loadMaterials(v),
+            onSearch: (v) => {
+              const q = v.trim();
+              if (listScope === 'material') {
+                void loadMaterials(q);
+              } else {
+                void loadMaterialGroups(q);
+              }
+            },
             allowClear: true,
           },
           actions: [
-            <Select
+            <ThemedSegmented
+              key="scope"
+              block
+              surfaceBackground
+              size="medium"
+              value={listScope}
+              onChange={handleScopeChange}
+              options={[
+                { label: t('app.master-data.productProcess.scopeMaterial'), value: 'material' },
+                { label: t('app.master-data.productProcess.scopeGroup'), value: 'group' },
+              ]}
+            />,
+            <ThemedSegmented
               key="assign-filter"
-              size="small"
-              style={{ width: '100%' }}
+              block
+              surfaceBackground
+              size="medium"
               value={assignFilter}
-              onChange={setAssignFilter}
+              onChange={(value) => setAssignFilter(value as AssignFilter)}
               options={[
                 { label: t('app.master-data.productProcess.filterAll'), value: 'all' },
                 { label: t('app.master-data.productProcess.filterAssigned'), value: 'assigned' },
                 { label: t('app.master-data.productProcess.filterUnassigned'), value: 'unassigned' },
               ]}
             />,
-            materialsTotal > API_LIST_LIMIT ? (
+            listScope === 'material' && materialsTotal > API_LIST_LIMIT ? (
               <Typography.Text key="trunc-hint" type="warning" style={{ fontSize: 12, display: 'block' }}>
                 {t('app.master-data.productProcess.listTruncated', {
                   total: materialsTotal,
@@ -285,14 +548,15 @@ const ProductProcessPage: React.FC = () => {
               </Typography.Text>
             ) : null,
           ].filter(Boolean),
-          leftContent: leftMaterialList,
+          leftContent: listScope === 'material' ? leftMaterialList : leftGroupList,
         }}
         rightPanel={{
           contentPadding: 12,
           content: (
-            <Spin spinning={selectedLoading}>
-              {selectedMaterial ? (
+            <Spin spinning={rightLoading}>
+              {listScope === 'material' && selectedMaterial ? (
                 <ProductProcessPanel
+                  scope="material"
                   material={selectedMaterial}
                   processRoutes={processRoutes}
                   processRoutesLoading={processRoutesLoading}
@@ -315,18 +579,47 @@ const ProductProcessPage: React.FC = () => {
                   }}
                   onProcessRoutesRefresh={loadProcessRoutes}
                 />
+              ) : listScope === 'group' && selectedGroup ? (
+                <ProductProcessPanel
+                  scope="group"
+                  materialGroup={selectedGroup}
+                  processRoutes={processRoutes}
+                  processRoutesLoading={processRoutesLoading}
+                  hideMaterialHeading
+                  hidePanelHint
+                  onMaterialGroupUpdated={(g) => {
+                    setSelectedGroup(g);
+                    setMaterialGroups((prev) => prev.map((row) => (row.uuid === g.uuid ? { ...row, ...g } : row)));
+                  }}
+                  onProductProcessGroupRouteSaved={(groupUuid, processRouteUuid) => {
+                    setProductProcessGroupRouteByUuid((prev) => {
+                      const next = { ...prev };
+                      if (processRouteUuid) {
+                        next[groupUuid] = processRouteUuid;
+                      } else {
+                        delete next[groupUuid];
+                      }
+                      return next;
+                    });
+                  }}
+                  onProcessRoutesRefresh={loadProcessRoutes}
+                />
               ) : (
                 <Empty
                   style={{ marginTop: 80 }}
-                  description={t('app.master-data.productProcess.selectMaterialHint')}
+                  description={
+                    listScope === 'material'
+                      ? t('app.master-data.productProcess.selectMaterialHint')
+                      : t('app.master-data.productProcess.selectGroupHint')
+                  }
                 />
               )}
             </Spin>
           ),
           footer: (
             <span>
-              {displayedMaterials.length}
-              {materialsTotal > displayedMaterials.length ? ` / ${materialsTotal}` : ''}
+              {listCount}
+              {listScope === 'material' && listTotal > listCount ? ` / ${listTotal}` : ''}
             </span>
           ),
         }}

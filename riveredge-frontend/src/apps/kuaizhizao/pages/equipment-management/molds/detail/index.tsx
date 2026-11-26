@@ -65,6 +65,7 @@ import {
   KUAIZHIZAO_MOLD_LIST_PATH,
   resolveMoldDetailTabKey,
 } from '../moldPaths';
+import { buildOpsOpenCreateQuery } from '../../shared/opsDocumentOpenCreate';
 
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
@@ -173,6 +174,15 @@ const MoldDetailPage: React.FC = () => {
   } = useCustomFieldsForList<MoldDetail>({ tableName: MOLD_CUSTOM_FIELD_TABLE });
 
   const moldTracking = useDocumentTracking(mold?.id ? 'mold' : undefined, mold?.id, trackingRefreshKey);
+
+  const moldOpsOpenCreateQuery = useMemo(
+    () => (mold?.id != null ? buildOpsOpenCreateQuery({ mold_id: mold.id }) : null),
+    [mold?.id],
+  );
+  const moldOpsCreateHref = useCallback(
+    (path: string) => (moldOpsOpenCreateQuery ? `${path}?${moldOpsOpenCreateQuery}` : path),
+    [moldOpsOpenCreateQuery],
+  );
 
   const loadPageData = useCallback(async () => {
     if (!uuid) return;
@@ -608,7 +618,7 @@ const MoldDetailPage: React.FC = () => {
           <>
             <div style={{ marginBottom: 12 }}>
               <Space wrap>
-                <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
+                <Link to={moldOpsCreateHref('/apps/kuaizhizao/equipment-management/mold-borrows')}>
                   <Button type="primary">{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
                 </Link>
                 <Link to="/apps/kuaizhizao/equipment-management/mold-returns">
@@ -655,16 +665,16 @@ const MoldDetailPage: React.FC = () => {
         label: t('app.kuaizhizao.moldOps.opsLinks.title'),
         children: (
           <Space wrap>
-            <Link to="/apps/kuaizhizao/equipment-management/mold-borrows">
+            <Link to={moldOpsCreateHref('/apps/kuaizhizao/equipment-management/mold-borrows')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.mold-borrows')}</Button>
             </Link>
-            <Link to="/apps/kuaizhizao/equipment-management/mold-trials">
+            <Link to={moldOpsCreateHref('/apps/kuaizhizao/equipment-management/mold-trials')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.mold-trials')}</Button>
             </Link>
-            <Link to="/apps/kuaizhizao/equipment-management/mold-maintenances">
+            <Link to={moldOpsCreateHref('/apps/kuaizhizao/equipment-management/mold-maintenances')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.mold-maintenances')}</Button>
             </Link>
-            <Link to="/apps/kuaizhizao/equipment-management/mold-repairs">
+            <Link to={moldOpsCreateHref('/apps/kuaizhizao/equipment-management/mold-repairs')}>
               <Button>{t('app.kuaizhizao.menu.equipment-management.mold-repairs')}</Button>
             </Link>
           </Space>
@@ -691,6 +701,7 @@ const MoldDetailPage: React.FC = () => {
     calibrations,
     calibrationTableColumns,
     messageApi,
+    moldOpsCreateHref,
   ]);
 
   const handleTabChange = (key: string) => {

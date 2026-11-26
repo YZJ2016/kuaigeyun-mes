@@ -50,7 +50,7 @@ class InvoiceBase(BaseModel):
     amount_excluding_tax: Decimal = Field(..., description="不含税金额")
     tax_amount: Decimal = Field(..., description="税额")
     total_amount: Decimal = Field(..., description="价税合计")
-    tax_rate: Decimal = Field(default=0.13, description="税率")
+    tax_rate: Decimal = Field(..., description="税率（必填）")
     invoice_date: date = Field(..., description="开票日期")
     received_date: Optional[date] = Field(None, description="收票/开具日期")
     status: str = Field(default="DRAFT", description="状态")

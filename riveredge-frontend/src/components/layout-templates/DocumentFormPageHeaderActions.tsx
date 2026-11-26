@@ -21,10 +21,16 @@ export interface DocumentFormPageHeaderActionsProps {
   primarySaveLabel?: string;
   primaryLoading?: boolean;
   saveDraftLoading?: boolean;
-  /** 保存只落草稿，另显示「提交」写成已提交。不影响未传入的页面。 */
+  /**
+   * 保存草稿 + 保存并审核（commit → submit_review）。
+   * onSaveAndAudit 优先；未传时沿用 onCommitSubmit。
+   */
   showCommitSubmit?: boolean;
+  /** @deprecated 使用 onSaveAndAudit */
   onCommitSubmit?: () => void;
+  onSaveAndAudit?: () => void;
   commitSubmitLoading?: boolean;
+  saveAndAuditLoading?: boolean;
 }
 
 export function DocumentFormPageHeaderActions({
@@ -42,15 +48,16 @@ export function DocumentFormPageHeaderActions({
   saveDraftLoading = false,
   showCommitSubmit = false,
   onCommitSubmit,
+  onSaveAndAudit,
   commitSubmitLoading = false,
+  saveAndAuditLoading,
 }: DocumentFormPageHeaderActionsProps) {
   const { t } = useTranslation();
+  const auditHandler = onSaveAndAudit ?? onCommitSubmit;
+  const auditLoading = saveAndAuditLoading ?? commitSubmitLoading;
 
   const draftLabel =
-    saveDraftLabel ??
-    (isCreatePage
-      ? t('components.layoutTemplates.documentFormPage.saveDraft')
-      : t('common.save'));
+    saveDraftLabel ?? t('components.layoutTemplates.documentFormPage.saveDraft');
 
   const primaryLabel = canSubmitAfterSave
     ? isCreatePage
@@ -62,12 +69,12 @@ export function DocumentFormPageHeaderActions({
     return (
       <Space wrap>
         <Button onClick={onCancel}>{t('common.cancel')}</Button>
-        <Button type="primary" loading={saveDraftLoading} onClick={onSaveDraft}>
-          {t('common.save')}
+        <Button loading={saveDraftLoading} onClick={onSaveDraft}>
+          {draftLabel}
           {SUBMIT_SHORTCUT_HINT}
         </Button>
-        <Button loading={commitSubmitLoading} onClick={onCommitSubmit}>
-          {t('common.submit')}
+        <Button type="primary" loading={auditLoading} onClick={auditHandler}>
+          {t('components.layoutTemplates.documentFormPage.saveAndAudit')}
         </Button>
       </Space>
     );

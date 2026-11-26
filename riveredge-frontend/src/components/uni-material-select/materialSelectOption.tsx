@@ -10,6 +10,44 @@ import { SecureImage } from '../secure-image';
 
 export const MATERIAL_SELECT_OPTION_ITEM_HEIGHT = 56;
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** 下拉候选项内对当前搜索词做不区分大小写高亮（支持空格分隔多词） */
+export function renderTextWithSearchHighlight(
+  text: string,
+  keyword: string,
+  highlightStyle: React.CSSProperties,
+): React.ReactNode {
+  const tokens = keyword
+    .trim()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (!tokens.length || !text) return text;
+  const pattern = tokens.map(escapeRegExp).join('|');
+  const re = new RegExp(`(${pattern})`, 'gi');
+  const parts = text.split(re);
+  if (parts.length <= 1) return text;
+  return parts.map((part, index) =>
+    index % 2 === 1 ? (
+      <mark
+        key={`${index}-${part}`}
+        style={{
+          padding: '0 1px',
+          borderRadius: 2,
+          ...highlightStyle,
+        }}
+      >
+        {part}
+      </mark>
+    ) : (
+      <React.Fragment key={`${index}-${part}`}>{part}</React.Fragment>
+    ),
+  );
+}
+
 function pickField(m: Record<string, unknown>, key: string): string {
   if (m == null || typeof m !== 'object') return '';
   const camel = m[key];
@@ -62,11 +100,14 @@ export type MaterialSelectOptionContentProps = {
   material: Record<string, unknown> | null | undefined;
   /** 无物料数据时的回退文案 */
   fallbackLabel?: React.ReactNode;
+  /** 下拉搜索框当前关键词，用于候选项高亮 */
+  searchKeyword?: string;
 };
 
 export const MaterialSelectOptionContent: React.FC<MaterialSelectOptionContentProps> = ({
   material,
   fallbackLabel,
+  searchKeyword = '',
 }) => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
@@ -89,6 +130,14 @@ export const MaterialSelectOptionContent: React.FC<MaterialSelectOptionContentPr
   if (model) {
     metaParts.push(`${t('app.master-data.materials.model')}: ${model}`);
   }
+
+  const titleText =
+    mainCode || nameVal ? formatMaterialSelectDropdownTitle(material) : String(fallbackLabel ?? '');
+  const highlightStyle: React.CSSProperties = {
+    background: token.colorPrimaryBg,
+    color: token.colorPrimary,
+    fontWeight: 600,
+  };
 
   return (
     <div
@@ -138,7 +187,9 @@ export const MaterialSelectOptionContent: React.FC<MaterialSelectOptionContentPr
             fontWeight: 500,
           }}
         >
-          {mainCode || nameVal ? formatMaterialSelectDropdownTitle(material) : fallbackLabel || EMPTY_VALUE_PLACEHOLDER}
+          {mainCode || nameVal
+            ? renderTextWithSearchHighlight(titleText, searchKeyword, highlightStyle)
+            : fallbackLabel || EMPTY_VALUE_PLACEHOLDER}
         </div>
         {metaParts.length > 0 ? (
           <div
@@ -151,7 +202,12 @@ export const MaterialSelectOptionContent: React.FC<MaterialSelectOptionContentPr
               whiteSpace: 'nowrap',
             }}
           >
-            {metaParts.join('  ')}
+            {metaParts.map((part, index) => (
+              <React.Fragment key={part}>
+                {index > 0 ? '  ' : null}
+                {renderTextWithSearchHighlight(part, searchKeyword, highlightStyle)}
+              </React.Fragment>
+            ))}
           </div>
         ) : null}
       </div>

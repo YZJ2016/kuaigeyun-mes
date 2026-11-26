@@ -76,7 +76,23 @@ async def _serialize_detail(tenant_id: int, user_id: int, obj: Receipt) -> Recei
     )
     if pull_lines:
         enriched["pull_lines"] = pull_lines
-    return ReceiptVoucherResponse.model_validate(enriched)
+    detailed = ReceiptVoucherResponse.model_validate(enriched)
+    audited = await _attach_audit(tenant_id, user_id, [detailed])
+    return audited[0]
+
+
+async def _attach_audit(
+    tenant_id: int,
+    user_id: int,
+    items: list[ReceiptVoucherResponse],
+) -> list[ReceiptVoucherResponse]:
+    if not items:
+        return items
+    from core.services.approval.audit_record_enricher import enrich_items
+
+    payloads = [item.model_dump() for item in items]
+    enriched = await enrich_items(tenant_id, "receipt", payloads, viewer_id=user_id)
+    return [ReceiptVoucherResponse.model_validate(row) for row in enriched]
 
 
 @router.post("", response_model=ReceiptVoucherResponse, status_code=status.HTTP_201_CREATED)
@@ -161,6 +177,7 @@ async def create_receipt(
             "counterparty_bank_account": data.counterparty_bank_account,
             "settlement_type": data.settlement_type or "normal",
             "status": "Draft",
+            "review_status": "草稿",
             "notes": data.notes,
             "attachments": data.attachments,
         }
@@ -260,6 +277,7 @@ async def list_receipts(
     total = await query.count()
     items = await query.order_by(order_expr, "-id").offset(skip).limit(limit).all()
     serialized = [await _serialize(tenant_id, current_user.id, r) for r in items]
+    serialized = await _attach_audit(tenant_id, current_user.id, serialized)
     return ReceiptVoucherListResponse(
         items=serialized,
         total=total, skip=skip, limit=limit
@@ -410,6 +428,11 @@ async def update_receipt(
     receipt = await _get_or_404(tenant_id, id)
     try:
         assert_voucher_correction_allowed(receipt, action="update")
+        from apps.kuaicaiwu.services.receipt_audit_service import (
+            assert_receipt_review_editable,
+        )
+
+        assert_receipt_review_editable(receipt)
     except BusinessLogicError as exc:
         raise _http_exception_with_trace(400, str(exc), "/receipts/{id}", tenant_id) from exc
     update_data = data.model_dump(exclude_unset=True)
@@ -567,7 +590,7 @@ async def unconfirm_receipt(
         )
     except (BusinessLogicError, ValidationError) as exc:
         raise _http_exception_with_trace(400, str(exc), "/receipts/{id}/unconfirm", tenant_id) from exc
-    payload = {"status": "Draft"}
+    payload = {"status": "Draft", "review_status": "草稿"}
     apply_update_audit(payload, current_user)
     await Receipt.filter(id=id).update(**payload)
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
@@ -590,6 +613,12 @@ async def delete_receipt(
     receipt = await _get_or_404(tenant_id, id)
     try:
         assert_voucher_correction_allowed(receipt, action="delete")
+        if str(receipt.status or "") == "Draft":
+            from apps.kuaicaiwu.services.receipt_audit_service import (
+                assert_receipt_review_editable,
+            )
+
+            assert_receipt_review_editable(receipt)
         if str(receipt.status or "") == "Confirmed":
             await apply_confirmed_voucher_unpost(
                 tenant_id,

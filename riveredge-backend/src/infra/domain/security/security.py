@@ -62,7 +62,12 @@ def create_access_token(
     return encoded_jwt
 
 
-def verify_token(token: str, *, secret: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def verify_token(
+    token: str,
+    *,
+    secret: Optional[str] = None,
+    silent: bool = False,
+) -> Optional[Dict[str, Any]]:
     """
     验证 JWT Token
     
@@ -71,6 +76,7 @@ def verify_token(token: str, *, secret: Optional[str] = None) -> Optional[Dict[s
     Args:
         token: JWT Token 字符串
         secret: 验签密钥（可选，默认 JWT_SECRET_KEY）
+        silent: True 时验签失败不打 DEBUG（双密钥探测用）
         
     Returns:
         Optional[Dict[str, Any]]: Token 载荷数据，如果验证失败则返回 None
@@ -83,18 +89,39 @@ def verify_token(token: str, *, secret: Optional[str] = None) -> Optional[Dict[s
         )
         return payload
     except JWTError as e:
-        from loguru import logger
-        logger.debug(f"Token 验证失败 (JWTError): {e}")
+        if not silent:
+            from loguru import logger
+            logger.debug(f"Token 验证失败 (JWTError): {e}")
         return None
     except Exception as e:
-        from loguru import logger
-        logger.debug(f"Token 验证失败 (Exception): {e}")
+        if not silent:
+            from loguru import logger
+            logger.debug(f"Token 验证失败 (Exception): {e}")
         return None
 
 
 def get_token_payload(token: str, *, secret: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """获取 Token 载荷（等同 verify_token）。"""
     return verify_token(token, secret=secret)
+
+
+def resolve_bearer_payload(token: str) -> Optional[Dict[str, Any]]:
+    """解析任意登录 Bearer：平台超管密钥 → 租户 JWT。
+
+    中间件 / Socket.IO / request_identity 须用本函数，禁止只拿 JWT_SECRET_KEY
+    去验超管票（会刷 Signature verification failed，且超管永远解析失败）。
+    """
+    if not token or not str(token).strip():
+        return None
+    raw = str(token).strip()
+    from infra.domain.security.infra_superadmin_security import (
+        get_infra_superadmin_token_payload,
+    )
+
+    infra = get_infra_superadmin_token_payload(raw)
+    if infra:
+        return infra
+    return verify_token(raw, silent=True)
 
 
 def hash_password(password: str) -> str:

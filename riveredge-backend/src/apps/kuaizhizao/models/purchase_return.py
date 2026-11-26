@@ -60,6 +60,10 @@ class PurchaseReturn(BaseModel):
     # 退货原因
     return_reason = fields.CharField(max_length=200, null=True, description="退货原因")
     return_type = fields.CharField(max_length=20, default="质量问题", description="退货类型（质量问题/供应商取消/其他）")
+    replenish = fields.BooleanField(
+        default=False,
+        description="是否补货（是则释放采购订单可再次下推入库的数量）",
+    )
 
     status = fields.CharField(max_length=20, default="待退货", description="退货状态")
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总退货数量")

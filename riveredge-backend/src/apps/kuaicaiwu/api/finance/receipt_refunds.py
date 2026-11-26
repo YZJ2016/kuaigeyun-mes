@@ -74,12 +74,28 @@ async def _serialize(tenant_id: int, user_id: int, obj: Receipt) -> ReceiptVouch
     return ReceiptVoucherResponse.model_validate(masked)
 
 
+async def _attach_audit(
+    tenant_id: int,
+    user_id: int,
+    items: list[ReceiptVoucherResponse],
+) -> list[ReceiptVoucherResponse]:
+    if not items:
+        return items
+    from core.services.approval.audit_record_enricher import enrich_items
+
+    payloads = [item.model_dump() for item in items]
+    enriched = await enrich_items(tenant_id, "receipt_refund", payloads, viewer_id=user_id)
+    return [ReceiptVoucherResponse.model_validate(row) for row in enriched]
+
+
 async def _serialize_detail(tenant_id: int, user_id: int, obj: Receipt) -> ReceiptVoucherResponse:
     from apps.kuaicaiwu.services.finance_voucher_enrichment import enrich_voucher_detail
 
     base = await _serialize(tenant_id, user_id, obj)
     enriched = await enrich_voucher_detail(tenant_id, base.model_dump(), kind="receipt")
-    return ReceiptVoucherResponse.model_validate(enriched)
+    detailed = ReceiptVoucherResponse.model_validate(enriched)
+    audited = await _attach_audit(tenant_id, user_id, [detailed])
+    return audited[0]
 
 
 @router.post("", response_model=ReceiptVoucherResponse, status_code=status.HTTP_201_CREATED)
@@ -143,6 +159,7 @@ async def create_receipt_refund(
         "counterparty_bank_account": data.counterparty_bank_account,
         "settlement_type": "refund",
         "status": "Draft",
+        "review_status": "草稿",
         "notes": data.notes,
         "attachments": data.attachments,
     }
@@ -224,6 +241,9 @@ async def list_receipt_refunds(
 
     payloads = [item.model_dump() for item in serialized]
     await attach_refund_bank_flow_capabilities(tenant_id, payloads, kind="receipt")
+    from core.services.approval.audit_record_enricher import enrich_items
+
+    payloads = await enrich_items(tenant_id, "receipt_refund", payloads, viewer_id=current_user.id)
     return ReceiptVoucherListResponse(
         items=[ReceiptVoucherResponse.model_validate(p) for p in payloads],
         total=total,
@@ -331,6 +351,14 @@ async def update_receipt_refund(
     receipt = await _get_or_404(tenant_id, id)
     if receipt.status == "Confirmed":
         raise _http_exception_with_trace(400, "已确认的收款退款不能修改", "/receipt-refunds/{id}", tenant_id)
+    try:
+        from apps.kuaicaiwu.services.receipt_refund_audit_service import (
+            assert_receipt_refund_review_editable,
+        )
+
+        assert_receipt_refund_review_editable(receipt)
+    except BusinessLogicError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/receipt-refunds/{id}", tenant_id) from exc
     update_data = data.model_dump(exclude_unset=True)
     update_data.pop("settlement_type", None)
     apply_update_audit(update_data, current_user)
@@ -416,5 +444,13 @@ async def cancel_receipt_refund(
             "/receipt-refunds/{id}/cancel",
             tenant_id,
         )
+    try:
+        from apps.kuaicaiwu.services.receipt_refund_audit_service import (
+            assert_receipt_refund_review_editable,
+        )
+
+        assert_receipt_refund_review_editable(receipt)
+    except BusinessLogicError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/receipt-refunds/{id}/cancel", tenant_id) from exc
     await Receipt.filter(id=id).update(status="Cancelled")
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))

@@ -1,4 +1,5 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -66,6 +67,7 @@ type BorrowOption = {
 const ToolReturnsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
   const perms = useResourcePermissions(RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -75,6 +77,7 @@ const ToolReturnsPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [borrowOptions, setBorrowOptions] = useState<BorrowOption[]>([]);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>();
+  const pushHandledRef = useRef<string | null>(null);
   const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
     useEquipmentDetailDrawer<ToolReturn>();
 
@@ -97,14 +100,38 @@ const ToolReturnsPage: React.FC = () => {
     return options;
   };
 
-  const handleCreate = () => {
+  const openCreate = async (prefillBorrowId?: number) => {
     setIsEdit(false);
     setCurrent(null);
-    setFormInitialValues({ return_date: dayjs(), usage_count: 1 });
+    const options = await loadBorrowOptions();
+    const borrowId = prefillBorrowId;
+    const toolId = borrowId ? options.find((o) => o.value === borrowId)?.toolId : undefined;
+    setFormInitialValues({
+      return_date: dayjs(),
+      usage_count: 1,
+      borrow_id: borrowId,
+      tool_id: toolId,
+    });
     setModalVisible(true);
-    void loadBorrowOptions();
+  };
+
+  const handleCreate = () => {
+    void openCreate();
   };
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    const borrowIdRaw = searchParams.get('borrow_id');
+    if (!borrowIdRaw || !perms.canCreate) return;
+    if (pushHandledRef.current === borrowIdRaw) return;
+    pushHandledRef.current = borrowIdRaw;
+    const borrowId = Number(borrowIdRaw);
+    if (!Number.isFinite(borrowId)) return;
+    void openCreate(borrowId);
+    const next = new URLSearchParams(searchParams);
+    next.delete('borrow_id');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, perms.canCreate, setSearchParams]);
 
   const handleDetail = (record: ToolReturn) => {
     if (!record.id) return;
@@ -389,6 +416,7 @@ const ToolReturnsPage: React.FC = () => {
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
           onDelete={executeDelete}

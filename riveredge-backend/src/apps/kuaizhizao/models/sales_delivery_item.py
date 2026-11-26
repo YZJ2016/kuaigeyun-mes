@@ -41,6 +41,7 @@ class SalesDeliveryItem(
     # 出库数量和价格
     delivery_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="出库数量")
     unit_price = fields.DecimalField(max_digits=12, decimal_places=4, description="单价")
+    tax_rate = fields.DecimalField(max_digits=6, decimal_places=2, default=0, description="税率（%）")
     unit_cost = fields.DecimalField(max_digits=14, decimal_places=4, null=True, description="出库单位成本")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="金额")
     is_gift = fields.BooleanField(default=False, description="是否赠品")

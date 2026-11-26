@@ -19,7 +19,7 @@ MCP：`obsidian-memory`（`E:\AI-Memory` 与本仓 `.cursor/memory`）。无独�
 
 ## 按需再读（不要默认全文）
 
-- 提交/测试：`test-knowledge.md`（新测试只放 `D:\pytest`，仓库 `tests/` 只改已有文件）
+- 提交/测试：`test-knowledge.md`（后端测试统一放 `riveredge-backend/tests/`，可新建，随仓库 git 管理；禁止放仓库外目录）
 - 推送身份：`E:\AI-Memory\40-Decisions\2026-09-29-kuaigeyun-git-identity.md`（令牌不写入聊天）
 - 功能做法：`.cursor/memory/README.md` 关键词表 → `features/*.md`
 

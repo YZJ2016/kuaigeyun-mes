@@ -90,6 +90,7 @@ def list_initiator_branch_conditions_in_graph(raw_nodes: Any) -> List[Dict[str, 
             continue
         conditions = data.get("conditions") or []
         branches: List[Dict[str, Any]] = []
+        default_index = None
         by_id = {str(n.get("id")): n for n in nodes if isinstance(n, dict) and n.get("id") is not None}
         for i, edge in enumerate(out_edges):
             cond = conditions[i] if i < len(conditions) and isinstance(conditions[i], dict) else {}
@@ -98,12 +99,26 @@ def list_initiator_branch_conditions_in_graph(raw_nodes: Any) -> List[Dict[str, 
                 target = by_id.get(str(edge.get("target") or ""))
                 td = target.get("data") if isinstance(target, dict) and isinstance(target.get("data"), dict) else {}
                 branch_label = str(td.get("label") or target.get("id") or "").strip() or f"分支{i + 1}"
-            branches.append({"index": i, "label": branch_label})
+            is_default = bool(cond.get("isDefault") or cond.get("is_default"))
+            if is_default and default_index is None:
+                default_index = i
+            target = by_id.get(str(edge.get("target") or ""))
+            td = target.get("data") if isinstance(target, dict) and isinstance(target.get("data"), dict) else {}
+            target_label = str(td.get("label") or "").strip()
+            branches.append(
+                {
+                    "index": i,
+                    "label": branch_label,
+                    "is_default": is_default,
+                    "target_label": target_label,
+                }
+            )
         out.append(
             {
                 "condition_node_id": node_id,
                 "label": str(data.get("label") or node_id).strip() or "条件分支",
                 "required": True,
+                "default_index": default_index,
                 "branches": branches,
             }
         )

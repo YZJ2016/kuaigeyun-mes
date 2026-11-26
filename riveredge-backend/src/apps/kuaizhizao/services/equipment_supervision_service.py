@@ -61,11 +61,21 @@ async def dispatch_maintenance_supervision(
     """新建 overdue 提醒即时通知；未处理 overdue 提醒每日督促一次。"""
     created = created_reminders or []
     overdue_created = [r for r in created if r.reminder_type == "overdue"]
+    due_soon_created = [r for r in created if r.reminder_type == "due_soon"]
     if overdue_created:
         await notify_maintenance_overdue_supervision(
             tenant_id=tenant_id,
             reminders=overdue_created,
             subject_tag="new",
+        )
+    if due_soon_created:
+        from apps.kuaizhizao.services.equipment_mobile_notification import (
+            notify_maintenance_due_soon_reminder,
+        )
+
+        await notify_maintenance_due_soon_reminder(
+            tenant_id=tenant_id,
+            reminders=due_soon_created,
         )
 
     today = date.today().isoformat()

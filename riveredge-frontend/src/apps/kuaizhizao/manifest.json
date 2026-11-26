@@ -435,9 +435,19 @@
             "permission": "kuaizhizao:purchase-return:read"
           },
           {
+            "title": "app.kuaizhizao.menu.purchase-management.outbound",
+            "path": "/apps/kuaizhizao/purchase-management/outbound",
+            "sort_order": 9,
+            "meta": {
+              "module": "purchase",
+              "node": "purchase_return"
+            },
+            "permission": "kuaizhizao:purchase-return:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.purchase-management.reports",
             "icon": "fileText",
-            "sort_order": 9,
+            "sort_order": 10,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-requisition-tracking",
@@ -452,21 +462,33 @@
                 "permission": "kuaizhizao:purchase-management-reports-purchase-order-query:read"
               },
               {
+                "title": "app.kuaizhizao.menu.reports.purchase-receipt-detail",
+                "path": "/apps/kuaizhizao/purchase-management/reports/purchase-receipt-detail",
+                "sort_order": 3,
+                "permission": "kuaizhizao:purchase-management-reports-purchase-receipt-detail:read"
+              },
+              {
+                "title": "app.kuaizhizao.menu.reports.material-purchase-summary",
+                "path": "/apps/kuaizhizao/purchase-management/reports/material-purchase-summary",
+                "sort_order": 4,
+                "permission": "kuaizhizao:purchase-management-reports-material-purchase-summary:read"
+              },
+              {
                 "title": "app.kuaizhizao.menu.reports.purchase-order-progress",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-order-progress",
-                "sort_order": 3,
+                "sort_order": 5,
                 "permission": "kuaizhizao:purchase-management-reports-purchase-order-progress:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.supplier-delivery-summary",
                 "path": "/apps/kuaizhizao/purchase-management/reports/supplier-delivery-summary",
-                "sort_order": 4,
+                "sort_order": 6,
                 "permission": "kuaizhizao:purchase-management-reports-supplier-delivery-summary:read"
               },
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-reconciliation",
                 "path": "/apps/kuaizhizao/purchase-management/reports/purchase-reconciliation",
-                "sort_order": 5,
+                "sort_order": 7,
                 "permission": "kuaizhizao:purchase-management-reports-purchase-reconciliation:read"
               }
             ]
@@ -3087,6 +3109,12 @@
     "kuaizhizao:purchase-management-reports-purchase-order-query:read",
     "kuaizhizao:purchase-management-reports-purchase-order-query:export",
     "kuaizhizao:purchase-management-reports-purchase-order-query:print",
+    "kuaizhizao:purchase-management-reports-purchase-receipt-detail:read",
+    "kuaizhizao:purchase-management-reports-purchase-receipt-detail:export",
+    "kuaizhizao:purchase-management-reports-purchase-receipt-detail:print",
+    "kuaizhizao:purchase-management-reports-material-purchase-summary:read",
+    "kuaizhizao:purchase-management-reports-material-purchase-summary:export",
+    "kuaizhizao:purchase-management-reports-material-purchase-summary:print",
     "kuaizhizao:purchase-management-reports-purchase-reconciliation:read",
     "kuaizhizao:purchase-management-reports-purchase-reconciliation:export",
     "kuaizhizao:purchase-management-reports-purchase-reconciliation:print",

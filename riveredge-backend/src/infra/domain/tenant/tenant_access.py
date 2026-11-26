@@ -51,14 +51,23 @@ async def filter_operational_tenant_ids(tenant_ids: set[int]) -> set[int]:
     return operational
 
 
-async def require_operational_tenant_by_id(tenant_id: int) -> Tenant:
-    """加载组织并校验可用；不可用时 403。"""
+async def require_existing_tenant_by_id(tenant_id: int) -> Tenant:
+    """仅校验组织行存在（不强制 ACTIVE）。
+
+    供平台超管运维入口：可进入非 active 组织，但拒绝幽灵/已删组织 ID。
+    """
     tenant = await Tenant.get_or_none(id=tenant_id)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="组织不存在",
         )
+    return tenant
+
+
+async def require_operational_tenant_by_id(tenant_id: int) -> Tenant:
+    """加载组织并校验可用；不可用时 403。"""
+    tenant = await require_existing_tenant_by_id(tenant_id)
     await sync_tenant_expiry_status(tenant)
     detail = tenant_access_denied_detail(tenant)
     if detail:

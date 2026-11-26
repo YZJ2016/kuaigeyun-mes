@@ -195,7 +195,65 @@ class MessageService:
                 message_log_uuid=message_log.uuid,
                 inngest_run_id=None,
             )
-        
+
+        # 企微/Webhook 推送：同步发送（不依赖 Taskiq worker）。
+        # 现场常见 message/send 未入队或 worker 未消费，导致审核通知长期 pending。
+        if request.type == "push":
+            from core.workflows.functions.message_sender import _send_push_notification
+            from loguru import logger
+
+            variables_dict = (
+                dict(message_log.variables)
+                if isinstance(message_log.variables, dict)
+                else None
+            )
+            try:
+                push_result = await _send_push_notification(
+                    tenant_id,
+                    str(config.uuid),
+                    request.recipient,
+                    subject or "新消息",
+                    content or "",
+                    variables_dict,
+                )
+            except Exception as exc:
+                logger.exception(
+                    "同步推送失败 message_log={} err={}",
+                    message_log.uuid,
+                    exc,
+                )
+                message_log.status = "failed"
+                message_log.error_message = str(exc)
+                await message_log.save()
+                return SendMessageResponse(
+                    success=False,
+                    message_log_uuid=message_log.uuid,
+                    inngest_run_id=None,
+                    error=str(exc),
+                )
+
+            if push_result.get("success"):
+                message_log.status = "success"
+                message_log.sent_at = timezone.now()
+                message_log.error_message = None
+                await message_log.save()
+                return SendMessageResponse(
+                    success=True,
+                    message_log_uuid=message_log.uuid,
+                    inngest_run_id=None,
+                )
+
+            err = str(push_result.get("error") or "推送失败")
+            message_log.status = "failed"
+            message_log.error_message = err
+            await message_log.save()
+            return SendMessageResponse(
+                success=False,
+                message_log_uuid=message_log.uuid,
+                inngest_run_id=None,
+                error=err,
+            )
+
         from core.tasks.dispatcher import TaskEvent, dispatch_event
 
         try:

@@ -27,6 +27,25 @@ def material_default_tax_rate(defaults: Dict[str, Any]) -> Decimal:
     return Decimal("0")
 
 
+def normalize_stored_unit_price_to_exclusive(
+    unit_price: Decimal,
+    tax_rate: Decimal,
+    price_type: Optional[str],
+) -> Decimal:
+    """价本/物料默认/成交价统一：询价出口为未税单价（中间精度 6 位，可与含税录入往返）。"""
+    pt = str(price_type or "tax_inclusive").strip() or "tax_inclusive"
+    price = Decimal(str(unit_price or 0))
+    if pt == "tax_exclusive":
+        return price
+    if tax_rate <= 0:
+        # 含税但无税率时无法剥离；原样返回，调用方不得再用另一税率乘回
+        return price
+    rate = tax_rate / Decimal("100") if tax_rate > Decimal("1") else tax_rate
+    factor = Decimal("1") + rate
+    if factor <= 0:
+        return price
+    return (price / factor).quantize(_UNIT_PRICE_CONVERT_QUANT, rounding=ROUND_HALF_UP)
+
 def convert_purchase_default_to_exclusive(
     price: Decimal,
     container: Dict[str, Any],
@@ -37,15 +56,20 @@ def convert_purchase_default_to_exclusive(
         or container.get("default_purchase_price_type")
         or "tax_inclusive"
     ).strip()
-    if pt == "tax_exclusive":
-        return price
-    if tax_rate <= 0:
-        return price
-    rate = tax_rate / Decimal("100") if tax_rate > Decimal("1") else tax_rate
-    factor = Decimal("1") + rate
-    if factor <= 0:
-        return price
-    return (price / factor).quantize(_UNIT_PRICE_CONVERT_QUANT, rounding=ROUND_HALF_UP)
+    return normalize_stored_unit_price_to_exclusive(price, tax_rate, pt)
+
+
+def convert_sale_default_to_exclusive(
+    price: Decimal,
+    container: Dict[str, Any],
+    tax_rate: Decimal,
+) -> Decimal:
+    pt = str(
+        container.get("defaultSalePriceType")
+        or container.get("default_sale_price_type")
+        or "tax_inclusive"
+    ).strip()
+    return normalize_stored_unit_price_to_exclusive(price, tax_rate, pt)
 
 
 def resolve_material_default_unit_price(
@@ -89,15 +113,16 @@ def resolve_material_default_unit_price(
 
     method = str(defaults.get("salePriceMethod") or defaults.get("sale_price_method") or "fixed").strip()
     sales = defaults.get("sales") if isinstance(defaults.get("sales"), dict) else {}
+    sale_container = {**defaults, **sales}
     if method == "tier" and quantity is not None:
         tier_raw = sales.get("tier_prices") or sales.get("tierPrices")
         tier_price = match_tier_unit_price(tier_raw, quantity)
         if tier_price is not None:
-            return tier_price
+            return convert_sale_default_to_exclusive(tier_price, sale_container, tax_rate)
     for key in ("defaultSalePrice", "default_sale_price", "standard_price"):
         raw = sales.get(key) if key in sales else defaults.get(key)
         if raw is not None and str(raw).strip() != "":
             price = Decimal(str(raw))
             if price > 0:
-                return price
+                return convert_sale_default_to_exclusive(price, sale_container, tax_rate)
     return None

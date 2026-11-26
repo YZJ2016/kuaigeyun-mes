@@ -19,6 +19,7 @@ router = APIRouter(prefix="/enums", tags=["Core - Enums"])
 # 单据状态展示配置（与后端常量一致，单一数据源）
 STATUS_DISPLAY: Dict[str, Dict[str, str]] = {
     DocumentStatus.DRAFT.value: {"text": "草稿", "color": "default"},
+    DocumentStatus.SUBMITTED.value: {"text": "已提交", "color": "processing"},
     DocumentStatus.APPROVED.value: {"text": "已审核", "color": "processing"},
     DocumentStatus.PENDING_REVIEW.value: {"text": "待审核", "color": "processing"},
     DocumentStatus.AUDITED.value: {"text": "已审核", "color": "processing"},

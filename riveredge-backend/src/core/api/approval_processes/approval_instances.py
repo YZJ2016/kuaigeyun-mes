@@ -152,6 +152,14 @@ async def batch_perform_approval_actions(
 async def get_approval_status(
     entity_type: str = Query(..., description="实体类型（如 demand、purchase_order、sales_order）"),
     entity_id: int = Query(..., ge=1, description="实体ID"),
+    node_key: Optional[str] = Query(
+        None,
+        description="审核 node_key；同 entity 多业务类型时用于草稿预览定位流程",
+    ),
+    business_type: Optional[str] = Query(
+        None,
+        description="业务类型；与 entity_type 一起解析审核声明（无 node_key 时）",
+    ),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -163,6 +171,8 @@ async def get_approval_status(
         entity_type=entity_type,
         entity_id=entity_id,
         viewer_id=current_user.id,
+        node_key=node_key,
+        business_type=business_type,
     )
     return result
 

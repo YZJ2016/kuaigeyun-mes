@@ -46,6 +46,6 @@ def _token_payload(request: Request):
     if not authorization or not authorization.startswith("Bearer "):
         return None
 
-    from infra.domain.security.security import get_token_payload
+    from infra.domain.security.security import resolve_bearer_payload
 
-    return get_token_payload(authorization[7:])
+    return resolve_bearer_payload(authorization[7:])

@@ -1,4 +1,5 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -77,6 +78,8 @@ interface MoldRepair {
 const MoldRepairsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openCreateHandledRef = useRef<string | null>(null);
   const perms = useResourcePermissions(RESOURCE);
   const canAudit = perms.canAction?.('audit') ?? perms.canAction?.('approve') ?? false;
   const actionRef = useRef<ActionType>(null);
@@ -135,16 +138,44 @@ const MoldRepairsPage: React.FC = () => {
     }
   };
 
-  const handleCreate = () => {
+  const beginCreate = (prefillMoldId?: number) => {
     setIsEdit(false);
     setCurrent(null);
     setPreviewLines([]);
     setModalVisible(true);
     void loadOptions();
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ repair_date: dayjs() });
+    formRef.current?.setFieldsValue({
+      repair_date: dayjs(),
+      ...(prefillMoldId != null ? { mold_id: prefillMoldId } : {}),
+    });
+    if (prefillMoldId != null) {
+      void handlePreview(prefillMoldId, undefined);
+    }
+  };
+
+  const handleCreate = () => {
+    beginCreate();
   };
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    const sig = openCreateQuerySignature(searchParams);
+    if (!sig || !perms.canCreate) return;
+    if (openCreateHandledRef.current === sig) return;
+    void (async () => {
+      let moldId = Number(searchParams.get('mold_id'));
+      const moldUuid = searchParams.get('mold_uuid');
+      if (!Number.isFinite(moldId) && moldUuid) {
+        const mold = await moldApi.get(moldUuid);
+        moldId = Number(mold.id);
+      }
+      if (!Number.isFinite(moldId)) return;
+      openCreateHandledRef.current = sig;
+      setSearchParams(clearOpsOpenCreateParams(searchParams), { replace: true });
+      beginCreate(moldId);
+    })();
+  }, [searchParams, perms.canCreate, setSearchParams]);
 
   const handleEdit = async (record: MoldRepair) => {
     if (!record.id) return;
@@ -595,6 +626,7 @@ const MoldRepairsPage: React.FC = () => {
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count })}
           onDelete={executeDelete}

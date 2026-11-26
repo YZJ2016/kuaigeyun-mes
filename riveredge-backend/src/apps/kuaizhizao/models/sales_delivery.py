@@ -64,6 +64,11 @@ class SalesDelivery(BaseModel):
     status = fields.CharField(max_length=20, default="待出库", description="出库状态")
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总出库数量")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="总金额")
+    price_type = fields.CharField(
+        max_length=20,
+        default="tax_inclusive",
+        description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)，与销售订单一致",
+    )
 
     # 币种（继承销售订单）
     currency_code = fields.CharField(max_length=20, null=True, default="CNY", description="币种代码")

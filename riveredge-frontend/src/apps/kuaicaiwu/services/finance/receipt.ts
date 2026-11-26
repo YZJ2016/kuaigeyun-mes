@@ -39,6 +39,8 @@ export interface ReceiptVoucher {
   counterparty_bank_name?: string;
   counterparty_bank_account?: string;
   status: string;
+  review_status?: string;
+  audit?: { phase?: string; allowed_actions?: string[] };
   source_voucher_id?: number;
   source_voucher_code?: string;
   source_vouchers?: { id: number; code: string }[];
@@ -181,6 +183,21 @@ export const receiptService = {
       method: 'POST',
     });
   },
+
+  commitReceipt: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt/${id}/submit`, { method: 'POST' }),
+
+  submitReceiptForReview: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt/${id}/submit_review`, { method: 'POST' }),
+
+  withdrawReceipt: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt/${id}/withdraw`, { method: 'POST' }),
+
+  approveReceipt: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt/${id}/approve`, { method: 'POST' }),
+
+  revokeReceipt: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt/${id}/revoke`, { method: 'POST' }),
 
   unconfirmReceipt: (id: number) => {
     return apiRequest<ReceiptVoucher>(`${RECEIPT_API}/${id}/unconfirm`, {

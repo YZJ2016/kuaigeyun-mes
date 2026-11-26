@@ -330,11 +330,11 @@ class PurchaseOrderItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
         description="录入单价（表单展示口径，含税时保存用户输入；详情只读直接展示）",
     )
     total_price: Decimal = Field(..., ge=0, description="总价")
-    tax_rate: Optional[Decimal] = Field(
-        default=None,
+    tax_rate: Decimal = Field(
+        ...,
         ge=0,
         le=100,
-        description="税率（%，行级）。未传为 None，落库时用订单头税率；显式 0 保持 0",
+        description="税率（%，行级必填；与销售订单行一致）",
     )
     price_settlement_status: Optional[str] = Field(None, max_length=20, description="定价状态")
     provisional_unit_price: Optional[Decimal] = Field(None, ge=0, description="暂估参考单价")

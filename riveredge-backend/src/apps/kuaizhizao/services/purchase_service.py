@@ -2438,6 +2438,97 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             except Exception:
                 pass
 
+    async def try_auto_notify_warehouse_and_confirm_receipt(
+        self,
+        *,
+        tenant_id: int,
+        notice_id: int,
+        operator_id: int,
+        order_id: Optional[int] = None,
+    ) -> None:
+        """收货通知创建后：按配置自动通知仓库（生成采购入库草稿），可选再确认入库。"""
+        from apps.kuaizhizao.services.receipt_notice_service import ReceiptNoticeService
+        from infra.domain.tenant_context import get_current_tenant_id, set_current_tenant_id
+
+        cfg = BusinessConfigService()
+        auto_notify = await cfg.auto_notify_warehouse_on_receipt_notice(tenant_id)
+        auto_confirm = await cfg.auto_confirm_purchase_receipt(tenant_id)
+        if not auto_notify and not auto_confirm:
+            return
+
+        # 通知仓库/过账会经 get_user_info → UserService.require_tenant_context；
+        # 自动化链路偶发无组织上下文时会静默失败且写不出备注。
+        prev_tenant = get_current_tenant_id()
+        set_current_tenant_id(int(tenant_id))
+        notice_svc = ReceiptNoticeService()
+        receipt_id: Optional[int] = None
+        try:
+            if auto_notify:
+                await notice_svc.submit_receipt_notice(
+                    tenant_id=tenant_id,
+                    notice_id=notice_id,
+                    submitted_by=operator_id,
+                )
+                notice = await notice_svc.notify_warehouse(
+                    tenant_id=tenant_id,
+                    notice_id=notice_id,
+                    notified_by=operator_id,
+                )
+                receipt_id = int(getattr(notice, "purchase_receipt_id", 0) or 0)
+            else:
+                from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+
+                row = await ReceiptNotice.get_or_none(
+                    tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+                )
+                receipt_id = int(getattr(row, "purchase_receipt_id", 0) or 0) if row else 0
+
+            if auto_confirm and receipt_id and receipt_id > 0:
+                from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+
+                receipt_svc = PurchaseReceiptService()
+                await receipt_svc.submit_purchase_receipt(
+                    tenant_id=tenant_id,
+                    receipt_id=receipt_id,
+                    submitted_by=operator_id,
+                )
+                await receipt_svc.confirm_receipt(
+                    tenant_id=tenant_id,
+                    receipt_id=receipt_id,
+                    confirmed_by=operator_id,
+                    confirmation_data=None,
+                )
+        except Exception as exc:
+            logger.warning(
+                "收货通知自动通知仓库/入库失败 tenant={} notice={}: {}",
+                tenant_id,
+                notice_id,
+                exc,
+            )
+            note = f"自动通知仓库或入库失败：{exc}"
+            if order_id:
+                try:
+                    await self._append_purchase_order_automation_note(
+                        tenant_id, int(order_id), note
+                    )
+                except Exception:
+                    pass
+            try:
+                from apps.kuaizhizao.models.receipt_notice import ReceiptNotice
+
+                row = await ReceiptNotice.get_or_none(
+                    tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+                )
+                if row:
+                    prev = (row.notes or "").strip()
+                    text = f"[业务自动化] {note}".strip()
+                    row.notes = (f"{prev}\n{text}".strip() if prev else text)[:2000]
+                    await row.save(update_fields=["notes", "updated_at"])
+            except Exception:
+                pass
+        finally:
+            set_current_tenant_id(prev_tenant)
+
     async def revoke_purchase_order_approval(
         self,
         tenant_id: int,

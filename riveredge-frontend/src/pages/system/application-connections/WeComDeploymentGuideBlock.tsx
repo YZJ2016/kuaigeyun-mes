@@ -8,11 +8,14 @@ import { getWecomDeploymentGuide, type WeComDeploymentGuide } from '../../../ser
 type WeComDeploymentGuideBlockProps = {
   corpId?: string;
   agentId?: string;
+  /** 连接器表单中的公网站点根地址，用于预览部署说明 */
+  baseUrl?: string;
 };
 
 export const WeComDeploymentGuideBlock: React.FC<WeComDeploymentGuideBlockProps> = ({
   corpId,
   agentId,
+  baseUrl,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -25,6 +28,7 @@ export const WeComDeploymentGuideBlock: React.FC<WeComDeploymentGuideBlockProps>
     void getWecomDeploymentGuide({
       corp_id: corpId?.trim() || undefined,
       agent_id: agentId?.trim() ? Number(agentId) : undefined,
+      base_url: baseUrl?.trim() || undefined,
     })
       .then((data) => {
         if (!cancelled) setGuide(data);
@@ -38,7 +42,7 @@ export const WeComDeploymentGuideBlock: React.FC<WeComDeploymentGuideBlockProps>
     return () => {
       cancelled = true;
     };
-  }, [corpId, agentId]);
+  }, [corpId, agentId, baseUrl]);
 
   const copy = async (value: string, label: string) => {
     if (!value) {
@@ -79,6 +83,24 @@ export const WeComDeploymentGuideBlock: React.FC<WeComDeploymentGuideBlockProps>
       value: guide.workbench_home_url,
     },
   ];
+  if (guide.receive_message_url) {
+    rows.push({
+      label: t('pages.system.applicationConnections.wecomGuide.receiveMessage'),
+      value: guide.receive_message_url,
+    });
+  }
+  if (guide.mobile_oauth_redirect_url) {
+    rows.push({
+      label: t('pages.system.applicationConnections.wecomGuide.mobileOauthRedirect'),
+      value: guide.mobile_oauth_redirect_url,
+    });
+  }
+  if (guide.pc_tenant_entry_url) {
+    rows.push({
+      label: t('pages.system.applicationConnections.wecomGuide.pcTenantEntry'),
+      value: guide.pc_tenant_entry_url,
+    });
+  }
   if (guide.login_with_agent_url) {
     rows.push({
       label: t('pages.system.applicationConnections.wecomGuide.loginWithAgent'),

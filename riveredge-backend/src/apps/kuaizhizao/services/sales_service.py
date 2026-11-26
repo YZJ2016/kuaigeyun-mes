@@ -155,9 +155,6 @@ class SalesForecastService(AppBaseService[SalesForecast]):
     ) -> None:
         """清理销售预测下推失败留下的、尚未真正下推到需求计算的中间 Demand。"""
         from apps.kuaizhizao.models.document_relation import DocumentRelation
-        from apps.kuaizhizao.services.document_relation_new_service import (
-            DocumentRelationNewService,
-        )
         from core.utils.timezone_utils import resolve_business_datetime
 
         q = Demand.filter(
@@ -184,16 +181,15 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             ).exists()
             if has_comp:
                 continue
-            async with in_transaction():
-                await DemandItem.filter(tenant_id=tenant_id, demand_id=d.id).delete()
-                await Demand.filter(tenant_id=tenant_id, id=d.id).update(deleted_at=now, updated_at=now)
-                await DocumentRelationNewService().delete_relation(
-                    tenant_id,
-                    source_type="sales_forecast",
-                    source_id=forecast_id,
-                    target_type="demand",
-                    target_id=d.id,
-                )
+            await DemandItem.filter(tenant_id=tenant_id, demand_id=d.id).delete()
+            await Demand.filter(tenant_id=tenant_id, id=d.id).update(deleted_at=now, updated_at=now)
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="sales_forecast",
+                source_id=forecast_id,
+                target_type="demand",
+                target_id=d.id,
+            ).delete()
             logger.info(
                 "已清理销售预测 %s 未下推的中间需求 %s",
                 forecast_id,
@@ -259,16 +255,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            resolve_review_submitted_for_document,
-        )
-
-        review_submitted = await resolve_review_submitted_for_document(
-            tenant_id, "sales_forecast", forecast
-        )
-        assert_sales_forecast_capability(
-            forecast, "delete", review_submitted=review_submitted
-        )
+        assert_sales_forecast_capability(forecast, "delete")
         deleted = await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).delete()
         if not deleted:
             raise BusinessLogicError("销售预测删除失败")
@@ -310,43 +297,39 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     )
                 await self._hydrate_forecast_item_snapshots(tenant_id, created_items)
 
-            # 与提交流程一致：蓝图配置无需审核时，创建后自动审核通过。
-            # 不再自动联动需求池（Demand），避免形成「预测→需求计划」隐式链路。
-            from infra.services.business_config_service import BusinessConfigService
+            # 保存只落草稿；提交 / 提交审核由 commit_forecast / submit_forecast_for_review 负责。
             from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
-            config_service = BusinessConfigService()
-            audit_required = await config_service.check_audit_required(tenant_id, "sales_forecast")
-            if not audit_required and str(getattr(forecast, "status", "") or "").strip() in ("草稿", "DRAFT"):
-                await SalesForecast.filter(tenant_id=tenant_id, id=forecast.id).update(
-                    status=DocumentStatus.AUDITED.value,
-                    review_status=ReviewStatus.APPROVED.value,
-                    **(await self._audit_update_fields(created_by)),
-                )
-                await self._try_auto_push_forecast_to_computation(
-                    tenant_id=tenant_id,
-                    forecast_id=forecast.id,
-                    operator_id=created_by,
-                )
-                forecast = await SalesForecast.get(tenant_id=tenant_id, id=forecast.id)
+
+            await SalesForecast.filter(tenant_id=tenant_id, id=forecast.id).update(
+                status=DocumentStatus.DRAFT.value,
+                review_status=ReviewStatus.DRAFT.value,
+            )
+            forecast = await SalesForecast.get(tenant_id=tenant_id, id=forecast.id)
 
             demand = await self._get_linked_demand_for_forecast(tenant_id, forecast.id)
             resp = SalesForecastResponse.model_validate(forecast)
-            from apps.kuaizhizao.services.document_action_policy.enricher import (
-                resolve_review_submitted_for_document,
-            )
-
-            review_submitted = await resolve_review_submitted_for_document(
-                tenant_id, "sales_forecast", forecast
-            )
             resp = enrich_sales_forecast_capabilities_on_response(
                 forecast,
                 resp,
                 pushed_to_computation=self._is_forecast_pushed_to_computation(forecast, demand),
                 has_downstream=await self._forecast_has_downstream(tenant_id, forecast.id),
                 has_items=bool(items_data),
-                review_submitted=review_submitted,
             )
-            return resp
+            forecast_id = int(forecast.id)
+
+        from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+            apply_manual_create_auto_submit,
+        )
+
+        applied = await apply_manual_create_auto_submit(
+            tenant_id=tenant_id,
+            node_key="sales_forecast",
+            entity_id=forecast_id,
+            operator_id=created_by,
+        )
+        if applied:
+            return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+        return resp
 
     async def get_sales_forecast_by_id(self, tenant_id: int, forecast_id: int) -> SalesForecastResponse:
         """根据ID获取销售预测（含明细，与列表 include_items 行为一致）"""
@@ -382,20 +365,12 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         pushed = self._is_forecast_pushed_to_computation(forecast, demand)
         has_downstream = await self._forecast_has_downstream(tenant_id, forecast_id)
         has_items = bool(item_rows)
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            resolve_review_submitted_for_document,
-        )
-
-        review_submitted = await resolve_review_submitted_for_document(
-            tenant_id, "sales_forecast", forecast
-        )
         resp = enrich_sales_forecast_capabilities_on_response(
             forecast,
             resp,
             pushed_to_computation=pushed,
             has_downstream=has_downstream,
             has_items=has_items,
-            review_submitted=review_submitted,
         )
         return await enrich_record(tenant_id, "sales_forecast", resp)
 
@@ -508,27 +483,28 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 resp.items = [self._forecast_item_to_response(it) for it in f_items]
             list_responses.append(resp)
 
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            batch_review_submitted_for_documents,
-        )
-
-        submitted_map = await batch_review_submitted_for_documents(
-            tenant_id, "sales_forecast", forecasts
-        )
         enriched = enrich_sales_forecast_list_capabilities(
             forecasts,
             list_responses,
             pushed_by_id=pushed_by_id,
             downstream_by_id={fid: fid in downstream_ids for fid in forecast_ids},
             has_items_by_id=has_items_by_id,
-            review_submitted_by_id=submitted_map,
         )
         result = [r.model_dump() for r in enriched]
         from core.services.approval.audit_record_enricher import enrich_data_payload
 
-        return await enrich_data_payload(tenant_id, "sales_forecast", {
-            "data": result, "total": total, "success": True
-        })
+        current_user = filters.get("current_user")
+        viewer_id = (
+            int(current_user.id)
+            if current_user is not None and getattr(current_user, "id", None) is not None
+            else None
+        )
+        return await enrich_data_payload(
+            tenant_id,
+            "sales_forecast",
+            {"data": result, "total": total, "success": True},
+            viewer_id=viewer_id,
+        )
         
     async def get_forecast_statistics(self, tenant_id: int) -> Dict[str, Any]:
         """获取销售预测统计（列表页指标卡，字段与销售订单 statistics 对齐）"""
@@ -859,21 +835,10 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            resolve_review_submitted_for_document,
-        )
-
-        review_submitted = await resolve_review_submitted_for_document(
-            tenant_id, "sales_forecast", forecast_row
-        )
         if rejection_reason:
-            assert_sales_forecast_capability(
-                forecast_row, "reject", review_submitted=review_submitted
-            )
+            assert_sales_forecast_capability(forecast_row, "reject")
         else:
-            assert_sales_forecast_capability(
-                forecast_row, "approve", review_submitted=review_submitted
-            )
+            assert_sales_forecast_capability(forecast_row, "approve")
 
         from infra.services.business_config_service import BusinessConfigService
         from core.services.approval.audit_flow_guard import assert_pending_approval_instance
@@ -957,7 +922,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             )
             await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                 status=DocumentStatus.DRAFT.value,
-                review_status=ReviewStatus.PENDING.value,
+                review_status=ReviewStatus.DRAFT.value,
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -1008,48 +973,72 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         await self._hydrate_forecast_item_snapshots(tenant_id, item_list)
         return [self._forecast_item_to_response(item) for item in item_list]
 
-    async def submit_forecast(self, tenant_id: int, forecast_id: int, submitted_by: int) -> SalesForecastResponse:
-        """
-        提交销售预测
-        
-        将草稿状态的销售预测提交为待审核状态
-        
-        Args:
-            tenant_id: 租户ID
-            forecast_id: 销售预测ID
-            submitted_by: 提交人ID
-            
-        Returns:
-            SalesForecastResponse: 更新后的销售预测
-            
-        Raises:
-            NotFoundError: 销售预测不存在
-            BusinessLogicError: 销售预测状态不是草稿
-        """
-        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+    async def commit_forecast(
+        self, tenant_id: int, forecast_id: int, submitted_by: int
+    ) -> SalesForecastResponse:
+        """草稿或已驳回 → 已提交。不启动审批。"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_submitted_status
 
         forecast_row = await SalesForecast.get_or_none(
             tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            resolve_review_submitted_for_document,
+        if is_submitted_status(str(forecast_row.status or "")):
+            return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+        assert_sales_forecast_capability(forecast_row, "submit")
+        await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
+            status=DocumentStatus.SUBMITTED.value,
+            review_status=ReviewStatus.DRAFT.value,
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            **(await self._audit_update_fields(submitted_by)),
         )
+        return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
-        review_submitted = await resolve_review_submitted_for_document(
-            tenant_id, "sales_forecast", forecast_row
-        )
-        assert_sales_forecast_capability(
-            forecast_row, "submit", review_submitted=review_submitted
-        )
+    async def submit_forecast_for_review(
+        self, tenant_id: int, forecast_id: int, submitted_by: int
+    ) -> SalesForecastResponse:
+        """已提交 → 待审核，或未开审核时直接已确认。"""
+        from apps.kuaizhizao.constants import is_submitted_status
 
+        forecast_row = await SalesForecast.get_or_none(
+            tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
+        )
+        if not forecast_row:
+            raise NotFoundError(f"销售预测不存在: {forecast_id}")
+        if not is_submitted_status(str(forecast_row.status or "")):
+            raise BusinessLogicError("请先提交销售预测，再提交审核")
+        return await self._enter_forecast_review(tenant_id, forecast_row, submitted_by)
+
+    async def submit_forecast(self, tenant_id: int, forecast_id: int, submitted_by: int) -> SalesForecastResponse:
+        """内部一次性提交审核。页面提交走 commit_forecast。"""
+        forecast_row = await SalesForecast.get_or_none(
+            tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
+        )
+        if not forecast_row:
+            raise NotFoundError(f"销售预测不存在: {forecast_id}")
+        assert_sales_forecast_capability(forecast_row, "submit")
+        return await self._enter_forecast_review(tenant_id, forecast_row, submitted_by)
+
+    async def _enter_forecast_review(
+        self,
+        tenant_id: int,
+        forecast_row: SalesForecast,
+        submitted_by: int,
+    ) -> SalesForecastResponse:
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+
+        forecast_id = int(forecast_row.id)
         approval_instance = None
         async with in_transaction():
-            # 检查业务配置：若无需审核，则提交后直接设为已审核（考虑中小企业实情）
             from infra.services.business_config_service import BusinessConfigService
-            config_service = BusinessConfigService()
-            audit_required = await config_service.check_audit_required(tenant_id, "sales_forecast")
+
+            audit_required = await BusinessConfigService().check_audit_required(
+                tenant_id, "sales_forecast"
+            )
 
             if not audit_required:
                 await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
@@ -1057,7 +1046,6 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     review_status=ReviewStatus.APPROVED.value,
                     **(await self._audit_update_fields(submitted_by)),
                 )
-                # 无需审核时不再自动创建 Demand，保持链路为「销售预测→需求计算（显式下推）」。
                 await self._try_auto_push_forecast_to_computation(
                     tenant_id=tenant_id,
                     forecast_id=forecast_id,
@@ -1071,7 +1059,7 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                     user_id=submitted_by,
                     node_key="sales_forecast",
                     entity_type="sales_forecast",
-                    entity_id=int(forecast_row.id),
+                    entity_id=forecast_id,
                     entity_uuid=str(forecast_row.uuid),
                     title=f"销售预测审批: {forecast_row.forecast_code}",
                     content=f"预测名称: {forecast_row.forecast_name or forecast_row.forecast_code}",
@@ -1101,24 +1089,27 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         forecast_id: int,
         withdrawn_by: int,
     ) -> SalesForecastResponse:
-        """撤回提交：待审核 → 草稿（提交人撤回，非反审核）"""
-        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+        """已提交撤销为草稿；待审核撤回为已提交。"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_submitted_status
 
         forecast_row = await SalesForecast.get_or_none(
             tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        from apps.kuaizhizao.services.document_action_policy.enricher import (
-            resolve_review_submitted_for_document,
-        )
+        assert_sales_forecast_capability(forecast_row, "withdraw_submit")
 
-        review_submitted = await resolve_review_submitted_for_document(
-            tenant_id, "sales_forecast", forecast_row
-        )
-        assert_sales_forecast_capability(
-            forecast_row, "withdraw_submit", review_submitted=review_submitted
-        )
+        if is_submitted_status(str(forecast_row.status or "")):
+            await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
+                status=DocumentStatus.DRAFT.value,
+                review_status=ReviewStatus.DRAFT.value,
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
+                **(await self._audit_update_fields(withdrawn_by)),
+            )
+            return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
         try:
             from core.services.approval.approval_instance_service import ApprovalInstanceService
@@ -1130,11 +1121,12 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 operator_id=withdrawn_by,
             )
         except Exception as e:
-            logger.warning("取消销售预测审批流程失败或无需取消: {}", e)
+            logger.exception("取消销售预测审批流程失败 forecast_id={}: {}", forecast_id, e)
+            raise BusinessLogicError("撤回失败：无法取消审批流程，请重试") from e
 
         await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
-            status=DocumentStatus.DRAFT.value,
-            review_status=ReviewStatus.PENDING.value,
+            status=DocumentStatus.SUBMITTED.value,
+            review_status=ReviewStatus.DRAFT.value,
             reviewer_id=None,
             reviewer_name=None,
             review_time=None,

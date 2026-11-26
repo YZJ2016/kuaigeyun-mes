@@ -50,7 +50,21 @@ import {
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
-import { loadAvailableQtyByMaterialWarehouse } from './outboundConfirmInventoryOptions';
+import {
+  loadAvailableQtyByMaterialWarehouse,
+  loadBatchOptionsByMaterialId,
+  type InventoryPickOption,
+} from './outboundConfirmInventoryOptions';
+import { isValidOutboundBatchAllocations } from './outboundBatchAllocation';
+import { lineLocationSelectionRequired } from '../../../../../components/uni-wh-dropdown';
+import {
+  isMaterialBatchEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import {
+  loadConfirmPreviewMaterialMeta,
+  type ConfirmPreviewMaterialMeta,
+} from '../inbound/inboundItemTracking';
 
 const OutboundOutsourcePullEntryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -61,8 +75,14 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const operatorHook = useOutboundOperatorSelect();
+  const trackingFlags = useWarehouseTrackingFlags();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const initRef = useRef(false);
+  const [lineMaterialMeta, setLineMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
+  const [batchOptionsByMaterialId, setBatchOptionsByMaterialId] = useState<
+    Record<number, InventoryPickOption[]>
+  >({});
+  const [batchLoadingMaterialId, setBatchLoadingMaterialId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -116,7 +136,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   useEffect(() => {
     bindSnapshot(() => ({
       notes,
-      issueTime: toApiBusinessDocumentDateTime(issueTime),
+      issueTime: issueTime?.isValid() ? toApiBusinessDocumentDateTime(issueTime) : undefined,
       receiverUuid: operatorHook.receiverUuid,
       receiverName: operatorHook.receiverName,
       issueQuantities: Object.fromEntries(issueLines.map((line) => [line.materialId, line.issueQuantity])),
@@ -210,23 +230,31 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
           (preview?.allow_manual_lines ?? preview?.data?.allow_manual_lines) !== false,
         );
         const rawLines = preview?.lines ?? preview?.data?.lines ?? [];
-        setIssueLines(
-          rawLines.map((line: Record<string, unknown>) => {
-            const materialId = Number(line.materialId ?? line.material_id);
-            const pending = Number(line.pendingQuantity ?? line.pending_quantity ?? 0);
-            return {
-              key: materialId,
-              materialId,
-              materialCode: String(line.materialCode ?? line.material_code ?? ''),
-              materialName: String(line.materialName ?? line.material_name ?? ''),
-              unit: String(line.unit ?? ''),
-              requiredQuantity: Number(line.requiredQuantity ?? line.required_quantity ?? 0),
-              issuedQuantity: Number(line.issuedQuantity ?? line.issued_quantity ?? 0),
-              pendingQuantity: pending,
-              availableQuantity: 0,
-              issueQuantity: 0,
-            };
-          }),
+        const mappedLines = rawLines.map((line: Record<string, unknown>) => {
+          const materialId = Number(line.materialId ?? line.material_id);
+          const pending = Number(line.pendingQuantity ?? line.pending_quantity ?? 0);
+          return {
+            key: materialId,
+            materialId,
+            materialCode: String(line.materialCode ?? line.material_code ?? ''),
+            materialName: String(line.materialName ?? line.material_name ?? ''),
+            unit: String(line.unit ?? ''),
+            requiredQuantity: Number(line.requiredQuantity ?? line.required_quantity ?? 0),
+            issuedQuantity: Number(line.issuedQuantity ?? line.issued_quantity ?? 0),
+            pendingQuantity: pending,
+            availableQuantity: 0,
+            issueQuantity: 0,
+          };
+        });
+        setIssueLines(mappedLines);
+        setLineMaterialMeta(
+          await loadConfirmPreviewMaterialMeta(
+            mappedLines.map((line) => ({
+              id: line.materialId,
+              material_id: line.materialId,
+              material_code: line.materialCode,
+            })),
+          ),
         );
         applyDraftOnce((draft) => {
           if (typeof draft.notes === 'string') setNotes(draft.notes);
@@ -262,6 +290,16 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
     })();
   }, [woId, leavePage, messageApi, t, applyDraftOnce, operatorHook.restoreReceiver]);
 
+  const ensureBatchOptionsForLine = useCallback(async (materialId: number, warehouseId: number) => {
+    setBatchLoadingMaterialId(materialId);
+    try {
+      const map = await loadBatchOptionsByMaterialId([materialId], warehouseId);
+      setBatchOptionsByMaterialId((prev) => ({ ...prev, ...map }));
+    } finally {
+      setBatchLoadingMaterialId(null);
+    }
+  }, []);
+
   const handleBatchSetWarehouse = useCallback(
     (warehouseId: number) => {
       if (!(warehouseId > 0) || !issueLines.length) return;
@@ -290,22 +328,47 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
 
     for (const line of activeLines) {
       const whId = Number(line.warehouseId ?? 0);
+      const materialLabel = line.materialName || line.materialCode || String(line.materialId);
       if (!(whId > 0)) {
         messageApi.error(
-          t('app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse', {
-            material: line.materialName || line.materialCode || line.materialId,
-          }),
+          t('app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse', { material: materialLabel }),
         );
         return;
       }
       const whOpt = warehouseOptions.find((o) => o.value === whId);
       if (!whOpt) {
         messageApi.error(
-          t('app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse', {
-            material: line.materialName || line.materialCode || line.materialId,
-          }),
+          t('app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse', { material: materialLabel }),
         );
         return;
+      }
+      const needLoc = await lineLocationSelectionRequired(whId, line.locationId, line.locationCode);
+      if (needLoc) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.msg.selectLocationForMaterial', { material: materialLabel }),
+        );
+        return;
+      }
+      const meta = lineMaterialMeta[line.materialId];
+      if (isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) {
+        const opts = batchOptionsByMaterialId[line.materialId] ?? [];
+        const allocs = (line.batchAllocations ?? []).filter(
+          (a) => String(a.batchNo).trim() && Number(a.quantity) > 0,
+        );
+        const fromSingle =
+          !allocs.length && String(line.batchNumber ?? '').trim()
+            ? [{ batchNo: String(line.batchNumber).trim(), quantity: line.issueQuantity }]
+            : allocs;
+        if (!isValidOutboundBatchAllocations(fromSingle, opts, line.issueQuantity)) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
+              material: materialLabel,
+              qty: line.issueQuantity,
+              batches: opts.map((o) => o.value).join('、') || '—',
+            }),
+          );
+          return;
+        }
       }
     }
 
@@ -318,18 +381,36 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
         issued_by: operatorHook.receiverId,
         issued_by_name: operatorHook.receiverName.trim() || undefined,
         remarks: notes.trim() || undefined,
-        lines: activeLines.map((line) => {
+        lines: activeLines.flatMap((line) => {
           const whId = Number(line.warehouseId);
           const whOpt = warehouseOptions.find((o) => o.value === whId)!;
-          return {
+          const base = {
             material_id: line.materialId,
             material_code: line.materialCode,
             material_name: line.materialName,
-            quantity: line.issueQuantity,
             unit: line.unit,
             warehouse_id: whId,
             warehouse_name: whOpt.name,
+            location_id: line.locationId,
+            location_name: line.locationCode?.trim() || undefined,
           };
+          const allocs = (line.batchAllocations ?? []).filter(
+            (a) => String(a.batchNo).trim() && Number(a.quantity) > 0,
+          );
+          if (allocs.length > 1) {
+            return allocs.map((a) => ({
+              ...base,
+              quantity: a.quantity,
+              batch_number: a.batchNo,
+            }));
+          }
+          return [
+            {
+              ...base,
+              quantity: line.issueQuantity,
+              batch_number: allocs[0]?.batchNo || line.batchNumber?.trim() || undefined,
+            },
+          ];
         }),
       });
       invalidateMenuBadgeCounts();
@@ -416,6 +497,11 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
                 stockByMaterialWh={stockByMaterialWh}
                 stockByWhStatus={stockByWhStatus}
                 onBatchSetWarehouse={handleBatchSetWarehouse}
+                trackingFlags={trackingFlags}
+                lineMaterialMeta={lineMaterialMeta}
+                batchOptionsByMaterialId={batchOptionsByMaterialId}
+                batchLoadingMaterialId={batchLoadingMaterialId}
+                onEnsureBatchOptions={ensureBatchOptionsForLine}
               />
               <Row gutter={16} style={{ marginTop: 16 }}>
                 <Col xs={24}>

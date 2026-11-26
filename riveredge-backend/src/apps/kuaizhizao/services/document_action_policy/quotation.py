@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.constants import LEGACY_PENDING_VALUES
+from apps.kuaizhizao.constants import LEGACY_PENDING_VALUES, is_submitted_status
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
@@ -29,7 +29,7 @@ def _norm_status(value: Any) -> str:
 
 def _is_pending_review(review_status: Any) -> bool:
     rs = _norm_status(review_status)
-    return rs in LEGACY_PENDING_VALUES or rs == ""
+    return rs in LEGACY_PENDING_VALUES
 
 
 def _is_superseded(quotation: Any) -> bool:
@@ -83,27 +83,33 @@ def derive_quotation_capabilities(
     quotation: Any,
     *,
     audit_required: bool,
-    require_audit_before_print: bool = False,
     conversion_downstream_missing: bool = False,
     contract_downstream_missing: bool = False,
     sales_review_downstream_missing: bool = False,
+    require_audit_before_print: bool = False,
 ) -> QuotationCapabilities:
     st = _norm_status(getattr(quotation, "status", None))
     rs = getattr(quotation, "review_status", None)
+    review_committed = is_submitted_status(str(rs or ""))
+    review_pending = _is_pending_review(rs)
     superseded = _is_superseded(quotation)
     linked_so = _has_live_sales_order_link(quotation, conversion_downstream_missing)
     linked_contract = _has_live_contract_link(quotation, contract_downstream_missing)
     linked_review = _has_live_sales_review_link(quotation, sales_review_downstream_missing)
 
-    # update — 草稿，或已发送且待审核（撤回审核后可编辑）
+    # update — 未提交的草稿，或已拒绝（已提交/待审核不可改）
     update_allowed = (
-        st in ("草稿", "draft", "已拒绝", "rejected")
-        or (st == "已发送" and _is_pending_review(rs))
+        (st in ("草稿", "draft") and not review_committed and not review_pending)
+        or st in ("已拒绝", "rejected")
     )
-    update_cap = _cap(
-        update_allowed,
-        None if update_allowed else "quotation.update.not_draft",
-    )
+    update_reason = None
+    if not update_allowed:
+        update_reason = (
+            "quotation.update.submitted"
+            if review_committed or review_pending
+            else "quotation.update.not_draft"
+        )
+    update_cap = _cap(update_allowed, update_reason)
 
     # delete
     delete_allowed = False
@@ -116,20 +122,30 @@ def derive_quotation_capabilities(
         delete_reason = "quotation.delete.linked_contract"
     elif linked_review:
         delete_reason = "quotation.delete.not_allowed"
-    elif st in ("草稿", "draft", "已拒绝", "rejected"):
+    elif st in ("草稿", "draft") and not review_committed and not review_pending:
         delete_allowed = True
-    elif st == "已发送" and _is_pending_review(rs):
+    elif st in ("已拒绝", "rejected"):
         delete_allowed = True
     elif st == "已转订单" and conversion_downstream_missing:
         delete_allowed = True
+    if not delete_allowed and (review_committed or review_pending):
+        delete_reason = "quotation.delete.submitted"
     delete_cap = _cap(delete_allowed, delete_reason if not delete_allowed else None)
 
-    # submit (draft/rejected only; audit UI still uses record.audit)
-    submit_allowed = st in ("草稿", "draft", "已拒绝", "rejected")
-    submit_cap = _cap(submit_allowed, None if submit_allowed else "quotation.update.not_draft")
+    # submit — 草稿/已拒绝 → 已提交（review_status=SUBMITTED）
+    submit_allowed = (
+        (st in ("草稿", "draft") and not review_committed and not review_pending)
+        or st in ("已拒绝", "rejected")
+    )
+    submit_cap = _cap(
+        submit_allowed,
+        None if submit_allowed else "quotation.update.not_draft",
+    )
 
-    # withdraw_submit — 已发送 + 待审核 → 草稿
-    withdraw_allowed = audit_required and st == "已发送" and _is_pending_review(rs)
+    # withdraw_submit — 已提交撤销，或待审核撤回为已提交
+    withdraw_allowed = (st in ("草稿", "draft") and review_committed) or (
+        audit_required and st == "已发送" and review_pending
+    )
     withdraw_cap = _cap(
         withdraw_allowed,
         "quotation.withdraw_submit.not_pending" if not withdraw_allowed else None,
@@ -286,10 +302,10 @@ def assert_quotation_capability(
     action: str,
     *,
     audit_required: bool,
-    require_audit_before_print: bool = False,
     conversion_downstream_missing: bool = False,
     contract_downstream_missing: bool = False,
     sales_review_downstream_missing: bool = False,
+    require_audit_before_print: bool = False,
 ) -> None:
     caps = derive_quotation_capabilities(
         quotation,
@@ -298,6 +314,16 @@ def assert_quotation_capability(
         conversion_downstream_missing=conversion_downstream_missing,
         contract_downstream_missing=contract_downstream_missing,
         sales_review_downstream_missing=sales_review_downstream_missing,
+    )
+    from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+        apply_print_unaudited_gate_to_capabilities,
+    )
+    from infra.services.business_config_service import peek_allow_print_unaudited
+
+    tenant_id = int(getattr(quotation, "tenant_id", 0) or 0)
+    allow_print = peek_allow_print_unaudited(tenant_id) if tenant_id else True
+    caps = apply_print_unaudited_gate_to_capabilities(
+        caps, quotation, allow_print_unaudited=allow_print
     )
     cap_map = {
         "update": caps.update,

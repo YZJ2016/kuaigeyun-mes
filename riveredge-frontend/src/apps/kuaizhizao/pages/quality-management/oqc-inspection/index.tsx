@@ -106,7 +106,12 @@ import {
   mapOqcInspectionExportRows,
 } from '../components/qualityInspectionExport';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
+
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
+const OQC_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_oqc_inspections';
 
 type OqcPullSourceCandidate = QualityPullCandidateBase & {
   notice_code?: string;
@@ -149,6 +154,29 @@ const OQCInspectionPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailRecord, setDetailRecord] = useState<OQCInspection | null>(null);
   const [oqcTrackingRefreshKey, setOqcTrackingRefreshKey] = useState(0);
+
+  const {
+    customFields: oqcFormCustomFields,
+    customFieldValues: oqcFormCustomFieldValues,
+    extractFormValues: extractOqcFormValues,
+    saveCustomFieldValues: saveOqcCustomFieldValues,
+    loadFieldValues: loadOqcFormFieldValues,
+    resetFieldValues: resetOqcFormFieldValues,
+  } = useCustomFields({
+    tableName: OQC_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: conductVisible,
+  });
+
+  const {
+    customFields: oqcListCustomFields,
+    generateCustomFieldColumns: generateOqcCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichOqcRecordsWithCustomFields,
+    customFieldValues: oqcDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadOqcFieldValuesForDetail,
+    resetDetailFieldValues: resetOqcDetailFieldValues,
+  } = useCustomFieldsForList<OQCInspection>({ tableName: OQC_CUSTOM_FIELD_TABLE });
+
   const oqcTracking = useDocumentTracking(
     detailDrawerVisible && detailRecord?.id ? 'oqc_inspection' : undefined,
     detailRecord?.id,
@@ -271,7 +299,7 @@ const OQCInspectionPage: React.FC = () => {
 
   const pullFromShipmentNoticeQuery = useUniPullQuery<OqcPullSourceCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
@@ -291,12 +319,16 @@ const OQCInspectionPage: React.FC = () => {
     },
     isRowDisabled: (row) => !isPullOqcInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      const selectedRows = rows.filter((x) => keys.some((k) => String(k) === String(x.id)));
+      const selected = selectedRows[0];
       if (!selected?.id) {
         messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectShipmentNotice'));
         return;
       }
       pullFromShipmentNoticeCloseRef.current?.();
+      if (selectedRows.length > 1) {
+        messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+      }
       await openPullPreview('shipment_notice', selected.id);
     },
   });
@@ -304,7 +336,7 @@ const OQCInspectionPage: React.FC = () => {
 
   const pullFromSalesDeliveryQuery = useUniPullQuery<OqcPullSourceCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
@@ -324,12 +356,16 @@ const OQCInspectionPage: React.FC = () => {
     },
     isRowDisabled: (row) => !isPullOqcInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      const selectedRows = rows.filter((x) => keys.some((k) => String(k) === String(x.id)));
+      const selected = selectedRows[0];
       if (!selected?.id) {
         messageApi.warning(t('app.kuaizhizao.quality.oqc.messages.selectSalesDelivery'));
         return;
       }
       pullFromSalesDeliveryCloseRef.current?.();
+      if (selectedRows.length > 1) {
+        messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+      }
       await openPullPreview('sales_delivery', selected.id);
     },
   });
@@ -338,24 +374,28 @@ const OQCInspectionPage: React.FC = () => {
   const openConductModal = useCallback((row: OQCInspection) => {
     setCurrentRow(row);
     setConductVisible(true);
-    setTimeout(
-      () =>
-        conductFormRef.current?.setFieldsValue({
-          inspection_result: row.inspection_result || '合格',
-          quality_status: row.quality_status || '合格',
-          release_decision: row.release_decision || 'pending',
-          qualified_quantity: row.qualified_quantity,
-          unqualified_quantity: row.unqualified_quantity,
-          attachments: mapAttachmentsToUploadList(row.attachments),
-        }),
-      50,
-    );
-  }, []);
+    void (async () => {
+      const baseValues = {
+        inspection_result: row.inspection_result || '合格',
+        quality_status: row.quality_status || '合格',
+        release_decision: row.release_decision || 'pending',
+        qualified_quantity: row.qualified_quantity,
+        unqualified_quantity: row.unqualified_quantity,
+        attachments: mapAttachmentsToUploadList(row.attachments),
+      };
+      const customFormValues =
+        row.id != null ? await loadOqcFormFieldValues(row.id) : {};
+      conductFormRef.current?.setFieldsValue({ ...baseValues, ...customFormValues });
+    })();
+  }, [loadOqcFormFieldValues]);
 
   const handleDetail = useCallback((record: OQCInspection) => {
     setDetailRecord(record);
     setDetailDrawerVisible(true);
-  }, []);
+    if (record.id != null) {
+      void loadOqcFieldValuesForDetail(record.id);
+    }
+  }, [loadOqcFieldValuesForDetail]);
 
   const executeDeleteRow = useCallback(async (record: OQCInspection) => {
     await qualityImprovementApi.oqc.delete(Number(record.id));
@@ -565,8 +605,9 @@ const OQCInspectionPage: React.FC = () => {
     [t],
   );
 
-  const columns: ProColumns<OQCInspection>[] = useMemo(
-    () => alignProColumns<OQCInspection>([
+  const columns: ProColumns<OQCInspection>[] = useMemo(() => {
+    const customFieldColumns = generateOqcCustomFieldColumns();
+    return alignProColumns<OQCInspection>([
       ...buildQualityInspectionListSearchColumns<OQCInspection>(
         t,
         inspectionDocStatusValueEnum,
@@ -598,6 +639,7 @@ const OQCInspectionPage: React.FC = () => {
       ]),
       buildQualityInspectionListNotesColumn<OQCInspection>(t),
       ...buildDocumentAuditColumns<OQCInspection>(t),
+      ...customFieldColumns,
       ...(oqcAuditColumn ? [oqcAuditColumn] : []),
       {
         title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
@@ -627,9 +669,16 @@ const OQCInspectionPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => renderOqcRowNodes(record),
       },
-    ], SALES_DOC_LIST_FIELD_RANK),
-    [t, oqcAuditColumn, inspectionDocStatusValueEnum, inspectionQualityStatusValueEnum, renderOqcRowNodes],
-  );
+    ], SALES_DOC_LIST_FIELD_RANK);
+  }, [
+    t,
+    oqcAuditColumn,
+    oqcListCustomFields,
+    generateOqcCustomFieldColumns,
+    inspectionDocStatusValueEnum,
+    inspectionQualityStatusValueEnum,
+    renderOqcRowNodes,
+  ]);
 
   return (
     <PermissionGuard
@@ -648,7 +697,7 @@ const OQCInspectionPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={OQC_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection-width-v5"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection-cf-v1"
           showAdvancedSearch
           pinnedTabsField={QUALITY_INSPECTION_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
@@ -672,6 +721,7 @@ const OQCInspectionPage: React.FC = () => {
             }
           }}
           showDeleteButton
+          deleteButtonText={t('common.delete')}
           onDelete={async () => {
             try {
               const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
@@ -713,6 +763,10 @@ const OQCInspectionPage: React.FC = () => {
               auditEnabled={oqcAuditEnabled}
               permGates={oqcPerms}
               handlers={oqcAuditBatchHandlers}
+              auditEntity={{
+                entityType: 'oqc_inspection',
+                entityName: t('app.kuaizhizao.menu.quality-management.oqc-inspection'),
+              }}
               onSuccess={() => {
                 setSelectedRowKeys([]);
     actionRef.current?.reload();
@@ -750,7 +804,7 @@ const OQCInspectionPage: React.FC = () => {
             sales_delivery_id: salesDeliveryIdFromQuery,
             oqc_inspection_id: oqcInspectionIdFromQuery,
           }}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, sort, _filter, searchFormValues, meta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const listParams = resolveQualityInspectionListParams(searchFormValues, sort);
@@ -771,9 +825,14 @@ const OQCInspectionPage: React.FC = () => {
                 total = data.length;
               }
             }
+            const rows = data as OQCInspection[];
+            const enriched =
+              meta?.purpose === 'prefetch'
+                ? rows
+                : await enrichOqcRecordsWithCustomFields(rows);
             return {
               success: true,
-              data: data as OQCInspection[],
+              data: enriched,
               total,
             };
           }}

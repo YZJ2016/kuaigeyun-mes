@@ -289,12 +289,6 @@ export const OutsourceOrdersTable: React.FC = () => {
     t,
   ]);
 
-  const outsourceOrderTracking = useDocumentTracking(
-    detailDrawerVisible && outsourceOrderDetail?.id ? 'outsource_order' : undefined,
-    outsourceOrderDetail?.id,
-    ooTrackingRefreshKey,
-  );
-
   // 供应商列表
   const [supplierList, setSupplierList] = useState<Supplier[]>([]);
 

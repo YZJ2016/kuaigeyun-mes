@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -7,13 +7,15 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Empty, Input, InputNumber, Row, Space, Table } from 'antd';
+import { App, Button, Col, Empty, Form, Input, InputNumber, Row, Space, Table } from 'antd';
 import { DeleteOutlined, EyeOutlined, CheckOutlined, CloseOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import CodeField from '../../../../../components/code-field';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
@@ -35,12 +37,26 @@ import {
   drawingBalloonSheetApi,
   DrawingBalloonSheet,
 } from '../../../services/drawing-balloon-sheet';
-import { inspectionPlanApi } from '../../../services/production';
+import { inspectionPlanApi, unwrapInspectionPlanList } from '../../../services/production';
+import { workOrderApi } from '../../../services/work-order';
 import { renderFaiConclusionTag, renderFaiStatusTag } from '../components/qualityMeta';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 
 const RESOURCE = 'kuaizhizao:quality-management-fai-orders';
+const FAI_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_fai_orders';
+
+type DropdownOption = { label: string; value: number; meta?: Record<string, unknown> };
+
+function pickOptionMeta(
+  option: DropdownOption | DropdownOption[] | undefined,
+): Record<string, unknown> | undefined {
+  const selected = Array.isArray(option) ? option[0] : option;
+  return selected?.meta;
+}
 
 const FAI_BATCH_SUBMIT_STATUSES = new Set(['draft', 'in_progress', 'rejected']);
 const FAI_BATCH_DELETABLE_STATUSES = new Set(['draft', 'rejected']);
@@ -71,6 +87,18 @@ function emptyChar(seq: number): FaiCharacteristic {
   };
 }
 
+/** 编辑/新建表单回填值（不含 characteristics，明细走独立 state） */
+function buildFaiFormValues(order: FaiOrder | null | undefined): Record<string, unknown> {
+  if (!order) {
+    return { trigger_reason: 'new_part', sample_size: 1, attachments: [] };
+  }
+  const { characteristics: _chars, ...rest } = order;
+  return {
+    ...rest,
+    attachments: mapAttachmentsToUploadList(order.attachments as any),
+  };
+}
+
 const FaiOrdersPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -82,10 +110,94 @@ const FaiOrdersPage: React.FC = () => {
   const [editing, setEditing] = useState<FaiOrder | null>(null);
   const [chars, setChars] = useState<FaiCharacteristic[]>([emptyChar(1)]);
   const [importPlanId, setImportPlanId] = useState<number | null>(null);
+  const [workOrderOptions, setWorkOrderOptions] = useState<DropdownOption[]>([]);
+  const [planOptions, setPlanOptions] = useState<DropdownOption[]>([]);
   const { canCreate, canUpdate, canDelete, canRead, canAction } = useResourcePermissions(RESOURCE);
+
+  const {
+    customFields: faiFormCustomFields,
+    customFieldValues: faiFormCustomFieldValues,
+    loadFieldValues: loadFaiFormFieldValues,
+    extractFormValues: extractFaiFormValues,
+    saveCustomFieldValues: saveFaiCustomFieldValues,
+    resetFieldValues: resetFaiFormFieldValues,
+  } = useCustomFields({
+    tableName: FAI_ORDER_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open,
+  });
+
+  const {
+    customFields: faiListCustomFields,
+    generateCustomFieldColumns: generateFaiCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichFaiRecordsWithCustomFields,
+  } = useCustomFieldsForList<FaiOrder>({ tableName: FAI_ORDER_CUSTOM_FIELD_TABLE });
+
+  const loadWorkOrderOptions = useCallback(async (keyword?: string) => {
+    const res: any = await workOrderApi.list({
+      keyword: keyword?.trim() || undefined,
+      limit: 50,
+    });
+    const items = Array.isArray(res?.items) ? res.items : Array.isArray(res?.data) ? res.data : [];
+    setWorkOrderOptions(
+      items
+        .filter((wo: { id?: number }) => wo?.id != null)
+        .map((wo: { id: number; code?: string; product_name?: string }) => ({
+          value: Number(wo.id),
+          label: `${wo.code || wo.id}${wo.product_name ? ` ${wo.product_name}` : ''}`,
+          meta: { code: wo.code, name: wo.product_name },
+        })),
+    );
+  }, []);
+
+  const loadPlanOptions = useCallback(async (keyword?: string) => {
+    const res = await inspectionPlanApi.list({
+      is_active: true,
+      keyword: keyword?.trim() || undefined,
+      skip: 0,
+      limit: 50,
+    });
+    const items = unwrapInspectionPlanList(res) as Array<{
+      id?: number;
+      plan_code?: string;
+      plan_name?: string;
+    }>;
+    setPlanOptions(
+      items
+        .filter((p) => p.id != null && Number(p.id) > 0)
+        .map((p) => ({
+          value: Number(p.id),
+          label: `${p.plan_name || p.plan_code || p.id}${p.plan_code ? ` (${p.plan_code})` : ''}`,
+          meta: { plan_code: p.plan_code, plan_name: p.plan_name },
+        })),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadWorkOrderOptions().catch(() => setWorkOrderOptions([]));
+    void loadPlanOptions().catch(() => setPlanOptions([]));
+  }, [open, loadPlanOptions, loadWorkOrderOptions]);
+
+  useEffect(() => {
+    if (!open || !editing?.work_order_id) return;
+    const woId = Number(editing.work_order_id);
+    if (!Number.isFinite(woId) || woId <= 0) return;
+    setWorkOrderOptions((prev) => {
+      if (prev.some((o) => o.value === woId)) return prev;
+      return [
+        {
+          value: woId,
+          label: editing.work_order_code || String(woId),
+          meta: { code: editing.work_order_code },
+        },
+        ...prev,
+      ];
+    });
+  }, [open, editing?.work_order_id, editing?.work_order_code]);
   const balloonSheetPull = useUniPullQuery<DrawingBalloonSheet>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     loadData: async ({ keyword, page, pageSize }) => {
       const res = await drawingBalloonSheetApi.list({
         confirmed_only: true,
@@ -269,12 +381,9 @@ const FaiOrdersPage: React.FC = () => {
     setEditing(null);
     setChars([emptyChar(1)]);
     setImportPlanId(null);
+    resetFaiFormFieldValues();
     setOpen(true);
-    setTimeout(() => {
-      formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({ trigger_reason: 'new_part', sample_size: 1, attachments: [] });
-    }, 0);
-  }, []);
+  }, [resetFaiFormFieldValues]);
   useNewShortcut(() => {
     if (canCreate) openCreate();
   });
@@ -283,14 +392,23 @@ const FaiOrdersPage: React.FC = () => {
     const detail = await faiOrderApi.get(row.id);
     setEditing(detail);
     setChars(detail.characteristics?.length ? detail.characteristics : [emptyChar(1)]);
+    setImportPlanId(null);
     setOpen(true);
-    setTimeout(() => {
-      formRef.current?.setFieldsValue({
-        ...detail,
-        attachments: mapAttachmentsToUploadList(detail.attachments as any),
-      });
-    }, 0);
   };
+
+  const fillFaiFormAfterOpen = useCallback(
+    (opened: boolean) => {
+      if (!opened) return;
+      // destroyOnHidden：须等 Modal 打开后 form 已挂载再写值；禁止 setTimeout 碰运气
+      void (async () => {
+        const base = buildFaiFormValues(editing);
+        const customFormValues =
+          editing?.id != null ? await loadFaiFormFieldValues(editing.id) : {};
+        formRef.current?.setFieldsValue({ ...base, ...customFormValues });
+      })();
+    },
+    [editing, loadFaiFormFieldValues],
+  );
 
   const handleSubmitRow = useCallback(
     async (row: FaiOrder) => {
@@ -476,9 +594,9 @@ const FaiOrdersPage: React.FC = () => {
     ],
   );
 
-  const columns: ProColumns<FaiOrder>[] = useMemo(
-    () =>
-      alignProColumns(
+  const columns: ProColumns<FaiOrder>[] = useMemo(() => {
+    const customFieldColumns = generateFaiCustomFieldColumns();
+    return alignProColumns(
         [
           {
             title: t('app.kuaizhizao.quality.fai.faiCode'),
@@ -544,6 +662,7 @@ const FaiOrdersPage: React.FC = () => {
             render: (_, r) => renderFaiConclusionTag(t, r.conclusion),
           },
           ...buildDocumentAuditColumns<FaiOrder>(t),
+          ...customFieldColumns,
           {
             title: t('common.status'),
             dataIndex: 'status',
@@ -567,9 +686,8 @@ const FaiOrdersPage: React.FC = () => {
           },
         ],
         GLOBAL_DOC_LIST_FIELD_RANK,
-      ),
-    [renderFaiRowNodes, statusEnum, t],
-  );
+      );
+  }, [faiListCustomFields, generateFaiCustomFieldColumns, renderFaiRowNodes, statusEnum, t]);
 
   const charColumns = [
     {
@@ -730,12 +848,13 @@ const FaiOrdersPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.fai-orders-cf-v1"
           skipFuzzyPinyinClientFilter
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
           showDeleteButton={canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={async (keys) => {
             try {
               const deletable = resolveSelectedRows(keys).filter((row) =>
@@ -781,7 +900,7 @@ const FaiOrdersPage: React.FC = () => {
                 ]
               : []
           }
-          request={async (params, _sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues, meta) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const res = await faiOrderApi.list({
@@ -790,7 +909,12 @@ const FaiOrdersPage: React.FC = () => {
               keyword: pickListSearchKeyword(searchFormValues),
               status: pickSearchString(searchFormValues, 'status'),
             });
-            return { success: true, data: res.items || [], total: res.total || 0 };
+            const rows = res.items || [];
+            const enriched =
+              meta?.purpose === 'prefetch'
+                ? rows
+                : await enrichFaiRecordsWithCustomFields(rows);
+            return { success: true, data: enriched, total: res.total || 0 };
           }}
         />
 
@@ -804,15 +928,20 @@ const FaiOrdersPage: React.FC = () => {
           width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
           grid={false}
           formRef={formRef}
+          isEdit={Boolean(editing?.id)}
+          initialValues={buildFaiFormValues(editing)}
+          afterOpenChange={fillFaiFormAfterOpen}
           onClose={() => {
             setOpen(false);
             setEditing(null);
+            resetFaiFormFieldValues();
           }}
           onFinish={async (values) => {
             try {
+              const { customData, standardValues } = extractFaiFormValues(values);
               const payload = {
-                ...values,
-                attachments: normalizeDocumentAttachments(values.attachments),
+                ...standardValues,
+                attachments: normalizeDocumentAttachments(standardValues.attachments),
                 characteristics: chars.filter((c) => (c.characteristic_name || '').trim()),
               };
               let saved: FaiOrder;
@@ -821,11 +950,14 @@ const FaiOrdersPage: React.FC = () => {
               } else {
                 saved = await faiOrderApi.create(payload);
               }
+              if (saved?.id != null) {
+                await saveFaiCustomFieldValues(saved.id, customData);
+              }
               messageApi.success(t('common.saveSuccess'));
               setEditing(saved);
               setChars(saved.characteristics?.length ? saved.characteristics : chars);
               invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
+              actionRef.current?.reload();
               return true;
             } catch (e: any) {
               messageApi.error(e?.message || t('common.saveFailed'));
@@ -841,6 +973,7 @@ const FaiOrdersPage: React.FC = () => {
                 label={t('app.kuaizhizao.quality.fai.faiCode')}
                 pageCode="kuaizhizao-quality-fai-order"
                 documentId={editing?.id}
+                autoGenerateOnCreate={!editing?.id}
               />
             </Col>
             <Col span={8}>
@@ -859,10 +992,20 @@ const FaiOrdersPage: React.FC = () => {
               />
             </Col>
             <Col span={8}>
-              <ProFormText name="material_code" label={t('app.kuaizhizao.quality.fai.materialCode')} />
-            </Col>
-            <Col span={8}>
-              <ProFormText name="material_name" label={t('app.kuaizhizao.quality.fai.materialName')} />
+              <UniMaterialSelect
+                name="material_id"
+                label={t('app.kuaizhizao.quality.fai.material')}
+                fillMapping={{
+                  material_code: 'mainCode',
+                  material_name: 'name',
+                  material_spec: 'specification',
+                  part_number: 'mainCode',
+                }}
+                showQuickCreate
+                showAdvancedSearch
+              />
+              <Form.Item name="material_code" hidden />
+              <Form.Item name="material_name" hidden />
             </Col>
             <Col span={8}>
               <ProFormText name="drawing_no" label={t('app.kuaizhizao.quality.fai.drawingNo')} />
@@ -871,10 +1014,28 @@ const FaiOrdersPage: React.FC = () => {
               <ProFormText name="drawing_revision" label={t('app.kuaizhizao.quality.fai.drawingRevision')} />
             </Col>
             <Col span={8}>
-              <ProFormText name="work_order_code" label={t('app.kuaizhizao.quality.fai.workOrder')} />
-            </Col>
-            <Col span={8}>
-              <ProFormDigit name="work_order_id" label={t('app.kuaizhizao.quality.fai.workOrderId')} />
+              <Form.Item name="work_order_id" label={t('app.kuaizhizao.quality.fai.workOrder')}>
+                <UniDropdown
+                  allowClear
+                  showSearch
+                  filterOption={false}
+                  style={{ width: '100%' }}
+                  placeholder={t('app.kuaizhizao.quality.patrol.form.selectWorkOrder', {
+                    defaultValue: '搜索工单编号',
+                  })}
+                  options={workOrderOptions}
+                  onSearch={(kw) => {
+                    void loadWorkOrderOptions(kw).catch(() => setWorkOrderOptions([]));
+                  }}
+                  onChange={(_value: number | undefined, option: DropdownOption | DropdownOption[]) => {
+                    const meta = pickOptionMeta(option);
+                    formRef.current?.setFieldsValue({
+                      work_order_code: meta?.code ?? null,
+                    });
+                  }}
+                />
+              </Form.Item>
+              <Form.Item name="work_order_code" hidden />
             </Col>
             <Col span={8}>
               <ProFormText name="part_number" label={t('app.kuaizhizao.quality.fai.partNumber')} />
@@ -901,12 +1062,6 @@ const FaiOrdersPage: React.FC = () => {
                 fieldProps={{ rows: 2 }}
               />
             </Col>
-            <Col span={24}>
-              <ProFormTextArea name="remarks" label={t('common.remark')} fieldProps={{ rows: 2 }} />
-            </Col>
-            <Col span={24}>
-              <DocumentAttachmentsField category="fai_order_attachments" />
-            </Col>
           </Row>
 
           <div style={{ width: '100%', marginTop: 8, marginBottom: 8 }}>
@@ -919,10 +1074,20 @@ const FaiOrdersPage: React.FC = () => {
               ) : null}
               {editable && editing?.id ? (
                 <>
-                  <InputNumber
-                    placeholder={t('app.kuaizhizao.quality.fai.inspectionPlanId')}
+                  <UniDropdown
+                    allowClear
+                    showSearch
+                    filterOption={false}
+                    style={{ minWidth: 220 }}
+                    placeholder={t('app.kuaizhizao.quality.incoming.form.selectInspectionPlan')}
                     value={importPlanId ?? undefined}
-                    onChange={(v) => setImportPlanId(v == null ? null : Number(v))}
+                    options={planOptions}
+                    onSearch={(kw) => {
+                      void loadPlanOptions(kw).catch(() => setPlanOptions([]));
+                    }}
+                    onChange={(v: number | undefined) => {
+                      setImportPlanId(v == null ? null : Number(v));
+                    }}
                   />
                   <Button
                     size="small"
@@ -966,6 +1131,21 @@ const FaiOrdersPage: React.FC = () => {
               </Space>
             ) : null}
           </div>
+
+          <CustomFieldsFormSection
+            customFields={faiFormCustomFields}
+            customFieldValues={faiFormCustomFieldValues}
+            gridColumns={3}
+          />
+
+          <Row gutter={16}>
+            <Col span={24}>
+              <ProFormTextArea name="remarks" label={t('common.remark')} fieldProps={{ rows: 2 }} />
+            </Col>
+            <Col span={24}>
+              <DocumentAttachmentsField category="fai_order_attachments" />
+            </Col>
+          </Row>
         </FormModalTemplate>
       </ListPageTemplate>
 

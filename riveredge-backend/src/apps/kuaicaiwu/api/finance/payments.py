@@ -62,7 +62,21 @@ def _serialize(obj: Payment) -> PaymentVoucherResponse:
     return resp
 
 
-async def _serialize_detail(tenant_id: int, obj: Payment) -> PaymentVoucherResponse:
+async def _attach_audit(
+    tenant_id: int,
+    user_id: int,
+    items: list[PaymentVoucherResponse],
+) -> list[PaymentVoucherResponse]:
+    if not items:
+        return items
+    from core.services.approval.audit_record_enricher import enrich_items
+
+    payloads = [item.model_dump() for item in items]
+    enriched = await enrich_items(tenant_id, "payment", payloads, viewer_id=user_id)
+    return [PaymentVoucherResponse.model_validate(row) for row in enriched]
+
+
+async def _serialize_detail(tenant_id: int, user_id: int, obj: Payment) -> PaymentVoucherResponse:
     from apps.kuaicaiwu.services.finance_voucher_enrichment import enrich_voucher_detail
 
     base = _serialize(obj)
@@ -79,7 +93,9 @@ async def _serialize_detail(tenant_id: int, obj: Payment) -> PaymentVoucherRespo
     )
     if offset_lines:
         enriched["offset_prepayment_lines"] = offset_lines
-    return PaymentVoucherResponse.model_validate(enriched)
+    detailed = PaymentVoucherResponse.model_validate(enriched)
+    audited = await _attach_audit(tenant_id, user_id, [detailed])
+    return audited[0]
 
 
 @router.post("", response_model=PaymentVoucherResponse, status_code=status.HTTP_201_CREATED)
@@ -208,6 +224,7 @@ async def create_payment(
             "advance_payee_name": data.advance_payee_name,
             "settlement_type": data.settlement_type or "normal",
             "status": "Draft",
+            "review_status": "草稿",
             "notes": data.notes,
             "require_payment_voucher": require_payment_voucher,
             "attachments": data.attachments,
@@ -239,7 +256,7 @@ async def create_payment(
                 payment_code=str(payment.payment_code),
                 created_by=current_user.id,
             )
-        return _serialize(payment)
+        return await _serialize_detail(tenant_id, current_user.id, payment)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(422, str(e), "/payments", tenant_id) from e
 
@@ -265,7 +282,8 @@ async def list_payments(
     sort_field: Optional[str] = Query(None),
     sort_order: Optional[str] = Query(None),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     """获取付款单列表"""
     from apps.kuaicaiwu.services.finance_list_core import apply_finance_voucher_list_filters
@@ -314,8 +332,9 @@ async def list_payments(
     items = await query.order_by(order_expr, "-id").offset(skip).limit(limit)
     serialized = [_serialize(p) for p in items]
     await enrich_payment_list_linked_payable_totals(tenant_id, serialized)
+    audited = await _attach_audit(tenant_id, current_user.id, serialized)
     return PaymentVoucherListResponse(
-        items=serialized,
+        items=audited,
         total=total, skip=skip, limit=limit
     )
 
@@ -494,11 +513,12 @@ async def preview_pull_payment_from_payment_application(
 async def get_payment(
     id: int,
     _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
-    tenant_id: int = Depends(get_current_tenant)
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """获取付款单详情"""
     payment = await _get_or_404(tenant_id, id)
-    return await _serialize_detail(tenant_id, payment)
+    return await _serialize_detail(tenant_id, current_user.id, payment)
 
 
 @router.get("/{id}/print", summary="Print payment voucher")
@@ -563,6 +583,11 @@ async def update_payment(
     payment = await _get_or_404(tenant_id, id)
     try:
         assert_voucher_correction_allowed(payment, action="update")
+        from apps.kuaicaiwu.services.payment_audit_service import (
+            assert_payment_review_editable,
+        )
+
+        assert_payment_review_editable(payment)
     except BusinessLogicError as exc:
         raise _http_exception_with_trace(400, str(exc), "/payments/{id}", tenant_id) from exc
     from apps.kuaicaiwu.constants.payment_method import (
@@ -672,7 +697,7 @@ async def update_payment(
         else:
             await payment_pull_service.clear_offset_prepayment_lines(tenant_id, int(payment.id))
         payment = await _get_or_404(tenant_id, id)
-    return await _serialize_detail(tenant_id, payment)
+    return await _serialize_detail(tenant_id, current_user.id, payment)
 
 
 @router.post("/{id}/confirm", response_model=PaymentVoucherResponse)
@@ -730,7 +755,7 @@ async def repair_payment_settlement(
     except ValidationError as exc:
         raise _http_exception_with_trace(400, str(exc), "/payments/{id}/repair-settlement", tenant_id) from exc
     payment = await _get_or_404(tenant_id, id, route="/payments/{id}/repair-settlement")
-    return await _serialize_detail(tenant_id, payment)
+    return await _serialize_detail(tenant_id, current_user.id, payment)
 
 
 @router.post("/{id}/cancel", response_model=PaymentVoucherResponse)
@@ -790,7 +815,7 @@ async def unconfirm_payment(
         )
     except (BusinessLogicError, ValidationError) as exc:
         raise _http_exception_with_trace(400, str(exc), "/payments/{id}/unconfirm", tenant_id) from exc
-    payload = {"status": "Draft"}
+    payload = {"status": "Draft", "review_status": "草稿"}
     apply_update_audit(payload, current_user)
     await Payment.filter(id=id).update(**payload)
     return _serialize(await _get_or_404(tenant_id, id))
@@ -813,6 +838,12 @@ async def delete_payment(
     payment = await _get_or_404(tenant_id, id)
     try:
         assert_voucher_correction_allowed(payment, action="delete")
+        if str(payment.status or "") == "Draft":
+            from apps.kuaicaiwu.services.payment_audit_service import (
+                assert_payment_review_editable,
+            )
+
+            assert_payment_review_editable(payment)
         if str(payment.status or "") == "Confirmed":
             await apply_confirmed_voucher_unpost(
                 tenant_id,

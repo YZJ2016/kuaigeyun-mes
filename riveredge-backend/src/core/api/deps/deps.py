@@ -81,11 +81,17 @@ async def get_current_tenant(
             raise HTTPException(status_code=403, detail="租户上下文不匹配，禁止跨租户访问")
         tenant_id = authenticated_tenant_id
 
-    from infra.domain.tenant.tenant_access import require_operational_tenant_by_id
+    from infra.domain.tenant.tenant_access import (
+        require_existing_tenant_by_id,
+        require_operational_tenant_by_id,
+    )
 
     if not is_infra_superadmin:
         await require_operational_tenant_by_id(tenant_id)
     else:
+        # 平台超管可进入非 active 组织做运维，但必须是真实存在的组织行；
+        # 跨租户恢复后 localStorage 残留幽灵 ID 时在此统一拒绝。
+        await require_existing_tenant_by_id(tenant_id)
         # spec 143：平台超管经 X-Tenant-ID 显式选择目标组织——进入/退出一次
         # with_tenant scope 以在激活点写入结构化日志 + core_operation_logs
         # 审计记录（请求态操作者已在 get_current_user 登记）。

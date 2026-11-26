@@ -44,7 +44,7 @@ import { InspectionSamplingTypeTag, InspectionValueTypeTag } from '../../../comp
 import { formatStepCriteriaDisplay, normalizeValueType, bumpPlanVersion, stepsFingerprint } from '../../../types/inspectionStepSpec';
 import { valueTypeOptions } from '../../../components/InspectionStepValueSpecFields';
 import { useTranslation } from 'react-i18next';
-import { getQualityPlanTypeFallback, getQualityTypeText } from '../components/qualityMeta';
+import { getQualityPlanTypeFallback, getQualityTypeText, resolveQualityPlanTypeShortCode } from '../components/qualityMeta';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
   buildInspectionPlanActiveValueEnum,
@@ -65,6 +65,16 @@ import { renderMasterActiveTag } from '../../../../master-data/utils/masterListP
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const INSPECTION_PLAN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_inspection_plans';
+
 interface InspectionPlan {
   id?: number;
   uuid?: string;
@@ -114,28 +124,6 @@ const InspectionPlansPage: React.FC = () => {
     return Object.fromEntries(valueTypeOptions(t).map((o) => [o.value, o.label]));
   }, [t]);
 
-  /** 当 URL 含 operationId 时，自动打开新建弹窗（仅首次） */
-  const hasAutoOpenedRef = useRef(false);
-  useEffect(() => {
-    if (hasAutoOpenedRef.current) return;
-    const operationId = searchParams.get('operationId');
-    if (operationId) {
-      hasAutoOpenedRef.current = true;
-      setIsEdit(false);
-      setIsCopyCreate(false);
-      setCurrentPlan(null);
-      setSteps([]);
-      setModalVisible(true);
-      setTimeout(() => {
-        formRef.current?.resetFields();
-        formRef.current?.setFieldsValue({
-          plan_type: 'process',
-          operation_id: parseInt(operationId, 10) || operationId,
-        });
-      }, 100);
-    }
-  }, [searchParams]);
-
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [isCopyCreate, setIsCopyCreate] = useState(false);
@@ -150,12 +138,58 @@ const InspectionPlansPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailPlanId, setDetailPlanId] = useState<number | null>(null);
 
+  const {
+    customFields: planFormCustomFields,
+    customFieldValues: planFormCustomFieldValues,
+    loadFieldValues: loadPlanFormFieldValues,
+    extractFormValues: extractPlanFormValues,
+    saveCustomFieldValues: savePlanCustomFieldValues,
+    resetFieldValues: resetPlanFormFieldValues,
+  } = useCustomFields({
+    tableName: INSPECTION_PLAN_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: modalVisible,
+  });
+
+  const {
+    customFields: planListCustomFields,
+    generateCustomFieldColumns: generatePlanCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichPlanRecordsWithCustomFields,
+    customFieldValues: planDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadPlanFieldValuesForDetail,
+    resetDetailFieldValues: resetPlanDetailFieldValues,
+  } = useCustomFieldsForList<InspectionPlan>({ tableName: INSPECTION_PLAN_CUSTOM_FIELD_TABLE });
+
+  /** 当 URL 含 operationId 时，自动打开新建弹窗（仅首次） */
+  const hasAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoOpenedRef.current) return;
+    const operationId = searchParams.get('operationId');
+    if (operationId) {
+      hasAutoOpenedRef.current = true;
+      setIsEdit(false);
+      setIsCopyCreate(false);
+      setCurrentPlan(null);
+      setSteps([]);
+      resetPlanFormFieldValues();
+      setModalVisible(true);
+      setTimeout(() => {
+        formRef.current?.resetFields();
+        formRef.current?.setFieldsValue({
+          plan_type: 'process',
+          operation_id: parseInt(operationId, 10) || operationId,
+        });
+      }, 100);
+    }
+  }, [searchParams, resetPlanFormFieldValues]);
+
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号。支持 URL 参数 operationId 预填过程检验 */
   const handleCreate = async () => {
     setIsEdit(false);
     setIsCopyCreate(false);
     setCurrentPlan(null);
     setSteps([]);
+    resetPlanFormFieldValues();
     setModalVisible(true);
     const operationId = searchParams.get('operationId');
     setTimeout(() => {
@@ -185,6 +219,8 @@ const InspectionPlansPage: React.FC = () => {
       const stepItems = mapDetailSteps(detail);
       setSteps(stepItems);
       setStepsBaseline(stepsFingerprint(stepItems));
+      const customFormValues =
+        detail.id != null ? await loadPlanFormFieldValues(detail.id) : {};
       setModalVisible(true);
       setTimeout(() => {
         formRef.current?.setFieldsValue({
@@ -194,6 +230,7 @@ const InspectionPlansPage: React.FC = () => {
           version: detail.version,
           is_active: detail.is_active,
           remarks: detail.remarks,
+          ...customFormValues,
         });
       }, 100);
     } catch (error) {
@@ -211,6 +248,7 @@ const InspectionPlansPage: React.FC = () => {
       setCurrentPlan(null);
       setSteps(stepItems);
       setStepsBaseline('');
+      resetPlanFormFieldValues();
       setModalVisible(true);
       const copySuffix = t('app.kuaizhizao.quality.plans.copySuffix');
       const baseName = (detail.plan_name || '').trim();
@@ -237,6 +275,7 @@ const InspectionPlansPage: React.FC = () => {
     try {
       const detail = await inspectionPlanApi.get(id.toString());
       setPlanDetail(detail);
+      await loadPlanFieldValuesForDetail(id);
     } catch (error: any) {
       setDetailError(error?.message || t('app.kuaizhizao.quality.plans.messages.loadDetailFailed'));
       setPlanDetail((prev) => (prev?.id === id ? prev : null));
@@ -264,9 +303,13 @@ const InspectionPlansPage: React.FC = () => {
   };
 
   const submitPlan = async (values: any) => {
-    const planCode = typeof values.plan_code === 'string' ? values.plan_code.trim() : values.plan_code;
+    const { customData, standardValues } = extractPlanFormValues(values);
+    const planCode =
+      typeof standardValues.plan_code === 'string'
+        ? standardValues.plan_code.trim()
+        : standardValues.plan_code;
     const submitData = {
-      ...values,
+      ...standardValues,
       plan_code: planCode,
       material_id: null,
       material_code: null,
@@ -276,9 +319,13 @@ const InspectionPlansPage: React.FC = () => {
 
     if (isEdit && currentPlan?.id) {
       await inspectionPlanApi.update(currentPlan.id.toString(), submitData);
+      await savePlanCustomFieldValues(currentPlan.id, customData);
       messageApi.success(t('app.kuaizhizao.quality.plans.messages.updateSuccess'));
     } else {
-      await inspectionPlanApi.create(submitData);
+      const created = await inspectionPlanApi.create(submitData);
+      if (created?.id != null) {
+        await savePlanCustomFieldValues(created.id, customData);
+      }
       messageApi.success(t('app.kuaizhizao.quality.plans.messages.createSuccess'));
     }
     setModalVisible(false);
@@ -287,6 +334,7 @@ const InspectionPlansPage: React.FC = () => {
     setSteps([]);
     setStepsBaseline('');
     formRef.current?.resetFields();
+    resetPlanFormFieldValues();
     actionRef.current?.reload();
   };
 
@@ -361,8 +409,9 @@ const InspectionPlansPage: React.FC = () => {
     [t],
   );
 
-  const columns: ProColumns<InspectionPlan>[] = useMemo(
-    () => alignProColumns<InspectionPlan>([
+  const columns: ProColumns<InspectionPlan>[] = useMemo(() => {
+    const customFieldColumns = generatePlanCustomFieldColumns();
+    return alignProColumns<InspectionPlan>([
       {
         title: t('app.kuaizhizao.quality.plans.columns.planCode'),
         dataIndex: 'plan_code',
@@ -425,6 +474,7 @@ const InspectionPlansPage: React.FC = () => {
         hideInSearch: true,
       },
       ...buildDocumentAuditColumns<InspectionPlan>(t),
+      ...customFieldColumns,
       {
         title: t('common.createdAt'),
         dataIndex: 'created_at_range',
@@ -517,9 +567,19 @@ const InspectionPlansPage: React.FC = () => {
           ) : null,
         ],
       },
-    ], SALES_DOC_LIST_FIELD_RANK),
-    [canCreate, canDelete, canRead, canUpdate, planActiveValueEnum, planTypeOptions, planTypeValueEnum, t],
-  );
+    ], SALES_DOC_LIST_FIELD_RANK);
+  }, [
+    canCreate,
+    canDelete,
+    canRead,
+    canUpdate,
+    generatePlanCustomFieldColumns,
+    planActiveValueEnum,
+    planListCustomFields,
+    planTypeOptions,
+    planTypeValueEnum,
+    t,
+  ]);
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
     detailBaseColumns, planDetail
@@ -531,14 +591,14 @@ const InspectionPlansPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.inspectionPlans')}
         headerTitle={t('app.kuaizhizao.quality.plans.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans-width-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans-cf-v1"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={INSPECTION_PLAN_PINNED_STATUS_FIELD}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta) => {
           try {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
@@ -550,7 +610,12 @@ const InspectionPlansPage: React.FC = () => {
               ...listParams,
             });
             const { data, total } = normalizeQualityImprovementListResponse(response);
-            return { data: data as InspectionPlan[], success: true, total };
+            const rows = data as InspectionPlan[];
+            const enriched =
+              meta?.purpose === 'prefetch'
+                ? rows
+                : await enrichPlanRecordsWithCustomFields(rows);
+            return { data: enriched, success: true, total };
           } catch {
             messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadListFailed'));
             return { data: [], success: false, total: 0 };
@@ -566,6 +631,7 @@ const InspectionPlansPage: React.FC = () => {
           style: { cursor: 'pointer' },
         })}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           try {
             const ids = keys.map(Number);
@@ -603,6 +669,7 @@ const InspectionPlansPage: React.FC = () => {
           setCurrentPlan(null);
           setSteps([]);
           formRef.current?.resetFields();
+          resetPlanFormFieldValues();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -616,22 +683,27 @@ const InspectionPlansPage: React.FC = () => {
         </ProFormItem>
         <Row gutter={16}>
           <ProFormDependency name={['plan_type']}>
-            {({ plan_type }) => (
-              <Col span={12}>
-                <CodeField
-                  pageCode="kuaizhizao-quality-inspection-plan"
-                  name="plan_code"
-                  label={t('app.kuaizhizao.quality.plans.form.planCode')}
-                  required
-                  autoGenerateOnCreate={!isEdit}
-                  showGenerateButton={false}
-                  documentId={isEdit ? currentPlan?.id : undefined}
-                  context={{
-                    plan_type: plan_type || '',
-                  }}
-                />
-              </Col>
-            )}
+            {({ plan_type }) => {
+              const planTypeCode = resolveQualityPlanTypeShortCode(plan_type);
+              return (
+                <Col span={12}>
+                  <CodeField
+                    pageCode="kuaizhizao-quality-inspection-plan"
+                    name="plan_code"
+                    label={t('app.kuaizhizao.quality.plans.form.planCode')}
+                    required
+                    autoGenerateOnCreate={!isEdit && Boolean(planTypeCode)}
+                    generateSessionKey={!isEdit && planTypeCode ? planTypeCode : undefined}
+                    showGenerateButton={false}
+                    documentId={isEdit ? currentPlan?.id : undefined}
+                    context={{
+                      plan_type: plan_type || '',
+                      plan_type_code: planTypeCode,
+                    }}
+                  />
+                </Col>
+              );
+            }}
           </ProFormDependency>
           <Col span={12}>
             <ProFormText
@@ -673,6 +745,12 @@ const InspectionPlansPage: React.FC = () => {
           <InspectionPlanStepEditor value={steps} onChange={setSteps} disabled={false} />
         </ProFormItem>
 
+        <CustomFieldsFormSection
+          customFields={planFormCustomFields}
+          customFieldValues={planFormCustomFieldValues}
+          gridColumns={2}
+        />
+
         <Row gutter={16}>
           <Col span={24}>
             <ProFormTextArea
@@ -697,6 +775,7 @@ const InspectionPlansPage: React.FC = () => {
           setPlanDetail(null);
           setDetailError(null);
           setDetailPlanId(null);
+          resetPlanDetailFieldValues();
         }}
         loading={detailLoading && !planDetail}
         size={DRAWER_CONFIG.STANDARD_WIDTH}
@@ -757,11 +836,21 @@ const InspectionPlansPage: React.FC = () => {
         }
         basic={
           planDetail ? (
-            <Descriptions
-              column={2}
-              size="small"
-              items={timeconfigBasicItems}
-            />
+            <>
+              <Descriptions
+                column={2}
+                size="small"
+                items={timeconfigBasicItems}
+              />
+              {hasCustomFieldsDetailContent(planListCustomFields, planDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={planListCustomFields}
+                    customFieldValues={planDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+            </>
           ) : detailError && !detailLoading ? null : (
             <div style={{ minHeight: 80 }} />
           )

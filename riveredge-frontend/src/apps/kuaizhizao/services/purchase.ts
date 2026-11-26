@@ -204,7 +204,10 @@ export interface PurchaseOrderItem {
   material_code?: string;
   material_name?: string;
   material_spec?: string;
+  material_model?: string;
   material_unit?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
   ordered_quantity?: number;
   unit?: string;
   unit_price?: number;

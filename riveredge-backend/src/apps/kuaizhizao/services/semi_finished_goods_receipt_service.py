@@ -28,6 +28,7 @@ from apps.kuaizhizao.constants.work_order_inbound_status import (
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.schemas.warehouse import (
     SemiFinishedGoodsReceiptCreate,
+    SemiFinishedGoodsReceiptUpdate,
     SemiFinishedGoodsReceiptItemCreate,
     SemiFinishedGoodsReceiptResponse,
     SemiFinishedGoodsReceiptWithItemsResponse,
@@ -208,6 +209,128 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 logger.warning("建立工单→半成品入库 单据关联失败: %s", e)
 
         return SemiFinishedGoodsReceiptResponse.model_validate(receipt)
+
+    async def update_semi_finished_goods_receipt(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        receipt_data: SemiFinishedGoodsReceiptUpdate,
+        updated_by: int,
+    ) -> SemiFinishedGoodsReceiptResponse:
+        """更新半成品入库单（待入库/草稿可改表头与明细）。"""
+        from apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub import (
+            assert_inbound_hub_capability,
+        )
+
+        async with in_transaction():
+            receipt = await SemiFinishedGoodsReceipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+            if not receipt:
+                raise NotFoundError(f"半成品入库单不存在: {receipt_id}")
+            assert_inbound_hub_capability(receipt, "update", receipt_type="semi_finished_goods")
+
+            items = getattr(receipt_data, "items", None)
+            if items is not None and len(items) == 0:
+                raise ValidationError("入库明细不能为空")
+
+            total_quantity = (
+                sum(float(item.receipt_quantity or 0) for item in items)
+                if items is not None
+                else float(receipt.total_quantity or 0)
+            )
+            work_order_id = receipt.work_order_id
+            raw_wo = getattr(receipt_data, "work_order_id", None)
+            if "work_order_id" in receipt_data.model_fields_set:
+                work_order_id = int(raw_wo) if raw_wo not in (None, 0, "0") else None
+            if work_order_id and items is not None:
+                from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+
+                await FinishedGoodsReceiptService()._assert_work_order_inbound_quantity(
+                    tenant_id,
+                    int(work_order_id),
+                    float(total_quantity or 0),
+                    exclude_semi_receipt_id=receipt_id,
+                )
+
+            dump = receipt_data.model_dump(
+                exclude_unset=True,
+                exclude={"receipt_code", "items", "status", "review_status", "total_quantity"},
+            )
+            if "work_order_id" in dump:
+                dump["work_order_id"] = work_order_id
+                dump["work_order_code"] = (
+                    str(getattr(receipt_data, "work_order_code", None) or "").strip()
+                    if work_order_id
+                    else ""
+                )
+            if dump.get("receipt_time") is not None:
+                dump["receipt_time"] = resolve_business_datetime(dump["receipt_time"])
+            user_info = await self.get_user_info(updated_by)
+            dump["updated_by"] = updated_by
+            dump["updated_by_name"] = user_info.get("name", "")
+            if items is not None:
+                dump["total_quantity"] = total_quantity
+            if dump:
+                await SemiFinishedGoodsReceipt.filter(
+                    tenant_id=tenant_id, id=receipt_id
+                ).update(**dump)
+
+            if items is not None:
+                from apps.master_data.models.material import Material
+                from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+
+                await SemiFinishedGoodsReceiptItem.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id
+                ).delete()
+                location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+                for item_data in items:
+                    material = await Material.get_or_none(
+                        tenant_id=tenant_id,
+                        id=item_data.material_id,
+                        deleted_at__isnull=True,
+                    )
+                    batch_number = getattr(item_data, "batch_number", None)
+                    if material:
+                        batch_number = await ensure_batch_no_for_item(
+                            tenant_id=tenant_id,
+                            material=material,
+                            item_data=item_data,
+                            supplier_code=None,
+                        ) or batch_number
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        scene="半成品入库",
+                        material_label=getattr(item_data, "material_name", None)
+                        or getattr(item_data, "material_code", "未知物料"),
+                    )
+                    await SemiFinishedGoodsReceiptItem.create(
+                        tenant_id=tenant_id,
+                        receipt_id=receipt_id,
+                        material_id=item_data.material_id,
+                        material_code=item_data.material_code,
+                        material_name=item_data.material_name,
+                        material_spec=getattr(item_data, "material_spec", None),
+                        material_unit=item_data.material_unit,
+                        receipt_quantity=item_data.receipt_quantity,
+                        qualified_quantity=item_data.qualified_quantity,
+                        unqualified_quantity=item_data.unqualified_quantity,
+                        location_id=getattr(item_data, "location_id", None),
+                        location_code=getattr(item_data, "location_code", None),
+                        batch_number=batch_number,
+                        expiry_date=getattr(item_data, "expiry_date", None),
+                        quality_status=getattr(item_data, "quality_status", "合格"),
+                        quality_inspection_id=getattr(item_data, "quality_inspection_id", None),
+                        status=getattr(item_data, "status", "待入库"),
+                        receipt_time=getattr(item_data, "receipt_time", None),
+                        notes=getattr(item_data, "notes", None),
+                        **_document_line_dual_quantity_write_kwargs(item_data),
+                    )
+
+            updated = await SemiFinishedGoodsReceipt.get(tenant_id=tenant_id, id=receipt_id)
+            return SemiFinishedGoodsReceiptResponse.model_validate(updated)
 
     async def get_semi_finished_goods_receipt_by_id(
         self, tenant_id: int, receipt_id: int
@@ -803,10 +926,13 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         fqc_rem = quota.get("fqc_qualified_remaining")
         if pending <= 0:
             hint = "工单可入库数量已用尽，无法再取单入库"
-        elif effective_pending <= 0 and fqc_rem is not None:
-            hint = "须先完成成品检验且存在合格数量后才能下推入库"
         elif effective_pending <= 0 and suggested <= 0:
             hint = "暂无质检合格或末道已审报工数量，请手工填写入库数量"
+        elif fqc_rem is not None and float(fqc_rem) <= 0:
+            hint = f"可创建待入库单（最多 {effective_pending}）；须先完成成品检验后才能确认入库"
+        elif fqc_rem is not None:
+            confirmable = min(effective_pending, float(fqc_rem))
+            hint = f"可创建待入库单（最多 {effective_pending}）；确认入库须 FQC 合格剩余 {confirmable}"
 
         material = await Material.get_or_none(
             tenant_id=tenant_id,

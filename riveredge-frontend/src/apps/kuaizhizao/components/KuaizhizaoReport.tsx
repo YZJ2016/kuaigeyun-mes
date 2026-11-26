@@ -124,7 +124,9 @@ export function KuaizhizaoReport<T extends Record<string, unknown> = Record<stri
     [augmentSearch, defaultRequest, requestOverride],
   );
 
-  const exportDomain = route.api === 'plan' ? 'plans' : route.api;
+  // 列表 API 用复数路径；export 后端分支同名（purchase→purchases，plan→plans）
+  const exportDomain =
+    route.api === 'plan' ? 'plans' : route.api === 'purchase' ? 'purchases' : route.api;
 
   return (
     <UniReport<T>

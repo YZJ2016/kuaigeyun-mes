@@ -50,9 +50,12 @@ MATERIAL_QUERY_FIELD_KEYS = (
     "FBaseUnitId.FNumber,FBaseUnitId.FName,"
     "FMaterialGroup.FNumber,FMaterialGroup.FName,"
     "FErpClsID,"
+    "FIsSNManage,"
     "FTaxRateId.FNumber,"
     "FDocumentStatus,FForbidStatus"
 )
+# 批号改走苍穹库存信息同步；星空主档仅保留序列号列作升级检测
+MATERIAL_BATCH_SERIAL_FIELD_MARKER = "FIsSNManage"
 MATERIAL_UNIT_NAME_MARKER = "FBaseUnitId.FName"
 MATERIAL_ERP_CLS_MARKER = "FErpClsID"
 
@@ -1217,6 +1220,8 @@ def material_preset_needs_upgrade(request_body: Any) -> bool:
         return True
     # 来源类型转换依赖 FErpClsID；缺列则映射/转换永远无值
     if MATERIAL_ERP_CLS_MARKER not in field_keys:
+        return True
+    if MATERIAL_BATCH_SERIAL_FIELD_MARKER not in field_keys:
         return True
     filter_string = str(query.get("FilterString") or query.get("filterString") or "")
     return MASTER_DATA_APPROVED_STATUS_MARKER not in filter_string.replace(" ", "")

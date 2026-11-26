@@ -221,6 +221,11 @@ class TestResolveNodeApproversFailClosed:
             "_resolve_approver_ids_from_identifiers",
             new_callable=AsyncMock,
             return_value=[],
+        ), patch.object(
+            ApprovalInstanceService,
+            "_resolve_hierarchy_start_department_id",
+            new_callable=AsyncMock,
+            return_value=None,
         ):
             with pytest.raises(ValidationError, match="未配置有效指定人员"):
                 await ApprovalInstanceService._resolve_node_approvers(node, instance)
@@ -243,6 +248,11 @@ class TestResolveNodeApproversFailClosed:
             "_filter_active_user_ids",
             new_callable=AsyncMock,
             return_value=[7, 8],
+        ), patch.object(
+            ApprovalInstanceService,
+            "_resolve_hierarchy_start_department_id",
+            new_callable=AsyncMock,
+            return_value=None,
         ):
             ids = await ApprovalInstanceService._resolve_node_approvers(node, instance)
         assert ids == [7, 8]
@@ -257,7 +267,12 @@ class TestResolveNodeApproversFailClosed:
         instance.data = {}
         node = {"id": "n1", "data": {"approverType": "optional"}}
 
-        with pytest.raises(ValidationError, match="不支持的审批人类型"):
+        with patch.object(
+            ApprovalInstanceService,
+            "_resolve_hierarchy_start_department_id",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), pytest.raises(ValidationError, match="不支持的审批人类型"):
             await ApprovalInstanceService._resolve_node_approvers(node, instance)
 
     @pytest.mark.asyncio
@@ -354,9 +369,14 @@ class TestResolveNodeApproversFailClosed:
             "_resolve_submitter_department_manager_at_level",
             new_callable=AsyncMock,
             return_value=[42],
-        ) as mock_level:
+        ) as mock_level, patch.object(
+            ApprovalInstanceService,
+            "_resolve_hierarchy_start_department_id",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
             ids = await ApprovalInstanceService._resolve_node_approvers(node, instance)
-        mock_level.assert_awaited_once_with(1, 10, 2)
+        mock_level.assert_awaited_once_with(1, 10, 2, start_department_id=None)
         assert ids == [42]
 
     @pytest.mark.asyncio
@@ -376,9 +396,14 @@ class TestResolveNodeApproversFailClosed:
             "_resolve_submitter_department_manager_at_level",
             new_callable=AsyncMock,
             return_value=[],
-        ) as mock_level:
+        ) as mock_level, patch.object(
+            ApprovalInstanceService,
+            "_resolve_hierarchy_start_department_id",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
             ids = await ApprovalInstanceService._resolve_node_approvers(node, instance)
-        mock_level.assert_awaited_once_with(1, 10, 2)
+        mock_level.assert_awaited_once_with(1, 10, 2, start_department_id=None)
         assert ids == []
 
 

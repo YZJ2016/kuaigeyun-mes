@@ -7,7 +7,13 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status, normalize_status
+from apps.kuaizhizao.constants import (
+    DocumentStatus,
+    ReviewStatus,
+    is_draft_status,
+    is_submitted_status,
+    normalize_status,
+)
 from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus
 from apps.kuaizhizao.services.order_change.helpers import item_has_change_content
 from apps.kuaizhizao.services.document_action_policy.types import (
@@ -70,8 +76,9 @@ def derive_sales_order_change_capabilities(
     has_change_content: bool = True,
 ) -> SalesOrderChangeCapabilities:
     status = getattr(doc, "status", None)
-    is_draft = is_draft_status(status)
-    is_pending = _is_pending_review(status)
+    submitted = is_submitted_status(status)
+    is_draft = is_draft_status(status) and not submitted
+    is_pending = _is_pending_review(status) and not submitted
     is_rejected = _is_rejected(status)
     applied = _is_applied(doc)
 
@@ -86,17 +93,19 @@ def derive_sales_order_change_capabilities(
         "sales_order_change.delete.not_draft" if not is_draft else None,
     )
 
-    submit_allowed = (is_draft or is_rejected) and has_change_content
+    submit_base = is_draft or is_rejected
+    submit_allowed = submit_base and has_change_content
     submit_reason = (
         "sales_order_change.submit.not_draft"
-        if not (is_draft or is_rejected)
+        if not submit_base
         else ("sales_order_change.submit.no_changes" if not has_change_content else None)
     )
     submit_cap = _cap(submit_allowed, submit_reason)
 
+    withdraw_ok = submitted or is_pending
     withdraw_cap = _cap(
-        is_pending,
-        "sales_order_change.withdraw_submit.not_pending" if not is_pending else None,
+        withdraw_ok,
+        "sales_order_change.withdraw_submit.not_pending" if not withdraw_ok else None,
     )
 
     approve_cap = _cap(
@@ -119,7 +128,7 @@ def derive_sales_order_change_capabilities(
         revoke_reason = "sales_order_change.revoke_approval.not_allowed"
     revoke_cap = _cap(revoke_allowed, revoke_reason)
 
-    preview_cap = _cap(is_draft or is_pending or _is_audited_pending_apply(doc))
+    preview_cap = _cap(is_draft or is_pending or submitted or _is_audited_pending_apply(doc))
 
     print_cap = _cap(True)
 

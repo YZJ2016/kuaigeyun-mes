@@ -93,6 +93,7 @@ import {
 } from '../components/InspectionDetailQualityActions';
 import {
   buildConductStepResultDefaults,
+  buildInspectionConductFormValues,
   getInspectionTemplateSource,
   hasInspectionPlanSteps,
   pickInspectionConductExtras,
@@ -457,20 +458,27 @@ const ProcessInspectionPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  // 处理检验
+  // 处理检验（已开展过须拉详情回填，列表行可能缺分项结果 JSON）
   const handleInspect = async (record: ProcessInspection) => {
-    setCurrentInspection(record);
+    let full = record;
+    if (record.id != null) {
+      try {
+        full = (await qualityApi.processInspection.get(
+          String(record.id),
+        )) as ProcessInspection;
+      } catch {
+        full = record;
+      }
+    }
+    setCurrentInspection(full);
     setInspectionModalVisible(true);
   };
 
   const fillInspectionConductForm = useCallback(
     async (record: ProcessInspection) => {
       const baseValues = {
-        qualified_quantity: record.inspection_quantity || 0,
-        unqualified_quantity: 0,
-        notes: '',
+        ...buildInspectionConductFormValues(record as unknown as Record<string, unknown>),
         attachments: mapAttachmentsToUploadList(record.attachments),
-        conduct_step_results: buildConductStepResultDefaults(record as unknown as Record<string, unknown>),
       };
       if (record.id != null) {
         const customFormValues = await loadInspectionFormFieldValues(record.id);
@@ -589,7 +597,7 @@ const ProcessInspectionPage: React.FC = () => {
 
   const pullFromWorkOrderQuery = useUniPullQuery<ProcessPullWorkOrderCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
@@ -609,12 +617,16 @@ const ProcessInspectionPage: React.FC = () => {
     },
     isRowDisabled: (row) => !isPullProcessInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      const selectedRows = rows.filter((x) => keys.some((k) => String(k) === String(x.id)));
+      const selected = selectedRows[0];
       if (!selected?.id) {
         messageApi.warning(t('app.kuaizhizao.quality.process.form.selectWorkOrder'));
         return;
       }
       pullFromWorkOrderCloseRef.current?.();
+      if (selectedRows.length > 1) {
+        messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+      }
       setPullPreviewOpen(true);
       setPullPreviewLoading(true);
       setPullPreviewConfirming(false);
@@ -660,16 +672,24 @@ const ProcessInspectionPage: React.FC = () => {
     }
     setPullPreviewConfirming(true);
     try {
-      await qualityApi.processInspection.createFromWorkOrder(
+      const created = (await qualityApi.processInspection.createFromWorkOrder(
         String(pullPreviewSourceId),
         String(pullSelectedOperationId),
-      );
+      )) as ProcessInspection;
       messageApi.success(t('app.kuaizhizao.quality.process.messages.createSuccess'));
       resetPullPreview();
       invalidateStats();
       actionRef.current?.reload();
+      // 新建或复用待检单后直接打开详情，避免列表翻页/筛选后「找不到刚下推的单」
+      if (created?.id != null) {
+        handleDetail(created);
+      }
     } catch (error: any) {
-      messageApi.error(error?.message || t('app.kuaizhizao.quality.process.messages.createFailed'));
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.process.messages.createFailed'),
+      );
     } finally {
       setPullPreviewConfirming(false);
     }
@@ -1073,6 +1093,7 @@ const ProcessInspectionPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={async () => {
           try {
             const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
@@ -1109,6 +1130,10 @@ const ProcessInspectionPage: React.FC = () => {
             auditEnabled={processAuditEnabled}
             permGates={processPerms}
             handlers={processAuditBatchHandlers}
+            auditEntity={{
+              entityType: 'process_inspection',
+              entityName: t('app.kuaizhizao.menu.quality-management.process-inspection'),
+            }}
             onSuccess={() => {
               setSelectedRowKeys([]);
               invalidateStats();
@@ -1135,12 +1160,10 @@ const ProcessInspectionPage: React.FC = () => {
         onFinish={handleInspectionSubmit}
         isEdit={false}
         initialValues={{
-          qualified_quantity: currentInspection?.inspection_quantity || 0,
-          unqualified_quantity: 0,
-          notes: '',
-          conduct_step_results: buildConductStepResultDefaults(
+          ...buildInspectionConductFormValues(
             currentInspection as unknown as Record<string, unknown>,
           ),
+          attachments: mapAttachmentsToUploadList(currentInspection?.attachments),
         }}
         width={
           hasInspectionPlanSteps(getInspectionTemplateSource(currentInspection as Record<string, unknown>))

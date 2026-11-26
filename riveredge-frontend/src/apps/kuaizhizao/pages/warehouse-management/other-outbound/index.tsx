@@ -39,11 +39,15 @@ import { runOutboundHubConfirmFromRecord, formatOutboundConfirmError } from '../
 import { isOutboundEditable } from '../outbound/outboundHubTypes';
 import {
   isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
+import { buildDocumentDetailSerialReadonlyColumn } from '../../../components/documentDetailSerialNumberColumn';
+import OutboundSerialPickerField from '../outbound/OutboundSerialPickerField';
 import { materialApi } from '../../../../master-data/services/material';
 import {
   loadBatchOptionsByMaterialId,
+  loadInStockSerialOptions,
   type InventoryPickOption,
 } from '../outbound/outboundConfirmInventoryOptions';
 import OutboundBatchAllocationField from '../outbound/OutboundBatchAllocationField';
@@ -57,7 +61,10 @@ import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { fetchBatchMaterialInventory } from '../../../../../components/uni-material-batch-picker/utils';
-import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
+import {
+  buildDocumentLineAuxQuantityDetailColumn,
+  buildDocumentLineDualQuantityPairColumns,
+} from '../../../../../components/quantity-with-unit';
 import {
   pickDocumentLineDualQuantityFields,
   validateDualQuantityBeforeSave,
@@ -533,6 +540,9 @@ const OtherOutboundPage: React.FC = () => {
   const [stockLoading, setStockLoading] = useState(false);
   const [lineStockKey, setLineStockKey] = useState('');
   const trackingFlags = useWarehouseTrackingFlags();
+  const [serialOptionsByUuid, setSerialOptionsByUuid] = useState<Record<string, InventoryPickOption[]>>({});
+  const [serialOptionsLoadingUuid, setSerialOptionsLoadingUuid] = useState<string | null>(null);
+  const serialOptionsLoadingRef = useRef<Record<string, boolean>>({});
   const [batchOptionsByKey, setBatchOptionsByKey] = useState<Record<string, InventoryPickOption[]>>({});
   const [batchOptionsLoadingKey, setBatchOptionsLoadingKey] = useState<string | null>(null);
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ value: number; label: string; code?: string }>>(
@@ -611,6 +621,8 @@ const OtherOutboundPage: React.FC = () => {
     batch_number: undefined as string | undefined,
     batch_allocations: [] as { batchNo: string; quantity: number }[],
     batch_managed: false,
+    serial_managed: false,
+    serial_numbers: undefined as string[] | undefined,
     batch_rule_id: undefined as string | undefined,
     default_batch_rule_id: undefined as string | undefined,
     outbound_quantity: 1,
@@ -628,19 +640,39 @@ const OtherOutboundPage: React.FC = () => {
     formRef.current?.setFieldValue(['items', index, 'location_code'], undefined);
     formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
     formRef.current?.setFieldValue(['items', index, 'batch_allocations'], []);
+    formRef.current?.setFieldValue(['items', index, 'serial_numbers'], undefined);
     syncLineStockKeyFromForm();
   }, [syncLineStockKeyFromForm]);
+
+  const ensureSerialOptions = useCallback(async (materialUuid: string, selected?: string[]) => {
+    const uuid = String(materialUuid || '').trim();
+    if (!uuid || serialOptionsLoadingRef.current[uuid]) return;
+    if (serialOptionsByUuid[uuid]?.length) return;
+    serialOptionsLoadingRef.current[uuid] = true;
+    setSerialOptionsLoadingUuid(uuid);
+    try {
+      const opts = await loadInStockSerialOptions(uuid);
+      setSerialOptionsByUuid((prev) => ({ ...prev, [uuid]: opts }));
+    } catch {
+      setSerialOptionsByUuid((prev) => ({ ...prev, [uuid]: [] }));
+    } finally {
+      serialOptionsLoadingRef.current[uuid] = false;
+      setSerialOptionsLoadingUuid((cur) => (cur === uuid ? null : cur));
+    }
+  }, [serialOptionsByUuid]);
 
   const applyMaterialBatchFlags = useCallback(
     async (idx: number, material: Material | undefined) => {
       if (!material) return;
       const uuid = material.uuid;
       let batchManaged = material.batchManaged ?? false;
+      let serialManaged = material.serialManaged ?? false;
       let defaultBatchRuleId = material.defaultBatchRuleId;
       if (uuid) {
         try {
           const full = await materialApi.get(uuid);
           batchManaged = full.batchManaged ?? false;
+          serialManaged = full.serialManaged ?? false;
           defaultBatchRuleId = full.defaultBatchRuleId;
         } catch {
           // 使用列表返回的字段
@@ -650,6 +682,10 @@ const OtherOutboundPage: React.FC = () => {
       formRef.current?.setFieldValue(
         ['items', idx, 'batch_managed'],
         isMaterialBatchEntryEnabled(trackingFlags, batchManaged),
+      );
+      formRef.current?.setFieldValue(
+        ['items', idx, 'serial_managed'],
+        isMaterialSerialEntryEnabled(trackingFlags, serialManaged),
       );
       formRef.current?.setFieldValue(['items', idx, 'default_batch_rule_id'], defaultBatchRuleId);
     },
@@ -1113,6 +1149,15 @@ const OtherOutboundPage: React.FC = () => {
     [selectedOtherOutboundForBatch],
   );
 
+  const getOtherOutboundReconcileDocumentIds = useCallback(() => {
+    if (selectedOtherOutboundIdsForDocumentPush.length) {
+      return selectedOtherOutboundIdsForDocumentPush;
+    }
+    return [...listRowsRef.current.values()]
+      .filter((row) => Number(row.id) > 0)
+      .map((row) => Number(row.id));
+  }, [selectedOtherOutboundIdsForDocumentPush]);
+
   const canToolbarPrint =
     selectedRowKeys.length === 1 &&
     !!selectedOtherOutboundForBatch[0] &&
@@ -1390,6 +1435,51 @@ const OtherOutboundPage: React.FC = () => {
         ),
       },
       {
+        title: t('app.kuaizhizao.warehouseOutbound.col.serialNo'),
+        dataIndex: 'serial_numbers',
+        width: 160,
+        ...DOCUMENT_DETAIL_TEXT_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            noStyle
+            shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+          >
+            {({ getFieldValue }) => {
+              const row = getFieldValue('items')?.[index];
+              if (!isMaterialSerialEntryEnabled(trackingFlags, row?.serial_managed)) {
+                return <span>—</span>;
+              }
+              const qty = Number(row?.outbound_quantity ?? 0);
+              const sn = getFieldValue(['items', index, 'serial_numbers']);
+              const uuid = String(row?.material_uuid ?? '').trim();
+              const serials = Array.isArray(sn)
+                ? sn.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+                : [];
+              return (
+                <>
+                  <AntForm.Item name={[index, 'serial_numbers']} hidden>
+                    <Input />
+                  </AntForm.Item>
+                  <OutboundSerialPickerField
+                    value={serials}
+                    onChange={(next) =>
+                      formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
+                    }
+                    options={uuid ? serialOptionsByUuid[uuid] ?? [] : []}
+                    maxCount={qty > 0 ? Math.round(qty) : undefined}
+                    loading={!!uuid && serialOptionsLoadingUuid === uuid}
+                    onOpenPicker={() => {
+                      if (uuid) void ensureSerialOptions(uuid, serials);
+                    }}
+                    materialLabel={String(row?.material_code || row?.material_name || '')}
+                  />
+                </>
+              );
+            }}
+          </AntForm.Item>
+        ),
+      },
+      {
         title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'),
         dataIndex: 'unit_price',
         width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
@@ -1419,6 +1509,10 @@ const OtherOutboundPage: React.FC = () => {
       stockLoading,
       syncLineStockKeyFromForm,
       t,
+      trackingFlags,
+      ensureSerialOptions,
+      serialOptionsByUuid,
+      serialOptionsLoadingUuid,
     ],
   );
 
@@ -1458,6 +1552,11 @@ const OtherOutboundPage: React.FC = () => {
           location_id: it.location_id,
           location_code: it.location_code,
           batch_number: it.batch_number,
+          serial_numbers: Array.isArray((it as { serial_numbers?: unknown }).serial_numbers)
+            ? ((it as { serial_numbers: string[] }).serial_numbers ?? [])
+                .map((s) => String(s ?? '').trim())
+                .filter(Boolean)
+            : undefined,
           notes: it.notes,
         }));
         formRef.current?.setFieldsValue({
@@ -1487,6 +1586,15 @@ const OtherOutboundPage: React.FC = () => {
             .filter((it) => Number(it.material_id) > 0 && Number(it.warehouse_id) > 0)
             .map((it) => ensureBatchOptions(Number(it.material_id), Number(it.warehouse_id))),
         );
+        for (const [idx, it] of items.entries()) {
+          const mid = Number(it.material_id);
+          if (!(mid > 0)) continue;
+          const uuid = String(formRef.current?.getFieldValue(['items', idx, 'material_uuid']) ?? '').trim();
+          if (uuid) {
+            const serials = Array.isArray(it.serial_numbers) ? it.serial_numbers : undefined;
+            await ensureSerialOptions(uuid, serials);
+          }
+        }
       } catch {
         if (!cancelled) {
           messageApi.error(t('app.kuaizhizao.otherOutbound.msg.loadDetailFailed'));
@@ -1503,6 +1611,7 @@ const OtherOutboundPage: React.FC = () => {
     createModalVisible,
     editingOutboundId,
     ensureBatchOptions,
+    ensureSerialOptions,
     loadOtherOutboundFormFieldValues,
     messageApi,
     t,
@@ -1562,18 +1671,41 @@ const OtherOutboundPage: React.FC = () => {
           messageApi.error(msg);
           throw new Error(msg);
         }
+        const qty = Number(it.outbound_quantity) || 0;
+        const allocs = lineBatchAllocationsFromRow(it as Record<string, unknown>, qty);
         if (it.batch_managed) {
-          const qty = Number(it.outbound_quantity) || 0;
           const materialId = Number(it.material_id) || 0;
           const whId = Number(it.warehouse_id) || 0;
           const key = materialId > 0 && whId > 0 ? `${materialId}:${whId}` : '';
           const opts = key ? batchOptionsByKey[key] ?? [] : [];
-          const allocs = lineBatchAllocationsFromRow(it as Record<string, unknown>, qty);
           if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
             const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
               material,
               qty,
               batches: opts.map((o) => o.value).join('、') || '—',
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+        }
+        const serialManaged = !!it.serial_managed;
+        if (isMaterialSerialEntryEnabled(trackingFlags, serialManaged)) {
+          const serials = Array.isArray(it.serial_numbers)
+            ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+            : [];
+          const required = Math.round(qty);
+          if (serials.length !== required) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+              material,
+              required,
+              actual: serials.length,
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+          if (allocs.length > 1) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported', {
+              material,
             });
             messageApi.error(msg);
             throw new Error(msg);
@@ -1629,6 +1761,14 @@ const OtherOutboundPage: React.FC = () => {
             payload.batch_number = allocs[0].batchNo;
           } else {
             payload.batch_number = String(it.batch_number ?? '').trim() || undefined;
+          }
+          if (isMaterialSerialEntryEnabled(trackingFlags, !!it.serial_managed)) {
+            const serials = Array.isArray(it.serial_numbers)
+              ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+              : [];
+            if (serials.length) {
+              payload.serial_numbers = serials;
+            }
           }
           return payload;
         });
@@ -1689,6 +1829,11 @@ const OtherOutboundPage: React.FC = () => {
           const unitPrice = Number(it.unit_price) || 0;
           const lineWhId = Number(it.warehouse_id) || 0;
           const allocs = lineBatchAllocationsFromRow(it as Record<string, unknown>, outboundQty);
+          const serials =
+            isMaterialSerialEntryEnabled(trackingFlags, !!it.serial_managed) &&
+            Array.isArray(it.serial_numbers)
+              ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+              : undefined;
           const base = {
             material_id: it.material_id,
             material_code: it.material_code || undefined,
@@ -1704,6 +1849,7 @@ const OtherOutboundPage: React.FC = () => {
                 : undefined,
             location_code: it.location_code || undefined,
             unit_price: unitPrice,
+            ...(serials?.length ? { serial_numbers: serials } : {}),
           };
           if (allocs.length > 1) {
             return allocs.map((a) => ({
@@ -1893,6 +2039,7 @@ const OtherOutboundPage: React.FC = () => {
                     pushEnabled={toolbarSyncPush.pushEnabled}
                     historySourceType="other_outbound"
                     historyTargetProfiles={['kingdee_im_otheroutbill']}
+                    getReconcileDocumentIds={getOtherOutboundReconcileDocumentIds}
                     size="medium"
                     renderPushPanel={({ active, close }) => (
                       <OtherOutboundDocumentPushPanel
@@ -2104,7 +2251,9 @@ const OtherOutboundPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.location'), dataIndex: 'location_code', width: 100 },
                   { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'outbound_quantity', width: 100, align: 'right' },
+                  buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
                   { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
+                  buildDocumentDetailSerialReadonlyColumn(t),
                   { title: t('common.remark'), dataIndex: 'notes' },
                 ]}
                 dataSource={outboundDetail.items}

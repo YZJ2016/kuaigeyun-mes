@@ -43,7 +43,8 @@ from apps.kuaizhizao.schemas.quality_improvement import (
 )
 from apps.kuaizhizao.services.spc_list_core import SPC_SAMPLE_SORTABLE_FIELDS
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
-from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService, Quality8DService, SPCService
+from apps.kuaizhizao.services.oqc_inspection_service import OQCInspectionService
+from apps.kuaizhizao.services.quality_improvement_service import Quality8DService, SPCService
 from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
 from core.api.deps.access import require_permission_codes, get_auth_context, ensure_permission_codes, AuthContext
 from core.api.deps import get_current_tenant, get_current_user
@@ -95,6 +96,7 @@ _8D_SUBMIT = Depends(require_permission_codes("kuaizhizao:quality-management-eig
 _8D_APPROVE = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:approve"))
 _NC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-nonconforming-ledger:read"))
 _NC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-nonconforming-ledger:update"))
+_NC_REVOKE = Depends(require_permission_codes("kuaizhizao:quality-management-nonconforming-ledger:revoke"))
 _OQC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:read"))
 _OQC_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:create"))
 _OQC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:update"))
@@ -163,7 +165,11 @@ async def get_quality_8d_report(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Quality8DResponse:
-    return await quality_8d_service.get_report(tenant_id=tenant_id, report_id=report_id)
+    return await quality_8d_service.get_report(
+        tenant_id=tenant_id,
+        report_id=report_id,
+        viewer_user_id=current_user.id,
+    )
 
 
 @router.put("/quality-8d-reports/{report_id}", response_model=Quality8DResponse, summary="Update 8D report")
@@ -655,8 +661,29 @@ async def update_nonconforming_disposition(
         stock_warehouse_id=payload.stock_warehouse_id,
         downgrade_material_id=payload.downgrade_material_id,
         downgrade_warehouse_id=payload.downgrade_warehouse_id,
+        location_id=payload.location_id,
+        location_code=payload.location_code,
         remarks=payload.remarks,
         attachments=payload.attachments,
+    )
+
+
+@router.post(
+    "/nonconforming-ledger/{defect_id}/revoke-disposition",
+    response_model=DefectRecordResponse,
+    summary="Revoke NC disposition",
+)
+async def revoke_nonconforming_disposition(
+    defect_id: int = Path(..., description="不合格品台账ID"),
+    _auth=_NC_REVOKE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DefectRecordResponse:
+    _ = _auth
+    return await defect_record_service.revoke_disposition(
+        tenant_id=tenant_id,
+        defect_id=defect_id,
+        updated_by=current_user.id,
     )
 
 
@@ -690,6 +717,7 @@ async def list_oqc_inspections(
         inspection_end_date=inspection_end_date,
         created_start_date=created_start_date,
         created_end_date=created_end_date,
+        viewer_id=current_user.id,
     )
 
 

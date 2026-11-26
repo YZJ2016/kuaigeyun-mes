@@ -13,6 +13,22 @@ export function mergeRecordMaps<T extends Record<number, unknown>>(
   return { ...base, ...overlay } as T;
 }
 
+/** 取单录入行数量：草稿反序列化可能误恢复为 dayjs/Date，须只保留非负有限数字 */
+export function sanitizePullEntryLineQuantities(
+  raw: Record<number, unknown> | Record<string, unknown> | undefined,
+): Record<number, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<number, number> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const lineId = Number(key);
+    if (!Number.isFinite(lineId) || lineId <= 0) continue;
+    if (dayjs.isDayjs(value) || value instanceof Date) continue;
+    const qty = Number(value);
+    if (Number.isFinite(qty) && qty >= 0) out[lineId] = qty;
+  }
+  return out;
+}
+
 export function draftDayjs(value: unknown, fallback = dayjs()): dayjs.Dayjs {
   const parsed = coerceFormDate(value);
   return parsed ?? fallback;
@@ -43,6 +59,16 @@ export function mergeMaterialIssueQuantities<T extends { materialId: number; iss
     qtyByMaterialId[row.materialId] != null
       ? { ...row, issueQuantity: Number(qtyByMaterialId[row.materialId]) }
       : row,
+  );
+}
+
+export function mergeLineIssueQuantities<T extends { key: number; issueQuantity: number }>(
+  lines: T[],
+  qtyByLineKey: Record<number, number> | undefined,
+): T[] {
+  if (!qtyByLineKey) return lines;
+  return lines.map((row) =>
+    qtyByLineKey[row.key] != null ? { ...row, issueQuantity: Number(qtyByLineKey[row.key]) } : row,
   );
 }
 

@@ -602,6 +602,18 @@ async def _resolve_company_seal_for_print(tenant_id: int) -> str:
     return await _resolve_site_image_setting_for_print(tenant_id, "company_seal")
 
 
+async def _resolve_site_name_for_print(tenant_id: int) -> str:
+    """打印表头站点名（站点设置 site_name，含平台级回退）。"""
+    try:
+        from core.services.system.site_setting_service import SiteSettingService
+
+        site_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
+        return str((site_settings or {}).get("site_name") or "").strip()
+    except Exception as e:
+        logger.warning("解析打印站点名失败 tenant_id={}: {}", tenant_id, e)
+        return ""
+
+
 _PARTNER_INVOICE_TYPE_PRINT_LABELS = {
     "digital_vat_special": "数电票（增值税专用发票）",
     "digital_vat_ordinary": "数电票（增值税普通发票）",
@@ -1188,6 +1200,8 @@ class DocumentPrintService:
         """在已准备好的单据变量上查找模板并渲染（html/pdf）。"""
         loc = i18n or await PrintLocalization.for_tenant(tenant_id)
         document_data["print_time"] = loc.format_datetime(resolve_business_datetime()) or resolve_business_datetime().strftime("%Y-%m-%d %H:%M")
+        if not str(document_data.get("site_name") or "").strip():
+            document_data["site_name"] = await _resolve_site_name_for_print(tenant_id)
         if not document_data.get("company_logo"):
             document_data["company_logo"] = await _resolve_company_logo_for_print(tenant_id)
         if not document_data.get("logo") and document_data.get("company_logo"):

@@ -433,8 +433,8 @@ def test_inbound_line_qc_mode_display_contract():
     assert _inbound_line_qc_mode("none", False) == "none"
 
 
-def test_inbound_preview_quantities_default_none_capped_by_fqc():
-    """spec 140 规则 9：入库预览对 default_none 物料按必检口径——FQC 余量封顶。"""
+def test_inbound_preview_quantities_default_none_not_capped_by_fqc():
+    """入库预览对 default_none 物料不再按 FQC 余量封顶：可创建待入库单，确认入库另受 FQC 约束。"""
     from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
 
     svc = FinishedGoodsReceiptService()
@@ -450,7 +450,7 @@ def test_inbound_preview_quantities_default_none_capped_by_fqc():
         _, _, pending, receipt_qty = asyncio.run(
             svc._resolve_work_order_inbound_preview_quantities(1, 1, wo, quota, 5.0)
         )
-    assert (pending, receipt_qty) == (0.0, 0.0)
+    assert (pending, receipt_qty) == (5.0, 5.0)
 
 
 def test_inbound_preview_quantities_material_exempt_not_capped():

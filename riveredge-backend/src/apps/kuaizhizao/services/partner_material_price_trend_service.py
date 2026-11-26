@@ -72,13 +72,57 @@ class PartnerMaterialPriceTrendService:
         material_id: int,
         customer_id: int,
     ) -> Optional[Decimal]:
-        trend = await self.get_sales_price_trend(
-            tenant_id, material_id, customer_id, limit=1
+        exclusive, _tax = await self.get_latest_sales_exclusive_unit_price(
+            tenant_id, material_id, customer_id
         )
-        if not trend.history_items:
-            return None
-        price = trend.history_items[0].unit_price
-        return price if price and price > 0 else None
+        return exclusive
+
+    async def get_latest_sales_exclusive_unit_price(
+        self,
+        tenant_id: int,
+        material_id: int,
+        customer_id: int,
+    ) -> tuple[Optional[Decimal], Optional[Decimal]]:
+        """取价用：返回（未税单价, 行税率%）。趋势图仍展示订单录入价。"""
+        from apps.master_data.services.partner_material_price_defaults import (
+            normalize_stored_unit_price_to_exclusive,
+        )
+
+        orders = await SalesOrder.filter(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            status__in=LEGACY_AUDITED_VALUES,
+        ).order_by("-order_date", "-id").limit(_SALES_ORDER_SCAN).all()
+        if not orders:
+            return None, None
+
+        order_map = {order.id: order for order in orders}
+        raw_items = await SalesOrderItem.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            sales_order_id__in=list(order_map.keys()),
+            is_gift=False,
+        ).all()
+        if not raw_items:
+            return None, None
+
+        ranked = []
+        for item in raw_items:
+            order = order_map.get(item.sales_order_id)
+            if order is None:
+                continue
+            ranked.append((order.order_date, order.id, item, order))
+        if not ranked:
+            return None, None
+        ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
+        _order_date, _order_id, item, order = ranked[0]
+        raw_price = Decimal(str(item.unit_price or 0))
+        if raw_price <= 0:
+            return None, None
+        tax_rate = Decimal(str(item.tax_rate or 0))
+        price_type = getattr(order, "price_type", None) or "tax_inclusive"
+        exclusive = normalize_stored_unit_price_to_exclusive(raw_price, tax_rate, price_type)
+        return exclusive, tax_rate if tax_rate > 0 else None
 
     async def get_latest_purchase_unit_price(
         self,
@@ -303,4 +347,4 @@ class PartnerMaterialPriceTrendService:
             min_price=min_price,
             max_price=max_price,
         )
-
+

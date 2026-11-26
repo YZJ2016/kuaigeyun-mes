@@ -55,7 +55,9 @@ async def _dispatch_sales_order_change(
 
     svc = SalesOrderChangeService()
     if action == "submit":
-        return await svc.submit(tenant_id, entity_id, user_id)
+        return await svc.commit(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_for_review(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve(
             tenant_id, entity_id, ApproveChangeRequest(approved=True, review_remarks=reason), user_id
@@ -86,7 +88,9 @@ async def _dispatch_sales_forecast(
 
     svc = SalesForecastService()
     if action == "submit":
-        return await svc.submit_forecast(tenant_id, entity_id, user_id)
+        return await svc.commit_forecast(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_forecast_for_review(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve_forecast(tenant_id, entity_id, user_id)
     if action == "reject":
@@ -113,7 +117,9 @@ async def _dispatch_sales_contract(
     svc = SalesContractService()
     reviewer_name = await svc.get_user_name(user_id) or str(user_id)
     if action == "submit":
-        return await svc.submit_contract(tenant_id, entity_id, user_id)
+        return await svc.commit_contract(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_contract_for_review(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve_contract(
             tenant_id, entity_id, user_id, reviewer_name, review_remarks=reason
@@ -141,7 +147,9 @@ async def _dispatch_quotation(
 
     svc = QuotationService()
     if action == "submit":
-        return await svc.submit_quotation(tenant_id, entity_id, user_id)
+        return await svc.commit_quotation(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_quotation_for_review(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve_quotation(tenant_id, entity_id, user_id, review_remarks=reason)
     if action == "reject":
@@ -337,6 +345,34 @@ async def _dispatch_purchase_return(
     if action == "revoke":
         return await svc.revoke_purchase_return_approval(tenant_id, entity_id, user_id)
     _unsupported("purchase_return", action)
+
+
+async def _dispatch_purchase_receipt(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+
+    svc = PurchaseReceiptService()
+    if action == "submit":
+        return await svc.commit_purchase_receipt(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_purchase_receipt_for_review(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_purchase_receipt(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.reject_purchase_receipt(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await svc.withdraw_purchase_receipt_submit(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_purchase_receipt_approval(tenant_id, entity_id, user_id)
+    _unsupported("purchase_receipt", action)
 
 
 async def _dispatch_sales_contract_change(
@@ -836,6 +872,162 @@ async def _dispatch_purchase_invoice(
     _unsupported("purchase_invoice", action)
 
 
+async def _dispatch_receipt(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.common.app_orm import require_finance_orm
+    from apps.kuaicaiwu.services.receipt_audit_service import ReceiptAuditService
+
+    require_finance_orm()
+    svc = ReceiptAuditService()
+    if action == "submit":
+        return await svc.commit_receipt(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_receipt_for_review(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_receipt(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_receipt(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_receipt(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_receipt(tenant_id, entity_id, user_id)
+    _unsupported("receipt", action)
+
+
+async def _dispatch_receipt_refund(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.common.app_orm import require_finance_orm
+    from apps.kuaicaiwu.services.receipt_refund_audit_service import (
+        ReceiptRefundAuditService,
+    )
+
+    require_finance_orm()
+    svc = ReceiptRefundAuditService()
+    if action == "submit":
+        return await svc.commit_receipt_refund(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_receipt_refund_for_review(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_receipt_refund(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_receipt_refund(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_receipt_refund(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_receipt_refund(tenant_id, entity_id, user_id)
+    _unsupported("receipt_refund", action)
+
+
+async def _dispatch_payment(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.common.app_orm import require_finance_orm
+    from apps.kuaicaiwu.services.payment_audit_service import PaymentAuditService
+
+    require_finance_orm()
+    svc = PaymentAuditService()
+    if action == "submit":
+        return await svc.commit_payment(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_payment_for_review(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_payment(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_payment(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_payment(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_payment(tenant_id, entity_id, user_id)
+    _unsupported("payment", action)
+
+
+async def _dispatch_payment_refund(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.common.app_orm import require_finance_orm
+    from apps.kuaicaiwu.services.payment_refund_audit_service import (
+        PaymentRefundAuditService,
+    )
+
+    require_finance_orm()
+    svc = PaymentRefundAuditService()
+    if action == "submit":
+        return await svc.commit_payment_refund(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_payment_refund_for_review(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_payment_refund(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_payment_refund(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_payment_refund(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_payment_refund(tenant_id, entity_id, user_id)
+    _unsupported("payment_refund", action)
+
+
+async def _dispatch_sales_invoice(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.common.app_orm import require_finance_orm
+    from apps.kuaicaiwu.services.sales_invoice_audit_service import (
+        SalesInvoiceAuditService,
+    )
+
+    require_finance_orm()
+    svc = SalesInvoiceAuditService()
+    if action == "submit":
+        return await svc.commit_sales_invoice(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_sales_invoice_for_review(tenant_id, entity_id, user_id)
+    if action == "withdraw":
+        return await svc.withdraw_sales_invoice(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_sales_invoice(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_sales_invoice(
+            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_sales_invoice(tenant_id, entity_id, user_id)
+    _unsupported("sales_invoice", action)
+
+
 async def _dispatch_bom_change(
     action: str,
     *,
@@ -1071,7 +1263,9 @@ async def _dispatch_rework_order(
 
     svc = ReworkOrderService()
     if action == "submit":
-        return await svc.submit_rework_order(tenant_id, entity_id, user_id)
+        return await svc.commit_rework_order(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_rework_order_for_review(tenant_id, entity_id, user_id)
     if action == "approve":
         return await svc.approve_rework_order(tenant_id, entity_id, user_id)
     if action == "reject":
@@ -1079,7 +1273,7 @@ async def _dispatch_rework_order(
     if action == "withdraw":
         return await svc.withdraw_rework_submit(tenant_id, entity_id, user_id)
     if action == "revoke":
-        _unsupported("rework_order", action)
+        return await svc.revoke_rework_approval(tenant_id, entity_id, user_id)
     _unsupported("rework_order", action)
 
 
@@ -1359,6 +1553,74 @@ async def _dispatch_mold_sample(
     if action in ("withdraw", "revoke"):
         _unsupported("mold_sample", action)
     _unsupported("mold_sample", action)
+
+
+async def _dispatch_notes_receivable(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
+) -> Any:
+    from apps.kuaicaiwu.services.notes_receivable_audit_service import (
+        NotesReceivableAuditService,
+    )
+
+    svc = NotesReceivableAuditService()
+    if action == "submit":
+        return await svc.commit_note(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_note_for_review(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_note(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_note(
+            tenant_id,
+            entity_id,
+            user_id,
+            rejection_reason=reason or "审批驳回",
+        )
+    if action == "withdraw":
+        return await svc.withdraw_note(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_note(tenant_id, entity_id, user_id)
+    _unsupported("notes_receivable", action)
+
+
+async def _dispatch_notes_payable(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
+) -> Any:
+    from apps.kuaicaiwu.services.notes_payable_audit_service import (
+        NotesPayableAuditService,
+    )
+
+    svc = NotesPayableAuditService()
+    if action == "submit":
+        return await svc.commit_note(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        return await svc.submit_note_for_review(tenant_id, entity_id, user_id)
+    if action == "approve":
+        return await svc.approve_note(tenant_id, entity_id, user_id)
+    if action == "reject":
+        return await svc.approve_note(
+            tenant_id,
+            entity_id,
+            user_id,
+            rejection_reason=reason or "审批驳回",
+        )
+    if action == "withdraw":
+        return await svc.withdraw_note(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_note(tenant_id, entity_id, user_id)
+    _unsupported("notes_payable", action)
 
 
 async def _dispatch_other_income(
@@ -1730,6 +1992,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "work_order": _dispatch_work_order,
     "sales_return": _dispatch_sales_return,
     "purchase_return": _dispatch_purchase_return,
+    "purchase_receipt": _dispatch_purchase_receipt,
     "sales_contract_change": _dispatch_sales_contract_change,
     "demand": _dispatch_demand,
     "purchase_order": _dispatch_purchase_order,
@@ -1745,6 +2008,11 @@ HANDLERS: Dict[str, DispatchFn] = {
     "oqc_inspection": _dispatch_oqc_inspection,
     "quality_patrol": _dispatch_quality_patrol,
     "receivable": _dispatch_receivable,
+    "receipt": _dispatch_receipt,
+    "receipt_refund": _dispatch_receipt_refund,
+    "payment": _dispatch_payment,
+    "payment_refund": _dispatch_payment_refund,
+    "sales_invoice": _dispatch_sales_invoice,
     "payable": _dispatch_payable,
     "purchase_invoice": _dispatch_purchase_invoice,
     "bom_change": _dispatch_bom_change,
@@ -1769,6 +2037,8 @@ HANDLERS: Dict[str, DispatchFn] = {
     "mold_sample": _dispatch_mold_sample,
     "freight_bill": _dispatch_freight_bill,
     "other_income": _dispatch_other_income,
+    "notes_receivable": _dispatch_notes_receivable,
+    "notes_payable": _dispatch_notes_payable,
     "other_expense": _dispatch_other_expense,
     "fund_transfer": _dispatch_fund_transfer,
     "partner_statement": _dispatch_partner_statement,

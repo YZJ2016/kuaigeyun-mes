@@ -197,6 +197,7 @@ const EightDWorkbench: React.FC = () => {
   const canEditActiveStageContent =
     !isCollaborative ||
     isChampion ||
+    canUpdate ||
     activeStageAssignment?.assignee_user_id === currentUser?.id;
 
   const reportGates = eightDReportRowGates(report, canUpdate, false, canClose, t, undefined, canPrint);

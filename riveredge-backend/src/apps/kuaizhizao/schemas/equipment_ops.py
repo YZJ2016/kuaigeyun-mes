@@ -260,7 +260,8 @@ class PatrolRouteListResponse(BaseModel):
 class MaintenanceItemBase(BaseModel):
     code: str = Field(..., max_length=64)
     name: str = Field(..., max_length=200)
-    requirement: Optional[str] = None
+    requirement: Optional[str] = Field(None, description="方法")
+    remark: Optional[str] = Field(None, description="备注")
     standard_hours: Optional[Decimal] = None
     is_active: bool = True
 
@@ -272,7 +273,8 @@ class MaintenanceItemCreate(MaintenanceItemBase):
 class MaintenanceItemUpdate(BaseModel):
     code: Optional[str] = Field(None, max_length=64)
     name: Optional[str] = Field(None, max_length=200)
-    requirement: Optional[str] = None
+    requirement: Optional[str] = Field(None, description="方法")
+    remark: Optional[str] = Field(None, description="备注")
     standard_hours: Optional[Decimal] = None
     is_active: Optional[bool] = None
 
@@ -301,7 +303,8 @@ class MaintenanceSchemeLineBase(BaseModel):
     sort_order: int = 0
     item_code: Optional[str] = None
     item_name: Optional[str] = None
-    requirement: Optional[str] = None
+    requirement: Optional[str] = Field(None, description="方法快照")
+    remark: Optional[str] = Field(None, description="备注快照")
     standard_hours: Optional[Decimal] = None
 
 
@@ -460,6 +463,7 @@ class SpotCheckCreate(BaseModel):
     check_date: Optional[date] = None
     inspector_id: Optional[int] = None
     inspector_name: Optional[str] = None
+    inspector_ids: Optional[List[int]] = None
     remark: Optional[str] = None
     attachments: Optional[List[dict]] = None
     lines: Optional[List[SpotCheckLineInput]] = None
@@ -469,6 +473,7 @@ class SpotCheckUpdate(BaseModel):
     check_date: Optional[date] = None
     inspector_id: Optional[int] = None
     inspector_name: Optional[str] = None
+    inspector_ids: Optional[List[int]] = None
     status: Optional[str] = None
     remark: Optional[str] = None
     attachments: Optional[List[dict]] = None
@@ -492,6 +497,7 @@ class SpotCheckResponse(AuditActorFields):
     check_date: date
     inspector_id: Optional[int] = None
     inspector_name: Optional[str] = None
+    inspector_ids: Optional[List[int]] = None
     reviewer_user_id: Optional[int] = None
     reviewer_user_name: Optional[str] = None
     reviewed_by: Optional[int] = None

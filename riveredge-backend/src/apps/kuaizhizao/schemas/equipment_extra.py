@@ -43,6 +43,7 @@ class SparePartResponse(BaseModel):
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = None
+    stock_quantity: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -88,7 +89,7 @@ class SparePartStockAdjustRequest(BaseModel):
     spare_part_id: int
     quantity: int
     operation_type: str
-    warehouse_location: str
+    warehouse_location: Optional[str] = None
     rel_type: Optional[str] = None
     rel_id: Optional[int] = None
     remark: Optional[str] = None

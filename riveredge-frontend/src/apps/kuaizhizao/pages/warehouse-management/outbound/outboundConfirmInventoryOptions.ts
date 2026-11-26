@@ -375,3 +375,14 @@ export async function loadInStockSerialOptions(materialUuid: string): Promise<In
 
   return serialNos.map((sn) => ({ value: sn, label: sn }));
 }
+
+/** 仅保留仍在库的已选序列号（编辑回填时剔除已出库项） */
+export function intersectSerialNumbersWithInStock(
+  selected: string[] | undefined,
+  inStock: InventoryPickOption[],
+): string[] {
+  const allowed = new Set(inStock.map((o) => o.value));
+  return (selected ?? [])
+    .map((s) => String(s ?? '').trim())
+    .filter((s) => s && allowed.has(s));
+}

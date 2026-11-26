@@ -47,9 +47,6 @@ const OperationsPage = lazy(() => import('./pages/process/operations'));
 const ProcessRoutesPage = lazy(() => import('./pages/process/routes'));
 const ProductProcessPage = lazy(() => import('./pages/process/product-process'));
 const DrawingsPage = lazy(() => import('./pages/process/drawings'));
-const DrawingWhereUsedPage = lazy(() => import('./pages/process/drawing-where-used'));
-const DrawingDistributionsPage = lazy(() => import('./pages/process/drawing-distributions'));
-const DrawingLoansPage = lazy(() => import('./pages/process/drawing-loans'));
 const SOPPage = lazy(() => import('./pages/process/sop'));
 const ESOPDesignerPage = lazy(() => import('./pages/process/sop/designer'));
 const SOPExecutionPage = lazy(() => import('./pages/process/sop/execution'));
@@ -97,9 +94,9 @@ const MasterDataApp: React.FC = () => {
       <Route path="process/routes" element={withPageSuspense(ProcessRoutesPage)} />
       <Route path="process/product-process" element={withPageSuspense(ProductProcessPage)} />
       <Route path="process/drawings" element={withPageSuspense(DrawingsPage)} />
-      <Route path="process/drawing-where-used" element={withPageSuspense(DrawingWhereUsedPage)} />
-      <Route path="process/drawing-distributions" element={withPageSuspense(DrawingDistributionsPage)} />
-      <Route path="process/drawing-loans" element={withPageSuspense(DrawingLoansPage)} />
+      <Route path="process/drawing-where-used" element={<Navigate to="../drawings" replace />} />
+      <Route path="process/drawing-distributions" element={<Navigate to="../drawings" replace />} />
+      <Route path="process/drawing-loans" element={<Navigate to="../drawings" replace />} />
       <Route path="process/engineering-bom" element={withPageSuspense(BOMPage)} />
       <Route path="process/engineering-bom/designer" element={
         <PermissionGuard permission="master-data:process:engineering-bom:update" fallback={<Navigate to="../engineering-bom" replace />}>

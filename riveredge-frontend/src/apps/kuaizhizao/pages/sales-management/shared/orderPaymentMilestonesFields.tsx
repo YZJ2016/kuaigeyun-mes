@@ -242,6 +242,7 @@ export function OrderPaymentMilestonesFields({
               <ProFormText
                 name={[index, 'milestone_name']}
                 placeholder={t('app.kuaizhizao.salesContract.milestoneNamePlaceholder')}
+                rules={[{ required: true, message: t('app.kuaizhizao.salesContract.milestoneNameRequired') }]}
                 formItemProps={{ style: { margin: 0 } }}
               />
             ),
@@ -252,6 +253,7 @@ export function OrderPaymentMilestonesFields({
             render: (_: unknown, __: unknown, index: number) => (
               <ProFormDatePicker
                 name={[index, 'planned_date']}
+                rules={[{ required: true, message: t('app.kuaizhizao.salesContract.plannedDateRequired') }]}
                 fieldProps={buildFutureDateShortcutFieldProps({
                   getForm: () => formRef.current,
                   fieldName: 'planned_date',
@@ -337,7 +339,7 @@ export function OrderPaymentMilestonesFields({
           },
           {
             title: t(bankAccountLabelKey(variant)),
-            width: 200,
+            width: 280,
             render: (_: unknown, __: unknown, index: number) => {
               const isPrepay = Boolean(milestoneRows[index]?.is_prepayment);
               if (!isPrepay) {
@@ -350,6 +352,10 @@ export function OrderPaymentMilestonesFields({
                   showSearch
                   allowClear
                   placeholder={t(bankAccountPlaceholderKey(variant))}
+                  fieldProps={{
+                    optionFilterProp: 'label',
+                    optionLabelProp: 'label',
+                  }}
                   formItemProps={{ style: { margin: 0 } }}
                 />
               );

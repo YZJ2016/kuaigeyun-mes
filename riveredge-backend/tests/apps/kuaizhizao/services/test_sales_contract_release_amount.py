@@ -3,6 +3,7 @@
 import asyncio
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from apps.kuaizhizao.services.sales_contract_service import SalesContractService
 
@@ -46,6 +47,9 @@ def test_validate_release_capacity_allows_net_amount_with_discount():
     )
     items = [_item("4325")]
     service = SalesContractService()
+    service.business_config_service = SimpleNamespace(
+        get_amount_decimal_places=AsyncMock(return_value=2)
+    )
     asyncio.run(
         service._validate_release_capacity(
             contract,

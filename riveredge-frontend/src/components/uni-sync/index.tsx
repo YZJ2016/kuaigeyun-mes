@@ -7,6 +7,7 @@ import { Button, Tooltip } from 'antd';
 import type { ButtonProps } from 'antd';
 import { SyncOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useUniTableDataActionIconOnly } from '../uni-table/dataActionIconOnlyContext';
 
 export interface UniSyncButtonProps extends Omit<ButtonProps, 'icon' | 'onClick'> {
   onSync: () => void;
@@ -21,10 +22,12 @@ export const UniSyncButton: React.FC<UniSyncButtonProps> = ({
   buttonText,
   children,
   type = 'default',
-  iconOnly = false,
+  iconOnly: iconOnlyProp = false,
   ...rest
 }) => {
   const { t } = useTranslation();
+  const toolbarIconOnly = useUniTableDataActionIconOnly();
+  const iconOnly = iconOnlyProp || toolbarIconOnly;
   const label = String(children ?? buttonText ?? t('components.uniTable.sync'));
   const btn = (
     <Button type={type} icon={<SyncOutlined />} onClick={onSync} aria-label={label} {...rest}>

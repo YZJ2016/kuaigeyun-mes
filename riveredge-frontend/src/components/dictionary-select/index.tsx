@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Input, Form, App, Col } from 'antd';
 import { ProForm, ProFormSelect } from '@ant-design/pro-components';
 import { UniDropdown, QuickCreateModal } from '../uni-dropdown';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
 import { createDictionaryItem } from '../../services/dataDictionary';
 import {
@@ -136,7 +137,7 @@ export interface DictionarySelectProps {
   quickCreatePopoverZIndex?: number;
   /**
    * 宿主单据 resource（{app}:{module}）。
-   * 无 system:data-dictionary read/display 时，通过 manifest module_references 隐式加载字典项。
+   * 审计透传；加载字典项须具备 system:data-dictionary 的 read 或 display（回显）。
    */
   hostResource?: string;
   /** 多选模式：存库为英文逗号分隔字符串，表单内为字符串数组 */
@@ -361,7 +362,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
   if (isReadonlyMode && noStyle) {
     const selected = resolveSelectedValues(value, multiple);
-    if (!selected.length) return <span>-</span>;
+    if (!selected.length) return <span>{EMPTY_VALUE_PLACEHOLDER}</span>;
     const labels = selected.map(
       (strVal) =>
         options.find((o) => o.value === strVal)?.label ??

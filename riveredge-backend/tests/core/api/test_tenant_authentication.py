@@ -40,6 +40,19 @@ async def test_tenant_only_route_authenticates(monkeypatch, token, header, expec
         "infra.domain.tenant.tenant_access.require_operational_tenant_by_id",
         AsyncMock(return_value=SimpleNamespace()),
     )
+    monkeypatch.setattr(
+        "infra.domain.tenant.tenant_access.require_existing_tenant_by_id",
+        AsyncMock(return_value=SimpleNamespace()),
+    )
+
+    class _NoopScope:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+    monkeypatch.setattr(deps, "with_tenant", lambda *a, **k: _NoopScope())
     app = FastAPI()
 
     @app.get("/tenant-resource")

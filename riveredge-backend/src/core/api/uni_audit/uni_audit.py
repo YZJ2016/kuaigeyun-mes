@@ -16,6 +16,7 @@ from fastapi import APIRouter, Body, Depends, Request
 from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant
 from core.config.audit_registry import entry_by_entity_type
+from core.services.approval.approval_audit_scope import resolve_audit_entry_for_entity
 from core.config.permission_contract import REVIEW_ACTIONS
 from core.services.approval.uni_audit_dispatch import (
     action_permission_for,
@@ -78,7 +79,9 @@ async def execute_audit_action(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """统一执行审核动作（按实体资源 + 动作权限码鉴权）。"""
-    entry = entry_by_entity_type(entity_type)
+    entry = await resolve_audit_entry_for_entity(
+        tenant_id, entity_type, entity_id
+    )
     if entry is None:
         raise ValidationError(f"实体 {entity_type} 未在任何 manifest.audit 中声明为可审核")
 
@@ -115,7 +118,9 @@ async def execute_audit_edit(
     tenant_id: int = Depends(get_current_tenant),
 ):
     """审核中改单：当前审批节点允许时修改单据并留痕。"""
-    entry = entry_by_entity_type(entity_type)
+    entry = await resolve_audit_entry_for_entity(
+        tenant_id, entity_type, entity_id
+    )
     if entry is None:
         raise ValidationError(f"实体 {entity_type} 未在任何 manifest.audit 中声明为可审核")
 

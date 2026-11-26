@@ -5,7 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { Button } from 'antd';
@@ -28,6 +28,7 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { pickSearchString } from '../../../../../utils/tableQueryKey';
+import { buildOpsOpenCreateQuery } from '../shared/opsDocumentOpenCreate';
 
 const P = 'app.kuaizhizao.toolMaintenanceReminder';
 const RESOURCE = 'kuaizhizao:tool-maintenance-reminder';
@@ -62,7 +63,10 @@ type ReminderDetailKind = 'maintenance' | 'calibration';
 
 const ToolMaintenanceRemindersPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const perms = useResourcePermissions(RESOURCE);
+  const maintPerms = useResourcePermissions('kuaizhizao:tool-maintenance');
+  const calibPerms = useResourcePermissions('kuaizhizao:tool-calibration');
   const maintenanceActionRef = useRef<ActionType>(null);
   const calibrationActionRef = useRef<ActionType>(null);
   const [maintenanceSelectedRowKeys, setMaintenanceSelectedRowKeys] = useState<React.Key[]>([]);
@@ -94,6 +98,34 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
       void openDetail(async () => record as ToolCalibrationReminder);
     },
     [openDetail],
+  );
+
+  const handleGoExecuteMaintenance = useCallback(
+    (record: ToolMaintenanceReminder) => {
+      if (!record.tool_uuid || !maintPerms.canCreate) return;
+      void (async () => {
+        const tool = await toolApi.get(record.tool_uuid!);
+        if (tool.id == null) return;
+        navigate(
+          `/apps/kuaizhizao/equipment-management/tool-maintenances?${buildOpsOpenCreateQuery({ tool_id: tool.id })}`,
+        );
+      })();
+    },
+    [maintPerms.canCreate, navigate],
+  );
+
+  const handleGoExecuteCalibration = useCallback(
+    (record: ToolCalibrationReminder) => {
+      if (!record.tool_uuid || !calibPerms.canCreate) return;
+      void (async () => {
+        const tool = await toolApi.get(record.tool_uuid!);
+        if (tool.id == null) return;
+        navigate(
+          `/apps/kuaizhizao/equipment-management/tool-calibrations?${buildOpsOpenCreateQuery({ tool_id: tool.id })}`,
+        );
+      })();
+    },
+    [calibPerms.canCreate, navigate],
   );
 
   const maintenanceDetailColumns: ProDescriptionsItemProps<ToolMaintenanceReminder>[] = useMemo(
@@ -303,11 +335,20 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                 >
                   {t('common.detail')}
                 </Button>,
+                maintPerms.canCreate ? (
+                  <Button
+                    key="execute"
+                    {...rowActionKind('update')}
+                    onClick={() => handleGoExecuteMaintenance(record)}
+                  >
+                    {t(`${P}.action.goExecute`)}
+                  </Button>
+                ) : null,
               ]
             : null,
       },
     ],
-    [t, perms.canRead, handleMaintenanceDetail],
+    [t, perms.canRead, maintPerms.canCreate, handleMaintenanceDetail, handleGoExecuteMaintenance],
   );
 
   const calibrationColumns: ProColumns<ToolCalibrationReminder>[] = useMemo(
@@ -384,11 +425,20 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                 >
                   {t('common.detail')}
                 </Button>,
+                calibPerms.canCreate ? (
+                  <Button
+                    key="execute"
+                    {...rowActionKind('update')}
+                    onClick={() => handleGoExecuteCalibration(record)}
+                  >
+                    {t(`${P}.action.goExecute`)}
+                  </Button>
+                ) : null,
               ]
             : null,
       },
     ],
-    [t, perms.canRead, handleCalibrationDetail],
+    [t, perms.canRead, calibPerms.canCreate, handleCalibrationDetail, handleGoExecuteCalibration],
   );
 
   if (!perms.canRead) {

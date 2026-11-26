@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from loguru import logger
 from tortoise import timezone
+from tortoise.transactions import in_transaction
 
 from core.models.im_conversation import (
     ImConversation,
@@ -29,7 +30,7 @@ from core.schemas.im import (
 from core.services.realtime.dispatch import schedule_user_realtime_event
 from core.services.realtime.events import IM_MESSAGE
 from core.utils.timezone_utils import resolve_business_datetime
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import AuthorizationError, NotFoundError, ValidationError
 from infra.models.user import User
 
 IM_RECALL_WINDOW_SECONDS = 120
@@ -255,6 +256,7 @@ class ImService:
             is_public=bool(conv.is_public),
             is_pinned=bool(member.is_pinned) if member else False,
             peer_user_id=peer_user_id,
+            created_by_id=conv.created_by_id,
             module_codes=await ImService._module_codes_for_conversation(
                 tenant_id=tenant_id,
                 conversation_id=conv.id,
@@ -423,19 +425,23 @@ class ImService:
         page_ids = [int(c.id) for c in page_rows]
         direct_ids = [int(c.id) for c in page_rows if c.kind == "direct"]
 
-        unread_map, module_map, member_count_map, direct_peer_map = await asyncio.gather(
-            ImService._batch_unread_counts(
-                tenant_id=tenant_id,
-                user_id=user_id,
-                member_by_conv={cid: member_by_conv[cid] for cid in page_ids if cid in member_by_conv},
-            ),
-            ImService._batch_module_codes(tenant_id=tenant_id, conversation_ids=page_ids),
-            ImService._batch_member_counts(tenant_id=tenant_id, conversation_ids=page_ids),
-            ImService._batch_direct_peer_titles(
-                tenant_id=tenant_id,
-                viewer_user_id=user_id,
-                conversation_ids=direct_ids,
-            ),
+        # 禁止 asyncio.gather 并发 Tortoise/asyncpg：同请求 ContextVar 共用一条连接，
+        # 会触发 another operation in progress / ConnectionDoesNotExistError（池连接被弄挂）。
+        unread_map = await ImService._batch_unread_counts(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            member_by_conv={cid: member_by_conv[cid] for cid in page_ids if cid in member_by_conv},
+        )
+        module_map = await ImService._batch_module_codes(
+            tenant_id=tenant_id, conversation_ids=page_ids
+        )
+        member_count_map = await ImService._batch_member_counts(
+            tenant_id=tenant_id, conversation_ids=page_ids
+        )
+        direct_peer_map = await ImService._batch_direct_peer_titles(
+            tenant_id=tenant_id,
+            viewer_user_id=user_id,
+            conversation_ids=direct_ids,
         )
 
         items: list[ImConversationResponse] = []
@@ -456,6 +462,7 @@ class ImService:
                     is_public=bool(conv.is_public),
                     is_pinned=bool(member.is_pinned) if member else False,
                     peer_user_id=peer_user_id,
+                    created_by_id=conv.created_by_id,
                     module_codes=module_map.get(cid, []),
                     member_count=member_count_map.get(cid, 0),
                     last_message_at=conv.last_message_at,
@@ -703,6 +710,67 @@ class ImService:
                         role="owner" if uid == user_id else "member",
                     )
         return conv
+
+    @staticmethod
+    async def dissolve_group_conversation(
+        *,
+        tenant_id: int,
+        user_id: int,
+        conversation_uuid: str,
+    ) -> None:
+        """解散自定义群聊（软删会话、成员与模块绑定）。公共群不可解散。"""
+        conv = await ImConversation.filter(
+            tenant_id=tenant_id,
+            uuid=conversation_uuid,
+            kind="group",
+            deleted_at__isnull=True,
+        ).first()
+        if not conv:
+            raise NotFoundError("群聊不存在")
+        if conv.is_public:
+            raise ValidationError("公共群聊不可解散")
+
+        member = await ImService._require_member(
+            tenant_id=tenant_id, user_id=user_id, conversation=conv
+        )
+        is_owner = (member.role or "") == "owner" or conv.created_by_id == user_id
+        if not is_owner:
+            raise AuthorizationError("仅群主可解散群聊")
+
+        members = await ImConversationMember.filter(
+            tenant_id=tenant_id,
+            conversation_id=conv.id,
+            deleted_at__isnull=True,
+        ).all()
+        notify_user_ids = sorted({int(row.user_id) for row in members if row.user_id})
+
+        now = resolve_business_datetime()
+        async with in_transaction():
+            conv.deleted_at = now
+            await conv.save(update_fields=["deleted_at", "updated_at"])
+            await ImConversationMember.filter(
+                tenant_id=tenant_id,
+                conversation_id=conv.id,
+                deleted_at__isnull=True,
+            ).update(deleted_at=now, updated_at=now)
+            await ImConversationModule.filter(
+                tenant_id=tenant_id,
+                conversation_id=conv.id,
+                deleted_at__isnull=True,
+            ).update(deleted_at=now, updated_at=now)
+
+        # 事务成功后再通知，避免半状态 fanout；payload 走既有 im.message 通道刷新列表
+        for uid in notify_user_ids:
+            schedule_user_realtime_event(
+                tenant_id=tenant_id,
+                user_id=uid,
+                event=IM_MESSAGE,
+                payload={
+                    "conversation_uuid": conv.uuid,
+                    "dissolved": True,
+                    "sender_id": user_id,
+                },
+            )
 
     @staticmethod
     async def list_members(

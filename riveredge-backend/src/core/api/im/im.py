@@ -98,6 +98,20 @@ async def update_group_conversation(
     )
 
 
+@router.delete("/conversations/{conversation_uuid}", status_code=204)
+async def dissolve_group_conversation(
+    conversation_uuid: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _: None = Depends(require_permission_codes("system:user-message:update", check_abac=False)),
+) -> None:
+    await ImService.dissolve_group_conversation(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        conversation_uuid=conversation_uuid,
+    )
+
+
 @router.get(
     "/conversations/{conversation_uuid}/members",
     response_model=ImMemberListResponse,

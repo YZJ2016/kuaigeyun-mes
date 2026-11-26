@@ -257,6 +257,8 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
             row["processing_status"] = self._resolve_processing_status(delay, change_status)
             row["delay_report_id"] = delay.id if delay else None
             row["delay_report_code"] = delay.report_code if delay else None
+            row["delay_status"] = delay.status if delay else None
+            row["delay_review_status"] = delay.review_status if delay else None
             row["purchase_order_change_id"] = delay.purchase_order_change_id if delay else None
             # 影响总成先占位，仅对本页行再批量解析，避免全量明细做溯源
             row["impacted_assembly"] = (
@@ -280,6 +282,7 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
 
         total = len(rows)
         page = rows[skip : skip + limit]
+        await self._attach_delay_audit(tenant_id, page, delay_map, current_user)
         if page:
             from apps.kuaizhizao.services.purchase_po_line_impact_service import (
                 PurchasePoLineImpactService,
@@ -298,6 +301,49 @@ class PurchaseArrivalWarningService(AppBaseService[PurchaseOrder]):
 
     def _empty_summary(self) -> dict:
         return {"normal": 0, "imminent": 0, "overdue": 0, "total_open_lines": 0}
+
+    async def _attach_delay_audit(
+        self,
+        tenant_id: int,
+        page: List[dict],
+        delay_map: Dict[int, PurchaseArrivalDelayReport],
+        current_user: Optional[CurrentUser],
+    ) -> None:
+        from apps.kuaizhizao.services.purchase_arrival_delay_service import (
+            derive_purchase_arrival_delay_capabilities,
+        )
+        from core.services.approval.audit_record_enricher import enrich_items, resolve_viewer_id
+
+        shadows: List[dict] = []
+        for row in page:
+            delay = delay_map.get(int(row["purchase_order_item_id"]))
+            if delay is None:
+                continue
+            shadows.append(
+                {
+                    "id": int(delay.id),
+                    "status": delay.status,
+                    "review_status": delay.review_status,
+                    "capabilities": derive_purchase_arrival_delay_capabilities(
+                        delay.status,
+                        delay.review_status,
+                        delay.purchase_order_change_id,
+                    ),
+                    "_row": row,
+                }
+            )
+        if not shadows:
+            return
+        await enrich_items(
+            tenant_id,
+            "purchase_arrival_delay",
+            shadows,
+            viewer_id=resolve_viewer_id(current_user),
+        )
+        for shadow in shadows:
+            row = shadow["_row"]
+            row["audit"] = shadow.get("audit")
+            row["capabilities"] = shadow.get("capabilities")
 
     async def _count_open_lines_by_warning_level(
         self,

@@ -20,6 +20,26 @@ export interface PartnerSettlementAccountsFormTableProps {
   titleKey: string;
 }
 
+function SettlementAccountDefaultCell({ index }: { index: number }) {
+  const form = Form.useFormInstance();
+  return (
+    <Form.Item name={[index, 'isDefault']} style={{ margin: 0 }} valuePropName="checked">
+      <Checkbox
+        onChange={(event) => {
+          if (!event.target.checked) return;
+          const rows = form.getFieldValue('settlementAccounts');
+          if (!Array.isArray(rows)) return;
+          rows.forEach((_, rowIndex) => {
+            if (rowIndex !== index) {
+              form.setFieldValue(['settlementAccounts', rowIndex, 'isDefault'], false);
+            }
+          });
+        }}
+      />
+    </Form.Item>
+  );
+}
+
 export const PartnerSettlementAccountsFormTable: React.FC<PartnerSettlementAccountsFormTableProps> = ({
   titleKey,
 }) => {
@@ -82,9 +102,7 @@ export const PartnerSettlementAccountsFormTable: React.FC<PartnerSettlementAccou
           width: 88,
           align: 'center',
           render: (_: unknown, __: unknown, index: number) => (
-            <Form.Item name={[index, 'isDefault']} style={{ margin: 0 }} valuePropName="checked">
-              <Checkbox />
-            </Form.Item>
+            <SettlementAccountDefaultCell index={index} />
           ),
         },
       ]}

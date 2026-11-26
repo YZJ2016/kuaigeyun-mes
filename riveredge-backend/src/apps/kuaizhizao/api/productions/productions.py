@@ -427,6 +427,7 @@ async def list_sales_forecasts(
         include_items=include_items,
         pullable_only=pullable_only,
         pull_target=pull_target,
+        current_user=current_user,
     )
     return SalesForecastListResult(**result)
     
@@ -612,21 +613,19 @@ async def delete_sales_forecast(
     return JSONResponse(content={"message": "销售预测删除成功"}, status_code=http_status.HTTP_200_OK)
 
 
-@router.post("/sales-forecasts/{forecast_id}/submit", response_model=SalesForecastResponse, summary="Submit sales forecast")
+@router.post("/sales-forecasts/{forecast_id}/submit", response_model=SalesForecastResponse, summary="Commit sales forecast")
 async def submit_sales_forecast(
     forecast_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> SalesForecastResponse:
     """
-    提交销售预测
-
-    将草稿状态的销售预测提交为待审核状态
+    提交销售预测（草稿或已驳回 → 已提交）。页面提交走本接口；提交审核另走 uni-audit。
 
     - **forecast_id**: 销售预测ID
     """
     service = SalesForecastService()
-    return await service.submit_forecast(
+    return await service.commit_forecast(
         tenant_id=tenant_id,
         forecast_id=forecast_id,
         submitted_by=current_user.id
@@ -999,24 +998,11 @@ async def batch_delete_sales_forecasts(
     
     注意：只能删除草稿状态的销售预测
     """
-    from apps.kuaizhizao.services.document_action_policy.enricher import (
-        batch_review_submitted_for_documents,
-    )
-
-    gate_rows = await SalesForecast.filter(tenant_id=tenant_id, id__in=request.ids).all()
-    submitted_map = await batch_review_submitted_for_documents(
-        tenant_id, "sales_forecast", gate_rows
-    )
-
     def validate_sales_forecast(forecast):
         """验证销售预测是否可以删除"""
         from apps.kuaizhizao.services.document_action_policy.sales_forecast import assert_sales_forecast_capability
 
-        assert_sales_forecast_capability(
-            forecast,
-            "delete",
-            review_submitted=submitted_map.get(int(forecast.id)),
-        )
+        assert_sales_forecast_capability(forecast, "delete")
     
     result = await BatchOperationService().batch_delete(
         tenant_id=tenant_id,
@@ -2727,6 +2713,54 @@ async def list_outsource_work_orders(
     except Exception as e:
         logger.error(f"获取工单委外列表失败: {e}")
         raise _http_exception_with_trace(500, str(e), "/outsource-work-orders", tenant_id)
+
+
+@router.get(
+    "/outsource-work-orders/{work_order_id}/print",
+    summary="Print outsource work order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-work-order:print"))],
+)
+async def print_outsource_work_order(
+    work_order_id: int = Path(..., description="工单委外ID"),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，优先于 template_code）"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式：json 或 html"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印工单委外单。"""
+    result = await DocumentPrintService().print_document(
+        tenant_id=tenant_id,
+        document_type="outsource_work_order",
+        document_id=work_order_id,
+        template_code=template_code,
+        template_uuid=template_uuid,
+        output_format=output_format,
+    )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/outsource-work-orders/{work_order_id}/print-variables",
+    summary="Outsource work order print variables",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outsource-work-order:print"))],
+)
+async def get_outsource_work_order_print_variables(
+    work_order_id: int = Path(..., description="工单委外ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """与 `_format_outsource_work_order_data` 一致。"""
+    try:
+        variables = await DocumentPrintService().get_document_variables_for_print(
+            tenant_id, "outsource_work_order", work_order_id
+        )
+        return {"success": True, "variables": variables}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/outsource-work-orders/{work_order_id}", response_model=OutsourceWorkOrderResponse, summary="Get outsourced work order")

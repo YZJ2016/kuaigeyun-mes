@@ -27,7 +27,7 @@ from apps.kuaicaiwu.schemas.finance import (
 )
 from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.models.receivable import Receivable
-from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
 from apps.kuaicaiwu.services.invoice_concurrent_settlement import (
     create_concurrent_receipt_for_receivable,
@@ -80,20 +80,6 @@ async def _get_or_404(tenant_id: int, invoice_id: int, route: str = "/sales-invo
     if not obj:
         raise _http_exception_with_trace(404, f"销售发票不存在: {invoice_id}", route, tenant_id)
     return obj
-
-
-def _derive_sales_invoice_review_status(inv: Invoice) -> str:
-    """列表生命周期与审核操作按钮：与 status 对齐"""
-    st = (inv.status or "").strip()
-    if st == "已作废":
-        return "已作废"
-    if st == "已红冲":
-        return "已红冲"
-    if st == "已驳回":
-        return "已驳回"
-    if st in ("已审核", "已开票"):
-        return "已审核"
-    return "待审核"
 
 
 def _join_partner_text(*parts: Optional[str]) -> Optional[str]:
@@ -171,7 +157,7 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
         reviewer_id=None,
         reviewer_name=None,
         review_time=None,
-        review_status=_derive_sales_invoice_review_status(obj),
+        review_status=str(getattr(obj, "review_status", None) or "草稿"),
         review_remarks=None,
         created_at=obj.created_at,
         updated_at=obj.updated_at,
@@ -305,6 +291,7 @@ async def create_sales_invoice(
             "attachments": data.attachments,
             "description": data.notes,
             "status": "未审核",
+            "review_status": "草稿",
         }
         apply_create_audit(create_payload, current_user)
         async with in_transaction():
@@ -391,7 +378,7 @@ async def list_sales_invoices(
         invoice_number=invoice_number,
         keyword_fields=["invoice_code", "partner_name", "invoice_number", "source_document_code"],
         review_status=review_status,
-        review_status_mode="sales_status",
+        review_status_mode="column",
         doc_date_start=doc_date_start,
         doc_date_end=doc_date_end,
         created_start_date=created_start_date,
@@ -405,8 +392,14 @@ async def list_sales_invoices(
     total = await query.count()
     items = await query.order_by(order_expr, "-id").offset(skip).limit(limit)
     serialized = [await _serialize(tenant_id, current_user.id, inv) for inv in items]
+    from core.services.approval.audit_record_enricher import enrich_items
+
+    payloads = [item.model_dump() for item in serialized]
+    payloads = await enrich_items(
+        tenant_id, "sales_invoice", payloads, viewer_id=current_user.id
+    )
     return SalesInvoiceListResponse(
-        items=serialized,
+        items=[SalesInvoiceResponse.model_validate(p) for p in payloads],
         total=total, skip=skip, limit=limit
     )
 
@@ -624,6 +617,15 @@ async def update_sales_invoice(
                 "/sales-invoices/{id}",
                 tenant_id,
             )
+    else:
+        try:
+            from apps.kuaicaiwu.services.sales_invoice_audit_service import (
+                assert_sales_invoice_review_editable,
+            )
+
+            assert_sales_invoice_review_editable(invoice)
+        except BusinessLogicError as exc:
+            raise _http_exception_with_trace(400, str(exc), "/sales-invoices/{id}", tenant_id) from exc
     from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 
     update_data: dict = {}
@@ -671,39 +673,22 @@ async def approve_sales_invoice(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """审核销售发票"""
-    invoice = await _get_or_404(tenant_id, id)
-    if invoice.status not in ("未审核", "DRAFT"):
-        raise _http_exception_with_trace(
-            400,
-            "发票状态不允许审核（仅待审核/草稿可审；已作废、已红冲请走实务流程）",
-            "/sales-invoices/{id}/approve",
-            tenant_id,
-        )
-    new_status = "已驳回" if rejection_reason else "已审核"
-    approve_payload = {"status": new_status}
-    apply_update_audit(approve_payload, current_user)
-    await Invoice.filter(id=id).update(**approve_payload)
-    if not rejection_reason:
-        from apps.kuaicaiwu.services.sales_invoice_receivable_auto import (
-            maybe_auto_generate_receivable_for_sales_invoice,
-        )
+    """审核销售发票（须已提交审核进入待审核）"""
+    from apps.kuaicaiwu.services.sales_invoice_audit_service import (
+        SalesInvoiceAuditService,
+    )
 
-        invoice_row = await Invoice.get(tenant_id=tenant_id, id=id)
-        auto_receivable_id, _ = await maybe_auto_generate_receivable_for_sales_invoice(
-            tenant_id=tenant_id,
-            invoice=invoice_row,
-            created_by=current_user.id,
+    try:
+        await SalesInvoiceAuditService().approve_sales_invoice(
+            tenant_id,
+            id,
+            current_user.id,
+            rejection_reason=rejection_reason,
         )
-        if auto_receivable_id:
-            await submit_finance_review(
-                model=Receivable,
-                tenant_id=tenant_id,
-                doc_id=int(auto_receivable_id),
-                updated_by=current_user.id,
-                doc_label="应收单",
-                node_key="receivable",
-            )
+    except BusinessLogicError as exc:
+        raise _http_exception_with_trace(
+            400, str(exc), "/sales-invoices/{id}/approve", tenant_id
+        ) from exc
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))
 
 
@@ -723,7 +708,14 @@ async def delete_sales_invoice(
             "/sales-invoices/{id}",
             tenant_id,
         )
-    from datetime import datetime
+    try:
+        from apps.kuaicaiwu.services.sales_invoice_audit_service import (
+            assert_sales_invoice_review_editable,
+        )
+
+        assert_sales_invoice_review_editable(invoice)
+    except BusinessLogicError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/sales-invoices/{id}", tenant_id) from exc
 
     await Invoice.filter(tenant_id=tenant_id, id=id).update(deleted_at=resolve_business_datetime())
 
@@ -829,6 +821,7 @@ async def create_red_letter_sales_invoice(
             "attachment_uuid": orig.attachment_uuid,
             "description": (desc + tail) if desc else tail.strip(),
             "status": "未审核",
+            "review_status": "草稿",
             "original_invoice_id": orig.id,
             "receivable_id": getattr(orig, "receivable_id", None),
             "receivable_code": getattr(orig, "receivable_code", None),

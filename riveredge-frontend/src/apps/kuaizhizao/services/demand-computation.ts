@@ -156,6 +156,29 @@ export async function getDemandComputationStatistics(): Promise<DemandComputatio
 /**
  * 创建需求计算
  */
+export type PullLineSelectionPayload = {
+  line_id: number;
+  quantity?: number;
+  bom_version?: string;
+  warehouse_id?: number;
+};
+
+export type CreateComputationFromPullLinesPayload = {
+  source_kind: 'demand_plan' | 'sales_order';
+  lines: PullLineSelectionPayload[];
+  notes?: string;
+  computation_params?: Record<string, unknown>;
+};
+
+export async function createComputationFromPullLines(
+  data: CreateComputationFromPullLinesPayload,
+): Promise<DemandComputation> {
+  return apiRequest<DemandComputation>('/apps/kuaizhizao/demand-computations/create-from-pull-lines', {
+    method: 'POST',
+    data,
+  });
+}
+
 export async function createDemandComputation(data: Partial<DemandComputation>): Promise<DemandComputation> {
   return apiRequest<DemandComputation>('/apps/kuaizhizao/demand-computations', {
     method: 'POST',
@@ -171,6 +194,33 @@ export async function listDemandComputations(params?: DemandComputationListParam
     method: 'GET',
     params,
   });
+}
+
+/** 工单从需求计算取单候选 */
+export type WorkOrderPullComputationCandidate = {
+  id: number;
+  computation_code?: string;
+  business_mode?: string;
+  computation_status?: string;
+  created_at?: string;
+  updated_at?: string;
+  can_push_work_order?: boolean;
+  disabled_reason?: string | null;
+  capabilities?: {
+    push_work_order?: { allowed?: boolean; reason?: string | null };
+  };
+};
+
+export async function listWorkOrderPullComputations(params?: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  pullable_only?: boolean;
+}): Promise<{ data: WorkOrderPullComputationCandidate[]; total: number }> {
+  return apiRequest<{ data: WorkOrderPullComputationCandidate[]; total: number }>(
+    '/apps/kuaizhizao/demand-computations/work-order-pull-computations',
+    { method: 'GET', params },
+  );
 }
 
 /**

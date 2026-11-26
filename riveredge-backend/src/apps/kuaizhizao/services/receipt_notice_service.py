@@ -57,25 +57,10 @@ def _receipt_notice_line_amount(
 async def _first_storage_location_for_warehouse(
     tenant_id: int, warehouse_id: int
 ) -> Tuple[Optional[int], Optional[str]]:
-    """取该仓库下第一个可用库位（按库区、库位 id），供启用库位管理时生成入库草稿。"""
-    from apps.master_data.models.warehouse import StorageArea, StorageLocation
+    """取该仓库下第一个可用库位；无库位时自动建立「整仓」直挂库位。"""
+    from apps.master_data.services.warehouse_service import WarehouseService
 
-    areas = await StorageArea.filter(
-        tenant_id=tenant_id,
-        warehouse_id=warehouse_id,
-        deleted_at__isnull=True,
-        is_active=True,
-    ).order_by("id")
-    for area in areas:
-        loc = await StorageLocation.filter(
-            tenant_id=tenant_id,
-            storage_area_id=area.id,
-            deleted_at__isnull=True,
-            is_active=True,
-        ).order_by("id").first()
-        if loc:
-            return loc.id, loc.code
-    return None, None
+    return await WarehouseService.ensure_whole_warehouse_location(tenant_id, int(warehouse_id))
 
 
 RECEIPT_NOTICE_SORTABLE_FIELDS = frozenset({
@@ -252,19 +237,13 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
     ) -> ReceiptNoticeResponse | ReceiptNoticeWithItemsResponse:
         item_count = await ReceiptNoticeItem.filter(tenant_id=tenant_id, notice_id=notice.id).count()
         receipt_withdrawable = await self._notice_receipt_withdrawable(tenant_id, notice)
-        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
-            push_allow_print_unaudited,
+        return enrich_receipt_notice_capabilities_on_response(
+            notice,
+            response,
+            has_items=item_count > 0,
+            has_warehouse=getattr(notice, "warehouse_id", None) is not None,
+            receipt_withdrawable=receipt_withdrawable,
         )
-
-        allow_print = await self.business_config_service.get_allow_print_unaudited(tenant_id)
-        with push_allow_print_unaudited(allow_print):
-            return enrich_receipt_notice_capabilities_on_response(
-                notice,
-                response,
-                has_items=item_count > 0,
-                has_warehouse=getattr(notice, "warehouse_id", None) is not None,
-                receipt_withdrawable=receipt_withdrawable,
-            )
 
     async def create_receipt_notice(
         self,
@@ -284,11 +263,36 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             raise BusinessLogicError("采购订单不存在或已删除，无法创建收货通知单")
         if int(source_order.supplier_id or 0) <= 0:
             raise BusinessLogicError("采购订单未指定供应商，无法创建收货通知单")
+
+        # 创建与后续自动通知仓库均依赖组织上下文（get_user_info / UserService）
+        from infra.domain.tenant_context import get_current_tenant_id, set_current_tenant_id
+
+        prev_tenant = get_current_tenant_id()
+        set_current_tenant_id(int(tenant_id))
+        try:
+            return await self._create_receipt_notice_body(
+                tenant_id=tenant_id,
+                notice_data=notice_data,
+                created_by=created_by,
+            )
+        finally:
+            set_current_tenant_id(prev_tenant)
+
+    async def _create_receipt_notice_body(
+        self,
+        *,
+        tenant_id: int,
+        notice_data: ReceiptNoticeCreate,
+        created_by: int,
+    ) -> ReceiptNoticeResponse:
         async with in_transaction():
             today = today_site_str()
             code = await self.generate_code(tenant_id, "RECEIPT_NOTICE_CODE", prefix=f"RN{today}")
 
-            dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
+            dump = notice_data.model_dump(
+                exclude_unset=True,
+                exclude={"items", "notice_code", "review_status"},
+            )
             if notice_data.notice_code:
                 code = notice_data.notice_code
 
@@ -296,6 +300,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             notice = await ReceiptNotice.create(
                 tenant_id=tenant_id,
                 notice_code=code,
+                review_status="草稿",
                 **dump,
                 created_by=created_by,
                 created_by_name=user_info["name"],
@@ -342,12 +347,40 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 total_amount=total_amount
             )
             notice = await ReceiptNotice.get(tenant_id=tenant_id, id=notice.id)
-            return ReceiptNoticeResponse.model_validate(notice)
+            notice_id = int(notice.id)
+            order_id = int(notice.purchase_order_id) if notice.purchase_order_id else None
+
+        # 事务提交后再走自动化，避免通知仓库嵌套写单被回滚
+        from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+            apply_manual_create_auto_submit,
+        )
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+        await apply_manual_create_auto_submit(
+            tenant_id=tenant_id,
+            node_key="receipt_notice",
+            entity_id=notice_id,
+            operator_id=created_by,
+        )
+        await PurchaseService().try_auto_notify_warehouse_and_confirm_receipt(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            operator_id=created_by,
+            order_id=order_id,
+        )
+        refreshed = await ReceiptNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if refreshed:
+            return ReceiptNoticeResponse.model_validate(refreshed)
+        return ReceiptNoticeResponse.model_validate(notice)
 
     async def get_receipt_notice_by_id(
         self,
         tenant_id: int,
-        notice_id: int
+        notice_id: int,
+        *,
+        viewer_id: Optional[int] = None,
     ) -> ReceiptNoticeWithItemsResponse:
         """根据ID获取收货通知单（含明细）"""
         notice = await ReceiptNotice.get_or_none(tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True)
@@ -369,7 +402,15 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             milestones=milestones,
             purchase_receipt_status=receipt_status_map.get(int(notice.id)),
         )
-        return await self._enrich_notice_response(tenant_id, notice, response)
+        response = await self._enrich_notice_response(tenant_id, notice, response)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(
+            tenant_id,
+            "receipt_notice",
+            response,
+            viewer_id=viewer_id,
+        )
 
     async def list_receipt_notices(
         self,
@@ -466,23 +507,28 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             if include_items:
                 resp.items = items_by_notice.get(int(r.id), [])
             list_responses.append(resp)
-        from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
-            push_allow_print_unaudited,
+        enriched = enrich_receipt_notice_list_capabilities(
+            notice_list,
+            list_responses,
+            has_items_by_id=items_map,
+            receipt_withdrawable_by_id=withdraw_map,
         )
-
-        allow_print = await self.business_config_service.get_allow_print_unaudited(tenant_id)
-        with push_allow_print_unaudited(allow_print):
-            enriched = enrich_receipt_notice_list_capabilities(
-                notice_list,
-                list_responses,
-                has_items_by_id=items_map,
-                receipt_withdrawable_by_id=withdraw_map,
-            )
-        return {
+        payload = {
             "data": [item.model_dump() for item in enriched],
             "total": total,
             "success": True,
         }
+        from core.services.approval.audit_record_enricher import (
+            enrich_data_payload,
+            resolve_viewer_id,
+        )
+
+        return await enrich_data_payload(
+            tenant_id,
+            "receipt_notice",
+            payload,
+            viewer_id=resolve_viewer_id(filters.get("current_user")),
+        )
 
     async def get_receipt_notice_statistics(self, tenant_id: int) -> Dict[str, int]:
         """按 status GROUP BY COUNT，供列表 KPI。"""
@@ -522,7 +568,10 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
         assert_receipt_notice_capability(notice, "update")
 
         async with in_transaction():
-            dump = notice_data.model_dump(exclude_unset=True, exclude={"notice_code"})
+            dump = notice_data.model_dump(
+                exclude_unset=True,
+                exclude={"notice_code", "status", "review_status", "items"},
+            )
             user_info = await self.get_user_info(updated_by)
             dump["updated_by"] = updated_by
             dump["updated_by_name"] = user_info["name"]
@@ -934,21 +983,15 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             wh_id = default_wh.id
             wh_name = default_wh.name
 
-        cfg = await self.business_config_service.get_business_config(tenant_id)
-        wh_params = cfg.get("parameters", {}).get("warehouse", {})
-        location_required = bool(wh_params.get("location_management", False))
-
         default_loc_by_wh: dict[int, tuple[Optional[int], Optional[str]]] = {}
 
         async def _default_location_for_warehouse(warehouse_id: int) -> tuple[Optional[int], Optional[str]]:
+            """出入库库位必填：草稿缺省时取仓库首个可用库位。"""
             if warehouse_id in default_loc_by_wh:
                 return default_loc_by_wh[warehouse_id]
-            loc_id: Optional[int] = None
-            loc_code: Optional[str] = None
-            if location_required:
-                loc_id, loc_code = await _first_storage_location_for_warehouse(
-                    tenant_id, int(warehouse_id)
-                )
+            loc_id, loc_code = await _first_storage_location_for_warehouse(
+                tenant_id, int(warehouse_id)
+            )
             default_loc_by_wh[warehouse_id] = (loc_id, loc_code)
             return loc_id, loc_code
 
@@ -1010,6 +1053,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 material_unit=str(ni.material_unit or "件"),
                 receipt_quantity=float(qty),
                 unit_price=float(unit_p),
+                tax_rate=float(getattr(po_item, "tax_rate", 0) or 0),
                 total_amount=float(total_amt),
                 qualified_quantity=float(qty),
                 unqualified_quantity=0.0,
@@ -1040,7 +1084,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             warehouse_id=int(wh_id),
             warehouse_name=str(wh_name or ""),
             status="草稿",
-            review_status="待审核",
+            review_status="草稿",
             notes=merged_notes,
             items=receipt_items,
         )
@@ -1050,7 +1094,6 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             tenant_id=tenant_id,
             receipt_data=receipt_data,
             created_by=notified_by,
-            skip_manual_create_auto_submit=True,
         )
 
         await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(

@@ -6,8 +6,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Flex, Input, Modal, Select, Table, Tooltip, TreeSelect, theme } from 'antd';
+import { App, Flex, Input, Modal, Select, Spin, Table, Tooltip, Tree, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { DataNode } from 'antd/es/tree';
 import { useTranslation } from 'react-i18next';
 import {
   ReferenceDisplayAccessError,
@@ -21,11 +22,11 @@ import { SecureImage } from '../secure-image';
 import { UniTableStackedPrimaryCell } from '../uni-table/stackedPrimaryColumn';
 import type { UniMaterialBatchPickerProps } from './types';
 import {
+  buildMaterialBatchPickerGroupTree,
   fetchBatchMaterialHasBom,
   fetchBatchMaterialInventory,
+  filterMaterialGroupTreeData,
   getMaterialField,
-  mapMaterialGroupTree,
-  type MaterialGroupTreeNode,
 } from './utils';
 import { apiRequest } from '../../services/api';
 import {
@@ -43,7 +44,14 @@ import './index.less';
 export type { UniMaterialBatchPickerProps } from './types';
 
 const PAGE_SIZE = 20;
-const DEFAULT_WIDTH = 1120;
+const DEFAULT_WIDTH = 1280;
+const GROUP_PANEL_WIDTH = 312;
+/** 与右侧表格 scroll.y 同一真源 */
+const PICKER_TABLE_SCROLL_Y = 360;
+/**
+ * 左侧分组树滚动区高度：对齐右侧跨页选择条 + 表头 + 表体滚动 + 分页，使左右内容区下沿平齐
+ */
+const PICKER_LIST_VIEWPORT_HEIGHT = 52 + 12 + 39 + PICKER_TABLE_SCROLL_Y + 48;
 
 function resolveMaterialImageFileUuid(raw: unknown): string | null {
   if (typeof raw === 'string') {
@@ -60,7 +68,7 @@ function resolveMaterialImageFileUuid(raw: unknown): string | null {
 }
 
 function materialPreviewLabel(record: Material): string {
-  const rec = record as Record<string, unknown>;
+  const rec = record as unknown as Record<string, unknown>;
   const code = String(getMaterialField(rec, 'mainCode') ?? record.code ?? '').trim();
   const name = String(record.name ?? '').trim();
   return code || name || '';
@@ -74,6 +82,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   width = DEFAULT_WIDTH,
   hostResource,
   warehouseId,
+  sourceType: fixedSourceType,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -81,8 +90,12 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   const [searchDraft, setSearchDraft] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [groupId, setGroupId] = useState<number | undefined>(undefined);
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string>('all');
   const [sourceType, setSourceType] = useState<string | undefined>(undefined);
-  const [groupTree, setGroupTree] = useState<MaterialGroupTreeNode[]>([]);
+  const [groupTreeData, setGroupTreeData] = useState<DataNode[]>([]);
+  const [groupTreeLoading, setGroupTreeLoading] = useState(false);
+  const [groupTreeSearch, setGroupTreeSearch] = useState('');
+  const [groupExpandedKeys, setGroupExpandedKeys] = useState<React.Key[]>(['all']);
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<Material[]>([]);
   const [page, setPage] = useState(1);
@@ -101,11 +114,19 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
 
   const loadTree = useCallback(async () => {
     try {
+      setGroupTreeLoading(true);
       const tree = await materialGroupApi.tree();
-      setGroupTree(mapMaterialGroupTree(tree.items ?? []));
+      setGroupTreeData(
+        buildMaterialBatchPickerGroupTree(tree.items ?? [], t, {
+          totalMaterialCount: tree.totalMaterialCount,
+          ungroupedMaterialCount: tree.ungroupedMaterialCount,
+        }),
+      );
     } catch {
-      setGroupTree([]);
+      setGroupTreeData([]);
       message.error(t('app.kuaizhizao.salesOrder.materialPickerLoadGroupFailed'));
+    } finally {
+      setGroupTreeLoading(false);
     }
   }, [message, t]);
 
@@ -230,11 +251,13 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     setSearchDraft('');
     setSearchKeyword('');
     setGroupId(undefined);
-    setSourceType(undefined);
+    setSelectedGroupKey('all');
+    setGroupTreeSearch('');
+    setSourceType(fixedSourceType);
     setPage(1);
     setSelectedMap(new Map());
     setCrossPageMode('page');
-  }, [open]);
+  }, [open, fixedSourceType]);
 
   /** 筛选 / 分页变化时拉列表（open 纳入依赖，保证首次打开也会请求） */
   useEffect(() => {
@@ -380,7 +403,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         title: t('app.kuaizhizao.salesOrder.materialPickerMaterial'),
         ellipsis: true,
         render: (_, r) => {
-          const rec = r as Record<string, unknown>;
+          const rec = r as unknown as Record<string, unknown>;
           const code = String(
             getMaterialField(rec, 'mainCode') ?? (r as { code?: string }).code ?? '',
           );
@@ -393,16 +416,31 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         },
       },
       {
-        title: t('app.kuaizhizao.salesOrder.materialSpec'),
-        width: 100,
-        ellipsis: true,
-        render: (_, r) => String(getMaterialField(r as Record<string, unknown>, 'specification') ?? ''),
+        title: t('app.kuaizhizao.salesOrder.materialPickerSpecModel'),
+        width: 140,
+        ellipsis: false,
+        render: (_, r) => {
+          const rec = r as unknown as Record<string, unknown>;
+          const spec = String(getMaterialField(rec, 'specification') ?? '').trim();
+          const model = String(getMaterialField(rec, 'model') ?? '').trim();
+          if (!spec && !model) return '-';
+          if (spec && model) {
+            return (
+              <UniTableStackedPrimaryCell
+                primary={spec}
+                secondary={model}
+                secondaryCopyable={false}
+              />
+            );
+          }
+          return spec || model;
+        },
       },
       {
         title: t('common.unit'),
         width: 64,
         render: (_, r) => {
-          const val = String(getMaterialField(r as Record<string, unknown>, 'baseUnit') ?? '');
+          const val = String(getMaterialField(r as unknown as Record<string, unknown>, 'baseUnit') ?? '');
           return val || '-';
         },
       },
@@ -471,7 +509,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         title: t('app.kuaizhizao.salesOrder.materialPickerSourceType'),
         width: 88,
         render: (_, r) => {
-          const rec = r as Record<string, unknown>;
+          const rec = r as unknown as Record<string, unknown>;
           const val = (getMaterialField(rec, 'sourceType') ?? rec.source_type) as string;
           const label = getMaterialSourceTypeLabel(val, t);
           if (!val || label === '-') return '-';
@@ -501,18 +539,63 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     onCancel();
   };
 
-  const popupContainer = (node: HTMLElement) => node.closest('.ant-modal-wrap') ?? document.body;
+  const popupContainer = (node: HTMLElement): HTMLElement =>
+    (node.closest('.ant-modal-wrap') as HTMLElement | null) ?? document.body;
+
+  const filteredGroupTreeData = useMemo(
+    () => filterMaterialGroupTreeData(groupTreeData, groupTreeSearch),
+    [groupTreeData, groupTreeSearch],
+  );
+
+  const collectGroupTreeKeys = useCallback((nodes: DataNode[]): React.Key[] => {
+    const keys: React.Key[] = [];
+    for (const node of nodes) {
+      keys.push(node.key);
+      if (node.children?.length) {
+        keys.push(...collectGroupTreeKeys(node.children));
+      }
+    }
+    return keys;
+  }, []);
+
+  useEffect(() => {
+    if (!open || groupTreeData.length === 0) return;
+    const kw = groupTreeSearch.trim();
+    const roots =
+      filteredGroupTreeData.length > 0 || !kw ? filteredGroupTreeData : groupTreeData;
+    setGroupExpandedKeys(collectGroupTreeKeys(roots.length ? roots : groupTreeData));
+  }, [open, groupTreeSearch, filteredGroupTreeData, groupTreeData, collectGroupTreeKeys]);
+
+  const handleGroupTreeSelect = useCallback(
+    (keys: React.Key[]) => {
+      const key = keys[0] != null ? String(keys[0]) : 'all';
+      setSelectedGroupKey(key);
+      if (!key || key === 'all') {
+        setGroupId(undefined);
+      } else {
+        const id = Number(key);
+        setGroupId(Number.isFinite(id) && id > 0 ? id : undefined);
+      }
+      setPage(1);
+      clearSelection();
+    },
+    [clearSelection],
+  );
+
+  const filterChromeStyle = useMemo(
+    () => ({
+      padding: 12,
+      marginBottom: 12,
+      background: token.colorFillAlter,
+      borderRadius: token.borderRadius,
+      border: `1px solid ${token.colorBorderSecondary}`,
+      boxSizing: 'border-box' as const,
+    }),
+    [token],
+  );
 
   const filterBar = (
-    <div
-      style={{
-        padding: 12,
-        marginBottom: 12,
-        background: token.colorFillAlter,
-        borderRadius: token.borderRadius,
-        border: `1px solid ${token.colorBorderSecondary}`,
-      }}
-    >
+    <div style={filterChromeStyle}>
       <Flex gap={8} align="center" style={{ width: '100%' }}>
         <Input.Search
           allowClear
@@ -531,24 +614,9 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
             setPage(1);
           }}
         />
-        <TreeSelect
-          allowClear
-          showSearch
-          treeLine
-          placeholder={t('app.kuaizhizao.common.materialBatchGroupPlaceholder')}
-          style={{ flex: 1, minWidth: 0 }}
-          treeData={groupTree}
-          value={groupId}
-          onChange={(v) => {
-            setGroupId(v as number | undefined);
-            setPage(1);
-            clearSelection();
-          }}
-          treeNodeFilterProp="title"
-          getPopupContainer={popupContainer}
-        />
         <Select
-          allowClear
+          allowClear={!fixedSourceType}
+          disabled={Boolean(fixedSourceType)}
           placeholder={t('app.kuaizhizao.common.materialBatchSourcePlaceholder')}
           style={{ flex: 1, minWidth: 0 }}
           value={sourceType}
@@ -587,58 +655,107 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
       wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
     >
-      {filterBar}
-      <UniPullQuerySelectionBar
-        crossPageMode={crossPageMode}
-        onCrossPageModeChange={handleCrossPageModeChange}
-        items={previewItems}
-        onRemove={handleRemoveSelected}
-        onClear={clearSelection}
-      />
-      <Table<Material>
-        className="uni-material-batch-picker-table"
-        size="small"
-        rowKey="id"
-        loading={loading}
-        tableLayout="fixed"
-        columns={columns}
-        dataSource={list}
-        rowSelection={rowSelection}
-        onRow={(record) => ({
-          onClick: (event) => handleMaterialRowClick(record, event),
-          style: { cursor: 'pointer' },
-        })}
-        pagination={{
-          current: page,
-          pageSize: PAGE_SIZE,
-          total: totalHint,
-          showSizeChanger: false,
-          showLessItems: true,
-          onChange: (p) => handlePageChange(p),
-          // mini 分页格宽 24px，antd 默认三个 • 会折行；改用单字符省略号
-          itemRender: (_page, type, originalElement) => {
-            if (type === 'jump-prev' || type === 'jump-next') {
-              return (
-                <a className="ant-pagination-item-link" style={{ whiteSpace: 'nowrap' }}>
-                  …
-                </a>
-              );
-            }
-            return originalElement;
-          },
-          showTotal: (tot) => (
-            <Flex gap={16} align="center" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
-                {t('app.kuaizhizao.salesOrder.materialPickerSelectedCount', { count: selectedCount })}
-              </span>
-              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
-                {t('app.kuaizhizao.salesOrder.materialPickerPageTotal', { total: tot })}
-              </span>
-            </Flex>
-          ),
-        }}
-        scroll={{ y: 360 }}
-      />
+      <div className="uni-material-batch-picker-body">
+        <div
+          className="uni-material-batch-picker-group-panel"
+          style={{
+            flex: `0 0 ${GROUP_PANEL_WIDTH}px`,
+            width: GROUP_PANEL_WIDTH,
+          }}
+        >
+          <div className="uni-material-batch-picker-group-column" style={filterChromeStyle}>
+            <Input.Search
+              allowClear
+              placeholder={t('app.master-data.materials.searchGroup')}
+              value={groupTreeSearch}
+              onChange={(e) => setGroupTreeSearch(e.target.value)}
+              onClear={() => setGroupTreeSearch('')}
+              style={{ width: '100%', marginBottom: 12, flexShrink: 0 }}
+            />
+            <div
+              className="uni-material-batch-picker-group-tree-scroll"
+              style={{ height: PICKER_LIST_VIEWPORT_HEIGHT }}
+            >
+              <Spin spinning={groupTreeLoading} className="uni-material-batch-picker-group-spin">
+                <Tree
+                  className="uni-material-batch-picker-group-tree"
+                  blockNode
+                  showLine
+                  selectedKeys={[selectedGroupKey]}
+                  expandedKeys={groupExpandedKeys}
+                  onExpand={(keys) => setGroupExpandedKeys(keys)}
+                  onSelect={handleGroupTreeSelect}
+                  treeData={
+                    filteredGroupTreeData.length > 0 || !groupTreeSearch.trim()
+                      ? filteredGroupTreeData
+                      : groupTreeData
+                  }
+                  titleRender={(node) => {
+                    const searchLabel = (node as DataNode & { searchLabel?: string }).searchLabel;
+                    const display =
+                      searchLabel ??
+                      (typeof node.title === 'string' ? node.title : String(node.title ?? ''));
+                    return <span className="material-group-tree-title-text">{display}</span>;
+                  }}
+                />
+              </Spin>
+            </div>
+          </div>
+        </div>
+        <div className="uni-material-batch-picker-main">
+          {filterBar}
+          <UniPullQuerySelectionBar
+            crossPageMode={crossPageMode}
+            onCrossPageModeChange={handleCrossPageModeChange}
+            items={previewItems}
+            onRemove={handleRemoveSelected}
+            onClear={clearSelection}
+          />
+          <Table<Material>
+            className="uni-material-batch-picker-table"
+            size="small"
+            rowKey="id"
+            loading={loading}
+            tableLayout="fixed"
+            columns={columns}
+            dataSource={list}
+            rowSelection={rowSelection}
+            onRow={(record) => ({
+              onClick: (event) => handleMaterialRowClick(record, event),
+              style: { cursor: 'pointer' },
+            })}
+            pagination={{
+              current: page,
+              pageSize: PAGE_SIZE,
+              total: totalHint,
+              showSizeChanger: false,
+              showLessItems: true,
+              onChange: (p) => handlePageChange(p),
+              itemRender: (_page, type, originalElement) => {
+                if (type === 'jump-prev' || type === 'jump-next') {
+                  return (
+                    <a className="ant-pagination-item-link" style={{ whiteSpace: 'nowrap' }}>
+                      …
+                    </a>
+                  );
+                }
+                return originalElement;
+              },
+              showTotal: (tot) => (
+                <Flex gap={16} align="center" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                    {t('app.kuaizhizao.salesOrder.materialPickerSelectedCount', { count: selectedCount })}
+                  </span>
+                  <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                    {t('app.kuaizhizao.salesOrder.materialPickerPageTotal', { total: tot })}
+                  </span>
+                </Flex>
+              ),
+            }}
+            scroll={{ y: PICKER_TABLE_SCROLL_Y }}
+          />
+        </div>
+      </div>
     </Modal>
   );
 };

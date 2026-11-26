@@ -29,6 +29,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 
 import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
 
@@ -151,6 +152,11 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
 
   const [current, setCurrent] = useState<MaintenanceScheme | null>(null);
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
+
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
 
   const [itemOptions, setItemOptions] = useState<{ label: string; value: number }[]>([]);
 
@@ -212,13 +218,17 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
     setCurrent(null);
 
+    setCreateCodeSessionKey((k) => k + 1);
+
+    setFormInitialValues({
+      is_active: true,
+      trigger_type: 'usage_count',
+      lines: [{ sort_order: 0 }],
+    });
+
     setModalVisible(true);
 
     void loadItemOptions();
-
-    formRef.current?.resetFields();
-
-    formRef.current?.setFieldsValue({ is_active: true, trigger_type: 'usage_count', lines: [{ sort_order: 0 }] });
 
   };
 
@@ -238,11 +248,7 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
       setCurrent(loaded);
 
-      setModalVisible(true);
-
-      void loadItemOptions();
-
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
 
         ...loaded,
 
@@ -258,6 +264,10 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
         })),
 
       });
+
+      setModalVisible(true);
+
+      void loadItemOptions();
 
     } catch (error: unknown) {
 
@@ -706,11 +716,16 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
         open={modalVisible}
 
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
 
         onFinish={handleSubmit}
 
         isEdit={isEdit}
+
+        initialValues={formInitialValues}
 
         width={MODAL_CONFIG.LARGE_WIDTH}
 
@@ -724,7 +739,22 @@ const MoldMaintenanceSchemesPage: React.FC = () => {
 
           <Col span={12}>
 
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `mold-maint-scheme-code-edit-${current?.id ?? 'none'}`
+                  : `mold-maint-scheme-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-mold-maintenance-scheme"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
 
           </Col>
 

@@ -10,14 +10,20 @@ export type { InputNumberProps, InputNumberRef };
 /** 与 antd InputNumber 一致，聚焦默认全选当前值。 */
 export const UNI_INPUT_NUMBER_MIN_WIDTH_PX = 96;
 
+/** 编辑框去掉精度补零。1.5000 显示 1.5，0.0000 显示 0。列表展示仍走 formatQuantity 等。 */
+function stripEditPrecisionPadding(raw: string): string {
+  if (!raw.includes('.')) return raw;
+  const stripped = raw.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  if (stripped === '' || stripped === '-' || stripped === '+') return '0';
+  return stripped;
+}
+
 const PatchedInputNumber = React.forwardRef<InputNumberRef, InputNumberProps>((props, ref) => {
-  const { precision, onFocus, onBlur, onChange, style, ...rest } = props;
-  const [focused, setFocused] = React.useState(false);
+  const { precision, formatter, onFocus, onBlur, onChange, style, ...rest } = props;
   const precisionRef = React.useRef(precision);
   precisionRef.current = precision;
 
   const handleBlur: NonNullable<InputNumberProps['onBlur']> = (event) => {
-    setFocused(false);
     const p = precisionRef.current;
     if (p != null && p >= 0) {
       const raw = props.value;
@@ -31,12 +37,21 @@ const PatchedInputNumber = React.forwardRef<InputNumberRef, InputNumberProps>((p
     onBlur?.(event);
   };
 
+  const editFormatter: NonNullable<InputNumberProps['formatter']> = (value, info) => {
+    if (info.userTyping) {
+      return formatter ? String(formatter(value, info) ?? '') : info.input;
+    }
+    const next = formatter ? String(formatter(value, info) ?? '') : value == null ? '' : String(value);
+    return stripEditPrecisionPadding(next);
+  };
+
   return (
     <AntdInputNumberBase
       ref={ref}
       {...rest}
-      precision={focused ? undefined : precision}
-      onFocus={mergeInputSelectAllOnFocus(() => setFocused(true), onFocus)}
+      precision={undefined}
+      formatter={editFormatter}
+      onFocus={mergeInputSelectAllOnFocus(onFocus)}
       onBlur={handleBlur}
       onChange={onChange}
       style={{ minWidth: UNI_INPUT_NUMBER_MIN_WIDTH_PX, ...style }}

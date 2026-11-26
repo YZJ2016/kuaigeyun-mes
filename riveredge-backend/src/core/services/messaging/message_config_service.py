@@ -4,7 +4,7 @@
 提供消息配置的 CRUD 操作。
 """
 
-from typing import Optional, List
+from typing import Any, Dict, Optional, List, Sequence
 from uuid import UUID
 from datetime import datetime
 
@@ -20,6 +20,7 @@ from core.schemas.message_config import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from email.header import Header
+from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
@@ -239,6 +240,24 @@ class MessageConfigService:
         ).first()
 
     @staticmethod
+    async def resolve_active_config(
+        tenant_id: int,
+        type: str,
+    ) -> Optional[MessageConfig]:
+        """
+        解析可用消息渠道：优先默认启用配置，否则取任意一条启用中的同类型配置。
+        """
+        default = await MessageConfigService.get_default_config(tenant_id, type)
+        if default:
+            return default
+        return await MessageConfig.filter(
+            tenant_id=tenant_id,
+            type=type,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).order_by("-updated_at", "-id").first()
+
+    @staticmethod
     async def test_connection(
         tenant_id: int,
         data: MessageConfigTestRequest
@@ -284,15 +303,24 @@ class MessageConfigService:
 
     @staticmethod
     async def _send_test_push(config: dict, target: str, tenant_id: int) -> tuple[bool, str, Optional[str]]:
-        """发送一条最小推送测试；企业微信凭据始终从应用连接器读取。"""
+        """发送一条推送测试；企业微信凭据始终从应用连接器读取。
+
+        可选 config 字段（联调审核卡片等）：
+        - subject / content：自定义标题与正文
+        - document_url：有值且 wecom_use_textcard 时发 textcard
+        - wecom_use_textcard / wecom_msgtype=textcard
+        """
         channel = config or {}
         provider = str(channel.get("provider") or channel.get("connection_type") or "").strip().lower()
-        content = "星技谷 消息渠道测试"
+        subject = str(channel.get("subject") or "").strip() or "星技谷 消息渠道测试"
+        content = str(channel.get("content") or "").strip() or "星技谷 消息渠道测试"
+        document_url = str(channel.get("document_url") or "").strip()
 
         if provider in ("wecom", "wechat_work", "企业微信"):
             from core.services.messaging.wecom_message_service import (
                 resolve_wecom_recipient_userids,
                 send_wecom_text_message,
+                send_wecom_textcard_message,
             )
 
             user_ids, resolve_error = await resolve_wecom_recipient_userids(
@@ -301,11 +329,26 @@ class MessageConfigService:
             )
             if resolve_error:
                 return False, "企业微信测试目标无效", resolve_error
-            sent = await send_wecom_text_message(
-                tenant_id=tenant_id,
-                user_ids=user_ids,
-                content=content,
+
+            wecom_msgtype = str(channel.get("wecom_msgtype") or "").strip().lower()
+            use_textcard = bool(document_url) and (
+                wecom_msgtype == "textcard" or bool(channel.get("wecom_use_textcard"))
             )
+            if use_textcard:
+                sent = await send_wecom_textcard_message(
+                    tenant_id=tenant_id,
+                    user_ids=user_ids,
+                    title=subject,
+                    description=content,
+                    url=document_url,
+                )
+            else:
+                body = content if content == subject else f"{subject}\n{content}"
+                sent = await send_wecom_text_message(
+                    tenant_id=tenant_id,
+                    user_ids=user_ids,
+                    content=body,
+                )
             return (
                 (True, "企业微信测试消息已发送", None)
                 if sent
@@ -355,8 +398,12 @@ class MessageConfigService:
         *,
         subject: str,
         content: str,
+        attachments: Optional[Sequence[Dict[str, Any]]] = None,
     ) -> tuple[bool, str, Optional[str]]:
-        """发送业务/测试邮件：使用调用方提供的主题与正文。"""
+        """
+        发送业务/测试邮件：使用调用方提供的主题与正文。
+        attachments 项：filename(str) + content(bytes)，可选 subtype（默认 pdf）。
+        """
         host = config.get("smtp_host")
         port = config.get("smtp_port", 465)
         username = config.get("smtp_username")
@@ -383,6 +430,20 @@ class MessageConfigService:
             message["Subject"] = Header(str(subject).strip(), "utf-8")
             message.attach(MIMEText(str(content), "plain", "utf-8"))
 
+            for item in attachments or []:
+                raw = item.get("content")
+                if not isinstance(raw, (bytes, bytearray)) or not raw:
+                    continue
+                filename = str(item.get("filename") or "attachment.bin").strip() or "attachment.bin"
+                subtype = str(item.get("subtype") or "pdf").strip() or "pdf"
+                part = MIMEApplication(bytes(raw), _subtype=subtype)
+                part.add_header(
+                    "Content-Disposition",
+                    "attachment",
+                    filename=("utf-8", "", filename),
+                )
+                message.attach(part)
+
             await aiosmtplib.send(
                 message,
                 hostname=host,
@@ -390,7 +451,7 @@ class MessageConfigService:
                 username=username,
                 password=password,
                 use_tls=use_tls,
-                timeout=10,
+                timeout=30,
             )
             return True, "邮件已成功发送", None
         except Exception as e:

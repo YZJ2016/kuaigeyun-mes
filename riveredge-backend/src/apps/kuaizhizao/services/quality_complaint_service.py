@@ -460,6 +460,11 @@ class QualityComplaintService(AppBaseService[QualityComplaint]):
             raise BusinessLogicError("仅处理中投诉可关闭")
         if not (row.supplier_response or "").strip():
             raise ValidationError("关闭前须填写供方整改说明")
+        from apps.kuaizhizao.services.qms_corrective_action_service import (
+            assert_no_open_capa_for_complaint,
+        )
+
+        await assert_no_open_capa_for_complaint(tenant_id, complaint_id)
         now = resolve_business_datetime()
         row.status = "closed"
         row.closed_at = now

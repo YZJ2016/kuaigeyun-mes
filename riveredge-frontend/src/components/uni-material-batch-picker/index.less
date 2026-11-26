@@ -1,3 +1,48 @@
+.uni-material-batch-picker-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.uni-material-batch-picker-group-panel {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+}
+
+.uni-material-batch-picker-group-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.uni-material-batch-picker-group-tree-scroll {
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.uni-material-batch-picker-group-spin {
+  display: block;
+
+  &.ant-spin-nested-loading,
+  > .ant-spin-container {
+    height: auto;
+  }
+}
+
+.uni-material-batch-picker-group-tree {
+  .material-group-tree-title-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.uni-material-batch-picker-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* 分页 jump-prev/next 用三个 • 作省略号，被挤窄时会按字折行并撑高整行 */
 .uni-material-batch-picker-table {
   /* 无数据时列宽仍可能被压缩，表头禁止折行 */

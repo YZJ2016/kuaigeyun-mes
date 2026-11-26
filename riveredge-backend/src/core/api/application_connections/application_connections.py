@@ -137,6 +137,10 @@ async def get_wecom_deployment_guide(
     request: Request,
     corp_id: Optional[str] = Query(None, description="可选，生成带 Agent 的登录入口 URL"),
     agent_id: Optional[int] = Query(None, ge=1, description="可选，与 corp_id 联用"),
+    base_url: Optional[str] = Query(
+        None,
+        description="可选，编辑表单中的公网站点根地址（优先于已保存连接器/环境 BASE_URL）",
+    ),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> dict[str, Any]:
@@ -150,6 +154,7 @@ async def get_wecom_deployment_guide(
         request_base_url=base,
         corp_id=(corp_id or "").strip() or None,
         agent_id=parsed_agent,
+        public_base_url=(base_url or "").strip() or None,
     )
 
 

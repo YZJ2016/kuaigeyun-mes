@@ -1318,7 +1318,6 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   demand_type: 20,
   business_mode: 20.1,
   source_type: 20.3,
-  order_type: 10.5,
   request_type: 20.42,
   repair_mode: 20.43,
   supply_source: 20.44,

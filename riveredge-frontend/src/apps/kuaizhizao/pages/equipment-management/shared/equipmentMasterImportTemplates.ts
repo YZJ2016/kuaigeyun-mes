@@ -67,7 +67,16 @@ export function buildEquipmentMaintenanceItemImportTemplate(t: TFunction) {
         labelKey: `${P_MAINT}.col.standardHours`,
         aliases: ['标准工时', '工时'],
       },
-      { field: 'requirement', labelKey: `${P_MAINT}.col.requirement`, aliases: ['要求'] },
+      {
+        field: 'requirement',
+        labelKey: `${P_MAINT}.col.requirement`,
+        aliases: ['方法', '要求'],
+      },
+      {
+        field: 'remark',
+        labelKey: 'common.remark',
+        aliases: ['备注'],
+      },
       {
         field: 'is_active',
         labelKey: 'common.enabled',
@@ -80,6 +89,7 @@ export function buildEquipmentMaintenanceItemImportTemplate(t: TFunction) {
       t(`${P_MAINT}.importExample.name`, { defaultValue: '示例保养项' }),
       '1',
       t(`${P_MAINT}.importExample.requirement`, { defaultValue: '清洁并润滑' }),
+      t(`${P_MAINT}.importExample.remark`, { defaultValue: '注意安全' }),
       pickImportExampleValue([...IMPORT_YES_NO_OPTIONS], t('common.yes')),
     ],
   );
@@ -107,6 +117,7 @@ export function equipmentMaintenanceItemExportColumns(t: TFunction): ExportXlsxC
     { key: 'name', title: t('common.name') },
     { key: 'standard_hours', title: t(`${P_MAINT}.col.standardHours`) },
     { key: 'requirement', title: t(`${P_MAINT}.col.requirement`) },
+    { key: 'remark', title: t('common.remark') },
     { key: 'is_active', title: t('common.enabled') },
     { key: 'updated_at', title: t('common.updatedAt') },
   ];

@@ -105,15 +105,28 @@ class PackingBindingUpdate(BaseModel):
     seal_status: Optional[SealStatus] = None
 
 
+class PackingBindingLineBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    product_serial_no: str
+    quantity: Decimal
+    line_status: str
+
+
 class PackingBindingResponse(PackingBindingBase):
     id: int
     uuid: str
     tenant_id: int
     bound_by: int
     bound_by_name: str
+    target_quantity: Optional[Decimal] = None
+    consumed_at: Optional[datetime] = None
+    packing_profile_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     capabilities: Optional[PackingBindingCapabilities] = None
+    lines: Optional[List[PackingBindingLineBrief]] = None
 
 
 class PackingBindingListResponse(BaseModel):
@@ -225,3 +238,75 @@ class PackingAsnResponse(BaseModel):
     box_count: int
     total_quantity: Decimal
     lines: List[PackingAsnLine] = Field(default_factory=list)
+
+
+class PackingSessionOpenRequest(BaseModel):
+    source_type: SourceType
+    source_id: int
+    product_id: int
+    source_line_id: Optional[int] = None
+    box_no: Optional[str] = None
+    packing_material_id: Optional[int] = None
+    packing_material_code: Optional[str] = None
+    packing_material_name: Optional[str] = None
+
+
+class PackingSessionScanRequest(BaseModel):
+    serial_number: str = Field(..., min_length=1)
+    quantity: Decimal = Field(Decimal("1"), gt=0, le=MAX_DECIMAL_12_2)
+
+
+class PackingNestPalletRequest(BaseModel):
+    pallet_no: str = Field(..., min_length=1)
+    box_nos: List[str] = Field(..., min_length=1)
+
+
+class PackingConsumeRequest(BaseModel):
+    source_type: SourceType
+    source_id: int
+    box_nos: Optional[List[str]] = None
+    serial_numbers: Optional[List[str]] = None
+
+
+class PackingConsumeResponse(BaseModel):
+    consumed_binding_ids: List[int] = Field(default_factory=list)
+    consumed_line_ids: List[int] = Field(default_factory=list)
+
+
+class PackingProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    profile_code: str
+    material_id: Optional[int] = None
+    pack_mode: str
+    mix_policy: str
+    max_quantity: Optional[Decimal] = None
+    seal_policy: str
+    refill_open_box: bool
+    require_sealed_for_consume: bool
+    allow_manual_box_code: bool
+    is_active: bool
+
+
+class PackingProfileUpdate(BaseModel):
+    pack_mode: Optional[str] = None
+    mix_policy: Optional[str] = None
+    max_quantity: Optional[Decimal] = None
+    seal_policy: Optional[str] = None
+    refill_open_box: Optional[bool] = None
+    require_sealed_for_consume: Optional[bool] = None
+    allow_manual_box_code: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class PackingCartonizationSuggestRequest(BaseModel):
+    material_id: Optional[int] = None
+    total_quantity: Decimal = Field(..., gt=0, le=MAX_DECIMAL_12_2)
+    line_count: int = Field(1, ge=1)
+
+
+class PackingCartonizationSuggestResponse(BaseModel):
+    suggested_box_count: int
+    suggested_capacity_per_box: Optional[float] = None
+    algorithm: str

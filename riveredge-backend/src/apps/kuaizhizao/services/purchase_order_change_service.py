@@ -8,7 +8,13 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status, normalize_status
+from apps.kuaizhizao.constants import (
+    DocumentStatus,
+    ReviewStatus,
+    is_draft_status,
+    is_submitted_status,
+    normalize_status,
+)
 from apps.kuaizhizao.constants.order_change import (
     OrderChangeApplyStatus,
     OrderChangeCategory,
@@ -236,7 +242,12 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             source_order_id=source_order_id,
             deleted_at__isnull=True,
             applied_at__isnull=True,
-            status__in=[DocumentStatus.DRAFT.value, DocumentStatus.PENDING_REVIEW.value, DocumentStatus.AUDITED.value],
+            status__in=[
+                DocumentStatus.DRAFT.value,
+                DocumentStatus.SUBMITTED.value,
+                DocumentStatus.PENDING_REVIEW.value,
+                DocumentStatus.AUDITED.value,
+            ],
         ).count()
         if pending:
             raise BusinessLogicError("该采购订单存在未完成的变更单，请先处理后再创建")
@@ -324,6 +335,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             applied_at__isnull=True,
             status__in=[
                 DocumentStatus.DRAFT.value,
+                DocumentStatus.SUBMITTED.value,
                 DocumentStatus.PENDING_REVIEW.value,
                 DocumentStatus.AUDITED.value,
             ],
@@ -692,9 +704,10 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"采购变更单不存在: {change_id}")
-        is_draft = is_draft_status(doc.status)
+        is_draft = is_draft_status(doc.status) and not is_submitted_status(doc.status)
         is_pending = normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value
-        if not is_draft:
+        is_rejected = normalize_status(doc.status) == DocumentStatus.REJECTED.value
+        if not is_draft and not is_rejected:
             if not (is_pending and approval_edit_context):
                 if is_pending and not approval_edit_context:
                     from core.services.approval.approval_edit_guard import ApprovalEditGuard
@@ -753,6 +766,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         docs: List[PurchaseOrderChangeOrder],
         lifecycle_stage: Optional[str] = None,
         include_items: bool = False,
+        viewer_id: Optional[int] = None,
     ) -> List[PurchaseOrderChangeListResponse]:
         change_ids = [d.id for d in docs]
         all_items = await PurchaseOrderChangeItem.filter(
@@ -816,7 +830,9 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             )
         from core.services.approval.audit_record_enricher import enrich_items
 
-        return await enrich_items(tenant_id, "purchase_order_change", result)
+        return await enrich_items(
+            tenant_id, "purchase_order_change", result, viewer_id=viewer_id
+        )
 
     async def list_change_orders(
         self,
@@ -835,6 +851,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         end_date: Optional[date] = None,
         order_by: Optional[str] = None,
         include_items: bool = False,
+        viewer_id: Optional[int] = None,
     ) -> Tuple[List[PurchaseOrderChangeListResponse], int]:
         qs = PurchaseOrderChangeOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if source_order_id:
@@ -882,14 +899,20 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         if lifecycle_filter:
             docs = await qs.order_by(order_clause, "-id").all()
             rows = await self._build_change_list_rows(
-                tenant_id, docs, lifecycle_stage=lifecycle_filter, include_items=include_items
+                tenant_id,
+                docs,
+                lifecycle_stage=lifecycle_filter,
+                include_items=include_items,
+                viewer_id=viewer_id,
             )
             total = len(rows)
             return rows[skip : skip + limit], total
 
         total = await qs.count()
         docs = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
-        rows = await self._build_change_list_rows(tenant_id, docs, include_items=include_items)
+        rows = await self._build_change_list_rows(
+            tenant_id, docs, include_items=include_items, viewer_id=viewer_id
+        )
         return rows, total
 
     async def get_by_id(self, tenant_id: int, change_id: int) -> PurchaseOrderChangeWithItemsResponse:
@@ -931,12 +954,51 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             await self._reset_linked_delay_reports(tenant_id, change_id)
 
     async def submit(self, tenant_id: int, change_id: int, operator_id: int) -> PurchaseOrderChangeWithItemsResponse:
+        """内部一次进入审核。HTTP 与统一审核的提交只调用 commit。"""
         doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"采购变更单不存在: {change_id}")
         has_content = await self._has_change_content(tenant_id, doc)
         assert_purchase_order_change_capability(doc, "submit", has_change_content=has_content)
         await self._purge_noop_change_items(tenant_id, doc)
+        return await self._enter_change_review(tenant_id, doc, operator_id)
+
+    async def commit(self, tenant_id: int, change_id: int, operator_id: int) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if is_submitted_status(doc.status):
+            return await self._to_detail(doc)
+        has_content = await self._has_change_content(tenant_id, doc)
+        assert_purchase_order_change_capability(doc, "submit", has_change_content=has_content)
+        await self._purge_noop_change_items(tenant_id, doc)
+        has_content = await self._has_change_content(tenant_id, doc)
+        assert_purchase_order_change_capability(doc, "submit", has_change_content=has_content)
+        user_info = await self.get_user_info(operator_id)
+        doc.status = DocumentStatus.SUBMITTED.value
+        doc.review_status = ReviewStatus.DRAFT.value
+        doc.updated_by = operator_id
+        doc.updated_by_name = user_info["name"]
+        await doc.save()
+        return await self._to_detail(doc)
+
+    async def submit_for_review(
+        self, tenant_id: int, change_id: int, operator_id: int
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        doc = await PurchaseOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        if not is_submitted_status(doc.status):
+            raise BusinessLogicError("请先提交采购变更单，再提交审核")
+        return await self._enter_change_review(tenant_id, doc, operator_id)
+
+    async def _enter_change_review(
+        self,
+        tenant_id: int,
+        doc: PurchaseOrderChangeOrder,
+        operator_id: int,
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        change_id = int(doc.id)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_order_change")
         user_info = await self.get_user_info(operator_id)
         pending_approver_ids: List[int] = []
@@ -1126,26 +1188,31 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         if not doc:
             raise NotFoundError(f"采购变更单不存在: {change_id}")
         assert_purchase_order_change_capability(doc, "withdraw_submit")
-        try:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        if is_submitted_status(doc.status):
+            doc.status = DocumentStatus.DRAFT.value
+            doc.review_status = ReviewStatus.DRAFT.value
+        else:
+            try:
+                from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-            await ApprovalInstanceService.cancel_approval(
-                tenant_id=tenant_id,
-                entity_type="purchase_order_change",
-                entity_id=change_id,
-                operator_id=operator_id,
-            )
-        except Exception as exc:
-            from loguru import logger
+                await ApprovalInstanceService.cancel_approval(
+                    tenant_id=tenant_id,
+                    entity_type="purchase_order_change",
+                    entity_id=change_id,
+                    operator_id=operator_id,
+                )
+            except Exception as exc:
+                from loguru import logger
 
-            logger.warning(
-                "取消采购变更单审批流程失败 tenant={} change={}: {}",
-                tenant_id,
-                change_id,
-                exc,
-            )
-        doc.status = DocumentStatus.DRAFT.value
-        doc.review_status = ReviewStatus.PENDING.value
+                logger.warning(
+                    "取消采购变更单审批流程失败 tenant={} change={}: {}",
+                    tenant_id,
+                    change_id,
+                    exc,
+                )
+                raise BusinessLogicError("撤回失败：无法取消审批流程，请重试") from exc
+            doc.status = DocumentStatus.SUBMITTED.value
+            doc.review_status = ReviewStatus.DRAFT.value
         user_info = await self.get_user_info(operator_id)
         doc.updated_by = operator_id
         doc.updated_by_name = user_info["name"]
@@ -1174,12 +1241,19 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_order_change"
         )
-        _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
 
-        async def _do_revoke() -> PurchaseOrderChangeWithItemsResponse:
+        async def _do_revoke(*, reopened: bool = False) -> PurchaseOrderChangeWithItemsResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
             user_info = await self.get_user_info(operator_id)
-            doc.status = DocumentStatus.DRAFT.value
-            doc.review_status = ReviewStatus.PENDING.value
+            if landing == "pending":
+                doc.status = DocumentStatus.PENDING_REVIEW.value
+                doc.review_status = ReviewStatus.PENDING.value
+            else:
+                doc.status = DocumentStatus.DRAFT.value
+                doc.review_status = ReviewStatus.DRAFT.value
             doc.reviewer_id = None
             doc.reviewer_name = None
             doc.review_time = None

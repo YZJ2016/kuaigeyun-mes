@@ -96,6 +96,7 @@ from core.api.files.public import router as files_public_router
 from core.api.apis.apis import router as apis_router
 from core.api.data_sources.data_sources import router as data_sources_router
 from core.api.application_connections.application_connections import router as application_connections_router
+from core.api.integrations.wecom_receive import router as wecom_receive_router
 from core.api.open_api import open_api_auth_router, open_api_admin_router
 from core.api.mobile_jsapi.mobile_jsapi import router as mobile_jsapi_router
 from core.api.connector_definitions.connector_definitions import router as connector_definitions_router
@@ -976,6 +977,8 @@ app.include_router(auth_router, prefix="/api/v1")
 
 # 公开的组织接口（不需要认证，用于注册等功能）
 app.include_router(tenants_public_router, prefix="/api/v1")
+# 企微「接收消息」回调（模板可更新卡；验签靠连接器 Token/AES，无 JWT）
+app.include_router(wecom_receive_router, prefix="/api/v1")
 # 公开的平台设置接口（不需要认证，用于登录页等）
 app.include_router(platform_settings_public_router, prefix="/api/v1/infra")
 # 公开的平台版本接口（用于悬浮按钮展示迭代信息）

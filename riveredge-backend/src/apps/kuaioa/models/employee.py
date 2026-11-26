@@ -24,6 +24,7 @@ class KuaioaEmployeeProfile(BaseModel):
         max_digits=12, decimal_places=4, null=True, description="计时单价"
     )
     hire_date = fields.DateField(null=True, description="入职日期")
+    hire_introducer = fields.CharField(max_length=100, null=True, description="入职介绍人")
     leave_date = fields.DateField(null=True, description="离职日期")
     bank_account = fields.CharField(max_length=50, null=True, description="工资卡号")
     bank_name = fields.CharField(max_length=100, null=True, description="银行名称")

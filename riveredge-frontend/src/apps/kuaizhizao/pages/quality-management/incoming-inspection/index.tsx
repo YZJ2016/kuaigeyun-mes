@@ -109,8 +109,8 @@ import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS } from '../../sales-management/shared/DocumentPushProgressBar';
-import { incomingInspectionReturnPushPercent } from '../../sales-management/shared/pushProgress';
+import { incomingInspectionDownstreamPushPercent } from '../../sales-management/shared/pushProgress';
+import { buildQualityInspectionListPushProgressColumn } from '../components/qualityTableColumns';
 import {
   buildQualityInspectionDocStatusValueEnum,
   buildQualityInspectionQualityStatusValueEnum,
@@ -137,7 +137,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { qualityInspectionRowGates, qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
-import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -156,6 +156,7 @@ import {
 import {
   filterDeletableQualityInspectionRecords,
   filterRevokeConductQualityInspectionRecords,
+  resolveRevokeConductBatchBlockedMessage,
 } from '../components/qualityRevokeConduct';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import {
@@ -193,6 +194,7 @@ interface IncomingInspection {
   qualified_quantity?: number;
   unqualified_quantity?: number;
   pushed_purchase_return_quantity?: number;
+  pushed_inbound_quantity?: number;
   inspection_result?: string;
   quality_status?: string;
   inspector_id?: number;
@@ -278,7 +280,13 @@ const IncomingInspectionPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const incomingInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const actionRef = useRef<ActionType>(null);
+  const tableSearchFormRef = useRef<any>(null);
   const tableRowsRef = useRef<IncomingInspection[]>([]);
+
+  const applyIncomingListPinnedFilter = useCallback((status: string) => {
+    tableSearchFormRef.current?.setFieldsValue?.({ status });
+    actionRef.current?.reload?.();
+  }, []);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
@@ -1290,40 +1298,47 @@ const IncomingInspectionPage: React.FC = () => {
   };
 
   const selectedIncomingForToolbar = useMemo(() => {
-    if (selectedRowKeys.length !== 1) return null;
-    const id = Number(selectedRowKeys[0]);
-    if (!Number.isFinite(id) || id <= 0) return null;
-    return tableRowsRef.current.find((row) => row.id === id) ?? null;
-  }, [selectedRowKeys]);
+    if (selectedRecordsForBatch.length !== 1) return null;
+    return selectedRecordsForBatch[0] ?? null;
+  }, [selectedRecordsForBatch]);
 
   const canPushPurchaseReturnToolbar =
-    selectedIncomingForToolbar?.capabilities?.push_purchase_return?.allowed === true;
+    selectedRecordsForBatch.length > 0 &&
+    selectedRecordsForBatch.every((row) => row.capabilities?.push_purchase_return?.allowed === true);
   const canPushInboundToolbar =
     inboundPerms.canCreate &&
-    selectedIncomingForToolbar?.capabilities?.push_inbound?.allowed === true;
+    selectedRecordsForBatch.length > 0 &&
+    selectedRecordsForBatch.every((row) => row.capabilities?.push_inbound?.allowed === true);
   const canPushToolbar = canPushPurchaseReturnToolbar || canPushInboundToolbar;
 
   const toolbarPushDisabledReason = useMemo(() => {
-    const base = buildUniPushToolbarDisabledReason(t, {
-      selectedCount: selectedRowKeys.length,
-      hasSelectedRecord: !!selectedIncomingForToolbar,
-    });
-    if (base) return base;
-    if (selectedIncomingForToolbar && !canPushToolbar) {
-      const qualified = Number(selectedIncomingForToolbar.qualified_quantity ?? 0);
-      const preferInbound = qualified > 0;
-      const reason = preferInbound
-        ? selectedIncomingForToolbar.capabilities?.push_inbound?.reason
-        : selectedIncomingForToolbar.capabilities?.push_purchase_return?.reason;
-      return (
-        qualityInspectionCapabilityReasonMessage(reason, t) ||
-        t('components.uniPush.disabled.unavailable')
+    if (selectedRowKeys.length === 0) {
+      return t('components.uniPush.toolbarSelectOneFirst');
+    }
+    if (selectedRecordsForBatch.length !== selectedRowKeys.length) {
+      return t('components.uniPush.toolbarSelectedNotInList');
+    }
+    if (!canPushToolbar) {
+      const firstBlocked = selectedRecordsForBatch.find(
+        (row) =>
+          !row.capabilities?.push_inbound?.allowed && !row.capabilities?.push_purchase_return?.allowed,
       );
+      if (firstBlocked) {
+        const qualified = Number(firstBlocked.qualified_quantity ?? 0);
+        const preferInbound = qualified > 0;
+        const reason = preferInbound
+          ? firstBlocked.capabilities?.push_inbound?.reason
+          : firstBlocked.capabilities?.push_purchase_return?.reason;
+        return (
+          qualityInspectionCapabilityReasonMessage(reason, t) ||
+          t('components.uniPush.disabled.unavailable')
+        );
+      }
+      return t('components.uniPush.disabled.unavailable');
     }
     if (
-      selectedIncomingForToolbar &&
       !inboundPerms.canCreate &&
-      selectedIncomingForToolbar.capabilities?.push_inbound?.allowed
+      selectedRecordsForBatch.some((row) => row.capabilities?.push_inbound?.allowed)
     ) {
       return t('app.kuaizhizao.quality.finished.push.inboundNoPermission');
     }
@@ -1331,10 +1346,71 @@ const IncomingInspectionPage: React.FC = () => {
   }, [
     canPushToolbar,
     inboundPerms.canCreate,
-    selectedIncomingForToolbar,
+    selectedRecordsForBatch,
     selectedRowKeys.length,
     t,
   ]);
+
+  const batchPushInboundDirect = async (rows: IncomingInspection[]) => {
+    let ok = 0;
+    let fail = 0;
+    for (const row of rows) {
+      if (!row.id || row.capabilities?.push_inbound?.allowed !== true) continue;
+      try {
+        const preview = await qualityApi.incomingInspection.previewPushToPurchaseReceipt(String(row.id));
+        const maxQty = Number(preview.items?.[0]?.max_push_quantity ?? 0);
+        if (!Number.isFinite(maxQty) || maxQty <= 0) {
+          fail += 1;
+          continue;
+        }
+        const warehouseId =
+          preview.warehouse_id ?? preview.items?.[0]?.warehouse_id;
+        await qualityApi.incomingInspection.pushToPurchaseReceipt(String(row.id), {
+          quantity: maxQty,
+          warehouse_id: warehouseId,
+        });
+        ok += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    if (ok > 0) {
+      messageApi.success(t('app.kuaizhizao.quality.incoming.batchPushInboundSuccess', { count: ok }));
+    }
+    if (fail > 0) {
+      messageApi.warning(t('app.kuaizhizao.quality.incoming.batchPushPartialFailed', { count: fail }));
+    }
+    invalidateStats();
+    actionRef.current?.reload();
+  };
+
+  const batchPushPurchaseReturnDirect = async (rows: IncomingInspection[]) => {
+    let ok = 0;
+    let fail = 0;
+    for (const row of rows) {
+      if (!row.id || row.capabilities?.push_purchase_return?.allowed !== true) continue;
+      try {
+        const preview = await qualityApi.incomingInspection.previewPushToPurchaseReturn(String(row.id));
+        const maxQty = Number(preview.items?.[0]?.max_push_quantity ?? 0);
+        if (!Number.isFinite(maxQty) || maxQty <= 0) {
+          fail += 1;
+          continue;
+        }
+        await qualityApi.incomingInspection.pushToPurchaseReturn(String(row.id), { quantity: maxQty });
+        ok += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    if (ok > 0) {
+      messageApi.success(t('app.kuaizhizao.quality.incoming.batchPushReturnSuccess', { count: ok }));
+    }
+    if (fail > 0) {
+      messageApi.warning(t('app.kuaizhizao.quality.incoming.batchPushPartialFailed', { count: fail }));
+    }
+    invalidateStats();
+    actionRef.current?.reload();
+  };
 
   const toolbarPushMenuItems = useMemo(
     () =>
@@ -1353,9 +1429,12 @@ const IncomingInspectionPage: React.FC = () => {
                   )
               : undefined,
           onClick: () => {
-            if (selectedIncomingForToolbar && canPushInboundToolbar) {
+            if (!canPushInboundToolbar) return;
+            if (selectedRecordsForBatch.length === 1 && selectedIncomingForToolbar) {
               void openPushInboundPreview(selectedIncomingForToolbar);
+              return;
             }
+            void batchPushInboundDirect(selectedRecordsForBatch);
           },
         },
         {
@@ -1370,9 +1449,12 @@ const IncomingInspectionPage: React.FC = () => {
                 )
               : undefined,
           onClick: () => {
-            if (selectedIncomingForToolbar && canPushPurchaseReturnToolbar) {
+            if (!canPushPurchaseReturnToolbar) return;
+            if (selectedRecordsForBatch.length === 1 && selectedIncomingForToolbar) {
               void pushPurchaseReturnDirect(selectedIncomingForToolbar);
+              return;
             }
+            void batchPushPurchaseReturnDirect(selectedRecordsForBatch);
           },
         },
       ]),
@@ -1383,6 +1465,7 @@ const IncomingInspectionPage: React.FC = () => {
       pushToInboundAction.label,
       pushToPurchaseReturnAction.label,
       selectedIncomingForToolbar,
+      selectedRecordsForBatch,
       t,
     ],
   );
@@ -1478,7 +1561,9 @@ const IncomingInspectionPage: React.FC = () => {
   const executeBatchRevokeConduct = useCallback(async () => {
     const targets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
     if (!targets.length) {
-      messageApi.warning(t('app.kuaizhizao.quality.common.messages.revokeConductBatchEmpty'));
+      messageApi.warning(
+        resolveRevokeConductBatchBlockedMessage(selectedRecordsForBatch, t),
+      );
       return;
     }
     try {
@@ -1663,26 +1748,10 @@ const IncomingInspectionPage: React.FC = () => {
     ...buildQualityInspectionListMaterialHiddenColumns<IncomingInspection>(t),
     buildInspectorNameColumn<IncomingInspection>(t('app.kuaizhizao.quality.common.columns.inspector')),
     ...buildQualityInspectionListQuantityResultColumns<IncomingInspection>(t, [
-      {
-        title: t('app.kuaizhizao.salesManagement.pushProgress.title'),
-        key: 'downstream_push_progress',
-        dataIndex: 'pushed_purchase_return_quantity',
-        ...DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
-        render: (_, record) => {
-          const percent = incomingInspectionReturnPushPercent(
-            record.pushed_purchase_return_quantity,
-            record.unqualified_quantity,
-          );
-          return (
-            <DocumentPushProgressBar
-              percent={percent}
-              tooltip={t('app.kuaizhizao.salesManagement.pushProgress.percentOnly', {
-                percent: Math.round(percent),
-              })}
-            />
-          );
-        },
-      },
+      buildQualityInspectionListPushProgressColumn<IncomingInspection>(t, {
+        dataIndex: 'pushed_inbound_quantity',
+        getPercent: (record) => incomingInspectionDownstreamPushPercent(record),
+      }),
     ]),
     buildQualityInspectionListNotesColumn<IncomingInspection>(t),
     ...buildDocumentAuditColumns<IncomingInspection>(t),
@@ -1727,24 +1796,34 @@ const IncomingInspectionPage: React.FC = () => {
           value: stats.pendingCount,
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#faad14' },
+          onClick:
+            stats.pendingCount > 0 ? () => applyIncomingListPinnedFilter('待检验') : undefined,
         },
         {
           title: t('app.kuaizhizao.quality.common.stats.qualifiedCount'),
           value: stats.qualifiedCount,
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#52c41a' },
+          onClick:
+            stats.qualifiedCount > 0 ? () => applyIncomingListPinnedFilter('合格') : undefined,
         },
         {
           title: t('app.kuaizhizao.quality.common.stats.unqualifiedCount'),
           value: stats.unqualifiedCount,
           prefix: <CloseCircleOutlined />,
           valueStyle: { color: '#f5222d' },
+          onClick:
+            stats.unqualifiedCount > 0
+              ? () => applyIncomingListPinnedFilter('不合格')
+              : undefined,
         },
         {
           title: t('app.kuaizhizao.quality.common.stats.totalInspected'),
           value: stats.totalInspected,
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#1890ff' },
+          onClick:
+            stats.totalInspected > 0 ? () => applyIncomingListPinnedFilter('已检验') : undefined,
         },
       ]}
     >
@@ -1752,7 +1831,8 @@ const IncomingInspectionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.incomingInspection)}
         headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection-width-v5"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection-width-v6"
+        formRef={tableSearchFormRef}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -1815,7 +1895,7 @@ const IncomingInspectionPage: React.FC = () => {
           <UniPushToolbarButton
             key={`incoming-inspection-push-${selectedIncomingForToolbar?.id ?? 'none'}`}
             menuItems={toolbarPushMenuItems}
-            disabled={selectedRowKeys.length !== 1 || !selectedIncomingForToolbar}
+            disabled={selectedRowKeys.length === 0 || selectedRecordsForBatch.length === 0}
             disabledReason={toolbarPushDisabledReason}
             sourceDocument={
               selectedIncomingForToolbar?.id
@@ -1840,6 +1920,7 @@ const IncomingInspectionPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           try {
             const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
@@ -1864,11 +1945,38 @@ const IncomingInspectionPage: React.FC = () => {
           }
         }}
         toolBarActionsAfterDelete={[
-          <ActionConfirmPopconfirm title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')} description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', { count: filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch).length })} onConfirm={() => executeBatchRevokeConduct()}>
-              <Button key="revoke-conduct-batch" icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
-            {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-          </Button>
-            </ActionConfirmPopconfirm>,
+          (() => {
+            const revokeTargets = filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch);
+            const revokeBtn = (
+              <Button
+                key="revoke-conduct-batch"
+                icon={<RollbackOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (revokeTargets.length === 0) {
+                    messageApi.warning(
+                      resolveRevokeConductBatchBlockedMessage(selectedRecordsForBatch, t),
+                    );
+                  }
+                }}
+              >
+                {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+              </Button>
+            );
+            if (revokeTargets.length === 0) return revokeBtn;
+            return (
+              <ActionConfirmPopconfirm
+                key="revoke-conduct-batch-confirm"
+                title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')}
+                description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', {
+                  count: revokeTargets.length,
+                })}
+                onConfirm={() => executeBatchRevokeConduct()}
+              >
+                {revokeBtn}
+              </ActionConfirmPopconfirm>
+            );
+          })(),
           <UniAuditBatchMenuButton
             key="incoming-inspection-batch-menu"
             selectedRowKeys={selectedRowKeys}
@@ -1876,6 +1984,10 @@ const IncomingInspectionPage: React.FC = () => {
             auditEnabled={incomingAuditEnabled}
             permGates={incomingPerms}
             handlers={incomingAuditBatchHandlers}
+            auditEntity={{
+              entityType: 'incoming_inspection',
+              entityName: t('app.kuaizhizao.menu.quality-management.incoming-inspection'),
+            }}
             onSuccess={() => {
               setSelectedRowKeys([]);
               invalidateStats();

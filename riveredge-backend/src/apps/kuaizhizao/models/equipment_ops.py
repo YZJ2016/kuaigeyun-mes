@@ -151,7 +151,9 @@ class EquipmentMaintenanceItem(BaseModel):
     id = fields.IntField(pk=True)
     code = fields.CharField(max_length=64)
     name = fields.CharField(max_length=200)
-    requirement = fields.TextField(null=True)
+    # 业务展示为「方法」；库字段仍用 requirement（历史契约）
+    requirement = fields.TextField(null=True, description="方法")
+    remark = fields.TextField(null=True, description="备注")
     standard_hours = fields.DecimalField(max_digits=10, decimal_places=2, null=True)
     is_active = fields.BooleanField(default=True)
     deleted_at = fields.DatetimeField(null=True)
@@ -200,7 +202,8 @@ class EquipmentMaintenanceSchemeLine(BaseModel):
     sort_order = fields.IntField(default=0)
     item_code = fields.CharField(max_length=64, null=True)
     item_name = fields.CharField(max_length=200, null=True)
-    requirement = fields.TextField(null=True)
+    requirement = fields.TextField(null=True, description="方法快照")
+    remark = fields.TextField(null=True, description="备注快照")
     standard_hours = fields.DecimalField(max_digits=10, decimal_places=2, null=True)
     deleted_at = fields.DatetimeField(null=True)
 
@@ -223,8 +226,16 @@ class EquipmentSpotCheck(BaseModel):
     scheme_id = fields.IntField(null=True)
     capture_mode = fields.CharField(max_length=8, null=True, description="采集方式快照 A/B/C")
     check_date = fields.DateField()
-    inspector_id = fields.IntField(null=True)
-    inspector_name = fields.CharField(max_length=100, null=True)
+    inspector_id = fields.IntField(null=True, description="点检人ID（主责，取 inspector_ids 首项）")
+    inspector_name = fields.CharField(
+        max_length=500,
+        null=True,
+        description="点检人姓名（多人顿号分隔）",
+    )
+    inspector_ids = fields.JSONField(
+        default=list,
+        description="点检人ID列表（多人点检）",
+    )
     reviewer_user_id = fields.IntField(null=True, description="指定审核人快照")
     reviewer_user_name = fields.CharField(max_length=100, null=True)
     reviewed_by = fields.IntField(null=True)

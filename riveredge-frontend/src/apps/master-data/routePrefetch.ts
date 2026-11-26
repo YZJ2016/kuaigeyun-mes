@@ -8,6 +8,7 @@ const pageModules = import.meta.glob('./pages/**/*.tsx') as Record<string, () =>
 const ROUTE_MODULE_OVERRIDES: Record<string, string> = {
   materials: './pages/materials/management.tsx',
   'process/engineering-bom': './pages/materials/bom/index.tsx',
+  'process/engineering-bom/new': './pages/materials/bom/index.tsx',
   'process/engineering-bom/designer': './pages/materials/bom/designer.tsx',
   'process/sop/designer': './pages/process/sop/designer.tsx',
   'process/sop/execution': './pages/process/sop/execution.tsx',

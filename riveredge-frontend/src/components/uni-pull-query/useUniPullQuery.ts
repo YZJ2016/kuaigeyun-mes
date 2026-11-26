@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { isPullableScope } from './pullScope';
 import { normalizePullKey, resolvePullRowKey } from './pullRowKey';
+import type { UniPullQueryCrossPageMode } from './UniPullQuerySelectionBar';
 import type { UniPullQueryLoadParams, UseUniPullQueryOptions } from './types';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -22,7 +23,14 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     onOpen,
     onClose,
     enableDateFilter = true,
+    preserveSelectionOnFilter,
+    defaultCrossPageMode,
   } = options;
+
+  const resolvedPreserveSelectionOnFilter =
+    preserveSelectionOnFilter ?? selectionType === 'checkbox';
+  const resolvedDefaultCrossPageMode: UniPullQueryCrossPageMode =
+    defaultCrossPageMode ?? (selectionType === 'checkbox' ? 'cross' : 'page');
 
   const resolvedDefaultScope =
     defaultScope ?? scopeOptions?.[0]?.value ?? 'all';
@@ -177,12 +185,14 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
       setAppliedDateFrom(from);
       setAppliedDateTo(to);
       setPage(1);
-      setSelectedRowKeys([]);
-      selectedRowsByKeyRef.current = new Map();
-      setSelectedRowsVersion((v) => v + 1);
+      if (!resolvedPreserveSelectionOnFilter) {
+        setSelectedRowKeys([]);
+        selectedRowsByKeyRef.current = new Map();
+        setSelectedRowsVersion((v) => v + 1);
+      }
       void load(buildLoadParams(appliedKeyword, 1, { from, to }));
     },
-    [appliedKeyword, buildLoadParams, load],
+    [appliedKeyword, buildLoadParams, load, resolvedPreserveSelectionOnFilter],
   );
 
   const handleDateClear = useCallback(() => {
@@ -397,5 +407,7 @@ export function useUniPullQuery<T extends object>(options: UseUniPullQueryOption
     selectionType,
     isRowDisabled,
     hasDisabledSelection,
+    preserveSelectionOnFilter: resolvedPreserveSelectionOnFilter,
+    defaultCrossPageMode: resolvedDefaultCrossPageMode,
   };
 }

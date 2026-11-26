@@ -148,6 +148,8 @@ export interface CreateEquipmentRepairData {
   repair_date: string;
   repair_type: string;
   repair_description?: string;
+  repairer_id: number;
+  repairer_name?: string;
   repair_cost?: number;
   spare_parts_used?: Record<string, any>;
   repair_person_id?: number;

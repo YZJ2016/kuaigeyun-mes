@@ -23,6 +23,7 @@ from core.models.approval_process import ApprovalProcess
 from core.models.approval_task import ApprovalTask
 from loguru import logger
 
+_EIGHT_D_UPDATE_PERMISSION = "kuaizhizao:quality-management-eight-d-reports:update"
 _ACTION_DISCIPLINES = frozenset({"d3_containment", "d5_corrective", "d6_verification"})
 _DISCIPLINE_TO_STAGE = {
     "d3_containment": "d3_containment",
@@ -77,6 +78,27 @@ class EightDCollaborationService:
         if report.created_by and report.created_by == user_id and not report.owner_id:
             return True
         return False
+
+    @staticmethod
+    async def collaboration_full_access(
+        tenant_id: int,
+        user_id: int,
+        report: Quality8DReport,
+    ) -> bool:
+        """牵头人、租户管理员或已授予 8D update 权限的质量管理员可越过阶段负责人限制。"""
+        if EightDCollaborationService._is_champion(report, user_id):
+            return True
+        from core.services.authorization.user_permission_service import UserPermissionService
+        from infra.models.user import User
+
+        user = await User.get_or_none(id=user_id, tenant_id=tenant_id)
+        if not user:
+            return False
+        if await UserPermissionService.is_admin_bypass(user, tenant_id):
+            return True
+        return await UserPermissionService.has_permission(
+            user_id, tenant_id, _EIGHT_D_UPDATE_PERMISSION
+        )
 
     @staticmethod
     async def bootstrap_on_create(
@@ -191,7 +213,9 @@ class EightDCollaborationService:
         row = await Quality8DStageAssignment.get_or_none(
             tenant_id=tenant_id, report_id=report_id, stage_key=stage_key
         )
-        if not row or row.assignee_user_id != user_id:
+        if not row:
+            raise NotFoundError("阶段指派不存在")
+        if row.assignee_user_id != user_id and not EightDCollaborationService._is_champion(report, user_id):
             raise BusinessLogicError("仅本阶段负责人可提交")
         if row.status not in ("pending", "in_progress"):
             raise BusinessLogicError("当前阶段状态不可提交")
@@ -375,10 +399,18 @@ class EightDCollaborationService:
         ).exclude(status__in=["verified", "cancelled"]).count()
 
     @staticmethod
-    async def transition_gate(tenant_id: int, report: Quality8DReport) -> EightDCollaborationGate:
+    async def transition_gate(
+        tenant_id: int,
+        report: Quality8DReport,
+        actor_user_id: Optional[int] = None,
+    ) -> EightDCollaborationGate:
         if not EightDCollaborationService._is_collaborative(report):
             return EightDCollaborationGate()
         if report.status == "closed":
+            return EightDCollaborationGate()
+        if actor_user_id is not None and await EightDCollaborationService.collaboration_full_access(
+            tenant_id, actor_user_id, report
+        ):
             return EightDCollaborationGate()
         stage = report.status
         assignment = await Quality8DStageAssignment.get_or_none(
@@ -457,7 +489,7 @@ class EightDCollaborationService:
     ) -> None:
         if not EightDCollaborationService._is_collaborative(report):
             return
-        if EightDCollaborationService._is_champion(report, user_id):
+        if await EightDCollaborationService.collaboration_full_access(tenant_id, user_id, report):
             return
         row = await Quality8DStageAssignment.get_or_none(
             tenant_id=tenant_id, report_id=report.id, stage_key=stage_key
@@ -476,7 +508,9 @@ class EightDCollaborationService:
     ) -> None:
         if not EightDCollaborationService._is_collaborative(report):
             return
-        if EightDCollaborationService._is_champion(report, user_id):
+        if await EightDCollaborationService.collaboration_full_access(
+            report.tenant_id, user_id, report
+        ):
             return
         if action_item and action_item.assignee_user_id == user_id:
             return

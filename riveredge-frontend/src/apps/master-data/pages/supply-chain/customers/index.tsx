@@ -48,10 +48,13 @@ import CustomerSyncFromSourceModal from '../../../components/CustomerSyncFromSou
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import type { Customer, CustomerCreate } from '../../../types/supply-chain';
 import {
+  customerBizFunctionLabel,
+  customerPartnerTypeLabel,
   partnerEnterpriseTypeLabel,
   partnerInvoiceTypeLabel,
   partnerRevenueRecognitionOverrideLabel,
-  partnerSettlementMethodLabel,
+  partnerDefaultPaymentMethodLabel,
+  partnerSettlementTermsLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
@@ -71,12 +74,16 @@ import {
 import {
   buildPartnerEnterpriseTypeImportOptions,
   buildPartnerInvoiceTypeImportOptions,
+  buildPartnerDefaultPaymentMethodImportOptions,
   buildPartnerSettlementMethodImportOptions,
+  buildPartnerSettlementTermsImportOptions,
   buildPartnerTaxpayerTypeImportOptions,
+  parsePartnerDefaultPaymentMethodImport,
   parsePartnerEnterpriseTypeImport,
   parsePartnerInvoiceTypeImport,
-  parsePartnerSettlementMethodImport,
+  parsePartnerSettlementTermsImport,
   parsePartnerTaxpayerTypeImport,
+  splitLegacyPartnerSettlementMethodImport,
 } from '../../../utils/partner-static-labels';
 import {
   IMPORT_YES_NO_OPTIONS,
@@ -229,7 +236,27 @@ const CustomersPage: React.FC = () => {
           { field: 'legalRepresentative', labelKey: 'field.partner.legalRepresentative' },
           { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: buildPartnerEnterpriseTypeImportOptions(t) },
           { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
-          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: buildPartnerSettlementMethodImportOptions(t) },
+          {
+            field: 'defaultPaymentMethodCode',
+            labelKey: 'field.partner.defaultPaymentMethod',
+            options: buildPartnerDefaultPaymentMethodImportOptions(t),
+          },
+          {
+            field: 'settlementTermsCode',
+            labelKey: 'field.partner.settlementTerms',
+            options: buildPartnerSettlementTermsImportOptions(t),
+          },
+          {
+            field: 'defaultCurrencyCode',
+            labelKey: 'field.partner.defaultCurrency',
+            options: ['CNY', 'USD', 'EUR'],
+          },
+          { field: 'defaultExchangeRate', labelKey: 'field.partner.defaultExchangeRate' },
+          {
+            field: 'settlementMethodCode',
+            labelKey: 'field.partner.settlementMethodLegacy',
+            options: buildPartnerSettlementMethodImportOptions(t),
+          },
           { field: 'deliveryContactName', labelKey: 'field.partner.deliveryContactName' },
           { field: 'deliveryContactPhone', labelKey: 'field.partner.deliveryContactPhone' },
           { field: 'deliveryAddress', labelKey: 'field.partner.deliveryAddress' },
@@ -245,7 +272,7 @@ const CustomersPage: React.FC = () => {
           t('app.master-data.customers.importExample.email'),
           '是',
           '', '', '', '', '', '', '', '',
-          '', '', '', '', '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', '', '', '',
         ],
       ),
     [t, i18n.language, dictLabelMaps],
@@ -563,7 +590,24 @@ const CustomersPage: React.FC = () => {
           legalRepresentative: cellAt('legalRepresentative') || undefined,
           enterpriseTypeCode: parsePartnerEnterpriseTypeImport(cellAt('enterpriseTypeCode'), t),
           paymentTermsDays: parseNum(cellAt('paymentTermsDays')),
-          settlementMethodCode: parsePartnerSettlementMethodImport(cellAt('settlementMethodCode'), t),
+          ...(() => {
+            const legacy = splitLegacyPartnerSettlementMethodImport(cellAt('settlementMethodCode'), t);
+            const defaultPaymentMethodCode =
+              parsePartnerDefaultPaymentMethodImport(cellAt('defaultPaymentMethodCode'), t) ??
+              legacy.defaultPaymentMethodCode;
+            const settlementTermsCode =
+              parsePartnerSettlementTermsImport(cellAt('settlementTermsCode'), t) ??
+              legacy.settlementTermsCode;
+            return {
+              ...(defaultPaymentMethodCode ? { defaultPaymentMethodCode } : {}),
+              ...(settlementTermsCode ? { settlementTermsCode } : {}),
+            };
+          })(),
+          defaultCurrencyCode: (() => {
+            const raw = String(cellAt('defaultCurrencyCode') || '').trim().toUpperCase();
+            return raw || undefined;
+          })(),
+          defaultExchangeRate: parseNum(cellAt('defaultExchangeRate')),
           deliveryContactName: cellAt('deliveryContactName') || undefined,
           deliveryContactPhone: cellAt('deliveryContactPhone') || undefined,
           deliveryAddress: cellAt('deliveryAddress') || undefined,
@@ -811,6 +855,7 @@ const CustomersPage: React.FC = () => {
       resizable: false,
       hideInSearch: true,
       ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
       defaultShow: false,
     },
     {
@@ -1046,15 +1091,43 @@ const CustomersPage: React.FC = () => {
       render: (_, r) => partnerEnterpriseTypeLabel(t, r.enterpriseTypeCode),
     },
     {
+      title: t('field.customer.partnerType'),
+      dataIndex: 'partnerType',
+      render: (_, r) => customerPartnerTypeLabel(t, r.partnerType),
+    },
+    {
+      title: t('field.customer.bizFunction'),
+      dataIndex: 'bizFunction',
+      render: (_, r) => customerBizFunctionLabel(t, r.bizFunction),
+    },
+    {
       title: t('field.partner.paymentTermsDays'),
       dataIndex: 'paymentTermsDays',
       render: (_, r) =>
         r.paymentTermsDays != null && r.paymentTermsDays !== '' ? String(r.paymentTermsDays) : '—',
     },
     {
-      title: t('field.partner.settlementMethod'),
-      dataIndex: 'settlementMethodCode',
-      render: (_, r) => partnerSettlementMethodLabel(t, r.settlementMethodCode),
+      title: t('field.partner.defaultPaymentMethod'),
+      dataIndex: 'defaultPaymentMethodCode',
+      render: (_, r) => partnerDefaultPaymentMethodLabel(t, r.defaultPaymentMethodCode),
+    },
+    {
+      title: t('field.partner.settlementTerms'),
+      dataIndex: 'settlementTermsCode',
+      render: (_, r) => partnerSettlementTermsLabel(t, r.settlementTermsCode),
+    },
+    {
+      title: t('field.partner.defaultCurrency'),
+      dataIndex: 'defaultCurrencyCode',
+      render: (_, r) => r.defaultCurrencyCode || '—',
+    },
+    {
+      title: t('field.partner.defaultExchangeRate'),
+      dataIndex: 'defaultExchangeRate',
+      render: (_, r) =>
+        r.defaultExchangeRate != null && r.defaultExchangeRate !== ''
+          ? String(r.defaultExchangeRate)
+          : '—',
     },
     { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
     { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },

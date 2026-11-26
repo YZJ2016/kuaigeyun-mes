@@ -9,6 +9,7 @@ import { normalizeCustomFieldFileUuids } from './customFieldFileUtils'
 import { formatJsonText, isEmptyJsonValue } from './customFieldJsonUtils'
 import { formatAssociatedDetailValue } from './customFieldAssociatedDisplayMode'
 import {
+  EMPTY_VALUE_PLACEHOLDER,
   formatBusinessDateOnly,
   formatDateTimeBySiteSetting,
 } from '../../utils/format'
@@ -25,7 +26,7 @@ function formatMultiselectListValue(
     .join('、')
 }
 
-const emptyCell = <Typography.Text type="secondary">-</Typography.Text>
+const emptyCell = <Typography.Text type="secondary">{EMPTY_VALUE_PLACEHOLDER}</Typography.Text>
 
 /** 将自定义字段值格式化为列表可展示的 ReactNode */
 export function renderCustomFieldListCell(field: CustomField, value: unknown): React.ReactNode {

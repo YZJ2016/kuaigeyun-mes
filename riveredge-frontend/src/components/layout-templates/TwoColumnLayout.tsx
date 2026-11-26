@@ -239,7 +239,6 @@ function resolveLeftPanelConfig(
     width: TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
     minWidth: TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
     maxWidth: TWO_COLUMN_LAYOUT.LEFT_PANEL_MAX_WIDTH,
-    resizable: !usePercentWidth,
     ...leftPanel,
     widthStorageKey,
     resizable: usePercentWidth ? false : leftPanel.resizable ?? true,

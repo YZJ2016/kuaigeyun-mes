@@ -24,7 +24,7 @@ class SalesContractItemCreate(BaseModel):
     material_unit: str
     contract_quantity: Decimal
     unit_price: Decimal
-    tax_rate: Optional[Decimal] = Decimal("0")
+    tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（%，必填）")
     total_amount: Decimal
     variant_attributes: Optional[dict] = None
     delivery_date: Optional[date] = None

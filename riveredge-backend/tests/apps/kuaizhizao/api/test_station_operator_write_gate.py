@@ -778,6 +778,7 @@ _SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 PC_ONLY_WRITE_ROUTES: frozenset[tuple[str, str]] = frozenset({
     # productions/work_orders.py
     ("POST", "/work-orders"),
+    ("POST", "/work-orders/bom-lines/preview"),
     ("POST", "/work-orders/create-peer-group"),
     ("POST", "/work-orders/dissolve-group"),
     ("POST", "/work-orders/merge"),

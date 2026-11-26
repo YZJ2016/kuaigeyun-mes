@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from core.schemas.base import BaseSchema, UuidStrCoerceMixin
 
@@ -19,6 +19,11 @@ class PaymentApplicationLineBase(BaseModel):
     payable_code: Optional[str] = Field(None, max_length=50, alias="payableCode", description="应付编码")
     line_kind: str = Field("goods", max_length=20, alias="lineKind", description="prepayment/goods/invoice")
     request_amount: Decimal = Field(..., gt=0, alias="requestAmount", description="申请金额")
+    material_name: Optional[str] = Field(None, max_length=200, alias="materialName", description="品名")
+    material_spec: Optional[str] = Field(None, max_length=200, alias="materialSpec", description="规格")
+    quantity: Optional[Decimal] = Field(None, alias="quantity", description="数量")
+    material_unit: Optional[str] = Field(None, max_length=20, alias="materialUnit", description="单位")
+    source_line_id: Optional[int] = Field(None, alias="sourceLineId", description="来源明细行ID")
     tax_rate: Optional[Decimal] = Field(
         None,
         ge=0,
@@ -84,7 +89,7 @@ class PaymentApplicationCreate(BaseModel):
     supplier_account_name: Optional[str] = Field(None, alias="supplierAccountName")
     supplier_bank_name: Optional[str] = Field(None, alias="supplierBankName")
     supplier_bank_account: Optional[str] = Field(None, alias="supplierBankAccount")
-    payment_reason: Optional[str] = Field(None, alias="paymentReason")
+    payment_reason: str = Field(..., min_length=1, alias="paymentReason")
     payment_method: Optional[str] = Field(None, alias="paymentMethod")
     advance_payee_id: Optional[int] = Field(None, alias="advancePayeeId")
     advance_payee_name: Optional[str] = Field(None, alias="advancePayeeName")
@@ -105,6 +110,13 @@ class PaymentApplicationCreate(BaseModel):
     )
     attachments: Optional[List[dict]] = None
     items: List[PaymentApplicationLineCreate] = Field(..., min_length=1)
+
+    @field_validator("payment_reason", mode="before")
+    @classmethod
+    def validate_payment_reason(cls, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("请填写付款事由")
+        return value.strip()
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -135,6 +147,13 @@ class PaymentApplicationUpdate(BaseModel):
     )
     attachments: Optional[List[dict]] = None
     items: Optional[List[PaymentApplicationLineCreate]] = None
+
+    @field_validator("payment_reason", mode="before")
+    @classmethod
+    def validate_payment_reason(cls, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("请填写付款事由")
+        return value.strip()
 
     model_config = ConfigDict(populate_by_name=True)
 

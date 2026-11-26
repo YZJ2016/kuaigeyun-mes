@@ -344,7 +344,9 @@ class ReportService:
         elif report_type in ["slow_moving", "slow-moving-analysis", "slow_moving_analysis"]:
             from apps.kuaizhizao.services.report_enhancements import build_slow_moving_inventory
             payload = await build_slow_moving_inventory(
-                tenant_id, warehouse_id=warehouse_id,
+                tenant_id,
+                warehouse_id=warehouse_id,
+                stale_days=90,
             )
             return self._wrap_report_payload(payload)
         else:
@@ -438,6 +440,7 @@ class ReportService:
         date_end: Optional[datetime] = None,
         warehouse_id: Optional[int] = None,
         *,
+        stale_days: int = 90,
         skip: int = 0,
         limit: int = 100,
     ) -> Dict[str, Any]:
@@ -445,6 +448,7 @@ class ReportService:
         from apps.kuaizhizao.services.report_enhancements import build_slow_moving_inventory
         return await build_slow_moving_inventory(
             tenant_id,
+            stale_days=stale_days,
             warehouse_id=warehouse_id,
             skip=skip,
             limit=limit,
@@ -3985,6 +3989,29 @@ class ReportService:
                 "summary": {"quantity": float(agg[0]["total_qty"] or 0) if agg else 0.0},
             })
 
+        if report_type in ["purchase-receipt-detail", "purchase_receipt_detail", "receipt_detail"]:
+            return await self._get_purchase_receipt_detail(
+                tenant_id,
+                date_start,
+                date_end,
+                supplier_id,
+                skip=skip,
+                limit=limit,
+                supplier_keyword=supplier_kw,
+                current_user=current_user,
+            )
+        if report_type in ["material-purchase-summary", "material_purchase_summary"]:
+            return await self._get_material_purchase_summary(
+                tenant_id,
+                date_start,
+                date_end,
+                supplier_id,
+                skip=skip,
+                limit=limit,
+                supplier_keyword=supplier_kw,
+                current_user=current_user,
+            )
+
         scoped_po_query = await self._scoped_purchase_order_query(
             tenant_id=tenant_id,
             current_user=current_user,
@@ -5369,6 +5396,7 @@ class ReportService:
         material_id: Optional[int] = None,
         keyword: Optional[str] = None,
         *,
+        stale_days: int = 90,
         skip: int = 0,
         limit: int = 100,
     ) -> Dict[str, Any]:
@@ -5416,7 +5444,7 @@ class ReportService:
             return {"data": items, "success": True}
         elif report_type in ["slow-moving-analysis", "slow_moving"]:
             payload = await self._get_slow_moving_analysis(
-                tenant_id, date_start, date_end, warehouse_id, skip=sk, limit=lim,
+                tenant_id, date_start, date_end, warehouse_id, stale_days=stale_days, skip=sk, limit=lim,
             )
             return self._wrap_report_payload(payload)
         elif report_type in ["fifo_exception", "fifo-exception", "fifo_exception_audit"]:

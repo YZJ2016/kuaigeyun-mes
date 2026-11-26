@@ -65,6 +65,11 @@ class Payment(BaseModel):
     )
 
     status = fields.CharField(max_length=20, default="Draft", description="状态 (Draft/Confirmed/Cancelled)")
+    review_status = fields.CharField(
+        max_length=20,
+        default="草稿",
+        description="审核状态：草稿/SUBMITTED/待审核/已审核/驳回。确认付款前须已审核",
+    )
     
     notes = fields.TextField(null=True, description="备注")
     require_payment_voucher = fields.BooleanField(

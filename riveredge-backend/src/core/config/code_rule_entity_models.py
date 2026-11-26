@@ -34,8 +34,25 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
     "EIGHT_D_REPORT_CODE": ("apps.kuaizhizao.models.quality_8d_report", "Quality8DReport"),
     "QMS_SYSTEM_DOCUMENT_CODE": ("apps.kuaizhizao.models.qms_system_document", "QmsSystemDocument"),
     "QMS_INTERNAL_AUDIT_CODE": ("apps.kuaizhizao.models.qms_internal_audit", "QmsInternalAudit"),
+    "QMS_CORRECTIVE_ACTION_CODE": (
+        "apps.kuaizhizao.models.qms_corrective_action",
+        "QmsCorrectiveAction",
+    ),
+    "QMS_QUALITY_OBJECTIVE_CODE": (
+        "apps.kuaizhizao.models.qms_quality_objective",
+        "QmsQualityObjective",
+    ),
+    "QMS_EXTERNAL_AUDIT_CODE": ("apps.kuaizhizao.models.qms_external_audit", "QmsExternalAudit"),
+    "QMS_NONCONFORMITY_REPORT_CODE": (
+        "apps.kuaizhizao.models.qms_nonconformity_report",
+        "QmsNonconformityReport",
+    ),
     "QMS_MANAGEMENT_REVIEW_CODE": ("apps.kuaizhizao.models.qms_management_review", "QmsManagementReview"),
     "FAI_ORDER_CODE": ("apps.kuaizhizao.models.fai_order", "FaiOrder"),
+    "DRAWING_BALLOON_SHEET_CODE": (
+        "apps.kuaizhizao.models.drawing_balloon_sheet",
+        "DrawingBalloonSheet",
+    ),
     "ENGINEERING_BOM_CODE": ("apps.master_data.models.material", "BOM"),
     "ENGINEERING_DRAWING_CODE": ("apps.master_data.models.drawing", "EngineeringDrawing"),
     "EQUIPMENT_CODE": ("apps.kuaizhizao.models.equipment", "Equipment"),
@@ -43,6 +60,34 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "apps.kuaizhizao.models.equipment_acceptance",
         "EquipmentAcceptance",
     ),
+    "EQUIPMENT_INSPECTION_ITEM_CODE": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentInspectionItem",
+    ),
+    "EQUIPMENT_INSPECTION_SCHEME_CODE": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentInspectionScheme",
+    ),
+    "EQUIPMENT_MAINTENANCE_ITEM_CODE": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentMaintenanceItem",
+    ),
+    "EQUIPMENT_MAINTENANCE_SCHEME_CODE": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentMaintenanceScheme",
+    ),
+    "EQUIPMENT_PATROL_ROUTE_CODE": (
+        "apps.kuaizhizao.models.equipment_ops",
+        "EquipmentPatrolRoute",
+    ),
+    "MOLD_MAINTENANCE_ITEM_CODE": ("apps.kuaizhizao.models.mold_ops", "MoldMaintenanceItem"),
+    "MOLD_MAINTENANCE_SCHEME_CODE": ("apps.kuaizhizao.models.mold_ops", "MoldMaintenanceScheme"),
+    "MOLD_REPAIR_ITEM_CODE": ("apps.kuaizhizao.models.mold_ops", "MoldRepairItem"),
+    "MOLD_REPAIR_SCHEME_CODE": ("apps.kuaizhizao.models.mold_ops", "MoldRepairScheme"),
+    "TOOL_MAINTENANCE_ITEM_CODE": ("apps.kuaizhizao.models.tool_ops", "ToolMaintenanceItem"),
+    "TOOL_MAINTENANCE_SCHEME_CODE": ("apps.kuaizhizao.models.tool_ops", "ToolMaintenanceScheme"),
+    "TOOL_REPAIR_ITEM_CODE": ("apps.kuaizhizao.models.tool_ops", "ToolRepairItem"),
+    "TOOL_REPAIR_SCHEME_CODE": ("apps.kuaizhizao.models.tool_ops", "ToolRepairScheme"),
     "EQUIPMENT_LINE_REBIND_CODE": (
         "apps.kuaizhizao.models.equipment_line_rebind",
         "EquipmentLineRebind",
@@ -198,6 +243,10 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "apps.kuaizhizao.models.outsource_work_order",
         "OutsourceMaterialReturn",
     ),
+    "OUTSOURCE_INSPECTION_CODE": (
+        "apps.kuaizhizao.models.outsource_inspection",
+        "OutsourceInspection",
+    ),
     "OUTSOURCE_ORDER_CODE": ("apps.kuaizhizao.models.outsource_order", "OutsourceOrder"),
     "OUTSOURCE_PRODUCT_RETURN_CODE": (
         "apps.kuaizhizao.models.outsource_work_order",
@@ -253,6 +302,10 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
     "KUAI_PLM_BOM_COLLAB_CODE": ("apps.kuaiplm.models.bom_collaboration", "BomCollaboration"),
     "KUAI_PLM_PROJECT_PROPOSAL_CODE": ("apps.kuaiplm.models.project_proposal", "ProjectProposal"),
     "KUAI_PLM_MOLD_SAMPLE_CODE": ("apps.kuaiplm.models.mold_sample_order", "MoldSampleOrder"),
+    "KUAI_PLM_PROTOTYPE_BUILD_SHEET_CODE": (
+        "apps.kuaiplm.models.prototype_build_sheet",
+        "PrototypeBuildSheet",
+    ),
     "RD_REQUIREMENT_CODE": ("apps.kuaiplm.models.phase2", "RdRequirement"),
     "OTHER_INCOME_CODE": ("apps.kuaicaiwu.models.other_voucher", "OtherIncome"),
     "OTHER_EXPENSE_CODE": ("apps.kuaicaiwu.models.other_voucher", "OtherExpense"),
@@ -300,6 +353,7 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
     "QUALITY_COMPLAINT_PQC_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
     "QUALITY_COMPLAINT_OQC_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
     "QUALITY_COMPLAINT_CUSTOMER_CODE": ("apps.kuaizhizao.models.quality_complaint", "QualityComplaint"),
+    "QUALITY_PATROL_CODE": ("apps.kuaizhizao.models.quality_patrol", "QualityPatrol"),
     "SUPPLIER_EVALUATION_CODE": (
         "apps.kuaizhizao.models.supplier_evaluation",
         "SupplierEvaluation",

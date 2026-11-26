@@ -45,8 +45,16 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
-import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { UniPullQueryModal, useUniPullQuery } from '../../../../../components/uni-pull-query';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
 import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
@@ -86,6 +94,7 @@ import { resolveUserDisplay, type User } from '../../../../../services/user';
 import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
 import {
+  buildDefaultReportingWorkTime,
   resolveReportingWorkTimeForSubmit,
   toReportingDayjs,
   formatReportingDateTime,
@@ -164,6 +173,8 @@ interface ReportingRecord {
   reported_quantity: number;
   qualified_quantity: number;
   unqualified_quantity: number;
+  /** 待登记不合格剩余（已返修/已登记/已直开报废后扣减） */
+  unqualified_remaining?: number;
   work_hours: number;
   status: 'pending' | 'approved' | 'rejected';
   reported_at: string;
@@ -326,29 +337,6 @@ const ReportingPage: React.FC = () => {
   );
   const reportingStatusValueEnum = useMemo(() => buildReportingStatusValueEnum(t), [t]);
 
-  const reportingAuditBatchHandlers = useMemo(
-    () => ({
-      approve: async (id: number) => {
-        const res = await reportingApi.approve(String(id));
-        showReportingPostActionNotices(messageApi, t, res);
-        return res;
-      },
-      revoke: (id: number) => reportingApi.revoke(String(id)),
-    }),
-    [messageApi, t],
-  );
-
-  const reportingAuditBatchBulkHandlers = useMemo(
-    () => ({
-      revoke: (ids: number[]) =>
-        reportingApi.batchRevoke(ids.map(String)).then((res) => ({
-          success_count: res.success,
-          failed_count: res.failed,
-        })),
-    }),
-    [],
-  );
-
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [reportingDetail, setReportingDetail] = useState<ReportingRecord | null>(null);
@@ -432,6 +420,126 @@ const ReportingPage: React.FC = () => {
     actionRef.current?.reload();
     invalidateStatistics();
   }, [invalidateMenuBadgeCounts, invalidateStatistics]);
+
+  const reportingToolbarAuditMenus = useMemo(() => {
+    const rows = selectedRecordsForBatch;
+    const reload = () => handleReportingBatchSuccess();
+    const reviewOf = (row: ReportingRecord) => String(row.review_status || '').trim();
+    const statusOf = (row: ReportingRecord) => String(row.status || '').trim();
+    const isDraft = (row: ReportingRecord) => ['draft', '草稿', 'DRAFT'].includes(statusOf(row));
+    const allowed = (row: ReportingRecord, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      keys: React.Key[],
+      records: ReportingRecord[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys,
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: reload,
+        message: messageApi,
+        t,
+      });
+    const submitRows = rows.filter((row) => isDraft(row) && allowed(row, 'submit'));
+    const committedRows = rows.filter(
+      (row) => isDraft(row) && reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+    );
+    const pendingRows = rows.filter((row) => {
+      const review = reviewOf(row);
+      return isDraft(row) && review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit');
+    });
+    const reviewRows = rows.filter((row) => isDraft(row) && allowed(row, 'submit_review'));
+    const approveRows = rows.filter((row) => {
+      const review = reviewOf(row);
+      return isDraft(row) && review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'approve');
+    });
+    const revokeRows = rows.filter((row) => allowed(row, 'revoke_approval'));
+    const canSubmit = reportingPerms.canAction?.('submit') ?? false;
+    const canApprove = reportingPerms.canAction?.('approve') ?? false;
+    const canRevoke = reportingPerms.canAction?.('revoke') ?? false;
+    const hasSelection = rows.length > 0;
+    const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: (keys) => run(keys, submitRows, 'submit', canSubmit, (id) => reportingApi.commit(id)),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t('app.kuaizhizao.workReporting.toolbar.withdrawSubmit'),
+          disabled: hasSelection && committedRows.length === 0,
+          onClick: (keys) =>
+            run(keys, committedRows, 'withdraw_submit', canSubmit, (id) => reportingApi.withdrawSubmit(id)),
+        },
+        {
+          key: 'submit-review',
+          label: t('app.kuaizhizao.workReporting.toolbar.submitReview'),
+          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+          onClick: (keys) =>
+            run(
+              keys,
+              reviewRows,
+              'submit_review',
+              canSubmit,
+              (id) => reportingApi.submitForReview(id),
+              t('app.kuaizhizao.workReporting.toolbar.submitReviewNotAllowed'),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: (id) => reportingApi.commit(id),
+        submitReview: async (id) => {
+          const res = await reportingApi.submitForReview(id);
+          showReportingPostActionNotices(messageApi, t, res);
+          return res;
+        },
+        onSuccess: reload,
+      },
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('common.audit'),
+        disabled: hasSelection && !(canApprove && approveRows.length > 0),
+        onClick: (keys) =>
+          run(keys, approveRows, 'approve', canApprove, async (id) => {
+            const res = await reportingApi.approveViaAudit(id);
+            showReportingPostActionNotices(messageApi, t, res);
+            return res;
+          }),
+      },
+      {
+        key: 'withdraw-review',
+        label: t('app.kuaizhizao.workReporting.toolbar.withdrawReview'),
+        disabled: hasSelection && pendingRows.length === 0,
+        onClick: (keys) =>
+          run(keys, pendingRows, 'withdraw_submit', canApprove, (id) => reportingApi.withdrawSubmit(id)),
+      },
+      {
+        key: 'revoke',
+        label: t('app.kuaizhizao.workReporting.toolbar.revoke'),
+        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+        onClick: (keys) =>
+          run(keys, revokeRows, 'revoke_approval', canRevoke, (id) => reportingApi.revokeApproval(id)),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [handleReportingBatchSuccess, messageApi, reportingPerms, selectedRecordsForBatch, t]);
 
   const handleSyncComplete = useCallback(() => {
     setSyncFreshnessKey((key) => key + 1);
@@ -819,15 +927,12 @@ const ReportingPage: React.FC = () => {
       work_order_id: Number(workOrder.id),
       operation_id: Number(operation.operation_id),
     };
-    if (operation.standard_time) {
-      const qtyDisplay =
-        Number(workOrder.display_quantity ?? workOrder.displayQuantity) ||
-        convertBaseQtyToProductionDisplay(
-          parseFloat(workOrder.quantity?.toString() || '0') || 0,
-          workOrder,
-        )
-      autoFillValues.work_hours = parseFloat(operation.standard_time.toString()) * qtyDisplay
-    }
+    const defaultWorkTime = buildDefaultReportingWorkTime(
+      operation.actual_start_date ?? operation.actualStartDate,
+    );
+    autoFillValues.work_start_time = defaultWorkTime.work_start_time;
+    autoFillValues.work_end_time = defaultWorkTime.work_end_time;
+    autoFillValues.work_hours = defaultWorkTime.work_hours;
     if (operation.reporting_type === 'quantity') {
       const remainingBase = getRemainingReportableQuantity(
         operation,
@@ -1022,19 +1127,28 @@ const ReportingPage: React.FC = () => {
     }
   };
 
+  const resolveUnqualifiedRemaining = (record: ReportingRecord): number => {
+    const remainingRaw = record.unqualified_remaining;
+    if (remainingRaw != null && Number.isFinite(Number(remainingRaw))) {
+      return Math.max(0, Number(remainingRaw));
+    }
+    return Math.max(0, Number(record.unqualified_quantity || 0));
+  };
+
   /**
    * 处理创建报废记录
    */
   const handleCreateScrap = (record: ReportingRecord) => {
-    if ((record.unqualified_quantity || 0) <= 0) {
-      messageApi.warning(t('app.kuaizhizao.workReporting.noUnqualifiedForScrap'));
+    const remaining = resolveUnqualifiedRemaining(record);
+    if (remaining <= 0) {
+      messageApi.warning(t('app.kuaizhizao.workReporting.noUnqualifiedRemainingForScrap'));
       return;
     }
     setCurrentReportingRecord(record);
     setScrapModalVisible(true);
     setTimeout(() => {
       scrapFormRef.current?.setFieldsValue({
-        scrap_quantity: record.unqualified_quantity,
+        scrap_quantity: remaining,
         scrap_type: 'other',
       });
     }, 100);
@@ -1067,15 +1181,16 @@ const ReportingPage: React.FC = () => {
    * 处理创建不良品记录
    */
   const handleCreateDefect = (record: ReportingRecord) => {
-    if ((record.unqualified_quantity || 0) <= 0) {
-      messageApi.warning(t('app.kuaizhizao.workReporting.noUnqualifiedForDefect'));
+    const remaining = resolveUnqualifiedRemaining(record);
+    if (remaining <= 0) {
+      messageApi.warning(t('app.kuaizhizao.workReporting.noUnqualifiedRemainingForDefect'));
       return;
     }
     setCurrentReportingRecordForDefect(record);
     setDefectModalVisible(true);
     setTimeout(() => {
       defectFormRef.current?.setFieldsValue({
-        defect_quantity: record.unqualified_quantity,
+        defect_quantity: remaining,
         defect_type: 'other',
         disposition: 'quarantine',
       });
@@ -1424,7 +1539,7 @@ const ReportingPage: React.FC = () => {
       );
     }
     if (isApproved) {
-      if ((record.unqualified_quantity || 0) > 0) {
+      if (resolveUnqualifiedRemaining(record) > 0) {
         nodes.push(
           <Button {...rowActionKind('create')}
             key="defect"
@@ -1899,9 +2014,7 @@ const ReportingPage: React.FC = () => {
         enableRowSelection={true}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        showCreateButton={true}
-        createButtonText={createButtonLabel}
-        onCreate={handleNewReporting}
+        showCreateButton={false}
         showSyncButton={toolbarSyncPush.hubVisible}
         onSync={() => undefined}
         syncToolbarExtra={
@@ -1949,6 +2062,7 @@ const ReportingPage: React.FC = () => {
             : undefined
         }
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           try {
             for (const id of keys) {
@@ -1972,17 +2086,42 @@ const ReportingPage: React.FC = () => {
           onClick: () => void handleDetail(record),
           style: { cursor: 'pointer' },
         })}
-        toolBarActionsAfterDelete={[
-          <UniAuditBatchMenuButton
-            key="reporting-batch-audit-menu"
+        toolBarRender={() => [
+          <UniPullCreateToolbar
+            key="create-reporting-with-pull"
+            compactKey="create-reporting-with-pull"
+            createLabel={createButtonLabel}
+            onCreate={handleNewReporting}
+            menuItems={[
+              { type: 'divider', key: 'copy-selected-divider' },
+              {
+                key: 'copy-selected',
+                label: t('app.kuaizhizao.workReporting.copySelectedCreate'),
+                disabled: selectedRecordsForBatch.length !== 1,
+                onClick: () => {
+                  const row = selectedRecordsForBatch[0];
+                  const woId = Number(row?.work_order_id);
+                  const opId = Number((row as { operation_id?: number })?.operation_id);
+                  if (!Number.isFinite(woId) || !Number.isFinite(opId)) {
+                    messageApi.warning(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
+                    return;
+                  }
+                  void openReportingCreateFromSource(woId, opId);
+                },
+              },
+            ]}
+          />,
+          <UniBatchMenuButton
+            key="reporting-submit"
             selectedRowKeys={selectedRowKeys}
-            selectedRecords={selectedRecordsForBatch}
-            auditEnabled={reportingAuditEnabled}
-            permGates={reportingPerms}
-            handlers={reportingAuditBatchHandlers}
-            bulkHandlers={reportingAuditBatchBulkHandlers}
-            onSuccess={handleReportingBatchSuccess}
-            toolBarButtonSize="medium"
+            menuItems={reportingToolbarAuditMenus.submitItems}
+            buttonText={t('common.submit')}
+          />,
+          <UniBatchMenuButton
+            key="reporting-audit"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={reportingToolbarAuditMenus.auditItems}
+            buttonText={t('components.uniAction.audit')}
           />,
         ]}
       />
@@ -2043,6 +2182,7 @@ const ReportingPage: React.FC = () => {
                 workOrderQuantity={Number(reportSelectedWorkOrder.quantity ?? 0) || 0}
                 operations={reportOperations}
                 workOrderId={reportWorkOrderId ?? undefined}
+                workOrder={reportSelectedWorkOrder}
                 unitContext={reportSelectedWorkOrder}
               />
             </Col>

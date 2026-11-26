@@ -100,14 +100,14 @@ export const UniImportPreviewModal: React.FC<UniImportPreviewModalProps> = ({
       preview.previewRows.map((row, rowIndex) => {
         const record: Record<string, string> = {
           key: String(rowIndex),
-          __rowNo: String(dataStartRow + rowIndex + 1),
+          __rowNo: String(preview.previewSheetRows[rowIndex] ?? dataStartRow + rowIndex + 1),
         };
         row.forEach((cell, colIndex) => {
           record[`col_${colIndex}`] = cell;
         });
         return record;
       }),
-    [preview.previewRows, dataStartRow],
+    [preview.previewRows, preview.previewSheetRows, dataStartRow],
   );
 
   const errorMessages = useMemo(

@@ -16,7 +16,13 @@ from tortoise.transactions import in_transaction
 from tortoise.exceptions import IntegrityError
 
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.constants import LEGACY_PENDING_VALUES, DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants import (
+    LEGACY_PENDING_VALUES,
+    DemandStatus,
+    DocumentStatus,
+    ReviewStatus,
+    is_submitted_status,
+)
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.quotation_item import QuotationItem
@@ -162,12 +168,19 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
 
     @staticmethod
-    def _line_release_amount(item: SalesContractItem, release_qty: Decimal) -> Decimal:
-        contract_qty = Decimal(str(item.contract_quantity or 0))
-        if contract_qty <= 0 or release_qty <= 0:
+    def _line_release_amount(
+        item: SalesContractItem, release_qty: Decimal, price_type: str
+    ) -> Decimal:
+        if release_qty <= 0:
             return Decimal("0")
-        total_amt = Decimal(str(item.total_amount or 0))
-        return quantize_business_amount(total_amt * release_qty / contract_qty, 2)
+        from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+
+        return stored_sales_line_amount(
+            release_qty,
+            item.unit_price or 0,
+            item.tax_rate or 0,
+            price_type,
+        )
 
     @staticmethod
     def _contract_goods_total(items: List[SalesContractItem]) -> Decimal:
@@ -178,6 +191,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract: SalesContract,
         all_items: List[SalesContractItem],
         gross_release_amt: Decimal,
+        amount_places: int = 2,
     ) -> Decimal:
         """按合同整单优惠比例分摊本次释放优惠（与下推销售订单一致）。"""
         full_goods = SalesContractService._contract_goods_total(all_items)
@@ -186,18 +200,25 @@ class SalesContractService(AppBaseService[SalesContract]):
             return Decimal("0")
         if gross_release_amt >= full_goods - Decimal("0.005"):
             return contract_discount
-        return quantize_business_amount(contract_discount * gross_release_amt / full_goods, 2)
+        return quantize_business_amount(
+            contract_discount * gross_release_amt / full_goods,
+            amount_places,
+        )
 
     @staticmethod
     def _release_net_amount(
         contract: SalesContract,
         all_items: List[SalesContractItem],
         gross_release_amt: Decimal,
+        amount_places: int = 2,
     ) -> Decimal:
         discount = SalesContractService._allocate_release_discount(
-            contract, all_items, gross_release_amt
+            contract,
+            all_items,
+            gross_release_amt,
+            amount_places,
         )
-        return quantize_business_amount(gross_release_amt - discount, 2)
+        return quantize_business_amount(gross_release_amt - discount, amount_places)
 
     @staticmethod
     def _contract_capability_context(
@@ -375,6 +396,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract_id: int,
         customer_id: Optional[int],
         items: List[SalesContractItemCreate],
+        price_type: str,
     ) -> None:
         from apps.kuaizhizao.utils.document_line_material_snapshot import (
             enrich_line_dicts_with_partner_snapshots,
@@ -390,6 +412,9 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
         for it, row in zip(items, rows):
             spec = row.get("material_spec") if row.get("material_spec") else it.material_spec
+            line_amt = SalesContractService._line_release_amount(
+                it, Decimal(str(it.contract_quantity or 0)), price_type
+            )
             await SalesContractItem.create(
                 tenant_id=tenant_id,
                 contract_id=contract_id,
@@ -401,7 +426,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                 contract_quantity=it.contract_quantity,
                 unit_price=it.unit_price,
                 tax_rate=it.tax_rate or Decimal("0"),
-                total_amount=it.total_amount,
+                total_amount=line_amt,
                 variant_attributes=it.variant_attributes,
                 delivery_date=it.delivery_date,
                 notes=it.notes,
@@ -409,25 +434,29 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
 
     @staticmethod
-    def _sum_items(items: List[SalesContractItemCreate]) -> tuple[Decimal, Decimal]:
+    def _sum_items(
+        items: List[SalesContractItemCreate], price_type: str
+    ) -> tuple[Decimal, Decimal]:
         total_qty = Decimal("0")
         total_amt = Decimal("0")
         for it in items:
-            total_qty += Decimal(str(it.contract_quantity or 0))
-            total_amt += Decimal(str(it.total_amount or 0))
+            qty = Decimal(str(it.contract_quantity or 0))
+            total_qty += qty
+            total_amt += SalesContractService._line_release_amount(it, qty, price_type)
         return total_qty, total_amt
 
     @staticmethod
     def _apply_header_discount(
         goods_incl: Decimal,
         discount_amount: Optional[Decimal],
+        amount_places: int = 2,
     ) -> tuple[Decimal, Decimal]:
         discount = Decimal(str(discount_amount or 0))
         if discount < Decimal("0"):
             raise ValidationError("整单优惠不能为负数")
         if discount > goods_incl:
             raise ValidationError("整单优惠不能大于价税合计")
-        net = quantize_business_amount(goods_incl - discount, 2)
+        net = quantize_business_amount(goods_incl - discount, amount_places)
         return discount, net
 
     async def _refresh_contract_totals(
@@ -445,7 +474,14 @@ class SalesContractService(AppBaseService[SalesContract]):
             if discount_amount is not None
             else getattr(contract, "discount_amount", None) or Decimal("0")
         )
-        discount, net_amt = self._apply_header_discount(goods_incl, discount_val)
+        amount_places = await self.business_config_service.get_amount_decimal_places(
+            tenant_id
+        )
+        discount, net_amt = self._apply_header_discount(
+            goods_incl,
+            discount_val,
+            amount_places,
+        )
         await SalesContract.filter(id=contract_id).update(
             total_quantity=total_qty,
             total_amount=net_amt,
@@ -472,6 +508,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         valid_from: Optional[date],
         valid_to: Optional[date],
         require_items_when_quantity: bool = True,
+        price_type: str = DEFAULT_SALES_PRICE_TYPE,
     ) -> tuple[List[SalesContractItemCreate], Decimal, Decimal]:
         """按录入明细模式校验并返回 (items, total_qty, net_header_amount_before_discount_apply)。
 
@@ -491,7 +528,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             return [], Decimal("0"), amt
         if require_items_when_quantity and not item_list:
             raise ValidationError("合同明细不能为空")
-        total_qty, total_amt = self._sum_items(item_list)
+        total_qty, total_amt = self._sum_items(item_list, price_type)
         return item_list, total_qty, total_amt
 
     async def create_contract(
@@ -517,6 +554,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             total_amount=getattr(data, "total_amount", None),
             valid_from=data.valid_from or data.contract_date,
             valid_to=data.valid_to,
+            price_type=data.price_type or DEFAULT_SALES_PRICE_TYPE,
         )
         data = data.model_copy(
             update={
@@ -525,8 +563,13 @@ class SalesContractService(AppBaseService[SalesContract]):
                 "items": item_list,
             }
         )
+        amount_places = await self.business_config_service.get_amount_decimal_places(
+            tenant_id
+        )
         discount, net_amt = self._apply_header_discount(
-            goods_amt, getattr(data, "discount_amount", None)
+            goods_amt,
+            getattr(data, "discount_amount", None),
+            amount_places,
         )
         term_group_id, term_group_name, contract_terms = None, None, None
         contract_code = (data.contract_code or "").strip() if data.contract_code else ""
@@ -618,12 +661,28 @@ class SalesContractService(AppBaseService[SalesContract]):
                     contract.quotation_code = q.quotation_code
                     await contract.save(update_fields=["quotation_code"])
             await self._persist_contract_items(
-                tenant_id, contract.id, data.customer_id, list(data.items)
+                tenant_id,
+                contract.id,
+                data.customer_id,
+                list(data.items),
+                data.price_type or DEFAULT_SALES_PRICE_TYPE,
             )
             contract.root_contract_id = contract.id
             await contract.save(update_fields=["root_contract_id"])
         if auto_submit:
             return await self.submit_contract(tenant_id, contract.id, created_by)
+        from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+            apply_manual_create_auto_submit,
+        )
+
+        applied = await apply_manual_create_auto_submit(
+            tenant_id=tenant_id,
+            node_key="sales_contract",
+            entity_id=int(contract.id),
+            operator_id=created_by,
+        )
+        if applied:
+            return await self.get_contract_by_id(tenant_id, int(contract.id))
         items = await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract.id).order_by("id")
         milestones = await SalesContractMilestone.filter(tenant_id=tenant_id, contract_id=contract.id).order_by("id")
         return self._contract_to_response(contract, items, milestones)
@@ -754,6 +813,11 @@ class SalesContractService(AppBaseService[SalesContract]):
                 }
         from core.services.approval.audit_record_enricher import enrich_items
 
+        viewer_id = (
+            int(current_user.id)
+            if current_user is not None and getattr(current_user, "id", None) is not None
+            else None
+        )
         items = await enrich_items(
             tenant_id,
             "sales_contract",
@@ -768,6 +832,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                 )
                 for r in row_list
             ],
+            viewer_id=viewer_id,
         )
         return SalesContractListResponse(
             items=items,
@@ -912,6 +977,9 @@ class SalesContractService(AppBaseService[SalesContract]):
                     data.discount_amount
                     if data.discount_amount is not None
                     else getattr(contract, "discount_amount", None),
+                    await self.business_config_service.get_amount_decimal_places(
+                        tenant_id
+                    ),
                 )
                 contract.total_quantity = total_qty
                 contract.total_amount = net_amt
@@ -923,10 +991,15 @@ class SalesContractService(AppBaseService[SalesContract]):
                     total_amount=None,
                     valid_from=contract.valid_from or contract.contract_date,
                     valid_to=contract.valid_to,
+                    price_type=getattr(contract, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
                 )
                 await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).delete()
                 await self._persist_contract_items(
-                    tenant_id, contract_id, contract.customer_id, list(item_list)
+                    tenant_id,
+                    contract_id,
+                    contract.customer_id,
+                    list(item_list),
+                    getattr(contract, "price_type", None) or DEFAULT_SALES_PRICE_TYPE,
                 )
                 await self._refresh_contract_totals(
                     tenant_id,
@@ -983,26 +1056,57 @@ class SalesContractService(AppBaseService[SalesContract]):
                 contract_id=None,
                 contract_code=None,
             )
-            from apps.kuaizhizao.services.document_relation_new_service import (
-                DocumentRelationNewService,
-            )
-
-            rel_svc = DocumentRelationNewService()
-            target_rows = await DocumentRelation.filter(
+            await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 target_type="sales_contract",
                 target_id=contract_id,
-            ).all()
-            source_rows = await DocumentRelation.filter(
+            ).delete()
+            await DocumentRelation.filter(
                 tenant_id=tenant_id,
                 source_type="sales_contract",
                 source_id=contract_id,
-            ).all()
-            for row in (*target_rows, *source_rows):
-                try:
-                    await rel_svc.delete_relation(tenant_id, relation_id=row.id)
-                except NotFoundError:
-                    continue
+            ).delete()
+
+    async def commit_contract(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        submitted_by: int,
+        current_user: Optional[User] = None,
+    ) -> SalesContractResponse:
+        """草稿或已驳回 → 已提交。不启动审批。"""
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
+        if is_submitted_status(str(contract.status or "")):
+            return await self.get_contract_by_id(
+                tenant_id, contract_id, current_user=current_user
+            )
+        assert_sales_contract_capability(contract, "submit")
+        contract.status = DocumentStatus.SUBMITTED.value
+        contract.review_status = ReviewStatus.DRAFT.value
+        contract.updated_by = submitted_by
+        await contract.save()
+        return await self.get_contract_by_id(
+            tenant_id, contract_id, current_user=current_user
+        )
+
+    async def submit_contract_for_review(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        submitted_by: int,
+        current_user: Optional[User] = None,
+    ) -> SalesContractResponse:
+        """已提交 → 待审核，或未开审核时直接已生效。"""
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
+        )
+        if not is_submitted_status(str(contract.status or "")):
+            raise BusinessLogicError("请先提交销售合同，再提交审核")
+        return await self._enter_contract_review(
+            tenant_id, contract, submitted_by, current_user=current_user
+        )
 
     async def submit_contract(
         self,
@@ -1011,11 +1115,23 @@ class SalesContractService(AppBaseService[SalesContract]):
         submitted_by: int,
         current_user: Optional[User] = None,
     ) -> SalesContractResponse:
+        """内部一次性提交审核。页面提交走 commit_contract。"""
         contract = await self._get_contract_checked(
             tenant_id, contract_id, current_user=current_user
         )
         assert_sales_contract_capability(contract, "submit")
+        return await self._enter_contract_review(
+            tenant_id, contract, submitted_by, current_user=current_user
+        )
 
+    async def _enter_contract_review(
+        self,
+        tenant_id: int,
+        contract: SalesContract,
+        submitted_by: int,
+        current_user: Optional[User] = None,
+    ) -> SalesContractResponse:
+        contract_id = contract.id
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "sales_contract"
         )
@@ -1168,13 +1284,25 @@ class SalesContractService(AppBaseService[SalesContract]):
         operator_id: int,
         current_user: Optional[User] = None,
     ) -> SalesContractResponse:
-        """撤回提交：待审核 → 草稿。"""
+        """已提交撤销为草稿；待审核撤回为已提交。"""
         contract = await self._get_contract_checked(
             tenant_id, contract_id, current_user=current_user
         )
         assert_sales_contract_capability(contract, "withdraw_submit")
-        contract.status = "草稿"
-        contract.review_status = ReviewStatus.PENDING.value
+        if is_submitted_status(str(contract.status or "")):
+            contract.status = "草稿"
+            contract.review_status = ReviewStatus.DRAFT.value
+            contract.reviewer_id = None
+            contract.reviewer_name = None
+            contract.review_time = None
+            contract.review_remarks = None
+            contract.updated_by = operator_id
+            await contract.save()
+            return await self.get_contract_by_id(
+                tenant_id, contract_id, current_user=current_user
+            )
+        contract.status = DocumentStatus.SUBMITTED.value
+        contract.review_status = ReviewStatus.DRAFT.value
         contract.reviewer_id = None
         contract.reviewer_name = None
         contract.review_time = None
@@ -1228,7 +1356,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
 
         contract.status = "草稿"
-        contract.review_status = ReviewStatus.PENDING.value
+        contract.review_status = ReviewStatus.DRAFT.value
         contract.reviewer_id = None
         contract.reviewer_name = None
         contract.review_time = None
@@ -1256,8 +1384,16 @@ class SalesContractService(AppBaseService[SalesContract]):
         all_items: Optional[List[SalesContractItem]] = None,
     ) -> None:
         rem_qty, rem_amt = self._remaining(contract)
+        amount_places = await self.business_config_service.get_amount_decimal_places(
+            contract.tenant_id
+        )
         net_order_amt = (
-            self._release_net_amount(contract, all_items, order_amt)
+            self._release_net_amount(
+                contract,
+                all_items,
+                order_amt,
+                amount_places,
+            )
             if all_items is not None
             else order_amt
         )
@@ -1411,8 +1547,16 @@ class SalesContractService(AppBaseService[SalesContract]):
         item_quantities: Optional[dict[int, Decimal]] = None,
         all_items: Optional[List[SalesContractItem]] = None,
     ) -> None:
+        amount_places = await self.business_config_service.get_amount_decimal_places(
+            contract.tenant_id
+        )
         net_order_amt = (
-            self._release_net_amount(contract, all_items, order_amt)
+            self._release_net_amount(
+                contract,
+                all_items,
+                order_amt,
+                amount_places,
+            )
             if all_items is not None
             else order_amt
         )
@@ -1545,6 +1689,7 @@ class SalesContractService(AppBaseService[SalesContract]):
         items: List[SalesContractItem],
         selected_item_ids: Optional[List[int]] = None,
         release_lines: Optional[List[SalesContractReleaseLine]] = None,
+        price_type: str = DEFAULT_SALES_PRICE_TYPE,
     ) -> tuple[List[tuple[SalesContractItem, Decimal]], dict[int, Decimal], Decimal, Decimal]:
         by_id = {int(it.id): it for it in items}
         plan: List[tuple[SalesContractItem, Decimal]] = []
@@ -1576,7 +1721,9 @@ class SalesContractService(AppBaseService[SalesContract]):
             raise BusinessLogicError("无可释放的合同明细")
         item_qty_map = {int(it.id): qty for it, qty in plan}
         order_qty = sum(qty for _, qty in plan)
-        order_amt = sum(self._line_release_amount(it, qty) for it, qty in plan)
+        order_amt = sum(
+            self._line_release_amount(it, qty, price_type) for it, qty in plan
+        )
         return plan, item_qty_map, order_qty, order_amt
 
     async def _sales_order_backfill_relation_exists(
@@ -1840,7 +1987,10 @@ class SalesContractService(AppBaseService[SalesContract]):
         if not all_items:
             raise BusinessLogicError("合同无明细")
         plan, _item_qty_map, order_qty, order_amt = self._resolve_release_plan(
-            all_items, selected_item_ids=selected_item_ids, release_lines=release_lines
+            all_items,
+            selected_item_ids=selected_item_ids,
+            release_lines=release_lines,
+            price_type=contract.price_type or DEFAULT_SALES_PRICE_TYPE,
         )
         await self._validate_release_capacity(
             contract, order_qty, order_amt, _item_qty_map, all_items=all_items
@@ -1860,12 +2010,22 @@ class SalesContractService(AppBaseService[SalesContract]):
                 unit_price=it.unit_price,
                 tax_rate=it.tax_rate or Decimal("0"),
                 variant_attributes=it.variant_attributes,
-                item_amount=self._line_release_amount(it, qty),
+                item_amount=self._line_release_amount(
+                    it, qty, contract.price_type or DEFAULT_SALES_PRICE_TYPE
+                ),
                 notes=it.notes,
             )
             for it, qty in plan
         ]
-        discount = self._allocate_release_discount(contract, all_items, order_amt)
+        amount_places = await self.business_config_service.get_amount_decimal_places(
+            tenant_id
+        )
+        discount = self._allocate_release_discount(
+            contract,
+            all_items,
+            order_amt,
+            amount_places,
+        )
         so_create = SalesOrderCreate(
             order_date=date.today(),
             delivery_date=delivery_date,
@@ -1915,6 +2075,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             all_items,
             selected_item_ids=selected_item_ids,
             release_lines=release_lines,
+            price_type=contract.price_type or DEFAULT_SALES_PRICE_TYPE,
         )
         from apps.kuaizhizao.services.sales_order_service import SalesOrderService
         from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
@@ -2098,6 +2259,121 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
         return preview_items
 
+    async def list_sales_contract_sales_order_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        contract_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口合同明细，供销售订单跨单取单。"""
+        from apps.kuaizhizao.models.sales_contract import SalesContract
+        from apps.kuaizhizao.models.sales_contract_item import SalesContractItem
+        from apps.kuaizhizao.services.document_action_policy.sales_contract import (
+            derive_sales_contract_capabilities,
+        )
+
+        c_query = SalesContract.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if contract_id is not None:
+            c_query = c_query.filter(id=int(contract_id))
+        contracts = await c_query.only(
+            "id",
+            "contract_code",
+            "contract_date",
+            "status",
+            "review_status",
+            "customer_name",
+            "enter_line_items",
+        )
+        if not contracts:
+            return {"data": [], "total": 0}
+
+        c_by_id = {int(c.id): c for c in contracts}
+        c_ids = list(c_by_id.keys())
+        items = await SalesContractItem.filter(
+            tenant_id=tenant_id, contract_id__in=c_ids
+        ).order_by("contract_id", "id")
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+
+        for item in items:
+            contract = c_by_id.get(int(item.contract_id))
+            if not contract:
+                continue
+            if self._is_amount_framework(getattr(contract, "enter_line_items", True)):
+                continue
+            item_rows = [item]
+            ctx = self._contract_capability_context(contract, item_rows)
+            caps = derive_sales_contract_capabilities(
+                contract,
+                has_items=ctx["has_items"],
+                has_releasable_items=ctx["has_releasable_items"],
+                remaining_amount=ctx["remaining_amount"],
+                remaining_quantity=ctx["remaining_quantity"],
+            )
+            push_allowed = caps.push_to_sales_order.allowed
+            contract_qty = float(item.contract_quantity or 0)
+            if contract_qty <= 0:
+                continue
+            released = float(item.released_quantity or 0)
+            remaining = float(self._line_remaining_qty(item)) if push_allowed else 0.0
+            pushed = max(0.0, contract_qty - remaining) if push_allowed else released
+            selectable = push_allowed and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(getattr(item, "material_spec", None) or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            contract_date = (
+                contract.contract_date.isoformat()
+                if getattr(contract, "contract_date", None)
+                else None
+            )
+            from apps.kuaizhizao.utils.pull_open_line_quantity import enrich_pull_line_from_source_item
+
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "contract_id": int(contract.id),
+                "contract_code": contract.contract_code,
+                "contract_status": contract.status,
+                "document_date": contract_date,
+                "contract_date": contract_date,
+                "customer_name": getattr(contract, "customer_name", None),
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "件",
+                "can_push": push_allowed,
+            }
+            enrich_pull_line_from_source_item(
+                row,
+                item,
+                suggested_primary=contract_qty,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                occupied_aux_pushed=0,
+                line_fully_pushed=remaining <= 0 and pushed > 0,
+            )
+            lines.append(row)
+        lines.sort(
+            key=lambda r: (
+                str(r.get("contract_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
+
     async def preview_push_sales_contract_to_sales_order(
         self,
         tenant_id: int,
@@ -2260,6 +2536,7 @@ class SalesContractService(AppBaseService[SalesContract]):
             all_items,
             selected_item_ids=selected_item_ids,
             release_lines=release_lines,
+            price_type=contract.price_type or DEFAULT_SALES_PRICE_TYPE,
         )
         await self._validate_release_capacity(
             contract, order_qty, order_amt, item_qty_map, all_items=all_items
@@ -2294,6 +2571,8 @@ class SalesContractService(AppBaseService[SalesContract]):
             material_name: str,
             qty: float,
             delivery_date,
+            *,
+            populate_bom_lines: bool = False,
         ) -> None:
             if qty <= 0:
                 return
@@ -2305,8 +2584,11 @@ class SalesContractService(AppBaseService[SalesContract]):
                     "material_name": material_name,
                     "quantity": Decimal("0"),
                     "earliest_delivery": delivery_date,
+                    "populate_bom_lines": bool(populate_bom_lines),
                 }
             wo_pool[key]["quantity"] += Decimal(str(qty))
+            if populate_bom_lines:
+                wo_pool[key]["populate_bom_lines"] = True
             if delivery_date and (
                 wo_pool[key]["earliest_delivery"] is None
                 or delivery_date < wo_pool[key]["earliest_delivery"]
@@ -2329,6 +2611,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                     it.material_name,
                     qty,
                     delivery_date,
+                    populate_bom_lines=True,
                 )
                 variant_attrs = getattr(it, "variant_attributes", None)
                 requirements = await expand_bom_with_source_control(
@@ -2350,6 +2633,7 @@ class SalesContractService(AppBaseService[SalesContract]):
                             req["material_name"],
                             float(req["required_quantity"]),
                             delivery_date,
+                            populate_bom_lines=True,
                         )
             else:
                 _add_to_pool(
@@ -2422,6 +2706,36 @@ class SalesContractService(AppBaseService[SalesContract]):
                 relation_data=relation_data,
                 created_by=created_by,
             )
+            if info.get("populate_bom_lines"):
+                from apps.kuaizhizao.schemas.work_order import WorkOrderBomLineCreate
+                from apps.kuaizhizao.services.work_order_bom_line_service import (
+                    WorkOrderBomLineService,
+                )
+
+                wo_bom_svc = WorkOrderBomLineService()
+                expanded = await wo_bom_svc.expand_bom_lines_for_form(
+                    tenant_id,
+                    product_id=int(info["material_id"]),
+                    quantity=qty_dec,
+                    product_bom_version=None,
+                    variant_attributes=None,
+                    configurable_selections=None,
+                )
+                if expanded:
+                    user_info = await work_order_service.get_user_info(created_by)
+                    bom_creates: List[WorkOrderBomLineCreate] = []
+                    for line in expanded:
+                        payload = line.model_dump(
+                            exclude={"id", "issued_quantity", "current_stock"}
+                        )
+                        bom_creates.append(WorkOrderBomLineCreate(**payload))
+                    await wo_bom_svc.replace_lines(
+                        tenant_id,
+                        int(wo_id),
+                        bom_creates,
+                        created_by=created_by,
+                        created_by_name=user_info["name"],
+                    )
             work_orders.append(wo)
 
         for info in wo_pool.values():

@@ -33,7 +33,13 @@ from apps.kuaizhizao.schemas.quotation import (
 )
 from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
 from apps.kuaizhizao.utils.gift_line_helper import validate_gift_line_rules
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus, LEGACY_PENDING_VALUES
+from apps.kuaizhizao.constants import (
+    DemandStatus,
+    DocumentStatus,
+    ReviewStatus,
+    LEGACY_PENDING_VALUES,
+    is_submitted_status,
+)
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
 from apps.kuaizhizao.services.document_action_policy import (
     assert_quotation_capability,
@@ -69,14 +75,11 @@ class QuotationService:
         sales_review_downstream_missing: bool = False,
     ) -> None:
         audit_required = await self._quotation_audit_required(tenant_id)
-        require_audit_before_print = (
-            await self.business_config_service.get_sales_require_audit_before_print(tenant_id)
-        )
+        await self.business_config_service.get_allow_print_unaudited(tenant_id)
         assert_quotation_capability(
             quotation,
             action,
             audit_required=audit_required,
-            require_audit_before_print=require_audit_before_print,
             conversion_downstream_missing=conversion_downstream_missing,
             contract_downstream_missing=contract_downstream_missing,
             sales_review_downstream_missing=sales_review_downstream_missing,
@@ -791,7 +794,16 @@ class QuotationService:
                 discount_amount=discount,
             )
             quotation = await Quotation.get(id=quotation.id)
-            if auto_submit:
+            should_submit = bool(auto_submit)
+            if not should_submit:
+                from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+                    is_manual_create_auto_submit_enabled,
+                )
+
+                should_submit = await is_manual_create_auto_submit_enabled(
+                    tenant_id, "quotation"
+                )
+            if should_submit:
                 await self._submit_quotation_with_audit(
                     tenant_id, quotation.id, created_by
                 )
@@ -801,13 +813,77 @@ class QuotationService:
             ).order_by("id")
             return self._quotation_to_response(quotation, items=items)
 
+    async def commit_quotation(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        submitted_by: int,
+    ) -> QuotationResponse:
+        """草稿或已驳回 → 已提交。业务状态保持草稿，不启动审批、不进入已发送。"""
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if is_submitted_status(str(quotation.review_status or "")):
+            return await self.get_quotation_by_id(
+                tenant_id, quotation_id, include_items=True
+            )
+        await self._assert_quotation_capability(tenant_id, quotation, "submit")
+        from apps.common.base_service import AppBaseService
+
+        op_name = await AppBaseService().get_user_name(submitted_by)
+        patch: Dict[str, Any] = {
+            "review_status": DocumentStatus.SUBMITTED.value,
+            "reviewer_id": None,
+            "reviewer_name": None,
+            "review_time": None,
+            "review_remarks": None,
+            "updated_by": submitted_by,
+        }
+        if quotation.status in ("已拒绝", "rejected"):
+            patch["status"] = "草稿"
+        async with in_transaction():
+            await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(**patch)
+            await self._log_quotation_state_transition(
+                tenant_id,
+                quotation_id,
+                str(quotation.status or "草稿"),
+                "已提交",
+                submitted_by,
+                op_name,
+                "提交",
+            )
+        return await self.get_quotation_by_id(
+            tenant_id, quotation_id, include_items=True
+        )
+
+    async def submit_quotation_for_review(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        submitted_by: int,
+    ) -> QuotationResponse:
+        """已提交 → 待审核（已发送），或未开审核时直接已发送+已通过。"""
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+        if not is_submitted_status(str(quotation.review_status or "")):
+            raise BusinessLogicError("请先提交报价单，再提交审核")
+        await self._submit_quotation_with_audit(tenant_id, quotation_id, submitted_by)
+        return await self.get_quotation_by_id(
+            tenant_id, quotation_id, include_items=True
+        )
+
     async def submit_quotation(
         self,
         tenant_id: int,
         quotation_id: int,
         submitted_by: int,
     ) -> QuotationResponse:
-        """提交报价单（草稿 → 已发送）；是否自动通过审核由业务蓝图 quotation.auditRequired 决定。"""
+        """内部一次性提交审核（草稿直进已发送）。页面提交走 commit_quotation。"""
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
@@ -825,7 +901,7 @@ class QuotationService:
         quotation_id: int,
         withdrawn_by: int,
     ) -> QuotationResponse:
-        """撤回已提交的报价单：已发送 + 待审核 → 草稿（与销售订单撤回语义一致）"""
+        """已提交撤销为草稿审核态；待审核撤回为已提交。业务状态回草稿。"""
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
@@ -835,18 +911,46 @@ class QuotationService:
         from apps.common.base_service import AppBaseService
 
         op_name = await AppBaseService().get_user_name(withdrawn_by)
+        if is_submitted_status(str(quotation.review_status or "")):
+            async with in_transaction():
+                await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
+                    status="草稿",
+                    review_status="",
+                    reviewer_id=None,
+                    reviewer_name=None,
+                    review_time=None,
+                    review_remarks=None,
+                    updated_by=withdrawn_by,
+                )
+                await self._log_quotation_state_transition(
+                    tenant_id,
+                    quotation_id,
+                    "已提交",
+                    "草稿",
+                    withdrawn_by,
+                    op_name,
+                    "撤销提交",
+                )
+            return await self.get_quotation_by_id(
+                tenant_id, quotation_id, include_items=True
+            )
+
         async with in_transaction():
             from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-            await ApprovalInstanceService.cancel_approval(
-                tenant_id=tenant_id,
-                entity_type="quotation",
-                entity_id=quotation_id,
-                operator_id=withdrawn_by,
-            )
+            try:
+                await ApprovalInstanceService.cancel_approval(
+                    tenant_id=tenant_id,
+                    entity_type="quotation",
+                    entity_id=quotation_id,
+                    operator_id=withdrawn_by,
+                )
+            except Exception as e:
+                logger.exception("取消报价单审批流程失败 quotation_id={}: {}", quotation_id, e)
+                raise BusinessLogicError("撤回失败：无法取消审批流程，请重试") from e
             await Quotation.filter(tenant_id=tenant_id, id=quotation_id).update(
                 status="草稿",
-                review_status="",
+                review_status=DocumentStatus.SUBMITTED.value,
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -856,11 +960,11 @@ class QuotationService:
             await self._log_quotation_state_transition(
                 tenant_id,
                 quotation_id,
-                "已发送",
-                "草稿",
+                "待审核",
+                "已提交",
                 withdrawn_by,
                 op_name,
-                "撤回提交",
+                "撤回审核",
             )
         return await self.get_quotation_by_id(
             tenant_id, quotation_id, include_items=True
@@ -1303,6 +1407,18 @@ class QuotationService:
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
 
+        series = (
+            quotation.quotation_series_code or quotation.quotation_code or ""
+        ).strip()
+        if series:
+            healed = await self._heal_series_live_latest(tenant_id, series)
+            if healed and healed.id == quotation.id:
+                quotation = healed
+            else:
+                quotation = await Quotation.get(
+                    tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+                )
+
         items = None
         if include_items:
             items = await QuotationItem.filter(
@@ -1377,7 +1493,7 @@ class QuotationService:
         from core.services.authorization.data_scope_resource_registry import get_resource_profile
 
         profile = get_resource_profile("kuaizhizao:quotation")
-        dept_uuid, dept_user_ids = await DataScopeService._department_context(
+        dept_uuids, dept_user_ids = await DataScopeService._department_context(
             tenant_id, current_user
         )
         ctx = ScopeResolveContext(
@@ -1386,7 +1502,8 @@ class QuotationService:
             resource="kuaizhizao:quotation",
             profile=profile,
             scope_payload=None,
-            department_uuid=dept_uuid,
+            department_uuid=dept_uuids[0] if dept_uuids else None,
+            department_uuids=dept_uuids,
             department_user_ids=dept_user_ids,
         )
         if scope == "mine":
@@ -1770,7 +1887,12 @@ class QuotationService:
             )
         from core.services.approval.audit_record_enricher import enrich_items
 
-        data = await enrich_items(tenant_id, "quotation", data)
+        viewer_id = (
+            int(current_user.id)
+            if current_user is not None and getattr(current_user, "id", None) is not None
+            else None
+        )
+        data = await enrich_items(tenant_id, "quotation", data, viewer_id=viewer_id)
         data = await enrich_quotation_list_capabilities(
             tenant_id,
             list(quotations),
@@ -1804,13 +1926,12 @@ class QuotationService:
                 user=current_user,
                 resource="kuaizhizao:quotation",
             )
-        rs = (quotation.review_status or "").strip()
-        is_draft = quotation.status == "草稿"
-        is_pending_audit = quotation.status == "已发送" and (
-            rs in LEGACY_PENDING_VALUES or rs == ""
-        )
         await self._assert_quotation_capability(tenant_id, quotation, "update")
-        if not is_draft and not is_pending_audit:
+        is_draft_editable = quotation.status == "草稿" and not is_submitted_status(
+            str(quotation.review_status or "")
+        )
+        is_rejected = quotation.status in ("已拒绝", "rejected")
+        if not is_draft_editable and not is_rejected:
             if approval_edit_context:
                 pass
             else:
@@ -1821,7 +1942,7 @@ class QuotationService:
                 )
                 if not edit_ctx:
                     raise BusinessLogicError(
-                        f"只能更新草稿或待审核中的报价单，当前状态: {quotation.status}"
+                        f"只能更新草稿状态的报价单，当前状态: {quotation.status}"
                     )
 
         if approval_edit_context:
@@ -1937,12 +2058,8 @@ class QuotationService:
         if not series:
             raise BusinessLogicError("报价系列编码缺失，无法修订")
 
-        latest = await Quotation.get_or_none(
-            tenant_id=tenant_id,
-            quotation_series_code=series,
-            is_latest_in_series=True,
-            deleted_at__isnull=True,
-        )
+        # 删除最新版后可能无人继承 latest；先自愈再解析
+        latest = await self._heal_series_live_latest(tenant_id, series)
         if not latest:
             raise BusinessLogicError("未找到该系列的最新版本报价单")
         if latest.id != src.id:
@@ -2115,6 +2232,56 @@ class QuotationService:
 
         return await self.get_quotation_by_id(tenant_id, new_row.id, include_items=True)
 
+    @staticmethod
+    async def _heal_series_live_latest(
+        tenant_id: int,
+        series: str,
+        *,
+        exclude_quotation_id: Optional[int] = None,
+    ) -> Optional[Quotation]:
+        """
+        保证系列在存活行中至多有一个 is_latest_in_series=True。
+        软删最新版后若无人继承，按 version_no/id 晋升上一存活版，并卸掉已删行上的 latest 标记。
+        """
+        series = (series or "").strip()
+        if not series:
+            return None
+        await Quotation.filter(
+            tenant_id=tenant_id,
+            quotation_series_code=series,
+            deleted_at__isnull=False,
+            is_latest_in_series=True,
+        ).update(is_latest_in_series=False)
+        live_q = Quotation.filter(
+            tenant_id=tenant_id,
+            quotation_series_code=series,
+            deleted_at__isnull=True,
+        )
+        if exclude_quotation_id is not None:
+            live_q = live_q.exclude(id=exclude_quotation_id)
+        latest = await live_q.filter(is_latest_in_series=True).order_by(
+            "-version_no", "-id"
+        ).first()
+        if latest:
+            # 若误有多条 latest，只保留最高版本
+            await Quotation.filter(
+                tenant_id=tenant_id,
+                quotation_series_code=series,
+                deleted_at__isnull=True,
+                is_latest_in_series=True,
+            ).exclude(id=latest.id).update(is_latest_in_series=False)
+            return latest
+        candidate = await live_q.order_by("-version_no", "-id").first()
+        if not candidate:
+            return None
+        await Quotation.filter(id=candidate.id).update(
+            is_latest_in_series=True,
+            superseded_by_id=None,
+        )
+        candidate.is_latest_in_series = True
+        candidate.superseded_by_id = None
+        return candidate
+
     async def delete_quotation(
         self,
         tenant_id: int,
@@ -2147,10 +2314,22 @@ class QuotationService:
             conversion_downstream_missing=conv_missing,
             contract_downstream_missing=contract_missing,
         )
+        series = (
+            quotation.quotation_series_code or quotation.quotation_code or ""
+        ).strip()
         now = resolve_business_datetime()
-        await Quotation.filter(
-            id=quotation_id, tenant_id=tenant_id
-        ).update(deleted_at=now)
+        async with in_transaction():
+            # 软删最新版时必须卸 latest，否则系列无人可下推/修订
+            await Quotation.filter(id=quotation_id, tenant_id=tenant_id).update(
+                deleted_at=now,
+                is_latest_in_series=False,
+            )
+            if series:
+                await self._heal_series_live_latest(
+                    tenant_id,
+                    series,
+                    exclude_quotation_id=quotation_id,
+                )
 
     async def _load_quotation_push_context(
         self,
@@ -2171,6 +2350,17 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
+        series = (
+            quotation.quotation_series_code or quotation.quotation_code or ""
+        ).strip()
+        if series:
+            healed = await self._heal_series_live_latest(tenant_id, series)
+            if healed and healed.id == quotation.id:
+                quotation = healed
+            else:
+                quotation = await Quotation.get(
+                    tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+                )
         conv_missing = await self._quotation_conversion_downstream_missing(
             tenant_id, quotation
         )
@@ -2240,6 +2430,348 @@ class QuotationService:
             )
         return preview_items
 
+    async def list_quotation_sales_order_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        quotation_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口报价明细，供销售订单跨单取单。"""
+        from apps.kuaizhizao.models.quotation import Quotation
+        from apps.kuaizhizao.models.quotation_item import QuotationItem
+        from apps.kuaizhizao.services.document_action_policy.quotation import (
+            _has_live_sales_order_link,
+            derive_quotation_capabilities,
+        )
+
+        q_query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if quotation_id is not None:
+            q_query = q_query.filter(id=int(quotation_id))
+        quotations = await q_query.only(
+            "id",
+            "quotation_code",
+            "quotation_date",
+            "valid_until",
+            "status",
+            "review_status",
+            "customer_name",
+            "sales_order_id",
+            "contract_id",
+            "sales_review_id",
+        )
+        if not quotations:
+            return {"data": [], "total": 0}
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "quotation"
+        )
+        q_by_id = {int(q.id): q for q in quotations}
+        q_ids = list(q_by_id.keys())
+        conv_missing_by_q: Dict[int, bool] = {}
+        contract_missing_by_q: Dict[int, bool] = {}
+        review_missing_by_q: Dict[int, bool] = {}
+        for q in quotations:
+            qid = int(q.id)
+            conv_missing_by_q[qid] = await self._quotation_conversion_downstream_missing(
+                tenant_id, q
+            )
+            contract_missing_by_q[qid] = await self._quotation_contract_downstream_missing(
+                tenant_id, q
+            )
+            review_missing_by_q[qid] = await self._quotation_sales_review_downstream_missing(
+                tenant_id, q
+            )
+
+        items = await QuotationItem.filter(
+            tenant_id=tenant_id, quotation_id__in=q_ids
+        ).order_by("quotation_id", "id")
+        material_ids = {
+            int(it.material_id) for it in items if getattr(it, "material_id", None)
+        }
+        material_by_id: Dict[int, Any] = {}
+        if material_ids:
+            from apps.master_data.models.material import Material
+
+            materials = await Material.filter(
+                tenant_id=tenant_id, id__in=list(material_ids), deleted_at__isnull=True
+            ).all()
+            material_by_id = {int(m.id): m for m in materials}
+        from apps.kuaizhizao.utils.pull_open_line_quantity import build_pull_open_qty_source
+
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            q = q_by_id.get(int(item.quotation_id))
+            if not q:
+                continue
+            qid = int(q.id)
+            conv_missing = conv_missing_by_q.get(qid, True)
+            caps = derive_quotation_capabilities(
+                q,
+                audit_required=audit_required,
+                conversion_downstream_missing=conv_missing,
+                contract_downstream_missing=contract_missing_by_q.get(qid, True),
+                sales_review_downstream_missing=review_missing_by_q.get(qid, True),
+            )
+            push_allowed = caps.convert_to_order.allowed
+            already_pushed = _has_live_sales_order_link(q, conv_missing)
+            qty = float(item.quote_quantity or 0)
+            if qty <= 0:
+                continue
+            from apps.kuaizhizao.utils.pull_open_line_quantity import (
+                build_whole_line_gate_primary_triplet,
+                enrich_pull_line_from_source_item,
+            )
+
+            qty, pushed, remaining = build_whole_line_gate_primary_triplet(
+                qty,
+                already_pushed=already_pushed,
+                push_allowed=push_allowed,
+            )
+            if already_pushed:
+                can_push = False
+            elif push_allowed:
+                can_push = True
+            else:
+                can_push = False
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            customer_name = str(getattr(q, "customer_name", None) or "").strip()
+            line_notes = str(getattr(item, "notes", None) or "").strip()
+            if kw:
+                haystack = " ".join(
+                    [
+                        str(q.quotation_code or ""),
+                        customer_name,
+                        material_code,
+                        material_name,
+                        material_spec,
+                        line_notes,
+                    ]
+                ).lower()
+                if kw not in haystack:
+                    continue
+            quotation_date = (
+                q.quotation_date.isoformat()
+                if getattr(q, "quotation_date", None)
+                else None
+            )
+            valid_until = (
+                q.valid_until.isoformat()
+                if getattr(q, "valid_until", None)
+                else None
+            )
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "quotation_id": qid,
+                "quotation_code": q.quotation_code,
+                "quotation_status": q.status,
+                "document_date": quotation_date,
+                "quotation_date": quotation_date,
+                "valid_until": valid_until,
+                "customer_name": customer_name or None,
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "件",
+                "line_notes": line_notes or None,
+                "can_push": can_push,
+            }
+            qty_source = build_pull_open_qty_source(
+                item, material_by_id.get(int(item.material_id or 0))
+            )
+            enrich_pull_line_from_source_item(
+                row,
+                qty_source,
+                suggested_primary=qty,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                already_pushed=already_pushed,
+                push_allowed=push_allowed,
+            )
+            lines.append(row)
+        lines.sort(
+            key=lambda r: (
+                str(r.get("document_date") or ""),
+                str(r.get("quotation_code") or ""),
+                int(r.get("id") or 0),
+            ),
+            reverse=True,
+        )
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
+
+    async def list_quotation_sales_review_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        quotation_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口报价明细，供订单评审跨单取单。"""
+        from apps.kuaizhizao.models.quotation import Quotation
+        from apps.kuaizhizao.models.quotation_item import QuotationItem
+        from apps.kuaizhizao.services.document_action_policy.quotation import (
+            _has_live_sales_review_link,
+            derive_quotation_capabilities,
+        )
+
+        q_query = Quotation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if quotation_id is not None:
+            q_query = q_query.filter(id=int(quotation_id))
+        quotations = await q_query.only(
+            "id",
+            "quotation_code",
+            "quotation_date",
+            "status",
+            "review_status",
+            "customer_name",
+            "sales_order_id",
+            "contract_id",
+            "sales_review_id",
+        )
+        if not quotations:
+            return {"data": [], "total": 0}
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "quotation"
+        )
+        q_by_id = {int(q.id): q for q in quotations}
+        q_ids = list(q_by_id.keys())
+        conv_missing_by_q: Dict[int, bool] = {}
+        contract_missing_by_q: Dict[int, bool] = {}
+        review_missing_by_q: Dict[int, bool] = {}
+        for q in quotations:
+            qid = int(q.id)
+            conv_missing_by_q[qid] = await self._quotation_conversion_downstream_missing(
+                tenant_id, q
+            )
+            contract_missing_by_q[qid] = await self._quotation_contract_downstream_missing(
+                tenant_id, q
+            )
+            review_missing_by_q[qid] = await self._quotation_sales_review_downstream_missing(
+                tenant_id, q
+            )
+
+        items = await QuotationItem.filter(
+            tenant_id=tenant_id, quotation_id__in=q_ids
+        ).order_by("quotation_id", "id")
+        material_ids = {
+            int(it.material_id) for it in items if getattr(it, "material_id", None)
+        }
+        material_by_id_review: Dict[int, Any] = {}
+        if material_ids:
+            from apps.master_data.models.material import Material
+
+            materials = await Material.filter(
+                tenant_id=tenant_id, id__in=list(material_ids), deleted_at__isnull=True
+            ).all()
+            material_by_id_review = {int(m.id): m for m in materials}
+        from apps.kuaizhizao.utils.pull_open_line_quantity import build_pull_open_qty_source
+
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            q = q_by_id.get(int(item.quotation_id))
+            if not q:
+                continue
+            qid = int(q.id)
+            review_missing = review_missing_by_q.get(qid, True)
+            caps = derive_quotation_capabilities(
+                q,
+                audit_required=audit_required,
+                conversion_downstream_missing=conv_missing_by_q.get(qid, True),
+                contract_downstream_missing=contract_missing_by_q.get(qid, True),
+                sales_review_downstream_missing=review_missing,
+            )
+            push_allowed = caps.convert_to_sales_review.allowed
+            already_pushed = _has_live_sales_review_link(q, review_missing)
+            qty = float(item.quote_quantity or 0)
+            if qty <= 0:
+                continue
+            from apps.kuaizhizao.utils.pull_open_line_quantity import (
+                build_whole_line_gate_primary_triplet,
+                enrich_pull_line_from_source_item,
+            )
+
+            qty, pushed, remaining = build_whole_line_gate_primary_triplet(
+                qty,
+                already_pushed=already_pushed,
+                push_allowed=push_allowed,
+            )
+            if already_pushed:
+                can_push = False
+            elif push_allowed:
+                can_push = True
+            else:
+                can_push = False
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            quotation_date = (
+                q.quotation_date.isoformat()
+                if getattr(q, "quotation_date", None)
+                else None
+            )
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "quotation_id": qid,
+                "quotation_code": q.quotation_code,
+                "quotation_status": q.status,
+                "document_date": quotation_date,
+                "quotation_date": quotation_date,
+                "customer_name": getattr(q, "customer_name", None),
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "件",
+                "can_push": can_push,
+            }
+            qty_source = build_pull_open_qty_source(
+                item, material_by_id_review.get(int(item.material_id or 0))
+            )
+            enrich_pull_line_from_source_item(
+                row,
+                qty_source,
+                suggested_primary=qty,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                already_pushed=already_pushed,
+                push_allowed=push_allowed,
+            )
+            lines.append(row)
+        lines.sort(
+            key=lambda r: (
+                str(r.get("quotation_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
+
     async def preview_push_quotation_to_sales_order(
         self,
         tenant_id: int,
@@ -2300,6 +2832,17 @@ class QuotationService:
         )
         if not quotation:
             raise NotFoundError(f"报价单不存在: {quotation_id}")
+        series = (
+            quotation.quotation_series_code or quotation.quotation_code or ""
+        ).strip()
+        if series:
+            healed = await self._heal_series_live_latest(tenant_id, series)
+            if healed and healed.id == quotation.id:
+                quotation = healed
+            else:
+                quotation = await Quotation.get(
+                    tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+                )
         conv_missing = await self._quotation_conversion_downstream_missing(
             tenant_id, quotation
         )
@@ -2381,6 +2924,7 @@ class QuotationService:
                 material_code=it.material_code,
                 material_name=it.material_name,
                 material_spec=it.material_spec,
+                material_model=getattr(it, "material_model", None),
                 material_unit=it.material_unit,
                 required_quantity=it.quote_quantity,
                 delivery_date=it.delivery_date or delivery_date,
@@ -2390,6 +2934,8 @@ class QuotationService:
                 item_amount=it.total_amount,
                 is_gift=bool(getattr(it, "is_gift", False)),
                 gift_ref_unit_price=getattr(it, "gift_ref_unit_price", None),
+                partner_material_code=getattr(it, "partner_material_code", None),
+                partner_material_name=getattr(it, "partner_material_name", None),
                 notes=it.notes,
             )
             for it in items
@@ -2515,6 +3061,19 @@ class QuotationService:
         )
         item_ids = [int(it.id) for it in items]
         payload = so_create.model_dump(by_alias=True, mode="json")
+        # 下推行锁定来源单价：打开新建页时副数量换算/客户回填不得重价冲掉报价单价与税率
+        payload_items = payload.get("items")
+        if isinstance(payload_items, list):
+            q_code = str(quotation.quotation_code or "")
+            for idx, row in enumerate(payload_items):
+                if not isinstance(row, dict):
+                    continue
+                row["unit_price_locked"] = True
+                row["source_document_type"] = "quotation"
+                row["source_document_id"] = quotation_id
+                row["source_document_code"] = q_code
+                if idx < len(items):
+                    row["source_line_id"] = int(items[idx].id)
         return {
             "target_type": "sales_order",
             "source_type": "quotation",

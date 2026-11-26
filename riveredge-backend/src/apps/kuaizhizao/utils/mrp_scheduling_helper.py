@@ -190,6 +190,19 @@ def resolve_direct_push_work_order_planned_dates(
     )
 
 
+def resolve_mrp_computation_push_work_order_planned_dates(
+    *,
+    delivery_date: Any,
+    today: Optional[date] = None,
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """MRP 下推工单：开工日为当前站点日，完工日为需求交期。"""
+    anchor = normalize_planning_date(today) or date.today()
+    end = normalize_planning_date(delivery_date)
+    planned_start = planning_date_to_work_order_start(anchor)
+    planned_end = planning_date_to_work_order_end(end) if end else None
+    return planned_start, planned_end
+
+
 def resolve_work_order_planned_dates_for_push(
     *,
     source_start: Optional[date],

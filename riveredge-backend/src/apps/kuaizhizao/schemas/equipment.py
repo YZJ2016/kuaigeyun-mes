@@ -33,6 +33,10 @@ def _validate_technical_parameters(value):
     return value
 
 
+# 单据态：故障/维修同步与 IoT/状态监控回写均不得覆盖（与 MesGuard 一致）
+EQUIPMENT_STATUS_PROTECTED = frozenset({"停用", "报废", "校验中"})
+
+
 class EquipmentBase(BaseModel):
     """
     设备基础 Schema
@@ -227,6 +231,10 @@ class EquipmentResponse(EquipmentBase):
     )
     line_rebind_at: Optional[datetime] = Field(None, description="最近换线完成时刻")
     line_rebind_id: Optional[int] = Field(None, description="最近换线单ID")
+    # 厂区由关联车间 → 主数据 Plant 解析，非设备表字段
+    plant_id: Optional[int] = Field(None, description="所属厂区ID（经车间解析）")
+    plant_code: Optional[str] = Field(None, max_length=50, description="所属厂区编码")
+    plant_name: Optional[str] = Field(None, max_length=200, description="所属厂区名称")
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None

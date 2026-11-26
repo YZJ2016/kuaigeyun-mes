@@ -30,6 +30,7 @@ import QmsReviewInputLinksField, {
   mergeReviewInputLinks,
   splitReviewInputLinks,
 } from '../qms/QmsReviewInputLinksField';
+import ManagementReviewResolutionsPanel from './ManagementReviewResolutionsPanel';
 
 const RESOURCE = 'kuaizhizao:quality-management-management-reviews';
 
@@ -51,6 +52,9 @@ const ManagementReviewsPage: React.FC = () => {
   );
   const otherInputLinksRef = useRef<import('../../../services/quality-qms').QmsEvidenceLink[]>([]);
   const { canCreate, canUpdate, canDelete } = useResourcePermissions(RESOURCE);
+  const { canCreate: canCreateCa } = useResourcePermissions(
+    'kuaizhizao:quality-management-corrective-actions',
+  );
 
   const { data: standardsEnvelope } = useQuery({
     queryKey: ['qms-standards'],
@@ -429,6 +433,23 @@ const ManagementReviewsPage: React.FC = () => {
               <DocumentAttachmentsField category="qms_management_review_attachments" />
             </Col>
           </Row>
+
+          {editing?.id ? (
+            <div style={{ marginTop: 16, marginBottom: 16 }}>
+              <ManagementReviewResolutionsPanel
+                reviewId={editing.id}
+                canUpdate={canUpdate}
+                canCreateCa={canCreateCa}
+              />
+            </div>
+          ) : (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginTop: 16, marginBottom: 16 }}
+              title={t('app.kuaizhizao.quality.qms.resolutionSaveHint')}
+            />
+          )}
         </FormModalTemplate>
       </ListPageTemplate>
     </PermissionGuard>

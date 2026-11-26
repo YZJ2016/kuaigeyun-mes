@@ -18,10 +18,12 @@ from core.api.deps.access import require_permission_codes, require_read_or_displ
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
+from apps.kuaizhizao.api.pull_query_params import PullQueryDateFrom, PullQueryDateTo
 from apps.kuaizhizao.services.delivery_notice_service import DeliveryNoticeService
 from apps.kuaizhizao.schemas.delivery_notice import (
     DeliveryNoticeCreate,
     DeliveryNoticeUpdate,
+    DeliveryNoticeSign,
     DeliveryNoticeResponse,
     DeliveryNoticeListResponse,
     DeliveryNoticeWithItemsResponse,
@@ -91,6 +93,8 @@ async def list_delivery_notice_pull_lines(
     keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
     sales_delivery_id: Optional[int] = Query(None, description="来源销售出库单"),
     pullable_only: bool = Query(True, description="仅剩余可通知量大于 0"),
+    date_from: PullQueryDateFrom = None,
+    date_to: PullQueryDateTo = None,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -103,6 +107,8 @@ async def list_delivery_notice_pull_lines(
             keyword=keyword,
             sales_delivery_id=sales_delivery_id,
             pullable_only=pullable_only,
+            date_from=date_from,
+            date_to=date_to,
         )
     except BusinessLogicError as e:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -306,6 +312,34 @@ async def send_delivery_notice(
             tenant_id=tenant_id,
             notice_id=notice_id,
             sent_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/{notice_id}/sign",
+    response_model=DeliveryNoticeResponse,
+    summary="Confirm customer receipt signature",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-notice:update"))],
+)
+async def sign_delivery_notice(
+    notice_id: int = Path(..., description="通知单ID"),
+    body: Optional[DeliveryNoticeSign] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """客户签收：已发送 → 已签收，记录签收时间。"""
+    payload = body or DeliveryNoticeSign()
+    try:
+        return await delivery_notice_service.sign_notice(
+            tenant_id=tenant_id,
+            notice_id=notice_id,
+            signed_by=current_user.id,
+            signed_at=payload.signed_at,
+            notes=payload.notes,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

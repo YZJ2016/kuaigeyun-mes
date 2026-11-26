@@ -8,7 +8,7 @@ Date: 2026-02-19
 """
 
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
@@ -47,14 +47,9 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         qty: Decimal,
         unit_price: Any,
         *,
-        explicit_total: Any = None,
         sales_delivery_item: Any = None,
         price_type: Optional[str] = None,
     ) -> Decimal:
-        if explicit_total is not None:
-            from apps.kuaizhizao.utils.document_amount_write import resolve_simple_line_total
-
-            return resolve_simple_line_total(qty, unit_price, explicit_total)
         if sales_delivery_item is not None and price_type is not None:
             from apps.kuaizhizao.constants.price_type import normalize_price_type
             from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
@@ -179,17 +174,27 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
         keyword: Optional[str] = None,
         sales_delivery_id: Optional[int] = None,
         pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         """开口销售出库行：可转送货单的剩余明细。"""
         from apps.kuaizhizao.services.document_action_policy.sales_delivery import (
             _CANCELLED,
         )
 
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
         from apps.kuaizhizao.utils.sales_delivery_helper import sales_delivery_reference_date_str
 
         delivery_query = SalesDelivery.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if sales_delivery_id is not None:
             delivery_query = delivery_query.filter(id=int(sales_delivery_id))
+        delivery_query = apply_pull_query_document_date_filter(
+            delivery_query,
+            field="delivery_time",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
+        )
         deliveries = await delivery_query.only(
             "id",
             "delivery_code",
@@ -261,7 +266,9 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
                 int(row.get("id") or 0),
             )
         )
-        return {"data": lines[skip : skip + limit], "total": len(lines)}
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
 
     async def create_delivery_notices_from_sales_delivery_items(
         self,
@@ -592,7 +599,6 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
                 amt = self._delivery_notice_line_amount(
                     qty,
                     item_data.unit_price,
-                    explicit_total=item_data.total_amount,
                     sales_delivery_item=delivery_line,
                     price_type=price_type,
                 )
@@ -781,6 +787,45 @@ class DeliveryNoticeService(AppBaseService[DeliveryNotice]):
             updated_by=sent_by,
             updated_by_name=(await self.get_user_info(sent_by))["name"],
         )
+        return DeliveryNoticeResponse.model_validate(
+            await DeliveryNotice.get(tenant_id=tenant_id, id=notice_id)
+        )
+
+    async def sign_notice(
+        self,
+        tenant_id: int,
+        notice_id: int,
+        signed_by: int,
+        *,
+        signed_at=None,
+        notes: str | None = None,
+    ) -> DeliveryNoticeResponse:
+        """客户签收：已发送 → 已签收，写入签收时间。"""
+        notice = await DeliveryNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"送货单不存在: {notice_id}")
+        if notice.status != "已发送":
+            raise BusinessLogicError("只有已发送状态的送货单才能签收")
+
+        stamp = signed_at or resolve_business_datetime()
+        if getattr(stamp, "tzinfo", None) is None:
+            from core.utils.timezone_utils import coerce_business_datetime_to_utc
+
+            stamp = coerce_business_datetime_to_utc(stamp)
+
+        patch: dict = {
+            "status": "已签收",
+            "signed_at": stamp,
+            "updated_by": signed_by,
+            "updated_by_name": (await self.get_user_info(signed_by))["name"],
+        }
+        if notes is not None:
+            existing = (notice.notes or "").strip()
+            patch["notes"] = f"{existing}\n{notes}".strip() if existing else notes
+
+        await DeliveryNotice.filter(tenant_id=tenant_id, id=notice_id).update(**patch)
         return DeliveryNoticeResponse.model_validate(
             await DeliveryNotice.get(tenant_id=tenant_id, id=notice_id)
         )

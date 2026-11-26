@@ -2366,6 +2366,12 @@ const PurchaseInquiriesPage: React.FC = () => {
             name="tax_rate_percent"
             label={t('app.kuaizhizao.purchaseInquiry.taxRate')}
             options={taxRatePercentOptions}
+            rules={[
+              {
+                required: true,
+                message: t('app.kuaizhizao.warehouseInbound.field.taxRateRequired'),
+              },
+            ]}
           />
         </Col>
         <Col flex="1 1 0" style={{ minWidth: 0 }} aria-hidden />

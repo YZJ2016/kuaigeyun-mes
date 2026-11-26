@@ -57,6 +57,7 @@ export const drawingDistributionApi = {
     limit?: number;
     status?: string;
     keyword?: string;
+    drawingUuid?: string;
   }): Promise<DrawingDistributionListResponse> => {
     return api.get<DrawingDistributionListResponse>(BASE, { params });
   },

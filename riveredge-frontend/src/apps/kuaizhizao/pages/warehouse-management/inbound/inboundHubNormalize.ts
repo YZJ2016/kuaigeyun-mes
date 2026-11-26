@@ -16,6 +16,7 @@ type InboundDetailItem = {
   inbound_quantity?: number;
   return_quantity?: number;
   quantity?: number;
+  warehouse_id?: number;
   warehouse_name?: string;
   location_code?: string;
   batch_number?: string;
@@ -26,6 +27,30 @@ type InboundDetailItem = {
   process_waste_qty?: number;
   material_waste_qty?: number;
 };
+
+type HeaderWarehouseEcho = {
+  warehouse_id?: number;
+  warehouse_name?: string;
+};
+
+/** 行仓为空时回落表头仓（详情列 / 确认入库同源，禁止多处各写一套） */
+export function applyHeaderWarehouseToInboundLines<T extends HeaderWarehouseEcho>(
+  items: T[],
+  header: HeaderWarehouseEcho,
+): T[] {
+  const headerWhId = Number(header.warehouse_id ?? 0);
+  const headerWhName = String(header.warehouse_name ?? '').trim();
+  return items.map((item) => {
+    const lineWhId = Number(item.warehouse_id ?? 0);
+    const lineWhName = String(item.warehouse_name ?? '').trim();
+    if (lineWhId > 0 || lineWhName) return item;
+    return {
+      ...item,
+      warehouse_id: headerWhId > 0 ? headerWhId : undefined,
+      warehouse_name: headerWhName || undefined,
+    };
+  });
+}
 
 /** Hub 明细行数量：采购/成品用 receipt_quantity，其他入库用 inbound_quantity 等 */
 export function resolveInboundHubLineQuantity(row: Record<string, unknown> | InboundDetailItem): number | undefined {
@@ -197,11 +222,15 @@ export function normalizeInboundHubDetail(
   }
 
   if (Array.isArray(row.items)) {
-    row.items = row.items.map((it) =>
+    const normalizedItems = row.items.map((it) =>
       normalizeInboundHubDetailItem(
         typeof it === 'object' && it != null ? (it as Record<string, unknown>) : {},
       ),
     );
+    row.items = applyHeaderWarehouseToInboundLines(normalizedItems, {
+      warehouse_id: Number(row.warehouse_id ?? 0) || undefined,
+      warehouse_name: String(row.warehouse_name ?? '').trim() || undefined,
+    });
   }
 
   const dateRaw = resolveInboundHubDateRaw(row as InboundHubOrder);
@@ -279,7 +308,10 @@ export function resolveInboundHubStatusTagColor(status?: string): string {
 export function resolveInboundHubDetailItems(order: InboundHubOrder): InboundDetailItem[] {
   const existing = order.items;
   if (Array.isArray(existing) && existing.length > 0) {
-    return existing as InboundDetailItem[];
+    return applyHeaderWarehouseToInboundLines(existing as InboundDetailItem[], {
+      warehouse_id: Number((order as { warehouse_id?: number }).warehouse_id ?? 0) || undefined,
+      warehouse_name: String(order.warehouse_name ?? '').trim() || undefined,
+    });
   }
 
   const row = order as Record<string, unknown>;

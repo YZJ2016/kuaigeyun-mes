@@ -20,7 +20,10 @@ import { redirectAfterLogout } from '../utils/loginEntry';
 import { isTenantExpiredApiDetail, TENANT_EXPIRED_MESSAGE } from '../utils/tenantAccess';
 import { isKuaireportSharedApiPath, isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
 import { webClientChannelHeaders } from '../utils/clientChannel';
-import { isRequestCancellation } from '../utils/requestCancellation';
+import {
+  isRequestCancellation,
+  trackInflightApiAbortController,
+} from '../utils/requestCancellation';
 import { applyStationOperatorSessionHeader } from '../apps/kuaizhizao/station/operatorSession';
 
 /**
@@ -131,9 +134,9 @@ export function formatApiErrorDetail(raw: unknown): string {
   }
   if (typeof raw === 'object') {
     const d = raw as { message?: string; trace_id?: string };
+    // 面向客户只展示业务文案；trace_id 留在响应体供排查，不拼进 Toast
     if (d.message != null) {
-      const m = String(d.message);
-      return d.trace_id ? `${m} (trace_id: ${d.trace_id})` : m;
+      return String(d.message);
     }
     return JSON.stringify(raw);
   }
@@ -399,6 +402,7 @@ export async function apiRequest<T = any>(
     const result = await withRetry(
       async () => {
         const attemptController = new AbortController();
+        const untrackInflight = trackInflightApiAbortController(attemptController);
         const onUserAbort = () => attemptController.abort(userSignal?.reason);
         if (userSignal) {
           if (userSignal.aborted) {
@@ -424,6 +428,7 @@ export async function apiRequest<T = any>(
           const parsed = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
           return { res, data: parsed };
         } finally {
+          untrackInflight();
           if (attemptTimeoutId) clearTimeout(attemptTimeoutId);
           if (userSignal) userSignal.removeEventListener('abort', onUserAbort);
         }
@@ -432,6 +437,9 @@ export async function apiRequest<T = any>(
         maxRetries: typeof maxRetries === 'number' ? maxRetries : 2,
         retryDelay: 800,
         shouldRetry: (error: any, attempt: number) => {
+          if (isRequestCancellation(error) || isRequestCancellation(error?.originalError)) {
+            return false;
+          }
           const msg = String(error?.message || error?.name || '').toLowerCase();
           if (msg.includes('timeout') || error?.name === 'TimeoutError') return false;
           if ([401, 400].includes(error?.response?.status)) return false;
@@ -713,10 +721,9 @@ export async function apiRequest<T = any>(
                 .join('；') || JSON.stringify(data.detail);
           } else {
             // 新兼容：支持后端 detail 结构化对象 { message, trace_id }
+            // 客户 Toast 只展示 message；trace_id 挂到 error 上供控制台/支持排查
             const detailObj = data.detail as { message?: string; trace_id?: string };
-            const detailMessage = detailObj?.message || JSON.stringify(data.detail);
-            const traceSuffix = detailObj?.trace_id ? ` (trace_id: ${detailObj.trace_id})` : '';
-            errorMessage = `${detailMessage}${traceSuffix}`;
+            errorMessage = detailObj?.message || JSON.stringify(data.detail);
           }
           // 对于 404 错误，如果 detail 是 "Not Found"，提供更友好的错误信息
           if (response.status === 404) {
@@ -727,6 +734,13 @@ export async function apiRequest<T = any>(
           }
           const error = new Error(errorMessage) as any;
           error.response = { data, status: response.status };
+          const detailTrace =
+            data.detail && typeof data.detail === 'object' && !Array.isArray(data.detail)
+              ? (data.detail as { trace_id?: string }).trace_id
+              : undefined;
+          if (detailTrace) {
+            error.traceId = detailTrace;
+          }
           throw error;
         }
         // 如果是旧格式 { code: ..., message: ... }

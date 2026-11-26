@@ -615,6 +615,7 @@ class ReceiptRefundService(AppBaseService[Receipt]):
             refund_amount = quantize_money(refund.total_amount)
             unconfirm_payload: dict = {
                 "status": "Draft",
+                "review_status": "草稿",
                 "settled_amount": Decimal("0"),
                 "unsettled_amount": refund_amount,
             }

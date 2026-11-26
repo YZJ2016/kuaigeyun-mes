@@ -29,6 +29,8 @@ class FinishedGoodsReceiptItem(
     """
     tenant_id = fields.IntField(description="租户ID")
     receipt_id = fields.IntField(description="入库单ID")
+    work_order_id = fields.IntField(null=True, description="来源工单ID（按行）")
+    work_order_code = fields.CharField(max_length=50, null=True, description="来源工单编码（按行）")
     material_id = fields.IntField(description="物料ID")
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")

@@ -17,13 +17,20 @@ from apps.kuaizhizao.schemas.equipment_fault import (
     EquipmentFaultUpdate,
     EquipmentFaultResponse,
     EquipmentFaultListResponse,
+    EquipmentRepairAddCollaboratorRequest,
     EquipmentRepairCompleteRequest,
     EquipmentRepairCreate,
+    EquipmentRepairReassignRequest,
     EquipmentRepairUpdate,
     EquipmentRepairResponse,
     EquipmentRepairListResponse,
 )
-from apps.kuaizhizao.services.equipment_fault_service import EquipmentFaultService, EquipmentRepairService
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from apps.kuaizhizao.services.equipment_fault_service import (
+    EquipmentFaultService,
+    EquipmentRepairService,
+    serialize_equipment_repair,
+)
 from apps.kuaizhizao.services.equipment_fault_reminder_service import (
     fault_has_arrival,
     is_fault_response_overdue,
@@ -33,7 +40,11 @@ from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/equipment-faults", tags=["App - Kuaige Zhizao - Equipment Faults"])
+router = APIRouter(
+    prefix="/equipment-faults",
+    tags=["App - Kuaige Zhizao - Equipment Faults"],
+    dependencies=[Depends(require_kuaizhizao_module_access("equipment-fault", resolve_print=False))],
+)
 
 
 async def _fault_response(tenant_id: int, fault) -> EquipmentFaultResponse:
@@ -140,7 +151,7 @@ async def create_equipment_repair(
             data=data,
             created_by=current_user.id
         )
-        return EquipmentRepairResponse.model_validate(repair)
+        return await serialize_equipment_repair(tenant_id, repair)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -162,6 +173,7 @@ async def list_equipment_repairs(
     repair_end_date: Optional[str] = Query(None, description="维修结束日期 YYYY-MM-DD"),
     created_start_date: Optional[str] = Query(None, description="创建开始日期 YYYY-MM-DD"),
     created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
+    mine: Optional[bool] = Query(None, description="为 true 时仅当前用户为主责或进行中参与人的维修单"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -184,6 +196,7 @@ async def list_equipment_repairs(
         repair_end_date=repair_end_date,
         created_start_date=created_start_date,
         created_end_date=created_end_date,
+        mine_user_id=current_user.id if mine else None,
     )
     
     items = [EquipmentRepairResponse.model_validate(repair) for repair in repairs]
@@ -214,7 +227,57 @@ async def complete_equipment_repair(
             data=data,
             operator=current_user,
         )
-        return EquipmentRepairResponse.model_validate(repair)
+        return await serialize_equipment_repair(tenant_id, repair)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/repairs/{uuid}/collaborators",
+    response_model=EquipmentRepairResponse,
+)
+async def add_equipment_repair_collaborator(
+    uuid: str,
+    data: EquipmentRepairAddCollaboratorRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """维修中添加协作人（记录介入开始时间）。"""
+    try:
+        repair = await EquipmentRepairService.add_collaborator(
+            tenant_id=tenant_id,
+            uuid=uuid,
+            data=data,
+            operator=current_user,
+        )
+        return await serialize_equipment_repair(tenant_id, repair)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/repairs/{uuid}/reassign",
+    response_model=EquipmentRepairResponse,
+)
+async def reassign_equipment_repair(
+    uuid: str,
+    data: EquipmentRepairReassignRequest,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """临时转派主责：原主责记为已转派，新主责记录介入时间。"""
+    try:
+        repair = await EquipmentRepairService.reassign_primary(
+            tenant_id=tenant_id,
+            uuid=uuid,
+            data=data,
+            operator=current_user,
+        )
+        return await serialize_equipment_repair(tenant_id, repair)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -234,7 +297,7 @@ async def get_equipment_repair(
     """
     try:
         repair = await EquipmentRepairService.get_equipment_repair_by_uuid(tenant_id, uuid)
-        return EquipmentRepairResponse.model_validate(repair)
+        return await serialize_equipment_repair(tenant_id, repair)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -260,7 +323,7 @@ async def update_equipment_repair(
             uuid=uuid,
             data=data
         )
-        return EquipmentRepairResponse.model_validate(repair)
+        return await serialize_equipment_repair(tenant_id, repair)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -308,7 +371,7 @@ async def arrive_equipment_fault(
             data=data,
             operator=current_user,
         )
-        return EquipmentRepairResponse.model_validate(repair)
+        return await serialize_equipment_repair(tenant_id, repair)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

@@ -1091,8 +1091,13 @@ const WorkOrderReadinessPopoverContent: React.FC<{
           if (!(pickingId > 0)) {
             throw new Error(t('app.kuaizhizao.workOrder.readinessConfirmPickingCreateFailed'))
           }
-          await warehouseApi.productionPicking.confirm(String(pickingId))
+          const confirmed = await warehouseApi.productionPicking.confirm(String(pickingId))
           messageApi.success(t('app.kuaizhizao.workOrder.readinessConfirmPickingSuccess'))
+          const pushText =
+            confirmed && typeof confirmed === 'object'
+              ? String((confirmed as { external_push_message?: unknown }).external_push_message ?? '').trim()
+              : ''
+          if (pushText) messageApi.warning(pushText)
           await queryClient.invalidateQueries({ queryKey: ['workOrderKittingAnalysis', workOrderId] })
           invalidateMenuBadgeCounts()
           onReadinessSynced?.()

@@ -50,6 +50,13 @@ class DeliveryNoticeUpdate(DeliveryNoticeBase):
     notice_code: Optional[str] = Field(None, max_length=50, description="通知单编码")
 
 
+class DeliveryNoticeSign(BaseSchema):
+    """客户签收：已发送 → 已签收"""
+
+    signed_at: Optional[datetime] = Field(None, description="签收时间（缺省为当前业务时刻）")
+    notes: Optional[str] = Field(None, description="签收备注")
+
+
 class DeliveryNoticeResponse(DeliveryNoticeBase):
     """送货单响应schema"""
     id: int = Field(..., description="通知单ID")

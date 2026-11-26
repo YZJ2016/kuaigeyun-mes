@@ -8,6 +8,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
@@ -46,6 +47,10 @@ import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLi
 import { alignProColumns } from '../../sales-management/shared/documentFieldAlignment';
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import {
+  handoffReplenishmentToPurchaseOrderCreate,
+  handoffReplenishmentToPurchaseRequisitionCreate,
+} from '../../../utils/documentFlowHandoff';
 
 interface ReplenishmentSuggestion {
   id?: number;
@@ -94,6 +99,7 @@ const SUGGESTION_TYPE_COLORS: Record<string, string> = {
 
 const ReplenishmentSuggestionsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { message: messageApi, modal } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<ReplenishmentSuggestion[]>([]);
@@ -242,13 +248,21 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
               : t('app.kuaizhizao.replenishmentSuggestions.msgPushPoConfirm', { count: ids.length }),
           content: preview?.tip,
           onOk: async () => {
-            const result =
-              target === 'purchase_requisition'
-                ? await warehouseApi.replenishmentSuggestion.pushToPurchaseRequisition(ids)
-                : await warehouseApi.replenishmentSuggestion.pushToPurchaseOrder(ids);
-            messageApi.success(
-              result?.message || t('app.kuaizhizao.replenishmentSuggestions.msgPushSuccess'),
-            );
+            if (target === 'purchase_requisition') {
+              await handoffReplenishmentToPurchaseRequisitionCreate(navigate, ids);
+              messageApi.success(
+                t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+                  target: pushToPrAction.targetLabel,
+                }),
+              );
+            } else {
+              await handoffReplenishmentToPurchaseOrderCreate(navigate, ids);
+              messageApi.success(
+                t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+                  target: pushToPoAction.targetLabel,
+                }),
+              );
+            }
             handleBatchSuccess();
           },
         });
@@ -256,7 +270,16 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         messageApi.error(error?.message || t('app.kuaizhizao.replenishmentSuggestions.msgPushFailed'));
       }
     },
-    [handleBatchSuccess, messageApi, modal, selectedRecordsForBatch, t],
+    [
+      handleBatchSuccess,
+      messageApi,
+      modal,
+      navigate,
+      pushToPoAction.targetLabel,
+      pushToPrAction.targetLabel,
+      selectedRecordsForBatch,
+      t,
+    ],
   );
 
   const toolbarPushMenuItems = useMemo(

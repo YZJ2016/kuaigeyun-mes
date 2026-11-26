@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { io, type Socket } from 'socket.io-client';
-import { getToken } from '../utils/auth';
+import { getTenantId, getToken } from '../utils/auth';
 import {
   getRealtimeConfig,
   getRealtimeToken,
@@ -26,6 +26,16 @@ function refetchImInbox(queryClient: ReturnType<typeof useQueryClient>, payload:
   void queryClient.refetchQueries({ queryKey: ['imConversations'], type: 'active' });
   const convUuid = payload.conversation_uuid;
   if (typeof convUuid === 'string' && convUuid) {
+    if (payload.dissolved === true) {
+      void queryClient.removeQueries({ queryKey: ['imMessages', convUuid] });
+      void queryClient.removeQueries({ queryKey: ['imMembers', convUuid] });
+      window.dispatchEvent(
+        new CustomEvent('im.conversation.dissolved', {
+          detail: { conversation_uuid: convUuid },
+        }),
+      );
+      return;
+    }
     void queryClient.invalidateQueries({ queryKey: ['imMessages', convUuid] });
     void queryClient.refetchQueries({ queryKey: ['imMessages', convUuid], type: 'active' });
   }
@@ -93,9 +103,14 @@ export function useRealtimeInbox({ enabled, onEvent }: Options) {
           if (!token) {
             return;
           }
+          // 平台超管 JWT 无 tenant_id，须随 auth 传当前选定组织
+          const tenantId = getTenantId();
           const socket = io(resolveSocketIoOrigin(), {
             path: config.socket_path || '/socket.io',
-            auth: { token },
+            auth: {
+              token,
+              ...(tenantId != null ? { tenant_id: tenantId } : {}),
+            },
             transports: ['websocket', 'polling'],
             reconnection: true,
           });

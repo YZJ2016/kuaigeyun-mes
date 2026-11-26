@@ -29,11 +29,13 @@ from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.models.equipment_point_inspection import EquipmentPointInspectionRecord
 from apps.kuaizhizao.schemas.equipment import (
     EquipmentCreate,
+    EquipmentResponse,
     EquipmentUpdate,
     EquipmentCalibrationCreate,
     EquipmentCalibrationCreateWithEquipment,
     EquipmentCalibrationUpdate,
 )
+from apps.master_data.models.factory import Plant, Workshop
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -269,6 +271,85 @@ class EquipmentService:
             raise NotFoundError("设备不存在")
         
         return equipment
+
+    @staticmethod
+    async def resolve_plant_by_workshop_ids(
+        tenant_id: int,
+        workshop_ids: List[int],
+    ) -> Dict[int, Dict[str, Any]]:
+        """车间 ID → 厂区 {plant_id, plant_code, plant_name}。"""
+        if not workshop_ids:
+            return {}
+        workshops = await Workshop.filter(
+            tenant_id=tenant_id,
+            id__in=workshop_ids,
+            deleted_at__isnull=True,
+        ).values("id", "plant_id")
+        plant_ids = sorted(
+            {int(row["plant_id"]) for row in workshops if row.get("plant_id") is not None}
+        )
+        plants_by_id: Dict[int, Dict[str, Any]] = {}
+        if plant_ids:
+            plants = await Plant.filter(
+                tenant_id=tenant_id,
+                id__in=plant_ids,
+                deleted_at__isnull=True,
+            ).values("id", "code", "name")
+            plants_by_id = {
+                int(p["id"]): {
+                    "plant_id": int(p["id"]),
+                    "plant_code": p.get("code"),
+                    "plant_name": p.get("name"),
+                }
+                for p in plants
+            }
+        result: Dict[int, Dict[str, Any]] = {}
+        for row in workshops:
+            wid = int(row["id"])
+            pid = row.get("plant_id")
+            if pid is None:
+                continue
+            plant = plants_by_id.get(int(pid))
+            if plant:
+                result[wid] = plant
+        return result
+
+    @staticmethod
+    async def serialize_equipment_list(
+        tenant_id: int,
+        equipment_list: List[Equipment],
+    ) -> List[EquipmentResponse]:
+        workshop_ids = sorted(
+            {
+                int(eq.workshop_id)
+                for eq in equipment_list
+                if eq.workshop_id is not None
+            }
+        )
+        plant_by_workshop = await EquipmentService.resolve_plant_by_workshop_ids(
+            tenant_id, workshop_ids
+        )
+        out: List[EquipmentResponse] = []
+        for eq in equipment_list:
+            base = EquipmentResponse.model_validate(eq)
+            plant = (
+                plant_by_workshop.get(int(eq.workshop_id))
+                if eq.workshop_id is not None
+                else None
+            )
+            if plant:
+                out.append(base.model_copy(update=plant))
+            else:
+                out.append(base)
+        return out
+
+    @staticmethod
+    async def serialize_equipment(
+        tenant_id: int,
+        equipment: Equipment,
+    ) -> EquipmentResponse:
+        items = await EquipmentService.serialize_equipment_list(tenant_id, [equipment])
+        return items[0]
     
     @staticmethod
     async def get_equipment_by_code(

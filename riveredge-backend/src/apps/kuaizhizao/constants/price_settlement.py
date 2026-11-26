@@ -27,4 +27,17 @@ class PriceSettlementPriceSource(str, Enum):
     HISTORY = "history"
 
 
-MONTHLY_SETTLEMENT_METHOD_CODES = frozenset({"monthly", "月结"})
+# 账期类结算（具体天数见客商 payment_terms_days）；含历史 monthly 等库值
+MONTHLY_SETTLEMENT_METHOD_CODES = frozenset(
+    {
+        "net_terms",
+        "monthly",
+        "bimonthly",
+        "quarterly",
+        "月结",
+        "双月结",
+        "季结",
+        "账期",
+        "账期结算",
+    }
+)

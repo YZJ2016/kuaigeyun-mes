@@ -283,8 +283,21 @@ class TenantInitDataService:
 
         if key == "approval_process_preset":
             from core.services.approval.audit_binding_service import AuditBindingService
+            from core.models.resource_category import RESOURCE_TYPE_APPROVAL_PROCESS
+            from core.services.resource.collab_function_category_service import (
+                CollabFunctionCategoryService,
+            )
 
-            return await AuditBindingService.ensure_binding_rows(tenant_id)
+            await CollabFunctionCategoryService().load_function_presets(
+                tenant_id,
+                RESOURCE_TYPE_APPROVAL_PROCESS,
+            )
+            result = await AuditBindingService.ensure_binding_rows(tenant_id)
+            await CollabFunctionCategoryService().backfill_resource_categories(
+                tenant_id,
+                RESOURCE_TYPE_APPROVAL_PROCESS,
+            )
+            return result
 
         if key == "message_template_preset":
             from core.services.messaging.message_template_service import MessageTemplateService
@@ -307,23 +320,29 @@ class TenantInitDataService:
                     kz_rules.get("templates_created") or 0
                 )
             if "kuaiplm" in installed:
-                from apps.kuaiplm.services.kuaiplm_notification_rule_presets import (
-                    load_kuaiplm_notification_rule_presets,
-                )
+                from apps.common.optional_pro import pro_app_available
 
-                plm_rules = await load_kuaiplm_notification_rule_presets(tenant_id)
-                count += int(plm_rules.get("created") or 0) + int(
-                    plm_rules.get("templates_created") or 0
-                )
+                if pro_app_available("kuaiplm"):
+                    from apps.kuaiplm.services.kuaiplm_notification_rule_presets import (
+                        load_kuaiplm_notification_rule_presets,
+                    )
+
+                    plm_rules = await load_kuaiplm_notification_rule_presets(tenant_id)
+                    count += int(plm_rules.get("created") or 0) + int(
+                        plm_rules.get("templates_created") or 0
+                    )
             if "kuaioa" in installed:
-                from apps.kuaioa.services.kuaioa_training_notification_presets import (
-                    load_kuaioa_training_notification_rule_presets,
-                )
+                from apps.common.optional_pro import pro_app_available
 
-                oa_rules = await load_kuaioa_training_notification_rule_presets(tenant_id)
-                count += int(oa_rules.get("rules_created") or 0) + int(
-                    oa_rules.get("templates_created") or 0
-                )
+                if pro_app_available("kuaioa"):
+                    from apps.kuaioa.services.kuaioa_training_notification_presets import (
+                        load_kuaioa_training_notification_rule_presets,
+                    )
+
+                    oa_rules = await load_kuaioa_training_notification_rule_presets(tenant_id)
+                    count += int(oa_rules.get("rules_created") or 0) + int(
+                        oa_rules.get("templates_created") or 0
+                    )
             if "haoligo" in installed:
                 from apps.haoligo.services.haoligo_message_template_registry import (
                     load_haoligo_message_template_presets,
@@ -362,16 +381,11 @@ class TenantInitDataService:
             return await MenuService.sync_all_menus_from_applications(tenant_id)
 
         if key == "kuaiai_faq_preset":
-            # KR-D18：FAQ 本期不做，apps.kuaiai.services.faq_seed_service 尚不存在；
-            # 保留该初始化项但加 guard——模块缺失时记 warning 跳过（返回 0），
-            # 不使租户初始化流程崩溃。
-            try:
-                from apps.kuaiai.services.faq_seed_service import FaqSeedService
-            except ImportError:
-                logger.warning(
-                    "kuaiai_faq_preset 跳过：apps.kuaiai.services.faq_seed_service 未实现（KR-D18 暂缓）"
-                )
+            from apps.common.optional_pro import pro_app_available
+
+            if not pro_app_available("kuaiai"):
                 return 0
+            from apps.kuaiai.services.faq_seed_service import FaqSeedService
 
             return await FaqSeedService.seed_default_faqs(
                 tenant_id,
@@ -397,29 +411,52 @@ class TenantInitDataService:
         return [cls.BOOTSTRAP_APPLICATION_STEP, *cls.INIT_ITEMS_REQUIRED]
 
     @classmethod
-    async def set_tenant_data_initializing(cls, tenant_id: int, initializing: bool) -> None:
-        """标记组织后台数据初始化进行中，避免与首次登录引导并发重复扫描应用。"""
+    async def merge_tenant_settings(
+        cls,
+        tenant_id: int,
+        patch: Optional[Dict[str, Any]] = None,
+        *,
+        remove_keys: Optional[List[str]] = None,
+    ) -> None:
+        """读最新 settings 再合并写入，避免整包覆盖冲掉 bootstrap_completed 等标志。"""
         from infra.models.tenant import Tenant
 
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
             return
         settings = dict(tenant.settings or {})
-        if initializing:
-            settings["tenant_data_initializing"] = True
-        else:
-            settings.pop("tenant_data_initializing", None)
+        if patch:
+            settings.update(patch)
+        for key in remove_keys or []:
+            settings.pop(key, None)
         await Tenant.filter(id=tenant_id).update(settings=settings)
+
+    @classmethod
+    async def set_tenant_data_initializing(cls, tenant_id: int, initializing: bool) -> None:
+        """标记组织后台数据初始化进行中，避免与首次登录引导并发重复扫描应用。"""
+        if initializing:
+            await cls.merge_tenant_settings(tenant_id, {"tenant_data_initializing": True})
+        else:
+            await cls.merge_tenant_settings(tenant_id, remove_keys=["tenant_data_initializing"])
 
     @classmethod
     async def get_bootstrap_status(cls, tenant_id: int) -> Dict[str, Any]:
         from infra.models.tenant import Tenant
 
         tenant = await Tenant.get_or_none(id=tenant_id)
-        settings = (tenant.settings or {}) if tenant else {}
+        if not tenant:
+            # 幽灵组织 ID（恢复后删了组织行）：切勿当成「新组织待引导」
+            return {
+                "pending": False,
+                "bootstrap_completed": False,
+                "tenant_missing": True,
+                "steps": [],
+            }
+        settings = tenant.settings or {}
         completed = bool(settings.get("bootstrap_completed") or settings.get("init_completed"))
         initializing = bool(settings.get("tenant_data_initializing"))
         return {
+            # 已完成标志优先：后台清 initializing 时的并发写不得让已完成组织再次 pending
             "pending": not completed and not initializing,
             "bootstrap_completed": completed,
             "steps": cls.get_bootstrap_steps(),
@@ -439,8 +476,6 @@ class TenantInitDataService:
 
     @classmethod
     async def complete_bootstrap(cls, tenant_id: int) -> None:
-        from datetime import datetime
-
         from infra.models.tenant import Tenant
         from infra.services.init_wizard_service import InitWizardService
 
@@ -449,7 +484,7 @@ class TenantInitDataService:
             raise ValueError("组织不存在")
 
         settings = dict(tenant.settings or {})
-        if settings.get("bootstrap_completed"):
+        if settings.get("bootstrap_completed") and settings.get("init_completed"):
             return
 
         if tenant.name:
@@ -463,10 +498,17 @@ class TenantInitDataService:
 
         await InitWizardService().apply_default_init_settings(tenant_id)
 
-        tenant = await Tenant.get_or_none(id=tenant_id)
-        settings = dict((tenant.settings or {}) if tenant else {})
-        settings["bootstrap_completed"] = True
-        settings["bootstrap_completed_at"] = to_api_isoformat(resolve_business_datetime())
-        await Tenant.filter(id=tenant_id).update(settings=settings)
+        # 向导写完后再读合并，避免与 set_tenant_data_initializing 整包写互相冲掉完成标志
+        completed_at = to_api_isoformat(resolve_business_datetime())
+        await cls.merge_tenant_settings(
+            tenant_id,
+            {
+                "bootstrap_completed": True,
+                "bootstrap_completed_at": completed_at,
+                "init_completed": True,
+                "init_completed_at": completed_at,
+            },
+            remove_keys=["tenant_data_initializing"],
+        )
         logger.info(f"组织 {tenant_id} 首次引导初始化完成")
 

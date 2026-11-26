@@ -8,7 +8,13 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_draft_status, normalize_status
+from apps.kuaizhizao.constants import (
+    DocumentStatus,
+    ReviewStatus,
+    is_draft_status,
+    is_submitted_status,
+    normalize_status,
+)
 from apps.kuaizhizao.constants.order_change import OrderChangeApplyStatus, OrderChangeLineType
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
@@ -453,7 +459,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             doc.updated_by = updated_by
             doc.updated_by_name = user_info["name"]
             await doc.save()
-        if is_pending:
+        if normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value:
             audit_required = await self.business_config_service.check_audit_required(
                 tenant_id, "sales_order_change"
             )
@@ -472,6 +478,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         docs: List[SalesOrderChangeOrder],
         lifecycle_stage: Optional[str] = None,
         include_items: bool = False,
+        viewer_id: Optional[int] = None,
     ) -> List[SalesOrderChangeListResponse]:
         change_ids = [d.id for d in docs]
         all_items = await SalesOrderChangeItem.filter(
@@ -534,7 +541,9 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             )
         from core.services.approval.audit_record_enricher import enrich_items
 
-        return await enrich_items(tenant_id, "sales_order_change", result)
+        return await enrich_items(
+            tenant_id, "sales_order_change", result, viewer_id=viewer_id
+        )
 
     async def list_change_orders(
         self,
@@ -589,18 +598,29 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
 
         order_clause = order_by if order_by else "-created_at"
         lifecycle_filter = (lifecycle_stage or "").strip()
+        viewer_id = (
+            int(current_user.id)
+            if current_user is not None and getattr(current_user, "id", None) is not None
+            else None
+        )
 
         if lifecycle_filter:
             docs = await qs.order_by(order_clause, "-id").all()
             rows = await self._build_change_list_rows(
-                tenant_id, docs, lifecycle_stage=lifecycle_filter, include_items=include_items
+                tenant_id,
+                docs,
+                lifecycle_stage=lifecycle_filter,
+                include_items=include_items,
+                viewer_id=viewer_id,
             )
             total = len(rows)
             return rows[skip : skip + limit], total
 
         total = await qs.count()
         docs = await qs.order_by(order_clause, "-id").offset(skip).limit(limit)
-        rows = await self._build_change_list_rows(tenant_id, docs, include_items=include_items)
+        rows = await self._build_change_list_rows(
+            tenant_id, docs, include_items=include_items, viewer_id=viewer_id
+        )
         return rows, total
 
     async def get_by_id(
@@ -656,12 +676,62 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         operator_id: int,
         current_user: Optional[User] = None,
     ) -> SalesOrderChangeWithItemsResponse:
+        """内部一次进入审核。HTTP / uni-audit 的提交只调用 commit。"""
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
         await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
         has_content = await self._has_change_content(tenant_id, doc)
         assert_sales_order_change_capability(doc, "submit", has_change_content=has_content)
+        return await self._enter_change_review(tenant_id, doc, operator_id)
+
+    async def commit(
+        self,
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+        current_user: Optional[User] = None,
+    ) -> SalesOrderChangeWithItemsResponse:
+        """草稿或已驳回 → 已提交。不启动审批，不自动生效。"""
+        doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"销售变更单不存在: {change_id}")
+        await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
+        if is_submitted_status(doc.status):
+            return await self._to_detail(doc)
+        has_content = await self._has_change_content(tenant_id, doc)
+        assert_sales_order_change_capability(doc, "submit", has_change_content=has_content)
+        user_info = await self.get_user_info(operator_id)
+        doc.status = DocumentStatus.SUBMITTED.value
+        doc.review_status = ReviewStatus.DRAFT.value
+        doc.updated_by = operator_id
+        doc.updated_by_name = user_info["name"]
+        await doc.save()
+        return await self._to_detail(doc)
+
+    async def submit_for_review(
+        self,
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+        current_user: Optional[User] = None,
+    ) -> SalesOrderChangeWithItemsResponse:
+        """已提交 → 待审核，或免审已审核并生效。"""
+        doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
+        if not doc:
+            raise NotFoundError(f"销售变更单不存在: {change_id}")
+        await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
+        if not is_submitted_status(doc.status):
+            raise BusinessLogicError("请先提交销售变更单，再提交审核")
+        return await self._enter_change_review(tenant_id, doc, operator_id)
+
+    async def _enter_change_review(
+        self,
+        tenant_id: int,
+        doc: SalesOrderChangeOrder,
+        operator_id: int,
+    ) -> SalesOrderChangeWithItemsResponse:
+        change_id = int(doc.id)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "sales_order_change")
         if audit_required:
             from core.services.approval.audit_flow_guard import (
@@ -674,7 +744,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                 user_id=operator_id,
                 node_key="sales_order_change",
                 entity_type="sales_order_change",
-                entity_id=int(doc.id),
+                entity_id=change_id,
                 entity_uuid=str(doc.uuid),
                 title=f"销售变更单审批: {doc.change_code}",
                 content=f"原销售订单: {doc.source_order_code or '—'}",
@@ -747,21 +817,30 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         operator_id: int,
         current_user: Optional[User] = None,
     ) -> SalesOrderChangeWithItemsResponse:
+        """已提交撤销为草稿；待审核撤回为已提交。"""
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
         await self._assert_change_visible_if_user(doc, tenant_id=tenant_id, current_user=current_user)
         assert_sales_order_change_capability(doc, "withdraw_submit")
-        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        if is_submitted_status(doc.status):
+            doc.status = DocumentStatus.DRAFT.value
+            doc.review_status = ReviewStatus.DRAFT.value
+        else:
+            try:
+                from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-        await ApprovalInstanceService.cancel_approval(
-            tenant_id=tenant_id,
-            entity_type="sales_order_change",
-            entity_id=change_id,
-            operator_id=operator_id,
-        )
-        doc.status = DocumentStatus.DRAFT.value
-        doc.review_status = ReviewStatus.PENDING.value
+                await ApprovalInstanceService.cancel_approval(
+                    tenant_id=tenant_id,
+                    entity_type="sales_order_change",
+                    entity_id=change_id,
+                    operator_id=operator_id,
+                )
+            except Exception as e:
+                logger.exception("取消销售变更单审批流程失败 change_id={}: {}", change_id, e)
+                raise BusinessLogicError("撤回失败：无法取消审批流程，请重试") from e
+            doc.status = DocumentStatus.SUBMITTED.value
+            doc.review_status = ReviewStatus.DRAFT.value
         user_info = await self.get_user_info(operator_id)
         doc.updated_by = operator_id
         doc.updated_by_name = user_info["name"]
@@ -793,7 +872,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         async def _do_revoke() -> SalesOrderChangeWithItemsResponse:
             user_info = await self.get_user_info(operator_id)
             doc.status = DocumentStatus.DRAFT.value
-            doc.review_status = ReviewStatus.PENDING.value
+            doc.review_status = ReviewStatus.DRAFT.value
             doc.reviewer_id = None
             doc.reviewer_name = None
             doc.review_time = None

@@ -12,6 +12,10 @@ import { translateLifecycleResult } from '../../../../../utils/globalLifecycleI1
 import type { SalesOrder, SalesOrderItem } from '../../../services/sales-order';
 import { documentCurrencyTitleVars } from '../../../utils/documentCurrencyDisplay';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
+import {
+  partnerDefaultPaymentMethodLabel,
+  partnerSettlementTermsLabel,
+} from '../../../../master-data/utils/partner-static-labels';
 import { resolveLifecycleDisplayLabel } from '../shared/ListUniLifecycleCell';
 
 const AUDIT_PHASE_I18N: Record<string, string> = {
@@ -29,7 +33,6 @@ export type SalesOrderExportContext = {
   auditEnabled: boolean;
   dictionaryLabels: {
     CURRENCY?: ImportCodeLabelMap;
-    PAYMENT_TERMS?: ImportCodeLabelMap;
     SHIPPING_METHOD?: ImportCodeLabelMap;
   };
 };
@@ -111,7 +114,9 @@ export function buildSalesOrderItemExportColumns(ctx: SalesOrderExportContext): 
     { key: 'price_type', title: t('app.kuaizhizao.salesOrder.priceType') },
     { key: 'currency_code', title: t('app.kuaizhizao.quotation.form.currency') },
     { key: 'exchange_rate', title: t('app.kuaizhizao.salesOrder.exchangeRate') },
-    { key: 'payment_terms', title: t('app.kuaizhizao.salesOrder.paymentTerms') },
+    { key: 'payment_method_code', title: t('app.kuaizhizao.salesOrder.paymentMethod') },
+    { key: 'settlement_terms_code', title: t('app.kuaizhizao.salesOrder.settlementTerms') },
+    { key: 'payment_terms_days', title: t('app.kuaizhizao.salesOrder.paymentCycle') },
     { key: 'shipping_method', title: t('app.kuaizhizao.salesOrder.shippingMethod') },
     { key: 'shipping_address', title: t('app.kuaizhizao.salesOrder.shippingAddress') },
     { key: 'delivery_progress', title: t('app.kuaizhizao.salesOrder.deliveryProgress') },
@@ -160,7 +165,9 @@ export function flattenSalesOrdersForExport(orders: SalesOrder[]): Array<Record<
       salesman_name: order.salesman_name,
       shipping_address: order.shipping_address,
       shipping_method: order.shipping_method,
-      payment_terms: order.payment_terms,
+      payment_method_code: order.payment_method_code,
+      settlement_terms_code: order.settlement_terms_code,
+      payment_terms_days: order.payment_terms_days,
       currency_code: order.currency_code,
       exchange_rate: order.exchange_rate,
       price_type: order.price_type,
@@ -252,7 +259,19 @@ export function mapSalesOrderItemToExportRow(
       row.exchange_rate != null && row.exchange_rate !== ''
         ? Number(row.exchange_rate).toFixed(4)
         : '',
-    payment_terms: dictLabel(dictionaryLabels.PAYMENT_TERMS, row.payment_terms),
+    payment_method_code: (() => {
+      const code = String(row.payment_method_code ?? '').trim();
+      return code ? partnerDefaultPaymentMethodLabel(t, code) : '';
+    })(),
+    settlement_terms_code: (() => {
+      const code = String(row.settlement_terms_code ?? '').trim();
+      return code ? partnerSettlementTermsLabel(t, code) : '';
+    })(),
+    payment_terms_days: (() => {
+      const days = row.payment_terms_days;
+      if (days == null || days === '') return '';
+      return t('app.kuaizhizao.salesOrder.paymentCycleDaysValue', { days: Number(days) });
+    })(),
     shipping_method: dictLabel(dictionaryLabels.SHIPPING_METHOD, row.shipping_method),
     shipping_address: String(row.shipping_address ?? ''),
     delivery_progress: formatPercent(row.delivery_progress),

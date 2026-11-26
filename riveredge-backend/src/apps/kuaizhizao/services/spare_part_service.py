@@ -93,6 +93,45 @@ class SparePartService:
         rows = await qs.order_by(order_clause).offset(skip).limit(limit)
         return rows, total
 
+    async def summarize_stock_quantities(
+        self, tenant_id: int, spare_part_ids: List[int]
+    ) -> Dict[int, int]:
+        if not spare_part_ids:
+            return {}
+        inv_rows = await SparePartInventory.filter(
+            tenant_id=tenant_id,
+            spare_part_id__in=spare_part_ids,
+            deleted_at__isnull=True,
+        ).all()
+        totals: Dict[int, int] = {}
+        for inv in inv_rows:
+            pid = int(inv.spare_part_id)
+            totals[pid] = totals.get(pid, 0) + int(inv.stock_quantity or 0)
+        return totals
+
+    async def list_inventory_by_part(self, tenant_id: int) -> List[Dict[str, Any]]:
+        """按备件汇总现存量（不区分库位）。"""
+        parts = await SparePart.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).order_by("part_no").all()
+        if not parts:
+            return []
+        part_ids = [int(p.id) for p in parts]
+        totals = await self.summarize_stock_quantities(tenant_id, part_ids)
+        return [
+            {
+                "id": p.id,
+                "spare_part_id": p.id,
+                "part_no": p.part_no,
+                "part_name": p.part_name,
+                "stock_quantity": totals.get(int(p.id), 0),
+                "safety_stock": int(p.safety_stock or 0),
+            }
+            for p in parts
+        ]
+
     async def get_spare_part(self, tenant_id: int, spare_part_id: int) -> SparePart:
         part = await SparePart.filter(
             tenant_id=tenant_id,
@@ -409,7 +448,7 @@ class SparePartService:
                 alerts.append({
                     "part_no": part.part_no,
                     "part_name": part.part_name,
-                    "current_stock": total_qty,
-                    "safety_stock": part.safety_stock
+                    "stock_quantity": total_qty,
+                    "safety_stock": part.safety_stock,
                 })
         return alerts

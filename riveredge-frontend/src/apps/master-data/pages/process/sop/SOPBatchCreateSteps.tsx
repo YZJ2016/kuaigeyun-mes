@@ -5,28 +5,24 @@
  * 供新建 Modal 的批量模式使用。
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Button, Card, Select, Space, Table, Steps, Modal, Input, Form, Typography, Segmented, Alert } from 'antd';
 import { HighlightOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { processRouteApi, operationApi, sopApi, unwrapProcessPagedList } from '../../../services/process';
-import { materialApi, materialGroupApi } from '../../../services/material';
+import { materialGroupApi } from '../../../services/material';
 import { rowActionKind } from '../../../../../components/uni-action';
 import type { ProcessRoute, Operation } from '../../../types/process';
-import type { Material, MaterialGroup, MaterialListResponse } from '../../../types/material';
+import type { Material, MaterialGroup } from '../../../types/material';
 import type { SOP } from '../../../types/process';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
-  type SopBindingConflict,
   findSopBindingConflicts,
   formatSopBindingConflictLabels,
+  type SopBindingConflict,
 } from '../../../utils/sopBindingDuplicate';
-import {
-  MATERIAL_SELECT_OPTION_ITEM_HEIGHT,
-  MaterialSelectOptionContent,
-  formatMaterialSelectLabel,
-} from '../../../../../components/uni-material-select';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 
 const { Text } = Typography;
 
@@ -65,8 +61,8 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialGroups, setMaterialGroups] = useState<MaterialGroup[]>([]);
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
-  const [materialsLoading, setMaterialsLoading] = useState(false);
   const [operationsLoading, setOperationsLoading] = useState(false);
+  const [batchMaterialPickForm] = Form.useForm();
 
   const [createRouteModalVisible, setCreateRouteModalVisible] = useState(false);
   const [newRouteCode, setNewRouteCode] = useState('');
@@ -162,22 +158,16 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
   useEffect(() => {
     const load = async () => {
       try {
-        setMaterialsLoading(true);
         setOperationsLoading(true);
-        const [matRes, mgRes, opRes] = await Promise.all([
-          materialApi.list({ limit: 1000, isActive: true }).catch(() => []),
+        const [mgRes, opRes] = await Promise.all([
           materialGroupApi.list({ limit: 1000 }).catch(() => []),
           operationApi.list({ isActive: true, limit: 1000 }),
         ]);
-        setMaterials(
-          Array.isArray(matRes) ? matRes : ((matRes as MaterialListResponse | undefined)?.items ?? [])
-        );
         setMaterialGroups(Array.isArray(mgRes) ? mgRes : []);
         setAllOperations(unwrapProcessPagedList(opRes));
       } catch (e) {
         console.error('加载基础数据失败:', e);
       } finally {
-        setMaterialsLoading(false);
         setOperationsLoading(false);
       }
     };
@@ -513,7 +503,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   style={{ width: '100%', maxWidth: 480 }}
                   value={selectedMaterialGroupUuids}
                   onChange={setSelectedMaterialGroupUuids}
-                  loading={materialsLoading}
+                  loading={operationsLoading}
                   showSearch
                   filterOption={(input, opt) =>
                     (opt?.label ?? '').toString().toLowerCase().includes((input || '').toLowerCase())
@@ -526,35 +516,31 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               </div>
             )}
             {type === 'material' && (
-              <div>
+              <div style={{ maxWidth: 480 }}>
                 <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.sop.typeMaterial')}</div>
-                <Select
-                  mode="multiple"
-                  placeholder={t('app.master-data.sop.selectMaterialPlaceholder')}
-                  style={{ width: '100%', maxWidth: 480 }}
-                  value={selectedMaterialUuids}
-                  onChange={setSelectedMaterialUuids}
-                  loading={materialsLoading}
-                  showSearch
-                  listItemHeight={MATERIAL_SELECT_OPTION_ITEM_HEIGHT}
-                  popupMatchSelectWidth={480}
-                  filterOption={(input, opt) =>
-                    (opt?.label ?? '').toString().toLowerCase().includes((input || '').toLowerCase())
-                  }
-                  optionRender={(option) => {
-                    const material = materials.find((m: any) => m.uuid === option.value);
-                    return (
-                      <MaterialSelectOptionContent
-                        material={material as Record<string, unknown> | undefined}
-                        fallbackLabel={option.label}
-                      />
-                    );
-                  }}
-                  options={materials.map((m: any) => ({
-                    label: formatMaterialSelectLabel(m),
-                    value: m.uuid,
-                  }))}
-                />
+                <Form form={batchMaterialPickForm} layout="vertical">
+                  <UniMaterialSelect
+                    name="materialIds"
+                    label=""
+                    placeholder={t('app.master-data.sop.selectMaterialPlaceholder')}
+                    mode="multiple"
+                    showQuickCreate={false}
+                    showAdvancedSearch
+                    fillMapping={{}}
+                    formItemProps={{ style: { marginBottom: 0 } }}
+                    onChange={(_ids, selected) => {
+                      const list = (Array.isArray(selected)
+                        ? selected
+                        : selected
+                          ? [selected]
+                          : []) as Material[];
+                      setMaterials(list);
+                      setSelectedMaterialUuids(
+                        list.map((m) => m.uuid).filter((u): u is string => Boolean(u)),
+                      );
+                    }}
+                  />
+                </Form>
               </div>
             )}
             <Button type="primary" loading={routeLoading} onClick={handleLoadRoute}>

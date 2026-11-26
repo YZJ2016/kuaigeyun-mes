@@ -819,6 +819,7 @@ async def collect_sales_order_buy_push_lines(
         supplier_id = resolve_default_supplier_id_from_material(material)
         supplier_name = resolve_default_supplier_name_from_material(material) or ""
         unit_price = Decimal("0")
+        suggested_tax_rate = None
         if material and supplier_id:
             from apps.master_data.services.partner_material_price_resolver import (
                 PartnerMaterialPriceResolver,
@@ -833,6 +834,7 @@ async def collect_sales_order_buy_push_lines(
             )
             if resolved.found and resolved.unit_price > 0:
                 unit_price = resolved.unit_price
+                suggested_tax_rate = resolved.tax_rate
         elif material:
             from apps.kuaizhizao.utils.material_source_helper import (
                 resolve_material_purchase_line_unit_price,
@@ -870,6 +872,7 @@ async def collect_sales_order_buy_push_lines(
                 "supplier_id": int(supplier_id) if supplier_id else None,
                 "supplier_name": str(supplier_name or ""),
                 "suggested_unit_price": unit_price or Decimal("0"),
+                "suggested_tax_rate": suggested_tax_rate,
                 "material": material,
             }
         )
@@ -1198,6 +1201,17 @@ async def plan_purchase_orders_from_sales_order(
     if not lines:
         raise BusinessLogicError("销售订单无可下推采购件，无法生成采购订单")
 
+    from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+    from apps.kuaizhizao.utils.purchase_order_line_amounts import (
+        coalesce_purchase_tax_percent,
+        load_price_amount_places,
+    )
+    from apps.master_data.services.partner_material_price_defaults import (
+        material_default_tax_rate,
+    )
+    from core.utils.price_precision import quantize_business_price
+
+    price_places, amount_places = await load_price_amount_places(tenant_id)
     today = to_site_date(resolve_business_datetime())
     by_supplier: Dict[int, List[Dict[str, Any]]] = {}
     for row in lines:
@@ -1221,6 +1235,17 @@ async def plan_purchase_orders_from_sales_order(
         for row in group:
             qty = row["max_push_quantity"]
             unit_price = row["suggested_unit_price"] or Decimal(0)
+            material = row.get("material")
+            mat_tax = (
+                material_default_tax_rate(material.defaults or {})
+                if material is not None
+                else None
+            )
+            tax_pct = coalesce_purchase_tax_percent(row.get("suggested_tax_rate"), mat_tax)
+            entered_unit = quantize_business_price(unit_price, price_places)
+            excl, _tax, _incl = calc_document_line_amounts(
+                qty, entered_unit, tax_pct, "tax_exclusive", amount_places
+            )
             req_date = row["required_date"] or today
             required_dates.append(req_date)
             po_items.append(
@@ -1231,8 +1256,10 @@ async def plan_purchase_orders_from_sales_order(
                     material_spec=row["material_spec"],
                     ordered_quantity=qty,
                     unit=row["unit"],
-                    unit_price=unit_price,
-                    total_price=qty * unit_price,
+                    unit_price=entered_unit,
+                    display_unit_price=entered_unit,
+                    total_price=excl,
+                    tax_rate=tax_pct,
                     received_quantity=Decimal(0),
                     outstanding_quantity=qty,
                     required_date=req_date,
@@ -1249,6 +1276,7 @@ async def plan_purchase_orders_from_sales_order(
                 order_date=today,
                 delivery_date=min(required_dates) if required_dates else today,
                 order_type="标准采购",
+                price_type="tax_exclusive",
                 status=DocumentStatus.DRAFT.value,
                 currency=so_currency["currency"],
                 exchange_rate=so_currency["exchange_rate"],

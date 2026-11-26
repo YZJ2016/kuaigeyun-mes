@@ -517,6 +517,7 @@ class PaymentVoucherResponse(PaymentVoucherBase):
     refunded_amount: Decimal = Decimal("0")
     refund_execution_status: str = "未退款"
     status: str = "Draft"
+    review_status: Optional[str] = "草稿"
     created_at: datetime
     updated_at: datetime
     created_by_name: Optional[str] = None
@@ -621,6 +622,7 @@ class ReceiptVoucherResponse(ReceiptVoucherBase):
     refunded_amount: Decimal = Decimal("0")
     refund_execution_status: str = "未退款"
     status: str = "Draft"
+    review_status: Optional[str] = "草稿"
     created_at: datetime
     updated_at: datetime
     created_by_name: Optional[str] = None
@@ -658,7 +660,7 @@ class SalesInvoiceBase(BaseSchema):
     invoice_number: str = Field(default="", max_length=50, description="发票号码（手工录入；草稿可为空，与库字段长度一致）")
     invoice_date: date = Field(..., description="开票日期")
     invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
-    tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
+    tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（%，必填）")
     invoice_amount: Decimal = Field(..., description="不含税金额（红字发票为负）")
     tax_amount: Decimal = Field(..., description="税额（红字发票为负）")
     total_amount: Decimal = Field(..., description="价税合计（红字发票为负）")
@@ -754,7 +756,7 @@ class SalesInvoiceResponse(SalesInvoiceBase):
     reviewer_id: Optional[int] = None
     reviewer_name: Optional[str] = None
     review_time: Optional[datetime] = None
-    review_status: str = "待审核"
+    review_status: str = "草稿"
     review_remarks: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -1019,7 +1021,7 @@ class MergeSalesInvoiceCreate(BaseSchema):
     invoice_date: date = Field(..., description="开票日期")
     invoice_number: str = Field(default="", max_length=50, description="发票号码")
     invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
-    tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
+    tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（%，必填）")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -1030,7 +1032,7 @@ class MergePurchaseInvoiceCreate(BaseSchema):
     invoice_date: date = Field(..., description="发票日期")
     invoice_number: str = Field(..., max_length=100, description="发票号码")
     invoice_type: str = Field("增值税专用发票", max_length=20, description="发票类型")
-    tax_rate: Decimal = Field(Decimal("13"), ge=0, le=100, description="税率(%)")
+    tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（%，必填）")
     notes: Optional[str] = Field(None, description="备注")
 
 

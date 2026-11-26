@@ -12,6 +12,12 @@ export type OutboundPullDirectConfirmTarget = {
   outbound_type: OutboundIssueType;
 };
 
+/** 取单/录入建单后打开出库 Hub 详情抽屉（二次确认） */
+export type OutboundPullOpenDetailTarget = {
+  id: number;
+  outbound_type: OutboundIssueType;
+};
+
 export type OutboundHubEntryIntent = {
   /** 进入后筛选出库类型 */
   outboundTypeFilter?: OutboundIssueType | 'all';
@@ -23,5 +29,6 @@ export type OutboundHubEntryIntent = {
 
 export type OutboundPullEntryNavigationState = {
   outboundDirectConfirm?: OutboundPullDirectConfirmTarget;
+  outboundOpenDetail?: OutboundPullOpenDetailTarget;
   outboundHubEntry?: OutboundHubEntryIntent;
 };

@@ -11,7 +11,9 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+
+from core.schemas.base import UuidStrCoerceMixin
 
 
 class EquipmentFaultBase(BaseModel):
@@ -169,7 +171,13 @@ class EquipmentRepairBase(BaseModel):
 
 
 class EquipmentRepairCreate(EquipmentRepairBase):
-    pass
+    repairer_id: int = Field(..., description="主维修人用户ID")
+
+    @model_validator(mode="after")
+    def require_repairer_id(self) -> "EquipmentRepairCreate":
+        if self.repairer_id is None or int(self.repairer_id) <= 0:
+            raise ValueError("指派维修须选择主维修人")
+        return self
 
 
 class EquipmentRepairUpdate(BaseModel):
@@ -189,6 +197,34 @@ class EquipmentRepairUpdate(BaseModel):
     attachments: Optional[List[dict]] = Field(None)
 
 
+class EquipmentRepairParticipantResponse(UuidStrCoerceMixin):
+    """参与人响应；uuid 列若为 PG UUID 类型，经 Mixin 统一成 str。"""
+
+    uuid: str
+    id: int
+    repair_id: int
+    repair_uuid: str
+    user_id: int
+    user_name: str
+    role: str
+    status: str
+    joined_at: datetime
+    left_at: Optional[datetime] = None
+    reassigned_to_id: Optional[int] = None
+    reassigned_to_name: Optional[str] = None
+    remark: Optional[str] = None
+
+
+class EquipmentRepairAddCollaboratorRequest(BaseModel):
+    user_id: int = Field(..., description="协作人用户ID")
+    remark: Optional[str] = Field(None, max_length=500)
+
+
+class EquipmentRepairReassignRequest(BaseModel):
+    to_user_id: int = Field(..., description="转派目标用户ID")
+    remark: Optional[str] = Field(None, max_length=500)
+
+
 class EquipmentRepairResponse(EquipmentRepairBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -201,7 +237,9 @@ class EquipmentRepairResponse(EquipmentRepairBase):
     arrival_at: Optional[datetime] = None
     arrival_by_id: Optional[int] = None
     arrival_by_name: Optional[str] = None
+    started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    participants: List[EquipmentRepairParticipantResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     created_by: Optional[int] = None

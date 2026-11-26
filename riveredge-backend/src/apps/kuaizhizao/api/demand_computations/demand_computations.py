@@ -27,6 +27,7 @@ from apps.kuaizhizao.services.demand_replanning_orchestrator_service import Dema
 from apps.kuaizhizao.models.demand_computation import DemandComputation
 from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
 from apps.kuaizhizao.schemas.demand_computation import (
+    CreateComputationFromPullLinesRequest,
     DemandComputationCreate,
     DemandComputationUpdate,
     DemandComputationResponse,
@@ -75,6 +76,80 @@ async def create_computation(
     except Exception as e:
         logger.error(f"创建需求计算失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建需求计算失败")
+
+
+@router.post(
+    "/create-from-pull-lines",
+    response_model=DemandComputationResponse,
+    summary="Create demand computation from open pull lines",
+)
+async def create_computation_from_pull_lines(
+    body: CreateComputationFromPullLinesRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(
+        require_permission_codes("kuaizhizao:plan-management-demand-computation:create")
+    ),
+):
+    """从计划生产或销售订单开口行多选合并创建一张需求计算。"""
+    try:
+        return await computation_service.create_from_pull_lines(
+            tenant_id=tenant_id,
+            request=body,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"开口行创建需求计算失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="开口行创建需求计算失败",
+        )
+
+
+@router.get(
+    "/work-order-pull-computations",
+    summary="Completed computations for work order pull",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:plan-management-demand-computation:read",
+                "kuaizhizao:plan-management-demand-computation:display",
+                "kuaizhizao:work-order:create",
+                "kuaizhizao:work-order:read",
+                require_all=False,
+            )
+        ),
+    ],
+)
+async def list_work_order_pull_computations(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="运算单号/需求编码"),
+    pullable_only: bool = Query(True, description="仅可下推工单"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """工单从需求计算取单：批量返回已完成运算单及是否可转工单。"""
+    try:
+        return await computation_service.list_work_order_pull_computations(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出工单开口需求计算失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出工单开口需求计算失败",
+        )
 
 
 @router.get(
@@ -807,7 +882,7 @@ async def delete_computation(
     """
     删除需求计算
 
-    仅当需求计算尚未下推工单/采购单/生产计划/采购申请等下游单据时允许删除。
+    下游仅为草稿且未审核时可级联清理后删除；已审核/已下达/已履约须先反审核并删除下游。
     删除后会同步清除关联需求的计算状态，需求可重新下推计算。
     """
     try:
@@ -853,7 +928,19 @@ async def update_computation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新需求计算失败")
 
 
-@router.post("/{computation_id:int}/generate-orders", summary="Generate work orders and POs (one click)")
+@router.post(
+    "/{computation_id:int}/generate-orders",
+    summary="Generate work orders and POs (one click)",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:plan-management-demand-computation:update",
+                "kuaizhizao:work-order:create",
+                require_all=False,
+            )
+        ),
+    ],
+)
 async def generate_orders(
     computation_id: int = Path(..., description="计算ID"),
     generate_mode: str = Query("all", description="生成粒度：all=全部，work_order_only=仅工单，purchase_only=仅采购，outsource_only=仅委外工单"),
@@ -899,7 +986,22 @@ async def generate_orders(
         )
 
 
-@router.get("/{computation_id:int}/push-options", summary="Get push capabilities and config")
+@router.get(
+    "/{computation_id:int}/push-options",
+    summary="Get push capabilities and config",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:plan-management-demand-computation:read",
+                "kuaizhizao:plan-management-demand-computation:display",
+                "kuaizhizao:plan-management-demand-computation:update",
+                "kuaizhizao:work-order:create",
+                "kuaizhizao:work-order:read",
+                require_all=False,
+            )
+        ),
+    ],
+)
 async def get_push_options(
     computation_id: int = Path(..., description="计算ID"),
     current_user: User = Depends(get_current_user),
@@ -920,7 +1022,22 @@ async def get_push_options(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get("/{computation_id:int}/push-preview", summary="Preview push targets")
+@router.get(
+    "/{computation_id:int}/push-preview",
+    summary="Preview push targets",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:plan-management-demand-computation:read",
+                "kuaizhizao:plan-management-demand-computation:display",
+                "kuaizhizao:plan-management-demand-computation:update",
+                "kuaizhizao:work-order:create",
+                "kuaizhizao:work-order:read",
+                require_all=False,
+            )
+        ),
+    ],
+)
 async def get_push_preview(
     computation_id: int = Path(..., description="计算ID"),
     production: Optional[str] = Query(None, description="生产路径：work_order"),

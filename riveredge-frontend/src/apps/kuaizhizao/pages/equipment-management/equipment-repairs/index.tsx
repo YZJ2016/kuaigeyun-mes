@@ -1,11 +1,18 @@
 import React, { useRef, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Modal, Typography } from 'antd';
-import { StatusTag } from '../../../../../constants/statusBadges';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, Button, Descriptions, Empty, Space, Table, Typography } from 'antd';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
-import { CheckOutlined } from '@ant-design/icons';
+import { CheckOutlined, SwapOutlined, UserAddOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -33,8 +40,21 @@ import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
 const P = 'app.kuaizhizao.equipmentRepair';
 const RESOURCE = 'kuaizhizao:equipment-fault';
+
+interface RepairParticipant {
+  uuid?: string;
+  user_id?: number;
+  user_name?: string;
+  role?: string;
+  status?: string;
+  joined_at?: string;
+  left_at?: string;
+  reassigned_to_name?: string;
+  remark?: string;
+}
 
 interface EquipmentRepair {
   uuid?: string;
@@ -54,7 +74,9 @@ interface EquipmentRepair {
   repair_result?: string;
   arrival_at?: string;
   arrival_by_name?: string;
+  started_at?: string;
   completed_at?: string;
+  participants?: RepairParticipant[];
   repair_parts?: { items?: Array<{ spare_part_id?: number; quantity?: number }> };
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
@@ -76,12 +98,86 @@ const EquipmentRepairsPage: React.FC = () => {
   const [completeVisible, setCompleteVisible] = useState(false);
   const [completeTarget, setCompleteTarget] = useState<EquipmentRepair | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [collabVisible, setCollabVisible] = useState(false);
+  const [reassignVisible, setReassignVisible] = useState(false);
+  const [staffTarget, setStaffTarget] = useState<EquipmentRepair | null>(null);
+  const [staffSubmitting, setStaffSubmitting] = useState(false);
+  const collabFormRef = useRef<any>(null);
+  const reassignFormRef = useRef<any>(null);
 
   const repairStatusValueEnum = useMemo(() => buildEquipmentRepairStatusValueEnum(t), [t]);
+
+  const refreshDetail = async (uuid: string) => {
+    await openDetail(() => equipmentFaultApi.getRepair(uuid) as Promise<EquipmentRepair>);
+  };
 
   const handleDetail = (record: EquipmentRepair) => {
     if (!record.uuid) return;
     void openDetail(() => equipmentFaultApi.getRepair(record.uuid!) as Promise<EquipmentRepair>);
+  };
+
+  const openCollaborator = (record: EquipmentRepair) => {
+    setStaffTarget(record);
+    setCollabVisible(true);
+  };
+
+  const openReassign = (record: EquipmentRepair) => {
+    setStaffTarget(record);
+    setReassignVisible(true);
+  };
+
+  const handleAddCollaborator = async (values: { user_id?: number; remark?: string }) => {
+    if (!staffTarget?.uuid) return;
+    const repairUuid = staffTarget.uuid;
+    const userId = Number(values.user_id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      messageApi.warning(t(`${P}.form.selectCollaborator`));
+      return;
+    }
+    setStaffSubmitting(true);
+    try {
+      await equipmentFaultApi.addCollaborator(repairUuid, {
+        user_id: userId,
+        remark: values.remark,
+      });
+      messageApi.success(t(`${P}.collaboratorSuccess`));
+      setCollabVisible(false);
+      setStaffTarget(null);
+      await refreshDetail(repairUuid);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+      throw error;
+    } finally {
+      setStaffSubmitting(false);
+    }
+  };
+
+  const handleReassign = async (values: { to_user_id?: number; remark?: string }) => {
+    if (!staffTarget?.uuid) return;
+    const repairUuid = staffTarget.uuid;
+    const userId = Number(values.to_user_id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      messageApi.warning(t(`${P}.form.selectReassignTo`));
+      return;
+    }
+    setStaffSubmitting(true);
+    try {
+      await equipmentFaultApi.reassignRepair(repairUuid, {
+        to_user_id: userId,
+        remark: values.remark,
+      });
+      messageApi.success(t(`${P}.reassignSuccess`));
+      setReassignVisible(false);
+      setStaffTarget(null);
+      await refreshDetail(repairUuid);
+      actionRef.current?.reload();
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+      throw error;
+    } finally {
+      setStaffSubmitting(false);
+    }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
@@ -113,12 +209,9 @@ const EquipmentRepairsPage: React.FC = () => {
       messageApi.warning(t(`${P}.repairContentRequired`));
       return;
     }
-    if (!completeTarget.arrival_at) {
-      messageApi.warning(t(`${P}.arriveRequiredFirst`));
-      return;
-    }
     setCompleting(true);
     try {
+      // 到场校验以后端为准（含同故障签到单继承）；勿用可能滞后的列表行拦完修
       await equipmentFaultApi.completeRepair(completeTarget.uuid, {
         fault_cause: cause,
         repair_content: content,
@@ -130,7 +223,12 @@ const EquipmentRepairsPage: React.FC = () => {
       closeDetail();
       actionRef.current?.reload();
     } catch (error: unknown) {
-      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+      const msg = getApiErrorMessage(error, t('common.operationFailed'));
+      const arriveHint =
+        typeof msg === 'string' && (msg.includes('到场') || msg.includes('签到'));
+      messageApi[arriveHint ? 'warning' : 'error'](
+        arriveHint ? t(`${P}.arriveRequiredFirst`) : msg,
+      );
       throw error;
     } finally {
       setCompleting(false);
@@ -167,11 +265,27 @@ const EquipmentRepairsPage: React.FC = () => {
       { title: t(`${P}.col.repairType`), dataIndex: 'repair_type' },
       { title: t(`${P}.col.repairerName`), dataIndex: 'repairer_name' },
       {
+        title: t(`${P}.col.taskCreatedAt`),
+        key: 'repair_task_created_at',
+        dataIndex: 'created_at',
+        render: (_, r) => (r.created_at ? formatDateTime(r.created_at) : '-'),
+      },
+      {
         title: t(`${P}.col.arrivalAt`),
         dataIndex: 'arrival_at',
         render: (_, r) => (r.arrival_at ? formatDateTime(r.arrival_at) : '-'),
       },
       { title: t(`${P}.col.arrivalBy`), dataIndex: 'arrival_by_name' },
+      {
+        title: t(`${P}.col.startedAt`),
+        dataIndex: 'started_at',
+        render: (_, r) => (r.started_at ? formatDateTime(r.started_at) : '-'),
+      },
+      {
+        title: t(`${P}.col.completedAt`),
+        dataIndex: 'completed_at',
+        render: (_, r) => (r.completed_at ? formatDateTime(r.completed_at) : '-'),
+      },
       {
         title: t('common.status'),
         dataIndex: 'status',
@@ -193,6 +307,18 @@ const EquipmentRepairsPage: React.FC = () => {
     ],
     [t, navigate],
   );
+
+  const participantRoleLabel = (role?: string) => {
+    if (role === '协作') return t(`${P}.role.collaborator`);
+    return t(`${P}.role.primary`);
+  };
+
+  const participantStatusLabel = (status?: string) => {
+    if (status === '已转派') return t(`${P}.partStatus.reassigned`);
+    if (status === '已完成') return t(`${P}.partStatus.done`);
+    if (status === '已退出') return t(`${P}.partStatus.left`);
+    return t(`${P}.partStatus.active`);
+  };
 
   const columns: ProColumns<EquipmentRepair>[] = useMemo(
     () => [
@@ -311,6 +437,47 @@ const EquipmentRepairsPage: React.FC = () => {
           r.repairer_name != null && r.repairer_name !== '' ? String(r.repairer_name) : '-',
       },
       {
+        title: t(`${P}.col.taskCreatedAt`),
+        key: 'repair_task_created_at',
+        dataIndex: 'created_at',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.created_at ? formatDateTime(r.created_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t(`${P}.col.arrivalAt`),
+        dataIndex: 'arrival_at',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.arrival_at ? formatDateTime(r.arrival_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t(`${P}.col.startedAt`),
+        dataIndex: 'started_at',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.started_at ? formatDateTime(r.started_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t(`${P}.col.completedAt`),
+        dataIndex: 'completed_at',
+        width: 160,
+        minWidth: 160,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, r) => (r.completed_at ? formatDateTime(r.completed_at, 'YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
         title: t(`${P}.col.repairResult`),
         dataIndex: 'repair_result',
         width: 100,
@@ -377,7 +544,7 @@ const EquipmentRepairsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentRepairs)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-repairs-repair-times-v1"
           actionRef={actionRef}
           rowKey="uuid"
           enableRowSelection={perms.canDelete}
@@ -415,9 +582,17 @@ const EquipmentRepairsPage: React.FC = () => {
         size={DRAWER_CONFIG.STANDARD_WIDTH}
         extra={
           detail && perms.canUpdate && detail.status === '进行中' ? (
-            <Button type="primary" icon={<CheckOutlined />} onClick={() => openComplete(detail)}>
-              {t(`${P}.action.complete`)}
-            </Button>
+            <Space>
+              <Button icon={<UserAddOutlined />} onClick={() => openCollaborator(detail)}>
+                {t(`${P}.action.addCollaborator`)}
+              </Button>
+              <Button icon={<SwapOutlined />} onClick={() => openReassign(detail)}>
+                {t(`${P}.action.reassign`)}
+              </Button>
+              <Button type="primary" icon={<CheckOutlined />} onClick={() => openComplete(detail)}>
+                {t(`${P}.action.complete`)}
+              </Button>
+            </Space>
           ) : null
         }
         basic={
@@ -427,6 +602,68 @@ const EquipmentRepairsPage: React.FC = () => {
               size="small"
               items={timeconfigBasicItems}
             />
+          ) : undefined
+        }
+        collaborationTitle={t(`${P}.section.participants`)}
+        collaboration={
+          detail ? (
+            detail.participants?.length ? (
+              <Table
+                size="small"
+                pagination={false}
+                rowKey={(r) => String(r.uuid || `${r.user_id}-${r.joined_at}`)}
+                dataSource={detail.participants}
+                columns={[
+                  {
+                    title: t(`${P}.col.repairerName`),
+                    dataIndex: 'user_name',
+                    render: (v: string) => v || '-',
+                  },
+                  {
+                    title: t(`${P}.col.participantRole`),
+                    dataIndex: 'role',
+                    render: (v: string) => (
+                      <MarkerTag color={v === '协作' ? 'processing' : 'success'}>
+                        {participantRoleLabel(v)}
+                      </MarkerTag>
+                    ),
+                  },
+                  {
+                    title: t(`${P}.col.participantStatus`),
+                    dataIndex: 'status',
+                    render: (v: string) => (
+                      <MarkerTag
+                        color={
+                          v === '已转派' ? 'warning' : v === '进行中' ? 'processing' : 'default'
+                        }
+                      >
+                        {participantStatusLabel(v)}
+                      </MarkerTag>
+                    ),
+                  },
+                  {
+                    title: t(`${P}.col.joinedAt`),
+                    dataIndex: 'joined_at',
+                    render: (v: string) => (v ? formatDateTime(v) : '-'),
+                  },
+                  {
+                    title: t(`${P}.col.leftAt`),
+                    dataIndex: 'left_at',
+                    render: (v: string, row: RepairParticipant) =>
+                      v
+                        ? `${formatDateTime(v)}${
+                            row.reassigned_to_name ? ` → ${row.reassigned_to_name}` : ''
+                          }`
+                        : '-',
+                  },
+                ]}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t(`${P}.participantsEmpty`)}
+              />
+            )
           ) : undefined
         }
         supplementary={
@@ -481,6 +718,66 @@ const EquipmentRepairsPage: React.FC = () => {
           ]}
           rules={[{ required: true }]}
         />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t(`${P}.collaboratorModal`)}
+        open={collabVisible}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCollabVisible(false);
+            setStaffTarget(null);
+          }
+        }}
+        formRef={collabFormRef}
+        onFinish={handleAddCollaborator}
+        submitter={{ submitButtonProps: { loading: staffSubmitting } }}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+      >
+        <UniUserSelect
+          name="user_uuid"
+          label={t(`${P}.action.addCollaborator`)}
+          placeholder={t(`${P}.form.selectCollaborator`)}
+          required
+          onChange={(_value, user) => {
+            const picked = Array.isArray(user) ? user[0] : user;
+            collabFormRef.current?.setFieldsValue({
+              user_id: picked?.id ?? undefined,
+            });
+          }}
+        />
+        <ProFormText name="user_id" hidden rules={[{ required: true }]} />
+        <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t(`${P}.reassignModal`)}
+        open={reassignVisible}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReassignVisible(false);
+            setStaffTarget(null);
+          }
+        }}
+        formRef={reassignFormRef}
+        onFinish={handleReassign}
+        submitter={{ submitButtonProps: { loading: staffSubmitting } }}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+      >
+        <UniUserSelect
+          name="to_user_uuid"
+          label={t(`${P}.action.reassign`)}
+          placeholder={t(`${P}.form.selectReassignTo`)}
+          required
+          onChange={(_value, user) => {
+            const picked = Array.isArray(user) ? user[0] : user;
+            reassignFormRef.current?.setFieldsValue({
+              to_user_id: picked?.id ?? undefined,
+            });
+          }}
+        />
+        <ProFormText name="to_user_id" hidden rules={[{ required: true }]} />
+        <ProFormTextArea name="remark" label={t(`${P}.form.remark`)} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>
   );

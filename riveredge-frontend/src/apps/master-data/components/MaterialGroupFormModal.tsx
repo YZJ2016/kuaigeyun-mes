@@ -33,6 +33,8 @@ import {
   normalizeStagesInput,
   materialStagesToApiPayload,
   InspectionStagesEditor,
+  MATERIAL_STAGE_KEYS,
+  findStagesMissingPlan,
 } from './InspectionStagesEditor';
 import { QualityMasterDataHint } from '../../kuaizhizao/pages/quality-management/components/QualityMasterDataHint';
 
@@ -325,6 +327,25 @@ export const MaterialGroupFormModal: React.FC<MaterialGroupFormModalProps> = ({
                       </Tooltip>
                     </span>
                   }
+                  rules={[
+                    {
+                      validator: async (_, value) => {
+                        const missing = findStagesMissingPlan(value, MATERIAL_STAGE_KEYS);
+                        if (!missing.length) return;
+                        const stageLabelKeys: Record<(typeof MATERIAL_STAGE_KEYS)[number], string> = {
+                          iqc: 'app.master-data.materialForm.inspectionStageIqc',
+                          osqc: 'app.master-data.materialForm.inspectionStageOsqc',
+                          fqc: 'app.master-data.materialForm.inspectionStageFqc',
+                          oqc: 'app.master-data.materialForm.inspectionStageOqc',
+                        };
+                        throw new Error(
+                          t('app.master-data.materialForm.inspectionPlanRequiredWhenPlanMode', {
+                            stage: missing.map((k) => t(stageLabelKeys[k])).join('、'),
+                          }),
+                        );
+                      },
+                    },
+                  ]}
                 >
                   <InspectionStagesEditor
                     scope="material"

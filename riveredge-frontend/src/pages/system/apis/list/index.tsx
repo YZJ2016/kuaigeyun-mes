@@ -67,7 +67,7 @@ import {
   type IntegrationConfig,
 } from '../../../../services/integrationConfig';
 import { useResourceCategoryPanel } from '../../shared/useResourceCategoryPanel';
-import { RESOURCE_CATEGORY_UNCATEGORIZED_KEY, type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
+import { type ResourceCategoryListFilter } from '../../../../services/resourceCategory';
 import { ApiLibraryModal } from '../ApiLibraryModal';
 import { ApiTestDrawer } from '../ApiTestDrawer';
 import { ApiFormModal, normalizeApiFormInitialValues, type ApiFormSubmitValues } from '../ApiFormModal';
@@ -156,17 +156,13 @@ const APIListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false)
     setCurrentApiUuid(null)
-    const presetCategoryUuid =
-      selectedCategoryKey !== 'all' && selectedCategoryKey !== RESOURCE_CATEGORY_UNCATEGORIZED_KEY
-        ? selectedCategoryKey
-        : undefined
     setFormInitialValues({
       method: 'GET',
       sync_direction: 'pull',
       api_interface_type: 'custom',
       is_active: true,
       is_system: false,
-      category_uuid: presetCategoryUuid,
+      category_uuid: categoryListFilter.category_uuid,
       request_headers: [],
       request_params: [],
       request_body: { pageNo: 1, pageSize: DEFAULT_API_REQUEST_PAGE_SIZE },
@@ -440,6 +436,7 @@ const APIListPage: React.FC = () => {
           response_format: values.response_format,
           response_example: values.response_example,
           source_type_conversion_map: values.source_type_conversion_map ?? null,
+          outbound_field_mappings: values.outbound_field_mappings ?? null,
           is_active: values.is_active,
         } as UpdateAPIData)
         messageApi.success(t('common.updateSuccess'))
@@ -459,6 +456,7 @@ const APIListPage: React.FC = () => {
           response_format: values.response_format,
           response_example: values.response_example,
           source_type_conversion_map: values.source_type_conversion_map ?? null,
+          outbound_field_mappings: values.outbound_field_mappings ?? null,
           is_active: values.is_active,
           is_system: values.is_system || false,
         } as CreateAPIData)

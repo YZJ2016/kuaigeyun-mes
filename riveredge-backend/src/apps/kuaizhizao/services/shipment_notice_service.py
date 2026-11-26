@@ -1617,7 +1617,7 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                         material_unit=material_unit or item.material_unit,
                         delivery_quantity=float(qty),
                         unit_price=float(unit_price) if unit_price is not None else 0.0,
-                        tax_rate=float(line_tax) if float(line_tax or 0) > 0 else None,
+                        tax_rate=float(line_tax or 0),
                         total_amount=float(total_amount) if total_amount is not None else 0.0,
                         is_gift=bool(getattr(item, "is_gift", False)),
                         gift_ref_unit_price=(

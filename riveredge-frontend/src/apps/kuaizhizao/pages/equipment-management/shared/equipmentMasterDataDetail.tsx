@@ -167,6 +167,24 @@ export function MasterDataLinesTable<T extends Record<string, unknown>>({
   );
 }
 
+/** FormModal 内宽明细表：Modal body 禁止横向溢出，须包一层可横向滚动并与详情抽屉一致用 max-content */
+export function FormModalLinesTableScroll({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className="scrollbar-like-modal form-modal-lines-table-scroll"
+      style={{ width: '100%', maxWidth: '100%', overflowX: 'auto', ...style }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function buildDetailDrawerEditExtra(
   t: TFunction,
   visible: boolean,

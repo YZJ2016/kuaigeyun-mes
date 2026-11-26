@@ -52,12 +52,36 @@ export type BuildSummaryFooterOptions = {
   showIndexColumn?: boolean;
 };
 
-type SummarySlot =
-  | { kind: 'empty' }
-  | { kind: 'summary'; dataIndex: string; col: ProColumns };
-
 function isIndexColumn(col: ProColumns): boolean {
   return col.valueType === 'index' || col.valueType === 'indexBorder';
+}
+
+function resolveColumnFieldKey(col: ProColumns, index: number): string {
+  const dataIndex = col.dataIndex;
+  if (dataIndex != null && dataIndex !== '') return String(dataIndex);
+  if (col.key != null && col.key !== '') return String(col.key);
+  return String(index);
+}
+
+function resolveSummaryCellFixed(col: ProColumns): 'left' | 'right' | undefined {
+  if (col.fixed === 'left' || col.fixed === 'right') return col.fixed;
+  return undefined;
+}
+
+/** ProTable 注入的勾选列 / 展开列不在 columns 内，合计行须占位 */
+function useSummaryLeadingBlankColumns(): number {
+  const counter = React.useContext(TableContext);
+  const props = counter?.propsRef?.current;
+  if (!props) return 0;
+  let count = 0;
+  if (props.rowSelection != null && props.rowSelection !== false) {
+    count += 1;
+  }
+  const expandable = props.expandable;
+  if (expandable?.showExpandColumn !== false && expandable?.expandedRowRender) {
+    count += 1;
+  }
+  return count;
 }
 
 /** 与 ProTable 表体一致：hideInTable + columnsMap.show + columnSort */
@@ -83,27 +107,6 @@ function resolveSummaryVisibleColumns(
   return sortable;
 }
 
-function buildSummarySlots(
-  columns: ProColumns[],
-  summaryFields: string[],
-  showIndexColumn?: boolean,
-): SummarySlot[] {
-  const fieldSet = new Set(summaryFields);
-  const slots: SummarySlot[] = [];
-  if (showIndexColumn) {
-    slots.push({ kind: 'empty' });
-  }
-  for (const col of columns) {
-    const dataIndex = String(col.dataIndex ?? '');
-    if (fieldSet.has(dataIndex)) {
-      slots.push({ kind: 'summary', dataIndex, col });
-    } else {
-      slots.push({ kind: 'empty' });
-    }
-  }
-  return slots;
-}
-
 type SummaryRowCellsProps = {
   columns: ProColumns[];
   summaryFields: string[];
@@ -126,49 +129,59 @@ const SummaryRowCells: React.FC<SummaryRowCellsProps> = ({
   rows,
   globalSummary,
   metaMap,
-  showIndexColumn,
+  showIndexColumn: _showIndexColumn,
 }) => {
   const { t } = useTranslation();
   const counter = React.useContext(TableContext);
   const columnsMap = counter?.columnsMap as Record<string, ColumnsState> | undefined;
+
+  const leadingBlankColumns = useSummaryLeadingBlankColumns();
+  const fieldSet = React.useMemo(() => new Set(summaryFields), [summaryFields]);
 
   const tableVisibleColumns = React.useMemo(
     () => resolveSummaryVisibleColumns(columns, columnsMap),
     [columns, columnsMap],
   );
 
-  const includeIndexColumn =
-    !!showIndexColumn && tableVisibleColumns.some(isIndexColumn);
-  const dataColumns = tableVisibleColumns.filter((col) => !isIndexColumn(col));
+  const hasSummaryColumn = tableVisibleColumns.some((col, index) =>
+    fieldSet.has(resolveColumnFieldKey(col, index)),
+  );
+  if (!hasSummaryColumn) return null;
 
-  const slots = buildSummarySlots(dataColumns, summaryFields, includeIndexColumn);
-  const firstSummaryIdx = slots.findIndex((slot) => slot.kind === 'summary');
-  if (firstSummaryIdx < 0) return null;
-
+  let labelPlaced = false;
   let cellIndex = 0;
+
+  const labelNode = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, whiteSpace: 'nowrap' }}>
+      <strong>{t('components.uniReport.pageSubtotal')}</strong>
+      <span style={STACK_SECONDARY_STYLE}>{t('components.uniReport.allTotal')}</span>
+    </div>
+  );
 
   return (
     <Table.Summary.Row>
-      <Table.Summary.Cell index={cellIndex++} colSpan={firstSummaryIdx}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, whiteSpace: 'nowrap' }}>
-          <strong>{t('components.uniReport.pageSubtotal')}</strong>
-          <span style={STACK_SECONDARY_STYLE}>{t('components.uniReport.allTotal')}</span>
-        </div>
-      </Table.Summary.Cell>
-      {slots.slice(firstSummaryIdx).map((slot, i) => {
-        if (slot.kind === 'summary') {
-          const { dataIndex, col } = slot;
-          const meta = metaMap.get(dataIndex);
-          const pageSum = sumPageField(rows, dataIndex);
-          const globalRaw = globalSummary?.[dataIndex];
+      {Array.from({ length: leadingBlankColumns }, (_, i) => (
+        <Table.Summary.Cell key={`summary-leading-${i}`} index={cellIndex++} />
+      ))}
+      {tableVisibleColumns.map((col, colIndex) => {
+        const fieldKey = resolveColumnFieldKey(col, colIndex);
+        const isSummaryField = fieldSet.has(fieldKey);
+        const fixed = resolveSummaryCellFixed(col);
+        const align = isSummaryField ? resolveSummaryAlign(col) : undefined;
+
+        if (isSummaryField) {
+          const meta = metaMap.get(fieldKey);
+          const pageSum = sumPageField(rows, fieldKey);
+          const globalRaw = globalSummary?.[fieldKey];
           const globalVal =
             globalRaw !== undefined && globalRaw !== null ? Number(globalRaw) : pageSum;
           const format = meta?.format ?? (col.valueType as string);
           return (
             <Table.Summary.Cell
+              key={`summary-field-${fieldKey}`}
               index={cellIndex++}
-              key={dataIndex || i}
-              align={resolveSummaryAlign(col)}
+              align={align}
+              fixed={fixed}
             >
               <div style={{ whiteSpace: 'nowrap' }}>
                 <strong>{formatSummaryValue(pageSum, format)}</strong>
@@ -177,7 +190,19 @@ const SummaryRowCells: React.FC<SummaryRowCellsProps> = ({
             </Table.Summary.Cell>
           );
         }
-        return <Table.Summary.Cell index={cellIndex++} key={`empty-${i}`} />;
+
+        const showLabel = !labelPlaced && !isIndexColumn(col);
+        if (showLabel) labelPlaced = true;
+
+        return (
+          <Table.Summary.Cell
+            key={`summary-empty-${fieldKey}-${colIndex}`}
+            index={cellIndex++}
+            fixed={fixed}
+          >
+            {showLabel ? labelNode : null}
+          </Table.Summary.Cell>
+        );
       })}
     </Table.Summary.Row>
   );

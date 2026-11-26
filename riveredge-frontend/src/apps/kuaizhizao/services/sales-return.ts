@@ -15,6 +15,11 @@ export interface SalesReturnCapabilities {
   confirm: ActionCapability;
   withdraw: ActionCapability;
   print: ActionCapability;
+  submit?: ActionCapability;
+  submit_review?: ActionCapability;
+  withdraw_submit?: ActionCapability;
+  approve?: ActionCapability;
+  revoke_approval?: ActionCapability;
 }
 
 export interface SalesReturn {

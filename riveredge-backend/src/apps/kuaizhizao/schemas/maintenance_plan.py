@@ -47,24 +47,24 @@ class MaintenancePlanBase(BaseModel):
 
 
 class MaintenancePlanCreate(MaintenancePlanBase):
-    """创建维护计划：必绑保养方案；本计划设备范围由 equipment_uuids 指定。"""
+    """创建维护计划：必绑保养方案；设备范围可先空，需要时再勾选。"""
     maintenance_scheme_id: int = Field(..., description="保养方案ID")
-    equipment_uuids: List[str] = Field(..., min_length=1, description="本计划范围内的设备UUID")
+    equipment_uuids: List[str] = Field(
+        default_factory=list,
+        description="本计划范围内的设备UUID（可空，后续再绑）",
+    )
 
     @field_validator("equipment_uuids")
     @classmethod
     def validate_equipment_uuids(cls, v: List[str]) -> List[str]:
-        cleaned = [str(x).strip() for x in v if str(x).strip()]
-        if not cleaned:
-            raise ValueError("请至少选择一台设备")
-        return cleaned
+        return [str(x).strip() for x in v if str(x).strip()]
 
 
 class MaintenancePlanUpdate(BaseModel):
-    """更新维护计划：维护类型/周期随方案快照；设备范围由 equipment_uuids 维护。"""
+    """更新维护计划：维护类型/周期随方案快照；设备范围由 equipment_uuids 维护（可空）。"""
     plan_name: Optional[str] = Field(None, min_length=1, max_length=200, description="计划名称")
     maintenance_scheme_id: Optional[int] = Field(None, description="保养方案ID")
-    equipment_uuids: Optional[List[str]] = Field(None, min_length=1, description="本计划范围内的设备UUID")
+    equipment_uuids: Optional[List[str]] = Field(None, description="本计划范围内的设备UUID（可空）")
     plan_type: Optional[str] = Field(None, max_length=50, description="计划类型")
     planned_start_date: Optional[datetime] = Field(None, description="计划开始日期")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束日期")
@@ -79,10 +79,7 @@ class MaintenancePlanUpdate(BaseModel):
     def validate_equipment_uuids(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         if v is None:
             return v
-        cleaned = [str(x).strip() for x in v if str(x).strip()]
-        if not cleaned:
-            raise ValueError("请至少选择一台设备")
-        return cleaned
+        return [str(x).strip() for x in v if str(x).strip()]
 
     @field_validator("plan_type")
     @classmethod

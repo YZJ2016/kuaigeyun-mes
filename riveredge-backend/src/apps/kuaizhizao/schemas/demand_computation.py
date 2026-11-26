@@ -35,7 +35,7 @@ computation_params（MRP）中小企业常用键白名单（JSON 存取，与前
   consider_equipment_availability, consider_mold_tool_availability；当前不参与净算与建议量，仅保留配置键。
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime, date
 from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -135,6 +135,21 @@ class DemandComputationCreate(DemandComputationBase):
         if self.demand_id is not None and self.demand_ids is not None:
             raise ValueError("demand_id 与 demand_ids 二选一，不能同时提供")
         return self
+
+
+class PullLineSelection(BaseModel):
+    line_id: int = Field(..., description="来源明细 ID（DemandItem 或 SalesOrderItem）")
+    quantity: Optional[float] = Field(None, description="本次数量；缺省为剩余可下推量")
+    bom_version: Optional[str] = Field(None, max_length=20)
+    material_bom_versions: Optional[Dict[str, str]] = Field(None)
+    warehouse_id: Optional[int] = Field(None)
+
+
+class CreateComputationFromPullLinesRequest(BaseModel):
+    source_kind: Literal["demand_plan", "sales_order"] = Field(...)
+    lines: List[PullLineSelection] = Field(..., min_length=1)
+    notes: Optional[str] = Field(None)
+    computation_params: Optional[Dict[str, Any]] = Field(None)
 
 
 class ExecuteComputationRequest(BaseModel):

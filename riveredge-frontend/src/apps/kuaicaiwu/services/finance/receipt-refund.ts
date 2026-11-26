@@ -90,6 +90,23 @@ export const receiptRefundService = {
       source_ids: number[];
       source_codes?: string[];
     }>(`${API}/resolve-from-sales-return/${salesReturnId}`, { method: 'GET' }),
+
+  commit: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt_refund/${id}/submit`, { method: 'POST' }),
+
+  submitForReview: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt_refund/${id}/submit_review`, {
+      method: 'POST',
+    }),
+
+  withdraw: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt_refund/${id}/withdraw`, { method: 'POST' }),
+
+  approve: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt_refund/${id}/approve`, { method: 'POST' }),
+
+  revoke: (id: number) =>
+    apiRequest<ReceiptVoucher>(`/core/uni-audit/receipt_refund/${id}/revoke`, { method: 'POST' }),
 };
 
 export const RECEIPT_REFUND_RESOURCE = 'kuaicaiwu:receipt-refund';

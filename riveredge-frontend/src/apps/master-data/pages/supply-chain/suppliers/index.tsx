@@ -11,7 +11,7 @@ import { useLocation } from 'react-router-dom';
 import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Descriptions, List, Modal, Popconfirm, Typography } from 'antd';
+import { App, Button, Descriptions, List, Modal, Popconfirm, Table, Typography } from 'antd';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -52,7 +52,8 @@ import {
   partnerEnterpriseTypeLabel,
   partnerInvoiceTypeLabel,
   partnerPayableRecognitionOverrideLabel,
-  partnerSettlementMethodLabel,
+  partnerDefaultPaymentMethodLabel,
+  partnerSettlementTermsLabel,
   partnerTaxpayerTypeLabel,
 } from '../../../utils/partner-static-labels';
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
@@ -68,11 +69,15 @@ import {
 import {
   buildPartnerEnterpriseTypeImportOptions,
   buildPartnerInvoiceTypeImportOptions,
+  buildPartnerDefaultPaymentMethodImportOptions,
   buildPartnerSettlementMethodImportOptions,
+  buildPartnerSettlementTermsImportOptions,
   buildPartnerTaxpayerTypeImportOptions,
+  parsePartnerDefaultPaymentMethodImport,
   parsePartnerEnterpriseTypeImport,
   parsePartnerInvoiceTypeImport,
-  parsePartnerSettlementMethodImport,
+  parsePartnerSettlementTermsImport,
+  splitLegacyPartnerSettlementMethodImport,
   parsePartnerTaxpayerTypeImport,
 } from '../../../utils/partner-static-labels';
 import {
@@ -191,7 +196,27 @@ const SuppliersPage: React.FC = () => {
           { field: 'legalRepresentative', labelKey: 'field.partner.legalRepresentative' },
           { field: 'enterpriseTypeCode', labelKey: 'field.partner.enterpriseType' , options: buildPartnerEnterpriseTypeImportOptions(t) },
           { field: 'paymentTermsDays', labelKey: 'field.partner.paymentTermsDays' },
-          { field: 'settlementMethodCode', labelKey: 'field.partner.settlementMethod' , options: buildPartnerSettlementMethodImportOptions(t) },
+          {
+            field: 'defaultPaymentMethodCode',
+            labelKey: 'field.partner.defaultPaymentMethod',
+            options: buildPartnerDefaultPaymentMethodImportOptions(t),
+          },
+          {
+            field: 'settlementTermsCode',
+            labelKey: 'field.partner.settlementTerms',
+            options: buildPartnerSettlementTermsImportOptions(t),
+          },
+          {
+            field: 'defaultCurrencyCode',
+            labelKey: 'field.partner.defaultCurrency',
+            options: ['CNY', 'USD', 'EUR'],
+          },
+          { field: 'defaultExchangeRate', labelKey: 'field.partner.defaultExchangeRate' },
+          {
+            field: 'settlementMethodCode',
+            labelKey: 'field.partner.settlementMethodLegacy',
+            options: buildPartnerSettlementMethodImportOptions(t),
+          },
           { field: 'paymentAccountName', labelKey: 'field.supplier.paymentAccountName', aliases: ['户名'] },
           { field: 'paymentBankName', labelKey: 'field.supplier.paymentBankName', aliases: ['开户银行'] },
           { field: 'paymentBankAccount', labelKey: 'field.supplier.paymentBankAccount', aliases: ['银行账号', '付款银行账号'] },
@@ -211,7 +236,7 @@ const SuppliersPage: React.FC = () => {
           t('app.master-data.suppliers.importExample.address'),
           '是',
           '', '', '', '', '', '', '', '',
-          '', '', '', '', '', '', '', '', '', '', '', '', '',
+          '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
         ],
       ),
     [t, i18n.language, dictLabelMaps],
@@ -511,7 +536,24 @@ const SuppliersPage: React.FC = () => {
           legalRepresentative: cellAt('legalRepresentative') || undefined,
           enterpriseTypeCode: parsePartnerEnterpriseTypeImport(cellAt('enterpriseTypeCode'), t),
           paymentTermsDays: parseNum(cellAt('paymentTermsDays')),
-          settlementMethodCode: parsePartnerSettlementMethodImport(cellAt('settlementMethodCode'), t),
+          ...(() => {
+            const legacy = splitLegacyPartnerSettlementMethodImport(cellAt('settlementMethodCode'), t);
+            const defaultPaymentMethodCode =
+              parsePartnerDefaultPaymentMethodImport(cellAt('defaultPaymentMethodCode'), t) ??
+              legacy.defaultPaymentMethodCode;
+            const settlementTermsCode =
+              parsePartnerSettlementTermsImport(cellAt('settlementTermsCode'), t) ??
+              legacy.settlementTermsCode;
+            return {
+              ...(defaultPaymentMethodCode ? { defaultPaymentMethodCode } : {}),
+              ...(settlementTermsCode ? { settlementTermsCode } : {}),
+            };
+          })(),
+          defaultCurrencyCode: (() => {
+            const raw = String(cellAt('defaultCurrencyCode') || '').trim().toUpperCase();
+            return raw || undefined;
+          })(),
+          defaultExchangeRate: parseNum(cellAt('defaultExchangeRate')),
           settlementAccounts: (() => {
             const accountName = cellAt('paymentAccountName') || undefined;
             const bankName = cellAt('paymentBankName') || undefined;
@@ -765,6 +807,7 @@ const SuppliersPage: React.FC = () => {
       resizable: false,
       hideInSearch: true,
       ellipsis: true,
+      // @ts-expect-error UniTable defaultShow：列设置可再打开
       defaultShow: false,
     },
     {
@@ -1042,9 +1085,27 @@ const SuppliersPage: React.FC = () => {
         r.paymentTermsDays != null && r.paymentTermsDays !== '' ? String(r.paymentTermsDays) : '—',
     },
     {
-      title: t('field.partner.settlementMethod'),
-      dataIndex: 'settlementMethodCode',
-      render: (_, r) => partnerSettlementMethodLabel(t, r.settlementMethodCode),
+      title: t('field.partner.defaultPaymentMethod'),
+      dataIndex: 'defaultPaymentMethodCode',
+      render: (_, r) => partnerDefaultPaymentMethodLabel(t, r.defaultPaymentMethodCode),
+    },
+    {
+      title: t('field.partner.settlementTerms'),
+      dataIndex: 'settlementTermsCode',
+      render: (_, r) => partnerSettlementTermsLabel(t, r.settlementTermsCode),
+    },
+    {
+      title: t('field.partner.defaultCurrency'),
+      dataIndex: 'defaultCurrencyCode',
+      render: (_, r) => r.defaultCurrencyCode || '—',
+    },
+    {
+      title: t('field.partner.defaultExchangeRate'),
+      dataIndex: 'defaultExchangeRate',
+      render: (_, r) =>
+        r.defaultExchangeRate != null && r.defaultExchangeRate !== ''
+          ? String(r.defaultExchangeRate)
+          : '—',
     },
     { title: t('field.partner.deliveryContactName'), dataIndex: 'deliveryContactName' },
     { title: t('field.partner.deliveryContactPhone'), dataIndex: 'deliveryContactPhone' },
@@ -1185,6 +1246,38 @@ const SuppliersPage: React.FC = () => {
             </DetailDrawerSection>
             <DetailDrawerSection title={t('field.supplier.addresses')}>
               <PartnerAddressesDetailTable rows={supplierDetail.addresses} />
+            </DetailDrawerSection>
+            <DetailDrawerSection title={t('field.supplier.paymentAccounts')}>
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="key"
+                locale={{ emptyText: t('common.noData') }}
+                dataSource={(supplierDetail.settlementAccounts ?? []).map((row, index) => ({
+                  ...row,
+                  key: index,
+                }))}
+                columns={[
+                  {
+                    title: t('field.partner.settlementAccountName'),
+                    dataIndex: 'accountName',
+                  },
+                  {
+                    title: t('field.partner.settlementBankName'),
+                    dataIndex: 'bankName',
+                  },
+                  {
+                    title: t('field.partner.settlementBankAccount'),
+                    dataIndex: 'bankAccount',
+                  },
+                  {
+                    title: t('field.partner.settlementAccountDefault'),
+                    dataIndex: 'isDefault',
+                    width: 72,
+                    render: (value: boolean) => (value ? t('common.yes') : ''),
+                  },
+                ]}
+              />
             </DetailDrawerSection>
             <DetailDrawerSection title={t('field.partner.tabInvoice')}>
               <Descriptions

@@ -60,6 +60,8 @@ def test_push_payment_application_allowed_without_prepayment_node():
         status="CONFIRMED",
         review_status="APPROVED",
         supplier_id=1,
+        department_id=10,
+        department_name="制造中心",
         prepayment_amount=Decimal("0"),
         total_amount=Decimal("5000"),
     )
@@ -107,6 +109,8 @@ def test_push_payment_application_denied_when_remaining_zero():
         status="CONFIRMED",
         review_status="APPROVED",
         supplier_id=1,
+        department_id=10,
+        department_name="制造中心",
         prepayment_amount=Decimal("0"),
         total_amount=Decimal("5000"),
     )
@@ -119,6 +123,27 @@ def test_push_payment_application_denied_when_remaining_zero():
     assert caps.push_payment_application.reason == "purchase_order.push_payment_application.no_amount"
 
 
+def test_push_payment_application_denied_without_department():
+    order = SimpleNamespace(
+        status="CONFIRMED",
+        review_status="APPROVED",
+        supplier_id=1,
+        department_id=None,
+        department_name=None,
+        prepayment_amount=Decimal("0"),
+        total_amount=Decimal("5000"),
+    )
+    caps = derive_purchase_order_capabilities(
+        order,
+        has_items=True,
+        prepayment_application_remaining=Decimal("5000"),
+    )
+    assert caps.push_payment_application.allowed is False
+    assert caps.push_payment_application.reason == (
+        "purchase_order.push_payment_application.no_department"
+    )
+
+
 @pytest.mark.asyncio
 async def test_preview_max_push_without_prepayment_uses_order_gross():
     order = SimpleNamespace(
@@ -126,6 +151,8 @@ async def test_preview_max_push_without_prepayment_uses_order_gross():
         order_code="PO001",
         supplier_id=10,
         supplier_name="供应商A",
+        department_id=10,
+        department_name="采购部",
         prepayment_amount=Decimal("0"),
         total_amount=Decimal("1000"),
         net_amount=Decimal("1130"),
@@ -150,6 +177,12 @@ async def test_preview_max_push_without_prepayment_uses_order_gross():
     ), patch(
         "infra.services.business_config_service.BusinessConfigService.get_finance_require_payment_application",
         new=AsyncMock(return_value=True),
+    ), patch(
+        "apps.kuaizhizao.services.payment_application_po_header.resolve_invoice_status_from_purchase_order",
+        new=AsyncMock(return_value="发票后补"),
+    ), patch(
+        "apps.kuaizhizao.services.payment_application_line_materials.lines_from_purchase_order_items",
+        new=AsyncMock(return_value=[]),
     ):
         preview = await svc.preview_from_purchase_order(1, 1)
 

@@ -83,7 +83,17 @@ from .qms_document_clause import QmsDocumentClause
 from .qms_audit_clause import QmsAuditClause
 from .qms_review_standard import QmsReviewStandard
 from .qms_system_document import QmsSystemDocument
+from .qms_system_document_circulation import QmsSystemDocumentCirculation
 from .qms_system_document_version import QmsSystemDocumentVersion
+from .qms_internal_audit_annual_plan import QmsInternalAuditAnnualPlan
+from .qms_internal_audit_checklist_item import QmsInternalAuditChecklistItem
+from .qms_nonconformity_report import QmsNonconformityReport
+from .qms_corrective_action import QmsCorrectiveAction
+from .qms_management_review_resolution import QmsManagementReviewResolution
+from .qms_quality_objective import QmsQualityObjective, QmsQualityObjectiveLine
+from .qms_legal_regulation import QmsLegalRegulation
+from .qms_external_audit import QmsExternalAudit
+from .qms_certificate import QmsCertificate
 from .spc_sample import SPCSample
 
 # 仓储管理模块
@@ -248,7 +258,7 @@ from .equipment import Equipment, EquipmentCalibration
 from .equipment_acceptance import EquipmentAcceptance
 from .equipment_line_rebind import EquipmentLineRebind, EquipmentLineRebindItem
 from .maintenance_plan import MaintenancePlan, MaintenanceExecution
-from .equipment_fault import EquipmentFault, EquipmentRepair
+from .equipment_fault import EquipmentFault, EquipmentRepair, EquipmentRepairParticipant
 from .mold import Mold, MoldUsage, MoldCalibration, MoldSignback
 from .mold_ops import (
     MoldMaintenanceItem,
@@ -356,8 +366,12 @@ __all__ = [
     'FaiOrder',
     'FaiCharacteristic',
     'QmsSystemDocument',
+    'QmsSystemDocumentCirculation',
     'QmsSystemDocumentVersion',
     'QmsInternalAudit',
+    'QmsInternalAuditAnnualPlan',
+    'QmsInternalAuditChecklistItem',
+    'QmsNonconformityReport',
     'QmsManagementReview',
     'SPCSample',
 
@@ -509,6 +523,7 @@ __all__ = [
     'MaintenanceExecution',
     'EquipmentFault',
     'EquipmentRepair',
+    'EquipmentRepairParticipant',
     'EquipmentInspectionItem',
     'EquipmentInspectionScheme',
     'EquipmentInspectionSchemeLine',

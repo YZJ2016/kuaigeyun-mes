@@ -56,14 +56,23 @@ export function liveRouteMatchesTabKey(
 }
 
 /** 表单页使用冻结 location，避免 list/new/edit 共用组件因全局路由变化卸载表单。 */
-function TabRouteLocationScope({ tabKey, children }: { tabKey: string; children: React.ReactNode }) {
-  const locationContext = useMemo(
-    () => ({
-      location: parseTabKeyToLocation(tabKey),
+function TabRouteLocationScope({
+  tabKey,
+  locationState,
+  children,
+}: {
+  tabKey: string;
+  locationState: unknown;
+  children: React.ReactNode;
+}) {
+  const locationContext = useMemo(() => {
+    const location = parseTabKeyToLocation(tabKey);
+    location.state = locationState ?? null;
+    return {
+      location,
       navigationType: NavigationType.Pop,
-    }),
-    [tabKey],
-  );
+    };
+  }, [tabKey, locationState]);
   return <LocationContext.Provider value={locationContext}>{children}</LocationContext.Provider>;
 }
 
@@ -77,6 +86,7 @@ function FormTabKeepAlivePane({
   active,
   visited,
   liveMatchesTab,
+  locationState,
   resetSignal,
   liveChildren,
 }: {
@@ -84,17 +94,23 @@ function FormTabKeepAlivePane({
   active: boolean;
   visited: boolean;
   liveMatchesTab: boolean;
+  locationState: unknown;
   resetSignal: number;
   liveChildren: React.ReactNode;
 }) {
   const hasMountedRef = useRef(false);
   const frozenTreeRef = useRef<React.ReactNode>(null);
+  const keptLocationStateRef = useRef<unknown>(null);
   const resetSeenRef = useRef(resetSignal);
 
   if (resetSeenRef.current !== resetSignal) {
     resetSeenRef.current = resetSignal;
     hasMountedRef.current = false;
     frozenTreeRef.current = null;
+    keptLocationStateRef.current = null;
+  }
+  if (liveMatchesTab && locationState != null) {
+    keptLocationStateRef.current = locationState;
   }
 
   if (active) {
@@ -120,7 +136,9 @@ function FormTabKeepAlivePane({
       aria-hidden={!active}
     >
       <div className="riveredge-route-transition" style={routeTransitionStyle}>
-        <TabRouteLocationScope tabKey={tabKey}>{frozenTreeRef.current}</TabRouteLocationScope>
+        <TabRouteLocationScope tabKey={tabKey} locationState={keptLocationStateRef.current}>
+          {frozenTreeRef.current}
+        </TabRouteLocationScope>
       </div>
     </div>
   );
@@ -196,6 +214,9 @@ export function TabRouteCache({
           active={key === activeKey}
           visited={visitedCreateTabKeysRef.current.has(key)}
           liveMatchesTab={liveRouteMatchesTabKey(key, livePathname, liveSearch)}
+          locationState={
+            liveRouteMatchesTabKey(key, livePathname, liveSearch) ? liveLocation.state : null
+          }
           resetSignal={paneResetSignalRef.current.get(key) ?? 0}
           liveChildren={children}
         />

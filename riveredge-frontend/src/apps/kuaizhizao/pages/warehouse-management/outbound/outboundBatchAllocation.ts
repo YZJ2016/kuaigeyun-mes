@@ -98,18 +98,27 @@ export function pickAndAllocateBatchesFifo(
   return allocateBatchQuantitiesFifo(target, nos, options, []);
 }
 
+export type OutboundBatchAllocationValidateOptions = {
+  /** 无库存批号可选时（如允许负库存出库）接受手工批号，不校验可用量 */
+  allowManualWithoutStock?: boolean;
+};
+
 export function isValidOutboundBatchAllocations(
   allocs: OutboundBatchAllocation[] | undefined,
   options: InventoryPickOption[],
   totalQty: number,
+  validateOpts?: OutboundBatchAllocationValidateOptions,
 ): boolean {
-  if (!options.length) return false;
   const list = (allocs ?? []).filter((a) => String(a.batchNo ?? '').trim() && Number(a.quantity) > QTY_EPS);
   if (!list.length) return false;
   const target = Number(totalQty) || 0;
   if (!(target > QTY_EPS)) return false;
   const sum = sumBatchAllocationQty(list);
   if (Math.abs(sum - target) > Math.max(QTY_EPS, target * 1e-9)) return false;
+
+  if (!options.length) {
+    return !!validateOpts?.allowManualWithoutStock;
+  }
 
   const avail = new Map(
     options.map((o) => [String(o.value ?? '').trim(), Number(o.quantity) || 0] as const),
@@ -121,6 +130,9 @@ export function isValidOutboundBatchAllocations(
       avail.get(batchNo) ??
       avail.get(normalized) ??
       0;
+    if (validateOpts?.allowManualWithoutStock && !(max > QTY_EPS)) {
+      continue;
+    }
     if (!(max > QTY_EPS) || a.quantity > max + QTY_EPS) return false;
   }
   return true;

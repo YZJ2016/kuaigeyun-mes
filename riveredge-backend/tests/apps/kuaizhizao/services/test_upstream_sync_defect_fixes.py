@@ -217,6 +217,10 @@ async def test_sales_delivery_withdraw_uses_line_warehouse_location_and_aux():
     ), patch(
         "apps.kuaizhizao.services.warehouse_service.SalesDeliveryResponse.model_validate",
         return_value=delivery,
+    ), patch(
+        "apps.kuaiconnect.services.document_push.kingdee_im_warehouse_revoke_service"
+        ".sync_im_warehouse_kingdee_after_withdraw",
+        new=AsyncMock(return_value=None),
     ):
         cfg_cls.return_value.get_business_config = AsyncMock(
             return_value={"parameters": {"warehouse": {}}}

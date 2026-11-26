@@ -14,14 +14,13 @@ import {
   Typography,
   Table,
   Form,
-  AutoComplete,
   Switch,
   InputNumber,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
   UniTableStackedPrimaryCell,
@@ -33,7 +32,15 @@ import {
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
 import { apiRequest } from '../../../../../services/api';
-import { sumInventoryPickOptionQty } from '../outbound/outboundConfirmInventoryOptions';
+import {
+  sumInventoryPickOptionQty,
+  type InventoryPickOption,
+} from '../outbound/outboundConfirmInventoryOptions';
+import OutboundBatchAllocationField from '../outbound/OutboundBatchAllocationField';
+import {
+  isValidOutboundBatchAllocations,
+  type OutboundBatchAllocation,
+} from '../outbound/outboundBatchAllocation';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
@@ -66,7 +73,9 @@ import { alignProColumns } from '../../sales-management/shared/documentFieldAlig
 import { WAREHOUSE_DOC_LIST_FIELD_RANK } from '../shared/warehouseDocListFieldRank';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
-type BatchPickOption = { value: string; label: string; quantity?: number };
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+
+const BATCHING_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_batching_orders';
 
 export type BatchingTaskRow = {
   task_type: string;
@@ -203,6 +212,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound');
   const batchingPerms = useResourcePermissions('kuaizhizao:warehouse-management-batching-center');
   const canExecuteBatching = batchingPerms.canAction?.('execute') ?? false;
+  const canDeleteBatching = Boolean(batchingPerms.canDelete);
   const taskTypeLabel = useMemo(() => getBatchingTaskTypeLabel(t), [t]);
   const taskTypeMap = useMemo(
     () => ({
@@ -217,7 +227,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
     }),
     [taskTypeLabel, t],
   );
+
+  const {
+    generateCustomFieldColumns: generateBatchingCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichBatchingRecordsWithCustomFields,
+  } = useCustomFieldsForList<BatchingTaskRow & { id?: number }>({
+    tableName: BATCHING_ORDER_CUSTOM_FIELD_TABLE,
+  });
+  const batchingCustomFieldColumns =
+    taskType === 'batching_draft' ? generateBatchingCustomFieldColumns() : [];
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<BatchingTaskRow[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -227,8 +248,13 @@ const BatchingTaskQueue: React.FC<Props> = ({
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [completeForm] = Form.useForm();
   const [pendingCompleteFormValues, setPendingCompleteFormValues] = useState<Record<string, unknown> | null>(null);
-  const [batchOptionsByMaterialId, setBatchOptionsByMaterialId] = useState<Record<number, BatchPickOption[]>>({});
+  const [batchOptionsByMaterialId, setBatchOptionsByMaterialId] = useState<
+    Record<number, InventoryPickOption[]>
+  >({});
   const [batchOptionsLoading, setBatchOptionsLoading] = useState(false);
+  const [batchAllocsByItemId, setBatchAllocsByItemId] = useState<
+    Record<number, OutboundBatchAllocation[]>
+  >({});
 
   const reload = () => {
     actionRef.current?.reload();
@@ -249,7 +275,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
   const handleMaterialCallUpdate = async (
     id: number,
     status: 'processing' | 'completed' | 'cancelled',
-    completion_batches?: { item_id: number; batch_no: string }[],
+    completion_batches?: { item_id: number; batch_no: string; quantity?: number }[],
   ) => {
     const payload: Record<string, unknown> = { status };
     if (status === 'completed' && completion_batches?.length) {
@@ -328,7 +354,11 @@ const BatchingTaskQueue: React.FC<Props> = ({
 
   const openBatchingConfirm = async (record: BatchingTaskRow) => {
     try {
-      const detail = await batchingOrderApi.syncFromWorkOrder(record.task_id);
+      // 手工单无工单：不可 sync 缺料，直接取详情明细
+      const hasWorkOrder = Number(record.work_order_id) > 0;
+      const detail = hasWorkOrder
+        ? await batchingOrderApi.syncFromWorkOrder(record.task_id)
+        : await batchingOrderApi.get(String(record.task_id));
       const allItems = detail?.items ?? [];
       const pendingItems = allItems.filter((it: { status?: string }) => it.status !== 'picked');
       if (!pendingItems.length) {
@@ -357,6 +387,10 @@ const BatchingTaskQueue: React.FC<Props> = ({
   };
 
   const handleSyncBatchingDraft = async (record: BatchingTaskRow) => {
+    if (!(Number(record.work_order_id) > 0)) {
+      messageApi.info(t('app.kuaizhizao.batchingCenter.syncShortageManualOnly'));
+      return;
+    }
     try {
       const detail = await batchingOrderApi.syncFromWorkOrder(record.task_id);
       const count = detail?.items?.length ?? 0;
@@ -367,6 +401,29 @@ const BatchingTaskQueue: React.FC<Props> = ({
     }
   };
 
+  const handleBatchDeleteBatchingDrafts = async (keys: React.Key[]) => {
+    const rows = keys
+      .map((key) => tableRowsRef.current.find((row) => `${row.task_type}-${row.task_id}` === String(key)))
+      .filter(
+        (row): row is BatchingTaskRow =>
+          row != null && row.task_type === 'batching_draft' && row.status === 'draft',
+      );
+    if (rows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.batchDeleteNoneDeletable'));
+      return;
+    }
+    try {
+      for (const row of rows) {
+        await batchingOrderApi.delete(String(row.task_id));
+      }
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: rows.length }));
+      setSelectedRowKeys([]);
+      reload();
+    } catch (e: unknown) {
+      messageApi.error(getApiErrorMessage(e, t('common.deleteFailed')));
+    }
+  };
+
   const submitComplete = async () => {
     if (!completingRecord) return;
     try {
@@ -374,13 +431,23 @@ const BatchingTaskQueue: React.FC<Props> = ({
       setCompleteSubmitting(true);
       if (completeMode === 'material_call') {
         const items: any[] = Array.isArray(completingRecord.items) ? completingRecord.items : [];
-        const completion_batches = items.map((it) => ({
-          item_id: it.id,
-          batch_no: String(vals[`batch_${it.id}`] ?? '').trim(),
-        }));
-        if (completion_batches.some((b) => !b.batch_no)) {
-          messageApi.warning(t('app.kuaizhizao.batchingCenter.fillAllBatchNos'));
-          return;
+        const completion_batches: { item_id: number; batch_no: string; quantity?: number }[] = [];
+        for (const it of items) {
+          const mid = Number(it.material_id);
+          const opts = Number.isFinite(mid) && mid > 0 ? batchOptionsByMaterialId[mid] ?? [] : [];
+          const qty = Number(it.requested_quantity ?? it.required_quantity ?? 0);
+          const allocs = batchAllocsByItemId[it.id] ?? [];
+          if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
+            messageApi.warning(t('app.kuaizhizao.batchingCenter.fillAllBatchNos'));
+            return;
+          }
+          for (const a of allocs) {
+            completion_batches.push({
+              item_id: it.id,
+              batch_no: a.batchNo,
+              quantity: a.quantity,
+            });
+          }
         }
         await handleMaterialCallUpdate(completingRecord.task_id, 'completed', completion_batches);
       } else {
@@ -401,17 +468,25 @@ const BatchingTaskQueue: React.FC<Props> = ({
             item_batches.push({ item_id: it.id, skip: true });
             continue;
           }
-          const batch_no = String(vals[`batch_${it.id}`] ?? '').trim();
-          if (!batch_no) {
-            messageApi.warning(t('app.kuaizhizao.batchingCenter.fillBatchOrSkip', { name: it.material_name ?? it.material_code }));
+          const mid = Number(it.material_id);
+          const opts = Number.isFinite(mid) && mid > 0 ? batchOptionsByMaterialId[mid] ?? [] : [];
+          const allocs = batchAllocsByItemId[it.id] ?? [];
+          if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
+            messageApi.warning(
+              t('app.kuaizhizao.batchingCenter.fillBatchOrSkip', {
+                name: it.material_name ?? it.material_code,
+              }),
+            );
             return;
           }
-          item_batches.push({
-            item_id: it.id,
-            batch_no,
-            pick_quantity: qty,
-            skip: false,
-          });
+          for (const a of allocs) {
+            item_batches.push({
+              item_id: it.id,
+              batch_no: a.batchNo,
+              pick_quantity: a.quantity,
+              skip: false,
+            });
+          }
         }
         if (!item_batches.some((b) => !b.skip)) {
           messageApi.warning(t('app.kuaizhizao.batchingCenter.selectAtLeastOnePick'));
@@ -424,6 +499,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
       }
       setCompleteOpen(false);
       setCompletingRecord(null);
+      setBatchAllocsByItemId({});
     } catch {
       /* validation or api */
     } finally {
@@ -457,6 +533,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
   useEffect(() => {
     if (!completeOpen) {
       setBatchOptionsByMaterialId({});
+      setBatchAllocsByItemId({});
       return;
     }
     const items =
@@ -479,7 +556,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
           { method: 'GET', params: { material_ids: mids, include_expired: false } },
         );
         const rows = res.items ?? [];
-        const map: Record<number, BatchPickOption[]> = {};
+        const map: Record<number, InventoryPickOption[]> = {};
         for (const row of rows) {
           const mid = row.material_id as number;
           if (!mid) continue;
@@ -727,6 +804,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
       },
     },
     ...buildDocumentAuditColumns<BatchingTaskRow>(t),
+    ...batchingCustomFieldColumns,
     {
       title: t('common.actions'),
       key: 'option',
@@ -828,6 +906,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
           return actions.length ? actions : null;
         }
         if (record.task_type === 'batching_draft') {
+          const hasWorkOrder = Number(record.work_order_id) > 0;
           if (canRead) {
             actions.push(
               <Button
@@ -841,16 +920,18 @@ const BatchingTaskQueue: React.FC<Props> = ({
             );
           }
           if (['draft', 'picking'].includes(record.status ?? '')) {
-            actions.push(
-              <Button
-                key="refresh-shortage"
-                {...rowActionKind('recycle')}
-                size="small"
-                onClick={() => handleSyncBatchingDraft(record)}
-              >
-                {t('app.kuaizhizao.batchingCenter.refreshShortage')}
-              </Button>,
-            );
+            if (hasWorkOrder) {
+              actions.push(
+                <Button
+                  key="refresh-shortage"
+                  {...rowActionKind('recycle')}
+                  size="small"
+                  onClick={() => handleSyncBatchingDraft(record)}
+                >
+                  {t('app.kuaizhizao.batchingCenter.refreshShortage')}
+                </Button>,
+              );
+            }
             if (canExecuteBatching) {
               actions.push(
                 <Button
@@ -897,7 +978,17 @@ const BatchingTaskQueue: React.FC<Props> = ({
         ],
         WAREHOUSE_DOC_LIST_FIELD_RANK,
       ),
-    [t, taskType, taskTypeLabel, taskTypeMap, onOpenDetail, canRead, pullFromWorkOrderAction.label],
+    [
+      t,
+      batchingCustomFieldColumns,
+      taskType,
+      taskTypeLabel,
+      taskTypeMap,
+      onOpenDetail,
+      canRead,
+      canExecuteBatching,
+      pullFromWorkOrderAction.label,
+    ],
   );
 
   const completeItems: any[] =
@@ -971,9 +1062,15 @@ const BatchingTaskQueue: React.FC<Props> = ({
             {
               title: t('app.kuaizhizao.warehouseCommon.colBatchNo'),
               key: 'batch',
-              width: 240,
+              width: 280,
               render: (_, it: any) => (
-                <Form.Item noStyle shouldUpdate={(prev, cur) => prev[`pick_${it.id}`] !== cur[`pick_${it.id}`]}>
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prev, cur) =>
+                    prev[`pick_${it.id}`] !== cur[`pick_${it.id}`] ||
+                    prev[`qty_${it.id}`] !== cur[`qty_${it.id}`]
+                  }
+                >
                   {({ getFieldValue }) => {
                     const enabled = getFieldValue(`pick_${it.id}`) !== false;
                     if (!enabled) {
@@ -984,20 +1081,33 @@ const BatchingTaskQueue: React.FC<Props> = ({
                       );
                     }
                     const opts = batchOptionsByMaterialId[it.material_id] ?? [];
+                    const qty = Number(
+                      getFieldValue(`qty_${it.id}`) ?? it.required_quantity ?? 0,
+                    );
+                    const materialLabel = [it.material_code, it.material_name]
+                      .filter(Boolean)
+                      .join(' - ');
                     return (
-                      <Form.Item name={`batch_${it.id}`} style={{ marginBottom: 0 }}>
-                        <AutoComplete
-                          size="small"
-                          allowClear
-                          options={opts}
-                          placeholder={t('app.kuaizhizao.batchingCenter.batchPlaceholder')}
-                          notFoundContent={batchOptionsLoading ? t('app.kuaizhizao.batchingCenter.loadingBatches') : t('app.kuaizhizao.batchingCenter.noMainWarehouseBatch')}
-                        />
-                      </Form.Item>
+                      <OutboundBatchAllocationField
+                        value={batchAllocsByItemId[it.id] ?? []}
+                        onChange={(next) =>
+                          setBatchAllocsByItemId((prev) => ({ ...prev, [it.id]: next }))
+                        }
+                        options={opts}
+                        totalQuantity={qty}
+                        loading={batchOptionsLoading}
+                        materialLabel={materialLabel}
+                      />
                     );
                   }}
                 </Form.Item>
               ),
+            },
+            {
+              title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
+              key: 'serial_numbers',
+              width: 100,
+              render: () => '—',
             },
           ]
         : [
@@ -1031,28 +1141,35 @@ const BatchingTaskQueue: React.FC<Props> = ({
             {
               title: t('app.kuaizhizao.warehouseCommon.colBatchNo'),
               key: 'batch',
-              width: 260,
+              width: 280,
               render: (_, it: any) => {
                 const opts = batchOptionsByMaterialId[it.material_id] ?? [];
+                const qty = Number(it.requested_quantity ?? it.required_quantity ?? 0);
+                const materialLabel = [it.material_code, it.material_name]
+                  .filter(Boolean)
+                  .join(' - ');
                 return (
-                  <Form.Item
-                    name={`batch_${it.id}`}
-                    rules={[{ required: true, message: t('app.kuaizhizao.batchingCenter.selectOrEnterBatch') }]}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <AutoComplete
-                      size="small"
-                      allowClear
-                      options={opts}
-                      placeholder={t('app.kuaizhizao.batchingCenter.batchPlaceholder')}
-                      notFoundContent={batchOptionsLoading ? t('app.kuaizhizao.batchingCenter.loadingBatches') : t('app.kuaizhizao.batchingCenter.noMainWarehouseBatch')}
-                    />
-                  </Form.Item>
+                  <OutboundBatchAllocationField
+                    value={batchAllocsByItemId[it.id] ?? []}
+                    onChange={(next) =>
+                      setBatchAllocsByItemId((prev) => ({ ...prev, [it.id]: next }))
+                    }
+                    options={opts}
+                    totalQuantity={qty}
+                    loading={batchOptionsLoading}
+                    materialLabel={materialLabel}
+                  />
                 );
               },
             },
+            {
+              title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
+              key: 'serial_numbers',
+              width: 100,
+              render: () => '—',
+            },
           ],
-    [batchOptionsByMaterialId, batchOptionsLoading, completeMode, t],
+    [batchAllocsByItemId, batchOptionsByMaterialId, batchOptionsLoading, completeMode, t],
   );
 
   return (
@@ -1115,12 +1232,30 @@ const BatchingTaskQueue: React.FC<Props> = ({
         actionRef={actionRef}
         rowKey={(r) => `${r.task_type}-${r.task_id}`}
         columns={columns}
-        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}-width-v4`}
+        columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.batching-center.tasks.${taskType}-width-v6`}
         showAdvancedSearch
         polling={false}
         showCreateButton={Boolean(onCreate)}
         onCreate={onCreate}
         createButtonText={t('app.kuaizhizao.batchingCenter.createBatchingOrder')}
+        enableRowSelection={taskType === 'batching_draft' && canDeleteBatching}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
+        showDeleteButton={taskType === 'batching_draft' && canDeleteBatching}
+        deleteButtonText={t('common.delete')}
+        onDelete={handleBatchDeleteBatchingDrafts}
+        deleteConfirmTitle={(count) =>
+          t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', {
+            count,
+            noun: taskTypeLabel.batching_draft,
+          })
+        }
+        rowSelectionGetCheckboxProps={(record) => ({
+          disabled: !(record.task_type === 'batching_draft' && record.status === 'draft'),
+        })}
         expandable={{
           columnWidth: 48,
           rowExpandable: (r) => r.task_type === 'material_call' && Array.isArray(r.items) && r.items.length > 0,
@@ -1179,7 +1314,7 @@ const BatchingTaskQueue: React.FC<Props> = ({
             />
           ),
         }}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const listParams = resolveBatchingCenterTaskListParams(searchFormValues, sort);
             const res = await batchingOrderApi.listTasks({
@@ -1191,7 +1326,16 @@ const BatchingTaskQueue: React.FC<Props> = ({
                 ? { work_order_code: workOrderCodeFilter }
                 : {}),
             });
-            const { data, total } = normalizeWarehouseListResponse(res);
+            const { data: raw, total } = normalizeWarehouseListResponse(res);
+            const data =
+              taskType === 'batching_draft' && meta?.purpose !== 'prefetch'
+                ? await enrichBatchingRecordsWithCustomFields(
+                    (raw as BatchingTaskRow[]).map((row) => ({
+                      ...row,
+                      id: row.task_id,
+                    })),
+                  )
+                : raw;
             return { data, total, success: true };
           } catch {
             return { data: [], total: 0, success: false };

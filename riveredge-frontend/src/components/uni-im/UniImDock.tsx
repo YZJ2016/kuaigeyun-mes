@@ -1017,6 +1017,19 @@ export default function UniImPanel({
   }, [isNotifySection, isTaskSection, open, queryClient, selectedUuid]);
 
   useEffect(() => {
+    const onDissolved = (event: Event) => {
+      const detail = (event as CustomEvent<{ conversation_uuid?: string }>).detail;
+      const uuid = detail?.conversation_uuid;
+      if (!uuid || selectedUuid !== uuid) {
+        return;
+      }
+      setSelectedUuid(null);
+    };
+    window.addEventListener('im.conversation.dissolved', onDissolved);
+    return () => window.removeEventListener('im.conversation.dissolved', onDissolved);
+  }, [selectedUuid]);
+
+  useEffect(() => {
     if (!open || !selectedNotifyUuid || !isNotifySection) {
       return;
     }
@@ -2170,6 +2183,15 @@ export default function UniImPanel({
         onSaved={() => {
           void queryClient.invalidateQueries({ queryKey: ['imConversations'] });
           void queryClient.invalidateQueries({ queryKey: ['imMembers', selectedUuid] });
+        }}
+        onDissolved={() => {
+          const dissolvedUuid = selectedUuid;
+          setSelectedUuid(null);
+          void queryClient.invalidateQueries({ queryKey: ['imConversations'] });
+          if (dissolvedUuid) {
+            void queryClient.removeQueries({ queryKey: ['imMessages', dissolvedUuid] });
+            void queryClient.removeQueries({ queryKey: ['imMembers', dissolvedUuid] });
+          }
         }}
       />
       <Modal

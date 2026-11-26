@@ -6,6 +6,7 @@ import type { PurchaseArrivalProcessingStatus } from '../services/purchase-arriv
 const PROCESSING_STATUS_KEYS: PurchaseArrivalProcessingStatus[] = [
   'unprocessed',
   'reported',
+  'submitted',
   'pending_review',
   'approved',
   'change_pending',
@@ -16,6 +17,7 @@ const PROCESSING_STATUS_KEYS: PurchaseArrivalProcessingStatus[] = [
 const PROCESSING_I18N_KEY: Record<PurchaseArrivalProcessingStatus, string> = {
   unprocessed: 'app.kuaizhizao.purchaseArrival.processing.unprocessed',
   reported: 'app.kuaizhizao.purchaseArrival.processing.reported',
+  submitted: 'app.kuaizhizao.purchaseArrival.processing.submitted',
   pending_review: 'app.kuaizhizao.purchaseArrival.processing.pendingReview',
   approved: 'app.kuaizhizao.purchaseArrival.processing.approved',
   change_pending: 'app.kuaizhizao.purchaseArrival.processing.changePending',
@@ -50,6 +52,8 @@ export function resolvePurchaseArrivalProcessingStatusTagColor(
     case 'pending_review':
       return DOCUMENT_STATUS_SEMANTIC_COLOR.pending;
     case 'change_pending':
+      return DOCUMENT_STATUS_SEMANTIC_COLOR.active;
+    case 'submitted':
       return DOCUMENT_STATUS_SEMANTIC_COLOR.active;
     case 'reported':
       return DOCUMENT_STATUS_SEMANTIC_COLOR.draft;

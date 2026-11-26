@@ -74,12 +74,28 @@ async def _serialize(tenant_id: int, user_id: int, obj: Payment) -> PaymentVouch
     return PaymentVoucherResponse.model_validate(masked)
 
 
+async def _attach_audit(
+    tenant_id: int,
+    user_id: int,
+    items: list[PaymentVoucherResponse],
+) -> list[PaymentVoucherResponse]:
+    if not items:
+        return items
+    from core.services.approval.audit_record_enricher import enrich_items
+
+    payloads = [item.model_dump() for item in items]
+    enriched = await enrich_items(tenant_id, "payment_refund", payloads, viewer_id=user_id)
+    return [PaymentVoucherResponse.model_validate(row) for row in enriched]
+
+
 async def _serialize_detail(tenant_id: int, user_id: int, obj: Payment) -> PaymentVoucherResponse:
     from apps.kuaicaiwu.services.finance_voucher_enrichment import enrich_voucher_detail
 
     base = await _serialize(tenant_id, user_id, obj)
     enriched = await enrich_voucher_detail(tenant_id, base.model_dump(), kind="payment")
-    return PaymentVoucherResponse.model_validate(enriched)
+    detailed = PaymentVoucherResponse.model_validate(enriched)
+    audited = await _attach_audit(tenant_id, user_id, [detailed])
+    return audited[0]
 
 
 @router.post("", response_model=PaymentVoucherResponse, status_code=status.HTTP_201_CREATED)
@@ -150,6 +166,7 @@ async def create_payment_refund(
         "bank_account_id": data.bank_account_id,
         "settlement_type": "refund",
         "status": "Draft",
+        "review_status": "草稿",
         "notes": data.notes,
         "attachments": data.attachments,
     }
@@ -231,8 +248,10 @@ async def list_payment_refunds(
 
     payloads = [item.model_dump() for item in serialized]
     await attach_refund_bank_flow_capabilities(tenant_id, payloads, kind="payment")
+    listed = [PaymentVoucherResponse.model_validate(p) for p in payloads]
+    audited = await _attach_audit(tenant_id, current_user.id, listed)
     return PaymentVoucherListResponse(
-        items=[PaymentVoucherResponse.model_validate(p) for p in payloads],
+        items=audited,
         total=total,
         skip=skip,
         limit=limit,
@@ -338,6 +357,14 @@ async def update_payment_refund(
     payment = await _get_or_404(tenant_id, id)
     if payment.status == "Confirmed":
         raise _http_exception_with_trace(400, "已确认的付款退款不能修改", "/payment-refunds/{id}", tenant_id)
+    try:
+        from apps.kuaicaiwu.services.payment_refund_audit_service import (
+            assert_payment_refund_review_editable,
+        )
+
+        assert_payment_refund_review_editable(payment)
+    except BusinessLogicError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/payment-refunds/{id}", tenant_id) from exc
     update_data = data.model_dump(exclude_unset=True)
     update_data.pop("settlement_type", None)
     apply_update_audit(update_data, current_user)
@@ -423,5 +450,13 @@ async def cancel_payment_refund(
             "/payment-refunds/{id}/cancel",
             tenant_id,
         )
+    try:
+        from apps.kuaicaiwu.services.payment_refund_audit_service import (
+            assert_payment_refund_review_editable,
+        )
+
+        assert_payment_refund_review_editable(payment)
+    except BusinessLogicError as exc:
+        raise _http_exception_with_trace(400, str(exc), "/payment-refunds/{id}/cancel", tenant_id) from exc
     await Payment.filter(id=id).update(status="Cancelled")
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))

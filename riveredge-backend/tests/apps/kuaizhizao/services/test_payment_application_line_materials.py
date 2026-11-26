@@ -1,4 +1,4 @@
-"""付款申请行：采购订单预付款按整单合同一行。"""
+"""付款申请行：采购订单预付款按行金额权重分摊到各明细行。"""
 
 from decimal import Decimal
 from types import SimpleNamespace
@@ -12,7 +12,7 @@ from apps.kuaizhizao.services.payment_application_line_materials import (
 
 
 @pytest.mark.asyncio
-async def test_prepayment_from_po_is_single_contract_line():
+async def test_prepayment_from_po_allocates_to_item_lines():
     order = SimpleNamespace(id=99, order_code="CG202611050005")
     with patch(
         "apps.kuaizhizao.models.purchase_order.PurchaseOrderItem.filter",
@@ -44,9 +44,9 @@ async def test_prepayment_from_po_is_single_contract_line():
             line_kind="prepayment",
         )
 
-    assert len(lines) == 1
-    assert lines[0].source_id == 99
-    assert lines[0].source_code == "CG202611050005"
-    assert lines[0].request_amount == Decimal("10000")
-    assert getattr(lines[0], "source_line_id", None) is None
-    mock_filter.assert_not_called()
+    assert len(lines) == 2
+    for line, item_id in zip(lines, (1, 2)):
+        assert line.source_id == 99
+        assert line.source_code == "CG202611050005"
+        assert line.request_amount == Decimal("5000")
+        assert line.source_line_id == item_id

@@ -14,6 +14,13 @@ import { requestDisplayResolve, requestDisplaySearch } from './displayContract';
 /**
  * 用户信息接口
  */
+/** 用户列表：第三方扫码登录是否已绑定 */
+export interface UserOauthBindings {
+  wecom?: boolean;
+  dingtalk?: boolean;
+  feishu?: boolean;
+}
+
 export interface User {
   id: number;
   uuid: string;
@@ -22,6 +29,18 @@ export interface User {
   email?: string;
   full_name?: string;
   phone?: string;
+  employee_number?: string | null;
+  gender?: string | null;
+  person_category?: string | null;
+  employment_status?: string | null;
+  supervisor_uuid?: string | null;
+  supervisor?: {
+    uuid: string;
+    username?: string;
+    full_name?: string;
+    employee_number?: string | null;
+  } | null;
+  secondary_departments?: Array<{ uuid: string; name: string; code?: string }>;
   is_active: boolean;
   is_infra_admin?: boolean;
   is_tenant_admin: boolean;
@@ -44,6 +63,7 @@ export interface User {
     code: string;
     role_type?: string;
   }>;
+  oauth_bindings?: UserOauthBindings | null;
   last_login?: string;
   created_at: string;
   updated_at: string;
@@ -90,6 +110,12 @@ export interface CreateUserData {
   department_uuid?: string;
   position_uuid?: string;
   role_uuids?: string[];
+  employee_number?: string;
+  gender?: string;
+  supervisor_uuid?: string;
+  person_category?: string;
+  employment_status?: string;
+  secondary_department_uuids?: string[];
   is_active?: boolean;
   is_tenant_admin?: boolean;
 }
@@ -108,6 +134,12 @@ export interface UpdateUserData {
   /** 传 null 清空职位 */
   position_uuid?: string | null;
   role_uuids?: string[];
+  employee_number?: string | null;
+  gender?: string | null;
+  supervisor_uuid?: string | null;
+  person_category?: string | null;
+  employment_status?: string | null;
+  secondary_department_uuids?: string[];
   is_active?: boolean;
   is_tenant_admin?: boolean;
 }
@@ -216,15 +248,17 @@ export async function deleteUser(userUuid: string): Promise<void> {
 /**
  * 重置用户密码
  *
- * 未传新密码时由后端按租户策略生成默认或临时口令。
+ * 重置指定用户密码；未传新密码时由后端按租户密码策略生成默认或临时口令。
  *
  * @param userUuid - 用户 UUID
- * @param newPassword - 新密码（可选，不提供则使用默认密码）
- * @returns 更新后的用户信息
+ * @param newPassword - 新密码（可选）
+ * @returns 用户信息及自动生成的明文口令（若有）
  */
 export interface UserResetPasswordResult {
   user: User;
+  /** 未指定新密码时后端返回的明文（简易默认 / 加强临时） */
   temporary_password?: string | null;
+  /** 加强模式自动生成时为 true，须提示下次登录修改 */
   must_change_password?: boolean;
 }
 
@@ -478,6 +512,7 @@ export interface UserDisplayItem {
   uuid: string;
   username: string;
   full_name?: string | null;
+  employee_number?: string | null;
   label: string;
   /** 头像文件 UUID；无则空 */
   avatar?: string | null;

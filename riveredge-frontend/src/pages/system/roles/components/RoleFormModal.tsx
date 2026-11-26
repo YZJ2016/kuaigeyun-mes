@@ -94,6 +94,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
           description: localized.description ?? detail.description,
           role_type: detail.role_type || 'internal',
           external_partner_type: detail.external_partner_type,
+          functional_domain: detail.functional_domain ?? undefined,
           is_active: detail.is_active ?? true,
           home_path: detail.home_path || undefined,
         });
@@ -113,6 +114,14 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       }
       if (payload.role_type !== 'external') {
         payload.external_partner_type = undefined;
+      }
+      if (payload.role_type === 'internal' || payload.role_type === 'station') {
+        payload.functional_domain =
+          payload.functional_domain === undefined || payload.functional_domain === ''
+            ? null
+            : payload.functional_domain;
+      } else {
+        payload.functional_domain = null;
       }
       if (payload.home_path === undefined || payload.home_path === '') {
         payload.home_path = null;

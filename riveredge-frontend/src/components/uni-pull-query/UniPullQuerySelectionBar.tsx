@@ -73,6 +73,8 @@ export const UniPullQuerySelectionBar: React.FC<UniPullQuerySelectionBarProps> =
             items.map((item) => (
               <Tag
                 key={String(item.key)}
+                color={token.colorPrimary}
+                variant="filled"
                 closable
                 onClose={(event) => {
                   event.preventDefault();

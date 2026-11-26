@@ -118,6 +118,10 @@ export function useInboundReceiverSelect() {
   const currentUser = useCurrentUser();
   const canPick = canPickUsersForDisplay(currentUser);
   const useFullUserList = canReadUserDirectory(currentUser);
+  // 用稳定标量做依赖，避免 Query/store 用户对象引用抖动导致 restoreReceiver 变身份、反冲已选人
+  const currentUserId = currentUser?.id;
+  const currentUserName = String(currentUser?.full_name || currentUser?.username || '').trim();
+  const currentUserUuid = currentUser?.uuid;
 
   const [receiverId, setReceiverId] = useState<number | undefined>();
   const [receiverName, setReceiverName] = useState('');
@@ -138,14 +142,14 @@ export function useInboundReceiverSelect() {
   }, []);
 
   const applyCurrentUserAsReceiver = useCallback(() => {
-    if (!currentUser) {
+    if (currentUserId == null && !currentUserName) {
       applyUser(undefined, '');
       return;
     }
-    const id = currentUser.id != null && currentUser.id > 0 ? currentUser.id : undefined;
-    const name = String(currentUser.full_name || currentUser.username || '').trim();
-    applyUser(id, name, currentUser.uuid);
-  }, [applyUser, currentUser]);
+    const id =
+      currentUserId != null && Number(currentUserId) > 0 ? Number(currentUserId) : undefined;
+    applyUser(id, currentUserName, currentUserUuid);
+  }, [applyUser, currentUserId, currentUserName, currentUserUuid]);
 
   const loadReceiverOptions = useCallback(
     async (keyword = '') => {
@@ -210,9 +214,15 @@ export function useInboundReceiverSelect() {
   }, [receiverId, receiverName, receiverOptions, receiverUuid]);
 
   useEffect(() => {
-    if (!currentUser || receiverId != null || receiverUuid) return;
+    if ((currentUserId == null && !currentUserName) || receiverId != null || receiverUuid) return;
     applyCurrentUserAsReceiver();
-  }, [applyCurrentUserAsReceiver, currentUser, receiverId, receiverUuid]);
+  }, [
+    applyCurrentUserAsReceiver,
+    currentUserId,
+    currentUserName,
+    receiverId,
+    receiverUuid,
+  ]);
 
   useEffect(() => {
     if (receiverId != null || !receiverUuid) return;

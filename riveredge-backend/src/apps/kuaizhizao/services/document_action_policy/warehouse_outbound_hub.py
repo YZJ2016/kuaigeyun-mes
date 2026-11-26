@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
 
+from apps.kuaizhizao.constants import is_submitted_status
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
     CAPABILITY_REASON_MESSAGES,
@@ -29,7 +30,7 @@ _EDITABLE_PRE_POST_BY_TYPE = {
         "草稿", "draft", "待审核", "待领料", "pending",
     }),
     "sales_delivery": frozenset({
-        "草稿", "draft", "待审核", "待出库", "pending",
+        "草稿", "draft", "待出库", "pending",
     }),
     "other_outbound": frozenset({
         "草稿", "draft", "待审核", "待出库", "pending",
@@ -43,6 +44,9 @@ _REVIEW_APPROVED = frozenset({
 })
 _REVIEW_REJECTED = frozenset({
     "已驳回", "审核驳回", "rejected", "REJECTED", "驳回",
+})
+_REVIEW_PENDING = frozenset({
+    "待审核", "pending_review", "pending_approval", "pending", "PENDING",
 })
 
 
@@ -64,6 +68,11 @@ def _is_review_rejected(review: Any) -> bool:
     return raw in _REVIEW_REJECTED
 
 
+def _is_review_pending(review: Any) -> bool:
+    raw = _norm(review)
+    return raw in _REVIEW_PENDING and not is_submitted_status(review)
+
+
 def _is_review_editable(review: Any) -> bool:
     raw = _norm(review)
     return raw in {"", "草稿", "draft", "DRAFT"} or _is_review_rejected(review)
@@ -75,9 +84,22 @@ def _derive_delete_capability(
     status: str,
     is_outsource_issue: bool,
     audit_required: bool,
+    outbound_type: str,
 ) -> ActionCapability:
     if is_outsource_issue:
         return _cap(False, "outbound_hub.delete.outsource_issue")
+    if outbound_type == "sales_delivery":
+        # 本地送审将主 status 置「待审核」（上游改 review_status 单轴）；已取消也允许删除（测试契约）
+        if status not in _OUTBOUND_PENDING_STATUSES and status not in {"草稿", "draft", "待审核", "已取消"}:
+            if status in _OUTBOUND_POSTED_STATUSES:
+                return _cap(False, "outbound_hub.delete.posted")
+            return _cap(False, "outbound_hub.delete.not_allowed")
+        review = getattr(record, "review_status", None)
+        if is_submitted_status(review):
+            return _cap(False, "sales_delivery.delete.submitted")
+        if audit_required and _is_review_approved(record):
+            return _cap(False, "outbound_hub.delete.audited")
+        return _cap(True)
     if status in _DELETABLE_PRE_EFFECTIVE:
         return _cap(True)
     if status in _OUTBOUND_POSTED_STATUSES:
@@ -109,14 +131,21 @@ def derive_outbound_hub_capabilities(
             confirm_reason = "outbound_hub.confirm.pending_audit"
         elif not confirm_allowed:
             confirm_reason = "outbound_hub.confirm.not_pending"
-    # 销售出库：仅「待出库」可确认（开启审核时须先通过 UniAudit）
+    # 销售出库：仅「待出库」且审核通过可确认
     elif ot == "sales_delivery":
-        confirm_allowed = status == "待出库"
-        confirm_reason = None
-        if status == "待审核":
+        confirm_allowed = False
+        confirm_reason = "outbound_hub.confirm.not_pending"
+        if status == "待出库":
+            # 本地允许免审租户未送审直过；须审核或单据在途/已提交时仍要求审核通过
+            if _is_review_approved(record) or not (
+                audit_required or _is_review_pending(review) or is_submitted_status(review)
+            ):
+                confirm_allowed = True
+                confirm_reason = None
+            else:
+                confirm_reason = "sales_delivery.confirm.not_audited"
+        elif _is_review_pending(review):
             confirm_reason = "outbound_hub.confirm.pending_audit"
-        elif not confirm_allowed:
-            confirm_reason = "outbound_hub.confirm.not_pending"
     else:
         confirm_allowed = not is_outsource_issue and status in _OUTBOUND_PENDING_STATUSES
         confirm_reason = None
@@ -137,6 +166,21 @@ def derive_outbound_hub_capabilities(
     if is_outsource_issue:
         update_allowed = False
         update_reason = "outbound_hub.update.outsource_issue"
+    elif ot == "sales_delivery":
+        pending_business = status in _OUTBOUND_PENDING_STATUSES or status in {"草稿", "draft", "待审核"}
+        if not pending_business:
+            update_allowed = False
+            update_reason = (
+                "outbound_hub.update.posted"
+                if status in _OUTBOUND_POSTED_STATUSES
+                else "outbound_hub.update.not_allowed"
+            )
+        elif is_submitted_status(review):
+            update_allowed = False
+            update_reason = "sales_delivery.update.submitted"
+        else:
+            update_allowed = True
+            update_reason = None
     elif editable_statuses is not None:
         update_allowed = status in editable_statuses
         update_reason = None if update_allowed else (
@@ -153,7 +197,46 @@ def derive_outbound_hub_capabilities(
     withdraw_submit_cap: Optional[ActionCapability] = None
     approve_cap: Optional[ActionCapability] = None
     revoke_cap: Optional[ActionCapability] = None
-    if ot == "production_picking" and audit_required:
+    if ot == "sales_delivery":
+        pending_business = status in _OUTBOUND_PENDING_STATUSES or status in {"草稿", "draft", "待审核"}
+        committed = is_submitted_status(review)
+        pending_review = _is_review_pending(review)
+        approved = _is_review_approved(record)
+        rejected = _is_review_rejected(review)
+        draft_review = _is_review_editable(review) and not rejected
+        submit_allowed = pending_business and has_items and not committed and not pending_review and not approved and (
+            draft_review or rejected
+        )
+        submit_cap = _cap(
+            submit_allowed,
+            None if submit_allowed else (
+                "sales_delivery.submit.no_items" if not has_items else "sales_delivery.submit.not_draft"
+            ),
+        )
+        submit_review_allowed = pending_business and has_items and committed
+        submit_review_cap = _cap(
+            submit_review_allowed,
+            None if submit_review_allowed else (
+                "sales_delivery.submit.no_items"
+                if not has_items
+                else "sales_delivery.submit_review.not_allowed"
+            ),
+        )
+        withdraw_submit_allowed = pending_business and (committed or pending_review)
+        withdraw_submit_cap = _cap(
+            withdraw_submit_allowed,
+            None if withdraw_submit_allowed else "sales_delivery.withdraw_submit.not_pending",
+        )
+        approve_cap = _cap(
+            pending_business and pending_review,
+            None if pending_business and pending_review else "sales_delivery.approve.not_pending",
+        )
+        revoke_allowed = pending_business and approved
+        revoke_cap = _cap(
+            revoke_allowed,
+            None if revoke_allowed else "sales_delivery.revoke_approval.not_allowed",
+        )
+    elif ot == "production_picking" and audit_required:
         draft_business = status in {"草稿", "draft"}
         pending_audit = status == "待审核"
         pending_pick = status == "待领料"
@@ -193,6 +276,7 @@ def derive_outbound_hub_capabilities(
             status=status,
             is_outsource_issue=is_outsource_issue,
             audit_required=audit_required,
+            outbound_type=ot,
         ),
         update=_cap(update_allowed, update_reason),
         submit=submit_cap,
@@ -227,6 +311,7 @@ def assert_outbound_hub_capability(
         "submit_review": caps.submit_review,
         "withdraw_submit": caps.withdraw_submit,
         "approve": caps.approve,
+        "reject": caps.approve,
         "revoke_approval": caps.revoke_approval,
     }
     cap = cap_map.get(action)

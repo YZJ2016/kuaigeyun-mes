@@ -10,7 +10,7 @@ WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 # 关键状态流转 / 下推 / 确认（短窗软幂等 + 更严限流）
 _CRITICAL_PATH_RE = re.compile(
-    r"/(submit|approve|unapprove|reject|confirm|withdraw|release|revoke|execute|"
+    r"/(submit|approve|unapprove|reject|confirm|withdraw|release|revoke(-[a-z0-9\-]+)?|execute|"
     r"complete|freeze|unfreeze|push-[a-z0-9\-]+|pull-from-[a-z0-9\-]+|"
     r"generate-orders|push-all|recompute|firm-planned|resume|"
     r"repair-settlement)(/|$)",

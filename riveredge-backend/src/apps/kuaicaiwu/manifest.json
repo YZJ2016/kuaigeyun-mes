@@ -723,6 +723,33 @@
       "config_section": "finance_ar_ap"
     },
     {
+      "node_key": "receipt",
+      "entity_type": "receipt",
+      "resource": "kuaicaiwu:receipt",
+      "name": "收款单审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "receipt_refund",
+      "entity_type": "receipt_refund",
+      "resource": "kuaicaiwu:receipt-refund",
+      "name": "收款退款审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "sales_invoice",
+      "entity_type": "sales_invoice",
+      "resource": "kuaicaiwu:sales-invoice",
+      "name": "销售发票审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_invoice"
+    },
+    {
       "node_key": "payable",
       "entity_type": "payable",
       "resource": "kuaicaiwu:payable",
@@ -757,6 +784,24 @@
       "template": "simple",
       "config_category": "finance",
       "config_section": "finance_misc"
+    },
+    {
+      "node_key": "notes_receivable",
+      "entity_type": "notes_receivable",
+      "resource": "kuaicaiwu:notes-receivable",
+      "name": "应收票据审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "notes_payable",
+      "entity_type": "notes_payable",
+      "resource": "kuaicaiwu:notes-payable",
+      "name": "应付票据审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
     },
     {
       "node_key": "fund_transfer",

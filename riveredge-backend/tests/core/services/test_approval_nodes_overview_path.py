@@ -94,6 +94,30 @@ def test_dead_branch_not_reachable_after_route_chosen():
     assert "end" in reachable
 
 
+def test_display_rank_follows_edges_not_insert_order():
+    """设计器把后加的财务副总插到采购副总前面时，执行记录按连线顺序，不按节点数组插入顺序。"""
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start"},
+            {"id": "purchase", "type": "approval", "data": {"label": "采购副总"}},
+            {"id": "finance", "type": "approval", "data": {"label": "财务副总"}},
+            {"id": "dept", "type": "approval", "data": {"label": "部门负责人"}},
+            {"id": "cc", "type": "cc", "data": {"label": "抄送"}},
+            {"id": "end", "type": "end"},
+        ],
+        "edges": [
+            {"source": "start", "target": "dept"},
+            {"source": "dept", "target": "finance"},
+            {"source": "finance", "target": "purchase"},
+            {"source": "purchase", "target": "cc"},
+            {"source": "cc", "target": "end"},
+        ],
+    }
+    rank = ApprovalInstanceService._graph_node_display_rank(graph)
+    ordered = sorted(rank, key=lambda nid: rank[nid])
+    assert ordered == ["start", "dept", "finance", "purchase", "cc", "end"]
+
+
 def test_passed_approval_nodes_lie_behind_current_not_in_forward_reach():
     """当前停在总经理特批时，直接上级/二级上级已在后方：在 on_path 且不在 reachable_from_current。
 

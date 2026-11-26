@@ -15,11 +15,13 @@ class AuditBindingItemResponse(BaseModel):
     name: str
     app: str
     config_category: str
+    config_section: Optional[str] = None
     template: str
     is_enabled: bool
     process_uuid: Optional[UUID] = None
     process_name: Optional[str] = None
     process_code: Optional[str] = None
+    process_matched: Optional[bool] = None
 
 
 class AuditProcessOptionResponse(BaseModel):

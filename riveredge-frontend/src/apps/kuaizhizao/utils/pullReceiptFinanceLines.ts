@@ -8,6 +8,8 @@ export type PullReceiptFinanceDetailLine = {
   quantity: number;
   unit_price: number;
   amount: number;
+  tax_rate?: number;
+  tax_amount?: number;
   occupied_amount: number;
   max_push_amount: number;
   max_push_quantity: number;

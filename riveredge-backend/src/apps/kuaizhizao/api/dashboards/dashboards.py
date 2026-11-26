@@ -7,8 +7,8 @@ Author: Luigi Lu
 Date: 2025-01-15
 """
 
-from typing import List, Optional
 import re
+from typing import List, Optional
 from decimal import Decimal
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
@@ -22,13 +22,22 @@ from core.services.user.approval_todo_mapper import (
 )
 from core.utils.api_cache import cache_by_kwargs
 from tortoise.expressions import Q
-from core.utils.timezone_utils import resolve_business_datetime, site_day_bounds_utc, to_api_isoformat
+from core.utils.timezone_utils import (
+    resolve_business_datetime,
+    site_day_bounds_utc,
+    to_api_isoformat,
+    to_site_date,
+)
 from infra.models.user import User
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.menu_badge_counts_service import fetch_menu_badge_counts
 from apps.kuaizhizao.services.dashboard_todo_link import (
     build_dashboard_todo_link,
     dashboard_todo_handle_message,
+)
+from apps.kuaizhizao.services.dashboard_todo_permission import (
+    is_todo_id_allowed,
+    resolve_allowed_todo_prefixes,
 )
 from apps.kuaizhizao.services.exception_service import (
     ACTIVE_EXCEPTION_STATUSES,
@@ -235,6 +244,12 @@ async def get_todos(
 
     # 每种来源独立 fetcher：内部自己 try/except，不会互相拖累；一次 gather 并发所有
     # 首次 cache miss 时耗时 ≈ max(单表查询) 而不是 sum（从 ~500ms 降到 ~50ms 级别）
+    allowed_prefixes = await resolve_allowed_todo_prefixes(current_user, tenant_id)
+
+    async def _gated(prefix: str, fetcher) -> List[TodoItem]:
+        if prefix not in allowed_prefixes:
+            return []
+        return await fetcher()
 
     async def _fetch_work_orders() -> List[TodoItem]:
         try:
@@ -1068,33 +1083,38 @@ async def get_todos(
 
     results = await _asyncio.gather(
         _fetch_approval_tasks(),
-        _fetch_work_orders(),
-        _fetch_material_shortages(),
-        _fetch_delivery_delays(),
-        _fetch_quality_exceptions(),
-        _fetch_inventory_alerts(),
-        _fetch_purchase_receipts(),
-        _fetch_finished_goods_receipts(),
-        _fetch_production_returns(),
-        _fetch_other_inbounds(),
-        _fetch_material_borrows(),
-        _fetch_material_returns(),
-        _fetch_material_calls(),
-        _fetch_receipt_notices(),
-        _fetch_production_pickings(),
-        _fetch_sales_deliveries(),
-        _fetch_other_outbounds(),
-        _fetch_purchase_requisitions(),
-        _fetch_purchase_returns(),
-        _fetch_shipment_notices(),
-        _fetch_sales_returns(),
-        _fetch_equipment_faults(),
-        _fetch_incoming_inspections(),
-        _fetch_process_inspections(),
-        _fetch_finished_inspections(),
+        _gated("work_order_", _fetch_work_orders),
+        _gated("exception_material_", _fetch_material_shortages),
+        _gated("exception_delay_", _fetch_delivery_delays),
+        _gated("exception_quality_", _fetch_quality_exceptions),
+        _gated("inventory_alert_", _fetch_inventory_alerts),
+        _gated("purchase_receipt_", _fetch_purchase_receipts),
+        _gated("finished_goods_receipt_", _fetch_finished_goods_receipts),
+        _gated("production_return_", _fetch_production_returns),
+        _gated("other_inbound_", _fetch_other_inbounds),
+        _gated("material_borrow_", _fetch_material_borrows),
+        _gated("material_return_", _fetch_material_returns),
+        _gated("material_call_", _fetch_material_calls),
+        _gated("receipt_notice_", _fetch_receipt_notices),
+        _gated("production_picking_", _fetch_production_pickings),
+        _gated("sales_delivery_", _fetch_sales_deliveries),
+        _gated("other_outbound_", _fetch_other_outbounds),
+        _gated("purchase_requisition_", _fetch_purchase_requisitions),
+        _gated("purchase_return_", _fetch_purchase_returns),
+        _gated("shipment_notice_", _fetch_shipment_notices),
+        _gated("sales_return_", _fetch_sales_returns),
+        _gated("equipment_fault_", _fetch_equipment_faults),
+        _gated("inspection_incoming_", _fetch_incoming_inspections),
+        _gated("inspection_process_", _fetch_process_inspections),
+        _gated("inspection_finished_", _fetch_finished_inspections),
     )
 
-    todos: List[TodoItem] = [item for sublist in results for item in sublist]
+    todos: List[TodoItem] = [
+        item
+        for sublist in results
+        for item in sublist
+        if is_todo_id_allowed(item.id, allowed_prefixes)
+    ]
 
     todos.sort(key=lambda x: (
         {"high": 0, "critical": 0, "medium": 1, "low": 2}.get((x.priority or "medium").lower(), 3),
@@ -1126,6 +1146,10 @@ async def handle_todo(
     - **todo_id**: 待办事项ID（格式：work_order_{id} 或 exception_material_{id} 等）
     - **action**: 处理动作（handle: 处理/跳转, ignore: 忽略）
     """
+    allowed_prefixes = await resolve_allowed_todo_prefixes(current_user, tenant_id)
+    if not is_todo_id_allowed(todo_id, allowed_prefixes):
+        raise HTTPException(status_code=403, detail="无权处理该待办事项")
+
     if todo_id.startswith("approval_task_"):
         # 工作流审批待办：按任务解析单据深链
         from core.models.approval_task import ApprovalTask
@@ -2365,6 +2389,49 @@ async def get_equipment_summary(
     }
 
 
+class EquipmentTodayTaskItem(BaseModel):
+    id: str
+    kind: str
+    priority: str = "medium"
+    title: str
+    description: Optional[str] = None
+    link: Optional[str] = None
+    mobile_route: Optional[str] = None
+    status: str = "pending"
+    due_date: Optional[str] = None
+    created_at: datetime
+    meta: Optional[dict[str, str]] = None
+
+
+class EquipmentTodayTaskListResponse(BaseModel):
+    items: List[EquipmentTodayTaskItem] = Field(default_factory=list)
+    total: int = 0
+    task_date: Optional[str] = None
+    as_of: Optional[datetime] = None
+
+
+@router.get(
+    "/equipment-today-tasks",
+    response_model=EquipmentTodayTaskListResponse,
+    summary="设备今日待完成任务",
+)
+async def get_equipment_today_tasks(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    limit: int = Query(50, ge=1, le=200),
+):
+    from apps.kuaizhizao.services.equipment_today_tasks_service import (
+        list_equipment_today_tasks,
+    )
+
+    payload = await list_equipment_today_tasks(
+        tenant_id=tenant_id,
+        user_id=int(current_user.id),
+        limit=limit,
+    )
+    return EquipmentTodayTaskListResponse.model_validate(payload)
+
+
 @router.get("/equipment-board/plants", summary="设备看板厂区列表")
 @cache_by_kwargs(namespace="dashboard:equipment_board_plants", ttl=60)
 async def get_equipment_board_plants(
@@ -2384,6 +2451,7 @@ async def get_equipment_board(
     tenant_id: int = Depends(get_current_tenant),
     plant_id: Optional[int] = Query(None, description="厂区 ID；缺省为全租户总览"),
     alert_limit: int = Query(30, ge=1, le=100, description="滚动异常条数上限"),
+    status_row_limit: int = Query(80, ge=1, le=200, description="设备状态滚动列表条数上限"),
     visit_mode: bool = Query(False, description="参观展示模式：叠加展示层覆盖，不改业务真源"),
 ):
     """
@@ -2396,6 +2464,7 @@ async def get_equipment_board(
         tenant_id,
         plant_id=plant_id,
         alert_limit=alert_limit,
+        status_row_limit=status_row_limit,
         scheme_domain="equipment",
         visit_mode=visit_mode,
     )
@@ -2970,39 +3039,41 @@ async def get_equipment_trend(
     date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
     date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
 ):
-    """设备故障报修按日计数趋势。"""
+    """设备故障按站点日历日计数趋势（按 fault_date，区间逐日补零）。"""
     from apps.kuaizhizao.models.equipment_fault import EquipmentFault
 
     now = resolve_business_datetime()
-    start_dt = (
-        datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
-        if date_start else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    )
-    end_dt = (
-        datetime.strptime(date_end, "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=0)
-        if date_end else now.replace(hour=23, minute=59, second=59, microsecond=0)
-    )
+    today_site = to_site_date(now)
+    if date_start and date_end:
+        range_start = date.fromisoformat(date_start.strip())
+        range_end = date.fromisoformat(date_end.strip())
+    else:
+        range_start = today_site.replace(day=1)
+        range_end = today_site
+
+    start_utc, _ = site_day_bounds_utc(range_start)
+    _, end_utc = site_day_bounds_utc(range_end)
 
     rows = await EquipmentFault.filter(
         tenant_id=tenant_id,
-        created_at__gte=start_dt,
-        created_at__lte=end_dt,
+        fault_date__gte=start_utc,
+        fault_date__lt=end_utc,
         deleted_at__isnull=True,
-    ).values_list("created_at")
+    ).values_list("fault_date")
 
-    bucket: dict = {}
+    bucket: dict[str, int] = {}
     for (dt,) in rows:
         if not dt:
             continue
-        sk = dt.strftime("%Y-%m-%d")
+        sk = to_site_date(dt).isoformat()
         bucket[sk] = bucket.get(sk, 0) + 1
 
-    items = [
-        {"date": datetime.strptime(sk, "%Y-%m-%d").strftime("%m-%d"), "count": cnt, "_sort": sk}
-        for sk, cnt in sorted(bucket.items())
-    ]
-    for it in items:
-        it.pop("_sort", None)
+    items: list[dict] = []
+    cursor = range_start
+    while cursor <= range_end:
+        sk = cursor.isoformat()
+        items.append({"date": cursor.strftime("%m-%d"), "count": int(bucket.get(sk, 0))})
+        cursor += timedelta(days=1)
     return {"items": items}
 
 

@@ -11,8 +11,9 @@ import { toApiDateTimeString, nowSiteDateTimeString } from '../../../../../utils
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem } from '@ant-design/pro-components';
+import { ProFormTextArea, ProFormDatePicker, ProFormRadio, ProFormDependency, ProFormItem, ProFormSelect } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, InputNumber, Row, Col, Tooltip } from 'antd';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -22,6 +23,8 @@ import {
   BulbOutlined,
 } from '@ant-design/icons';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { buildDocumentLineDualQuantityFormColumns } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { UniPullQueryModal, isPullableScope, renderPullCapabilityTag, useUniPullQuery } from '../../../../../components/uni-pull-query';
 import {
   MultiTabListPageTemplate,
@@ -58,8 +61,11 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus } from '../../../utils/workOrderLifecycle';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 
 const MATERIAL_CENTER_RESOURCE = 'kuaizhizao:warehouse-management-batching-center';
+const BATCHING_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_batching_orders';
 
 interface PullWorkOrderCandidate {
   id: number;
@@ -81,6 +87,11 @@ const BatchingCenterPage: React.FC = () => {
   const perms = useResourcePermissions(MATERIAL_CENTER_RESOURCE);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const [batchingListReloadKey, setBatchingListReloadKey] = useState(0);
+  const bumpBatchingList = useCallback(() => {
+    setBatchingListReloadKey((k) => k + 1);
+    invalidateMenuBadgeCounts();
+  }, [invalidateMenuBadgeCounts]);
   const [searchParams] = useSearchParams();
   const materialCenterTabs = useMemo(() => getMaterialCenterTabs(t), [t]);
   const workOrderStatusValueEnum = useMemo(() => buildWorkOrderLifecycleValueEnum(t), [t]);
@@ -131,6 +142,18 @@ const BatchingCenterPage: React.FC = () => {
   const [detailData, setDetailData] = useState<Record<string, unknown> | null>(null);
   const formRef = useRef<any>(null);
   const defaultBatchingItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', required_quantity: 1 };
+
+  const {
+    customFields: batchingFormCustomFields,
+    customFieldValues: batchingFormCustomFieldValues,
+    extractFormValues: extractBatchingFormValues,
+    saveCustomFieldValues: saveBatchingCustomFieldValues,
+    resetFieldValues: resetBatchingFormFieldValues,
+  } = useCustomFields({
+    tableName: BATCHING_ORDER_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
 
   const appendBatchingItemsFromMaterials = useCallback(
     (selected: Material[]) => {
@@ -211,7 +234,7 @@ const BatchingCenterPage: React.FC = () => {
         pullFromWorkOrderQuery.closeModal();
         setCreateModalVisible(false);
         formRef.current?.resetFields();
-        invalidateMenuBadgeCounts();
+        bumpBatchingList();
       } catch (error: unknown) {
         messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.batchingCenter.createFailed')));
       }
@@ -220,36 +243,49 @@ const BatchingCenterPage: React.FC = () => {
 
   const handleCreateSubmit = async (values: any) => {
     try {
-      if (values.create_mode === 'from_work_order') {
+      const { standardValues, customData } = extractBatchingFormValues(values);
+      if (standardValues.create_mode === 'from_work_order') {
         pullFromWorkOrderQuery.openModal();
         return;
       }
-      const items = values.items || [];
+      const items = standardValues.items || [];
       if (items.length === 0) {
         messageApi.error(t('app.kuaizhizao.batchingCenter.manualNeedItems'));
         throw new Error(t('app.kuaizhizao.batchingCenter.manualNeedItems'));
       }
+      if (!standardValues.target_warehouse_id) {
+        messageApi.error(t('app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse'));
+        throw new Error(t('app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse'));
+      }
       const orderData: any = {
-        warehouse_id: values.warehouse_id,
-        warehouse_name: values._warehouse_name || '',
-        batching_date: toApiDateTimeString(values.batching_date) ?? nowSiteDateTimeString(),
-        remarks: values.remarks,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        warehouse_id: standardValues.warehouse_id,
+        warehouse_name: standardValues._warehouse_name || '',
+        target_warehouse_id: standardValues.target_warehouse_id,
+        target_warehouse_name: standardValues._target_warehouse_name || '',
+        batching_date: toApiDateTimeString(standardValues.batching_date) ?? nowSiteDateTimeString(),
+        remarks: standardValues.remarks,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
       const itemPayload = items.map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code || '',
         material_name: it.material_name || '',
         unit: it.material_unit || '',
+        ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
         required_quantity: Number(it.required_quantity) || 0,
-        warehouse_id: values.warehouse_id,
-        warehouse_name: values._warehouse_name || '',
+        warehouse_id: standardValues.warehouse_id,
+        warehouse_name: standardValues._warehouse_name || '',
       }));
-      await batchingOrderApi.create({ ...orderData, items: itemPayload });
+      const created = await batchingOrderApi.create({ ...orderData, items: itemPayload });
+      const recordId = Number((created as { id?: number })?.id ?? 0);
+      if (recordId > 0 && Object.keys(customData).length > 0) {
+        await saveBatchingCustomFieldValues(recordId, customData);
+      }
       messageApi.success(t('app.kuaizhizao.batchingCenter.createSuccess'));
+      resetBatchingFormFieldValues();
       setCreateModalVisible(false);
       formRef.current?.resetFields();
-      invalidateMenuBadgeCounts();
+      bumpBatchingList();
     } catch (error: any) {
       if (error.message && !error.message.includes('请选择') && !error.message.includes('请添加')) {
         messageApi.error(error.message || t('app.kuaizhizao.batchingCenter.createFailed'));
@@ -325,18 +361,20 @@ const BatchingCenterPage: React.FC = () => {
               onCreate={() => handleCreate()}
               onOpenDetail={openMaterialCenterDetail}
               canRead={perms.canRead}
-              onRefreshBatchingList={invalidateMenuBadgeCounts}
+              listReloadKey={batchingListReloadKey}
+              onRefreshBatchingList={bumpBatchingList}
             />
           ) : (
             <BatchingTaskQueue
               taskType={tab.key as BatchingTaskTabKey}
               onOpenDetail={openMaterialCenterDetail}
               canRead={perms.canRead}
-              onRefreshBatchingList={invalidateMenuBadgeCounts}
+              listReloadKey={batchingListReloadKey}
+              onRefreshBatchingList={bumpBatchingList}
             />
           ),
       })),
-    [materialCenterTabs, invalidateMenuBadgeCounts, openMaterialCenterDetail, perms.canRead, t],
+    [materialCenterTabs, batchingListReloadKey, bumpBatchingList, openMaterialCenterDetail, perms.canRead, t],
   );
 
   return (
@@ -354,6 +392,7 @@ const BatchingCenterPage: React.FC = () => {
         onClose={() => {
           setCreateModalVisible(false);
           formRef.current?.resetFields();
+          resetBatchingFormFieldValues();
         }}
         onFinish={handleCreateSubmit}
         formRef={formRef}
@@ -429,17 +468,18 @@ const BatchingCenterPage: React.FC = () => {
                             </AntForm.Item>
                           ),
                         },
-                        {
-                          title: t('app.kuaizhizao.batchingCenter.requiredQty'),
-                          dataIndex: 'required_quantity',
-                          width: 120,
-                          align: 'right' as const,
-                          render: (_: any, __: any, index: number) => (
-                            <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.0001, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]} style={{ margin: 0 }}>
-                              <InputNumber placeholder={t('common.quantity')} min={0} precision={4} style={{ width: '100%' }} size="small" />
-                            </AntForm.Item>
-                          ),
-                        },
+                        ...buildDocumentLineDualQuantityFormColumns({
+                          t,
+                          getForm: () => formRef.current,
+                          quantityField: 'required_quantity',
+                          unitField: 'material_unit',
+                          scenario: 'purchase',
+                          quantityDecimals: 4,
+                          unitWidth: 88,
+                          quantityWidth: 180,
+                          controlSize: 'small',
+                          unitReadOnly: true,
+                        }),
                         {
                           title: t('common.actions'),
                           width: 60,
@@ -503,11 +543,37 @@ const BatchingCenterPage: React.FC = () => {
                     />
                   </Col>
                   <Col span={12}>
-                    <UniWarehouseSelect
+                    <ProFormSelect
                       name="target_warehouse_id"
-                      label={t('app.kuaizhizao.batchingCenter.targetLineSideWarehouse')}
+                      label={t('app.kuaizhizao.batchingCenter.targetLineSideWarehouseRequired')}
                       placeholder={t('app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse')}
-                      onChange={(val, wh) => formRef.current?.setFieldsValue({ _target_warehouse_name: wh?.name })}
+                      rules={[
+                        {
+                          required: true,
+                          message: t('app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse'),
+                        },
+                      ]}
+                      showSearch
+                      fieldProps={{
+                        optionFilterProp: 'label',
+                        onChange: (_val: number, option: { name?: string; label?: React.ReactNode } | undefined) => {
+                          formRef.current?.setFieldsValue({
+                            _target_warehouse_name: String(option?.name || option?.label || ''),
+                          });
+                        },
+                      }}
+                      request={async () => {
+                        const res = await masterWarehouseApi.list({
+                          warehouse_type: 'line_side',
+                          is_active: true,
+                          limit: 200,
+                        });
+                        return (res.items ?? []).map((wh) => ({
+                          value: wh.id,
+                          name: wh.name || '',
+                          label: `${wh.name || ''}${wh.code ? ` / ${wh.code}` : ''}`.trim() || String(wh.id),
+                        }));
+                      }}
                     />
                   </Col>
                 </Row>
@@ -522,6 +588,11 @@ const BatchingCenterPage: React.FC = () => {
                   </Col>
                   <Col span={12} />
                 </Row>
+                <CustomFieldsFormSection
+                  customFields={batchingFormCustomFields}
+                  customFieldValues={batchingFormCustomFieldValues}
+                  gridColumns={2}
+                />
                 <DocumentAttachmentsField category="batching_order_attachments" />
                 <ProFormTextArea
                   name="remarks"

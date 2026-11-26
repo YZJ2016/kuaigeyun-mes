@@ -14,16 +14,27 @@ import {
   Modal,
   Popconfirm,
   Result,
+  Select,
   Space,
   Spin,
   Table,
 } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { handoffSalesReviewToSalesOrderCreate } from '../../../utils/documentFlowHandoff';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  handoffQuotationsToSalesReviewCreate,
+  handoffSalesReviewToSalesOrderCreate,
+  continuePoHandoffQueueIfAny,
+} from '../../../utils/documentFlowHandoff';
+import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
 import { UniTable } from '../../../../../components/uni-table';
 import {
+  MaterialStackedCell,
   UniTableStackedPrimaryCell,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -64,10 +75,14 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
-  UNI_PULL_QUERY_MAX_FETCH_LIMIT,
-  pagePullCandidates,
-  renderPullQueryDocStatus,
-  renderPullQueryReviewStatus,
+  buildDefaultPullOpenLineQtyColumns,
+  buildPullQueryMaterialIdentityColumn,
+  buildPullQueryPartnerDocumentColumn,
+  isPullOpenLineSelectable,
+  isPullableScope,
+  renderPullCapabilityTag,
+  renderPullQueryOptionalDate,
+  renderPullQueryOptionalText,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -81,8 +96,9 @@ import {
 } from '../../../services/sales-review';
 import {
   listQuotations,
+  listQuotationSalesReviewPullLines,
   type Quotation,
-  type QuotationCapabilities,
+  type QuotationSalesOrderPullLine,
 } from '../../../services/quotation';
 import { SalesReviewFormModal } from './FormModal';
 import { SalesReviewReviewModal } from './ReviewModal';
@@ -113,24 +129,6 @@ function synthesizeSalesReviewBatchCapabilities(row: SalesReviewListItem): Sales
 const SALES_REVIEW_RESOURCE = 'kuaizhizao:sales-review';
 const COLUMN_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.sales-reviews-width-v3';
 
-type PullQuotationCandidate = {
-  id: number;
-  quotation_code: string;
-  customer_name?: string;
-  quotation_date?: string;
-  delivery_date?: string;
-  total_amount?: number;
-  status?: string;
-  review_status?: string;
-  salesman_name?: string;
-  sales_review_id?: number;
-  sales_review_code?: string;
-  capabilities?: QuotationCapabilities;
-};
-
-const isPullQuotationSelectable = (record: PullQuotationCandidate): boolean =>
-  quotationCapabilityAllowed(record as Quotation, 'convert_to_sales_review');
-
 function canEditStatus(status?: string): boolean {
   return status === 'draft' || status === 'rejected';
 }
@@ -140,11 +138,23 @@ function canDeleteStatus(status?: string): boolean {
   return status === 'draft' || status === 'rejected' || status === 'cancelled';
 }
 
+type DocumentFlowSubmitExtras = {
+  documentFlowSourceType?: string;
+  documentFlowSourceId?: number;
+  documentFlowSourceItemIds?: number[];
+};
+
 const SalesReviewsPage: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { message } = App.useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
   const pullFromQuotationAction = resolveKuaizhizaoDocumentAction(t, 'sales_review.pull_from_quotation');
+  const pullSourceQuotationIdRef = useRef<number | undefined>(undefined);
+  const [pullSourceQuotationId, setPullSourceQuotationId] = useState<number | undefined>();
+  const [pullSourceQuotationOptions, setPullSourceQuotationOptions] = useState<
+    { value: number; label: string }[]
+  >([]);
   const pushToSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'sales_order.pull_from_sales_review');
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const actionRef = useRef<ActionType>(null);
@@ -159,6 +169,9 @@ const SalesReviewsPage: React.FC = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<SalesReview | null>(null);
+  const [createSeed, setCreateSeed] = useState<Record<string, unknown> | null>(null);
+  const documentFlowSubmitExtrasRef = useRef<DocumentFlowSubmitExtras | null>(null);
+  const handoffFlowConsumedRef = useRef<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -280,8 +293,47 @@ const SalesReviewsPage: React.FC = () => {
 
   const openCreate = () => {
     setEditing(null);
+    setCreateSeed(null);
+    documentFlowSubmitExtrasRef.current = null;
     setModalOpen(true);
   };
+
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search || '');
+    if (sp.get('flow') !== 'quotation') return;
+    const sourceId = Number(sp.get('sourceId'));
+    if (!Number.isFinite(sourceId) || sourceId <= 0) return;
+    const flowKey = `${location.pathname}?flow=quotation&sourceId=${sourceId}`;
+    if (handoffFlowConsumedRef.current === flowKey) return;
+
+    const draftSearch = `?flow=quotation&sourceId=${sourceId}`;
+    const draftKey = buildDocumentCreateDraftKey(
+      'kuaizhizao:sales-review',
+      location.pathname,
+      draftSearch,
+    );
+    const handoffDraft = getDocumentFormDraft<Record<string, unknown>>(draftKey);
+    if (!handoffDraft) return;
+
+    handoffFlowConsumedRef.current = flowKey;
+    const {
+      _documentFlowMeta: _meta,
+      documentFlowSourceType,
+      documentFlowSourceId,
+      documentFlowSourceItemIds,
+      ...formValues
+    } = handoffDraft;
+    documentFlowSubmitExtrasRef.current = {
+      documentFlowSourceType: documentFlowSourceType as string | undefined,
+      documentFlowSourceId: documentFlowSourceId as number | undefined,
+      documentFlowSourceItemIds: documentFlowSourceItemIds as number[] | undefined,
+    };
+    setEditing(null);
+    setCreateSeed(formValues);
+    setModalOpen(true);
+    clearDocumentFormDraft(draftKey);
+    navigate(location.pathname, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   const openReviewModal = useCallback((record: SalesReviewListItem | SalesReview) => {
     if (record.status !== 'reviewing') return;
@@ -541,25 +593,6 @@ const SalesReviewsPage: React.FC = () => {
 
   useNewShortcut(openCreate);
 
-  const mapPullQuotationRows = useCallback((rows: Quotation[]): PullQuotationCandidate[] => {
-    return rows
-      .filter((q) => q.id && q.quotation_code)
-      .map((q) => ({
-        id: Number(q.id),
-        quotation_code: String(q.quotation_code),
-        customer_name: q.customer_name || '',
-        quotation_date: q.quotation_date || '',
-        delivery_date: q.delivery_date || '',
-        total_amount: q.total_amount != null ? Number(q.total_amount) : undefined,
-        status: q.status || '',
-        review_status: q.review_status || '',
-        salesman_name: q.salesman_name || '',
-        sales_review_id: q.sales_review_id ? Number(q.sales_review_id) : undefined,
-        sales_review_code: q.sales_review_code || '',
-        capabilities: q.capabilities,
-      }));
-  }, []);
-
   const pullFromQuotationScopeOptions = useMemo(
     () => [
       { label: t('components.uniPullQuery.scopePullable'), value: 'pullable' },
@@ -568,52 +601,76 @@ const SalesReviewsPage: React.FC = () => {
     [t],
   );
 
-  const pullFromQuotationQuery = useUniPullQuery<PullQuotationCandidate>({
+  const pullFromQuotationQuery = useUniPullQuery<QuotationSalesOrderPullLine>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullFromQuotationScopeOptions,
     defaultScope: 'pullable',
-    isRowDisabled: (record) => !isPullQuotationSelectable(record),
+    onOpen: () => {
+      pullSourceQuotationIdRef.current = undefined;
+      setPullSourceQuotationId(undefined);
+      void listQuotations({ skip: 0, limit: 100 })
+        .then((result) => {
+          const rows: Quotation[] = Array.isArray(result) ? result : result.data || [];
+          setPullSourceQuotationOptions(
+            rows
+              .filter(
+                (row) =>
+                  row.id != null &&
+                  row.quotation_code &&
+                  quotationCapabilityAllowed(row, 'convert_to_sales_review'),
+              )
+              .map((row) => ({ value: Number(row.id), label: String(row.quotation_code) })),
+          );
+        })
+        .catch(() => setPullSourceQuotationOptions([]));
+    },
+    isRowDisabled: (record) => !isPullOpenLineSelectable(record),
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
-        const result = await listQuotations({
-          skip: 0,
-          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+        const listRes = await listQuotationSalesReviewPullLines({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
           keyword: keyword.trim() || undefined,
+          quotation_id: pullSourceQuotationIdRef.current,
+          pullable_only: isPullableScope(scope),
         });
-        const rows: Quotation[] = Array.isArray(result) ? result : result.data || [];
-        return pagePullCandidates(mapPullQuotationRows(rows), scope, page, pageSize, isPullQuotationSelectable);
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
       } catch (err) {
         message.error(getApiErrorMessage(err, t('app.kuaizhizao.salesOrder.loadQuotationsFailed')));
         return { data: [], total: 0 };
       }
     },
-    onConfirm: async (keys, rows) => {
-      const selectedId = Number(keys[0]);
-      const selected = rows[0];
-      if (!selectedId || selectedId <= 0) {
-        message.warning(t('app.kuaizhizao.salesOrder.selectQuotationFirst'));
+    onConfirm: async (_keys, rows) => {
+      const selected = rows.filter((row) => isPullOpenLineSelectable(row));
+      if (!selected.length) {
+        message.warning(t('app.kuaizhizao.salesOrder.selectAtLeastOneLine'));
         return;
       }
-      if (selected && !isPullQuotationSelectable(selected)) {
-        const reason =
-          quotationCapabilityReasonMessage(selected.capabilities?.convert_to_sales_review?.reason, t) ||
-          t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
-        message.warning(reason);
-        return;
+      const byQuotation = new Map<number, number[]>();
+      for (const row of selected) {
+        const qid = Number(row.quotation_id);
+        const itemId = Number(row.id);
+        if (qid > 0 && itemId > 0) {
+          const bucket = byQuotation.get(qid) ?? [];
+          bucket.push(itemId);
+          byQuotation.set(qid, bucket);
+        }
       }
       try {
-        const result = await salesReviewApi.pullFromQuotation(selectedId);
-        const reviewCode = result?.sales_review?.review_code || '';
+        await handoffQuotationsToSalesReviewCreate(
+          navigate,
+          [...byQuotation.entries()].map(([quotationId, itemIds]) => ({
+            quotationId,
+            selectedItemIds: itemIds,
+          })),
+        );
         message.success(
-          result?.message ||
-            t('app.kuaizhizao.salesReview.createdFromQuotation', {
-              defaultValue: '已从报价单创建订单评审：{{code}}',
-              code: reviewCode,
-            }),
+          t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+            target: pullFromQuotationAction.targetLabel,
+          }),
         );
         pullFromQuotationQuery.closeModal();
-        reloadTable();
       } catch (err) {
         message.error(
           getApiErrorMessage(
@@ -631,82 +688,46 @@ const SalesReviewsPage: React.FC = () => {
 
   const pullQuotationColumns = useMemo(
     () => [
-      { title: t('app.kuaizhizao.quotation.import.code'), dataIndex: 'quotation_code', width: 180 },
       {
-        title: t('app.kuaizhizao.salesOrder.customerName'),
-        dataIndex: 'customer_name',
-        width: 180,
-        ellipsis: true,
-        render: (v: string) => v || '-',
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        render: (_: unknown, record: QuotationSalesOrderPullLine) =>
+          renderPullQueryOptionalDate(
+            record.document_date || record.quotation_date,
+            (s) => formatBusinessDateOnly(s),
+          ),
       },
-      {
-        title: t('app.kuaizhizao.quotation.colQuotationDate'),
-        dataIndex: 'quotation_date',
-        width: 120,
-        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.deliveryDate'),
-        dataIndex: 'delivery_date',
-        width: 120,
-        render: (v: string) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-        dataIndex: 'total_amount',
-        width: 130,
-        align: 'right' as const,
-        render: (v: number | undefined) =>
-          v != null
-            ? formatAmount(v)
-            : '-',
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 100,
-        align: 'center' as const,
-        render: (v) => renderPullQueryDocStatus(t, v),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.reviewStatus'),
-        dataIndex: 'review_status',
-        width: 100,
-        render: (v) => renderPullQueryReviewStatus(t, v),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.salesman'),
-        dataIndex: 'salesman_name',
-        width: 120,
-        ellipsis: true,
-        render: (v: string) => v || '-',
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.duplicateGuardHint'),
-        width: 260,
-        render: (_: unknown, record: PullQuotationCandidate) => {
-          if (isPullQuotationSelectable(record)) {
-            return t('app.kuaizhizao.salesOrder.canCreate');
-          }
-          if (record.sales_review_id) {
-            return t('app.kuaizhizao.salesOrder.alreadyCreated', {
-              code: record.sales_review_code || '-',
-            });
-          }
-          const reason = quotationCapabilityReasonMessage(
-            record.capabilities?.convert_to_sales_review?.reason,
-            t,
-          );
-          return reason || t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed');
+      buildPullQueryPartnerDocumentColumn<QuotationSalesOrderPullLine>(t, {
+        titleKey: 'app.kuaizhizao.quotation.colQuotationCode',
+        codeDataIndex: 'quotation_code',
+        partnerField: 'customer_name',
+      }),
+      buildPullQueryMaterialIdentityColumn<QuotationSalesOrderPullLine>(t),
+      ...buildDefaultPullOpenLineQtyColumns(t, {
+        keys: {
+          suggested: 'app.kuaizhizao.quotation.colQuoteQuantity',
+          pushed: 'app.kuaizhizao.purchaseOrder.pull.col.convertedQty',
         },
+        includeRemaining: false,
+        widths: { suggested: 112, pushed: 112 },
+      }),
+      {
+        title: t('app.kuaizhizao.quotation.form.validUntil'),
+        dataIndex: 'valid_until',
+        width: 112,
+        render: (v: string | null | undefined) =>
+          renderPullQueryOptionalDate(v, (s) => formatBusinessDateOnly(s)),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.form.lineNotes'),
+        dataIndex: 'line_notes',
+        width: 160,
+        ellipsis: true,
+        render: (v: string | null | undefined) => renderPullQueryOptionalText(v),
       },
     ],
     [t],
-  );
-
-  const selectedPullQuotation = pullFromQuotationQuery.selectedRows[0];
-  const selectedPullQuotationNotPullable = !!(
-    selectedPullQuotation && !isPullQuotationSelectable(selectedPullQuotation)
   );
 
   const handlePullFromQuotation = () => {
@@ -1091,6 +1112,7 @@ const SalesReviewsPage: React.FC = () => {
             return items;
           }}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteButtonDisabled={!canToolbarBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.salesReview.confirmBatchDelete', { count })}
@@ -1254,14 +1276,24 @@ const SalesReviewsPage: React.FC = () => {
       <SalesReviewFormModal
         open={modalOpen}
         editing={editing}
+        createSeed={createSeed}
+        documentFlowSubmitExtrasRef={documentFlowSubmitExtrasRef}
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
+          setCreateSeed(null);
+          documentFlowSubmitExtrasRef.current = null;
         }}
         onSuccess={(row) => {
+          const hadFlowHandoff = Boolean(
+            documentFlowSubmitExtrasRef.current?.documentFlowSourceType,
+          );
           reloadTable();
           if (detailOpen && detailIdRef.current === row.id) {
             setDetail(row);
+          }
+          if (!editing && hadFlowHandoff) {
+            continuePoHandoffQueueIfAny(navigate);
           }
         }}
       />
@@ -1282,7 +1314,7 @@ const SalesReviewsPage: React.FC = () => {
         }}
       />
 
-      <UniPullQueryModal<PullQuotationCandidate>
+      <UniPullQueryModal<QuotationSalesOrderPullLine>
         title={pullFromQuotationAction.label}
         open={pullFromQuotationQuery.open}
         onCancel={pullFromQuotationQuery.closeModal}
@@ -1310,43 +1342,28 @@ const SalesReviewsPage: React.FC = () => {
         scopeOptions={pullFromQuotationQuery.scopeOptions}
         scope={pullFromQuotationQuery.scope}
         onScopeChange={pullFromQuotationQuery.handleScopeChange}
-        searchPlaceholder={t('app.kuaizhizao.salesOrder.searchQuotationPlaceholder')}
+        searchPlaceholder={t('app.kuaizhizao.purchaseOrder.pull.searchPlaceholder')}
+        getRowLabel={(row) => [row.quotation_code, row.material_code].filter(Boolean).join(' ')}
+        filterExtra={(
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('app.kuaizhizao.quotation.import.code')}
+            style={{ width: 220, flexShrink: 0 }}
+            value={pullSourceQuotationId}
+            options={pullSourceQuotationOptions}
+            onChange={(value) => {
+              const nextId = Number(value);
+              const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+              pullSourceQuotationIdRef.current = next;
+              setPullSourceQuotationId(next);
+              pullFromQuotationQuery.handleSearchApply(pullFromQuotationQuery.appliedKeyword);
+            }}
+          />
+        )}
         emptyText={t('app.kuaizhizao.salesOrder.noQuotationAvailable')}
         emptySearchText={t('app.kuaizhizao.salesOrder.quotationNotFound')}
-        okButtonProps={{
-          disabled:
-            pullFromQuotationQuery.selectedRowKeys.length === 0 ||
-            selectedPullQuotationNotPullable ||
-            pullFromQuotationQuery.loading,
-        }}
-        alert={
-          selectedPullQuotationNotPullable && selectedPullQuotation
-            ? (
-              <Alert
-                type="warning"
-                showIcon
-                title={
-                  selectedPullQuotation.sales_review_id
-                    ? t('app.kuaizhizao.salesOrder.pullDuplicateAlert', {
-                        source: pullFromQuotationAction.sourceLabel,
-                        target: pullFromQuotationAction.targetLabel,
-                      })
-                    : quotationCapabilityReasonMessage(
-                        selectedPullQuotation.capabilities?.convert_to_sales_review?.reason,
-                        t,
-                      ) || t('app.kuaizhizao.salesOrder.pullQuotationNotAllowed')
-                }
-                description={
-                  selectedPullQuotation.sales_review_id
-                    ? t('app.kuaizhizao.salesOrder.alreadyCreated', {
-                        code: selectedPullQuotation.sales_review_code || '-',
-                      })
-                    : undefined
-                }
-              />
-            )
-            : undefined
-        }
       />
 
       {PrintModal}

@@ -7,7 +7,8 @@ export type PurchaseRequisitionFormFieldVisibility = {
 };
 
 const DEFAULT_VISIBILITY: PurchaseRequisitionFormFieldVisibility = {
-  requisition_name: true,
+  /** 默认不显示；用户在「字段设置」勾选后才出现 */
+  requisition_name: false,
 };
 
 export function resolvePurchaseRequisitionFormFieldVisibility(

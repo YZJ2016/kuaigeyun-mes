@@ -218,9 +218,11 @@ class OutsourceMaterialIssue(BaseModel):
     # 基本信息
     code = fields.CharField(max_length=50, description="委外发料单编码（组织内唯一）")
 
-    # 委外工单关联
-    outsource_work_order_id = fields.IntField(description="委外工单ID")
-    outsource_work_order_code = fields.CharField(max_length=50, description="委外工单编码")
+    # 委外工单 / 工序委外关联（二选一）
+    outsource_work_order_id = fields.IntField(null=True, description="委外工单ID")
+    outsource_work_order_code = fields.CharField(max_length=50, null=True, description="委外工单编码")
+    outsource_order_id = fields.IntField(null=True, description="工序委外单ID")
+    outsource_order_code = fields.CharField(max_length=50, null=True, description="工序委外单编码")
 
     # 物料信息
     material_id = fields.IntField(description="物料ID（原材料）")

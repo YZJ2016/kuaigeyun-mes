@@ -161,6 +161,7 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             "receivable_id": receivable_id,
             "payable_id": payable_id,
             "status": self.initial_status(dir_norm),
+            "review_status": "草稿",
             "notes": notes,
             "attachments": attachments,
         }
@@ -186,6 +187,7 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
         limit: int = 50,
         keyword: Optional[str] = None,
         status: Optional[str] = None,
+        review_status: Optional[str] = None,
         bill_type: Optional[str] = None,
         expiring_within_days: Optional[int] = None,
         due_date_start: Optional[str] = None,
@@ -211,6 +213,8 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             )
         if status and str(status).strip():
             q = q.filter(status=str(status).strip())
+        if review_status and str(review_status).strip():
+            q = q.filter(review_status=str(review_status).strip())
         if bill_type and str(bill_type).strip():
             q = q.filter(bill_type=self.normalize_bill_type(bill_type))
         if partner_id:
@@ -226,7 +230,7 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             active_statuses = ["held"] if dir_norm == "receivable" else ["issued"]
             q = q.filter(status__in=active_statuses)
             if dir_norm == "receivable":
-                q = q.filter(receipt_id__isnull=True)
+                q = q.filter(receipt_id__isnull=True, review_status="已审核")
             else:
                 q = q.filter(payment_id__isnull=True)
 
@@ -235,6 +239,8 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             end = today + timedelta(days=int(expiring_within_days))
             active_statuses = ["held"] if dir_norm == "receivable" else ["issued"]
             q = q.filter(status__in=active_statuses, due_date__gte=today, due_date__lte=end)
+            if dir_norm == "receivable":
+                q = q.filter(review_status="已审核")
 
         if due_date_start:
             try:
@@ -270,6 +276,10 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             raise ValidationError("应收票据才能关联收款单")
         if note.status != "held":
             raise ValidationError("仅在手票据可关联收款单")
+        if str(getattr(note, "review_status", "") or "").strip() not in {
+            "approved", "已审核", "审核通过", "已通过", "通过",
+        }:
+            raise ValidationError("应收票据须审核通过后才能关联收款单")
         if note.receipt_id and int(note.receipt_id) != int(receipt_id):
             raise ValidationError("票据已关联其他收款单")
         receipt = await Receipt.get_or_none(
@@ -292,6 +302,10 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             raise ValidationError("应付票据才能关联付款单")
         if note.status != "issued":
             raise ValidationError("仅已开出票据可关联付款单")
+        if str(getattr(note, "review_status", "") or "").strip() not in {
+            "approved", "已审核", "审核通过", "已通过", "通过",
+        }:
+            raise ValidationError("应付票据须审核通过后才能关联付款单")
         if note.payment_id and int(note.payment_id) != int(payment_id):
             raise ValidationError("票据已关联其他付款单")
         payment = await Payment.get_or_none(
@@ -314,6 +328,18 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
         row = await self.get_by_id(tenant_id, note_id, direction=direction)
         if row.status in (_RECEIVABLE_TERMINAL if row.direction == "receivable" else _PAYABLE_TERMINAL):
             raise ValidationError("票据已处于终态，不能再修改票面信息")
+        if row.direction == "receivable":
+            from apps.kuaicaiwu.services.notes_receivable_audit_service import (
+                assert_notes_receivable_review_editable,
+            )
+
+            assert_notes_receivable_review_editable(row)
+        elif row.direction == "payable":
+            from apps.kuaicaiwu.services.notes_payable_audit_service import (
+                assert_notes_payable_review_editable,
+            )
+
+            assert_notes_payable_review_editable(row)
 
         allowed = {
             "bill_no", "amount", "issue_date", "due_date", "drawer_name", "acceptor_name",
@@ -363,6 +389,11 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
                 raise ValidationError("不支持的应收票据动作")
             if row.status != "held":
                 raise ValidationError("仅在手票据可执行该动作")
+            from apps.kuaicaiwu.services.notes_receivable_audit_service import (
+                assert_notes_receivable_action_allowed,
+            )
+
+            assert_notes_receivable_action_allowed(row)
             if act == "endorse":
                 name = str(payload.get("endorse_to_name") or "").strip()
                 if not name:
@@ -391,6 +422,11 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
                 raise ValidationError("不支持的应付票据动作")
             if row.status != "issued":
                 raise ValidationError("仅已开出票据可执行该动作")
+            from apps.kuaicaiwu.services.notes_payable_audit_service import (
+                assert_notes_payable_action_allowed,
+            )
+
+            assert_notes_payable_action_allowed(row)
             if act == "honor":
                 row.status = "honored"
                 row.settle_date = payload.get("settle_date") or today
@@ -406,6 +442,18 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
         row = await self.get_by_id(tenant_id, note_id, direction=direction)
         if row.status in (_RECEIVABLE_TERMINAL if row.direction == "receivable" else _PAYABLE_TERMINAL):
             raise ValidationError("终态票据不可删除")
+        if row.direction == "receivable":
+            from apps.kuaicaiwu.services.notes_receivable_audit_service import (
+                assert_notes_receivable_review_editable,
+            )
+
+            assert_notes_receivable_review_editable(row)
+        elif row.direction == "payable":
+            from apps.kuaicaiwu.services.notes_payable_audit_service import (
+                assert_notes_payable_review_editable,
+            )
+
+            assert_notes_payable_review_editable(row)
         row.deleted_at = resolve_business_datetime()
         await row.save()
 
@@ -416,6 +464,7 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             tenant_id=tenant_id,
             direction="receivable",
             status="held",
+            review_status="已审核",
             due_date__gte=today,
             due_date__lte=end,
             deleted_at__isnull=True,
@@ -424,6 +473,7 @@ class FinanceNoteService(AppBaseService[FinanceNote]):
             tenant_id=tenant_id,
             direction="payable",
             status="issued",
+            review_status="已审核",
             due_date__gte=today,
             due_date__lte=end,
             deleted_at__isnull=True,

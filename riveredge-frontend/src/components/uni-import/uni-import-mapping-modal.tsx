@@ -5,6 +5,7 @@ import {
   autoMatchColumnMapping,
   buildMappedImportRows,
   extractExcelHeaders,
+  isImportYearPreambleFirstCell,
   type ColumnMapping,
 } from './apply-import-mapping';
 
@@ -56,7 +57,8 @@ export const UniImportMappingModal: React.FC<UniImportMappingModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    setHeaderRowIndex(1);
+    // 客户「工资明细总表」首行多为「年份 / 2026年」，表头在第 2 行
+    setHeaderRowIndex(isImportYearPreambleFirstCell(rawRows[0]?.[0]) ? 2 : 1);
   }, [open, rawRows]);
 
   useEffect(() => {

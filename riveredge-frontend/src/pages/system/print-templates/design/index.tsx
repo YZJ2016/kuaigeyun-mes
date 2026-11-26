@@ -65,7 +65,7 @@ const { Title } = Typography;
 
 type BlockStyle = {
   fontSize?: string;
-  fontWeight?: string | number;
+  fontWeight?: string;
   textAlign?: string;
   color?: string;
   letterSpacing?: string;
@@ -238,7 +238,7 @@ type DetailTableColumn = {
   key: string;
   label: string;
   type?: 'text' | 'image' | 'qrcode' | 'number';
-  /** Decimal places when type is number, default 2 */
+  /** Decimal places when type is number：单价类默认 4，金额/税额类默认 2 */
   precision?: number;
   width?: string;
   /** Use table style "Body Align" if not set */
@@ -246,6 +246,36 @@ type DetailTableColumn = {
   /** Use table style "Vertical Align" if not set */
   verticalAlign?: 'top' | 'middle' | 'bottom';
 };
+
+const PRINT_PRICE_COLUMN_KEYS = new Set([
+  'unit_price',
+  'tax_inclusive_unit_price',
+  'suggested_unit_price',
+  'before_unit_price',
+  'after_unit_price',
+]);
+const PRINT_AMOUNT_COLUMN_KEYS = new Set([
+  'total_amount',
+  'tax_inclusive_amount',
+  'tax_amount',
+  'amount',
+  'before_amount',
+  'after_amount',
+  'delta_amount',
+  'before_total_amount',
+  'after_total_amount',
+  'total_request_amount',
+  'remaining_amount',
+  'paid_amount',
+  'released_amount',
+]);
+
+function defaultPrintNumberPrecision(key?: string): number {
+  const k = String(key || '').trim();
+  if (PRINT_PRICE_COLUMN_KEYS.has(k)) return 4;
+  if (PRINT_AMOUNT_COLUMN_KEYS.has(k)) return 2;
+  return 2;
+}
 
 type DesignerNodeSchema =
   | { id: string; type: 'text'; content: string; tag?: 'h1' | 'h2' | 'h3' | 'h4' | 'p' | 'div'; style?: BlockStyle }
@@ -1492,7 +1522,10 @@ const SortableTableColumnItem: React.FC<{
             value={col.type || 'text'}
             onChange={(val) => {
               if (val === 'number') {
-                onUpdate(index, { type: val, precision: col.precision ?? 2 });
+                onUpdate(index, {
+                  type: val,
+                  precision: col.precision ?? defaultPrintNumberPrecision(col.key),
+                });
               } else {
                 onUpdate(index, { type: val, precision: undefined });
               }
@@ -1514,8 +1547,10 @@ const SortableTableColumnItem: React.FC<{
               min={0}
               max={12}
               style={{ width: '100%' }}
-              value={col.precision ?? 2}
-              onChange={(v) => onUpdate(index, { precision: v ?? 2 })}
+              value={col.precision ?? defaultPrintNumberPrecision(col.key)}
+              onChange={(v) =>
+                onUpdate(index, { precision: v ?? defaultPrintNumberPrecision(col.key) })
+              }
             />
           </div>
         ) : null}

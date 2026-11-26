@@ -60,6 +60,11 @@ class Receipt(BaseModel):
     )
 
     status = fields.CharField(max_length=20, default="Draft", description="状态 (Draft/Confirmed/Cancelled)")
+    review_status = fields.CharField(
+        max_length=20,
+        default="草稿",
+        description="审核状态：草稿/SUBMITTED/待审核/已审核/驳回。确认收款前须已审核",
+    )
     
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")

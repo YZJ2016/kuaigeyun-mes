@@ -5,7 +5,11 @@ import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ApplicationConnection } from '../../../../../services/applicationConnection';
 import type { API } from '../../../../../services/apiManagement';
-import { DocumentPushBatchPanel } from '../../../components/DocumentPushBatchPanel';
+import {
+  DocumentPushBatchPanel,
+  type DocumentPushBindActionOption,
+} from '../../../components/DocumentPushBatchPanel';
+import { sortApisByPreferredHints } from '../../../../../utils/activeApiSelectOptions';
 import { warehouseApi } from '../../../services/production';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 
@@ -29,9 +33,52 @@ export interface PurchaseReceiptDocumentPushPanelProps {
 
 const PR_DEFAULT_PROFILES: string[] = [];
 const PR_KINGDEE_PROFILES = ['kingdee_im_purinbill'];
-const PR_SAVE_API_HINTS = ['purinbill', '采购入库', 'im_purinbill', 'add_im_purinbill', 'add2_im_purinbill'];
+const PR_SAVE_API_HINTS = [
+  'purinbill',
+  '采购入库',
+  'im_purinbill',
+  'add_im_purinbill',
+  'add2_im_purinbill',
+  'batchUnaudit',
+  'batchUnsubmit',
+  'batchDelete',
+];
 
 const PUSHABLE_STATUSES = new Set(['已入库', '已完成', 'processed', 'COMPLETED', 'POSTED']);
+
+function apiHaystack(api: API): string {
+  const code = String(api.code || '').toLowerCase();
+  const path = String(api.path || '').toLowerCase();
+  const name = String(api.name || '').toLowerCase();
+  return `${code} ${path} ${name}`.replace(/_/g, '');
+}
+
+function isKingdeeImPurinbillOperateApi(api: API, marker: string): boolean {
+  const hay = apiHaystack(api);
+  const name = String(api.name || '').toLowerCase();
+  const isPurin =
+    hay.includes('purinbill') ||
+    hay.includes('impurinbill') ||
+    name.includes('采购入库');
+  if (!isPurin) return false;
+  return hay.includes(marker.replace(/_/g, ''));
+}
+
+function matchPurinbillBindingApi(
+  slot: string,
+  api: API,
+  connection: ApplicationConnection | undefined,
+): boolean {
+  if (!connection) return false;
+  if (api.connection_uuid && api.connection_uuid !== connection.uuid) return false;
+  const key = String(slot || '').trim();
+  if (key === 'confirm') return isKingdeeImPurinbillAddApi(api, connection);
+  if (key === 'update') return isKingdeeImPurinbillOperateApi(api, 'batchupdate');
+  if (key === 'withdraw') return isKingdeeImPurinbillOperateApi(api, 'batchunaudit');
+  if (key === 'unsubmit') return isKingdeeImPurinbillOperateApi(api, 'batchunsubmit');
+  if (key === 'delete') return isKingdeeImPurinbillOperateApi(api, 'batchdelete');
+  return false;
+}
 
 function isKingdeeImPurinbillAddApi(
   api: API,
@@ -130,15 +177,51 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
     [t],
   );
 
-  const bindActionOptions = useMemo(
+  const bindActionOptions = useMemo<DocumentPushBindActionOption[]>(
     () => [
       {
         label: t('app.kuaizhizao.warehouseInbound.action.confirmInbound'),
         value: 'confirm',
+        apiKeys: ['confirm'],
+      },
+      {
+        label: t('app.kuaizhizao.documentPush.batch.bindAction.update'),
+        value: 'update',
+        apiKeys: ['update'],
+      },
+      {
+        label: t('app.kuaizhizao.warehouseInbound.action.withdrawInbound'),
+        value: 'withdraw',
+        apiKeys: ['withdraw', 'unsubmit'],
+      },
+      {
+        label: t('common.delete'),
+        value: 'delete',
+        apiKeys: ['delete'],
       },
     ],
     [t],
   );
+
+  const resolveActionApiUuid = useCallback((slot: string, items: API[]) => {
+    const hintsBySlot: Record<string, string[]> = {
+      confirm: PR_SAVE_API_HINTS,
+      update: ['batchUpdate', 'batch_update', 'im_purinbill'],
+      withdraw: ['batchUnaudit', 'unaudit', 'im_purinbill'],
+      unsubmit: ['batchUnsubmit', 'unsubmit', 'im_purinbill'],
+      delete: ['batchDelete', 'delete', 'im_purinbill'],
+    };
+    const sorted = sortApisByPreferredHints(items, hintsBySlot[slot] || []);
+    if (slot === 'confirm') {
+      return preferPurinbillApiUuid(sorted);
+    }
+    const hayMatch = (api: API, markers: string[]) => {
+      const hay = `${api.code || ''} ${api.path || ''} ${api.name || ''}`.toLowerCase();
+      return markers.some((m) => hay.includes(m.toLowerCase()));
+    };
+    const preferred = sorted.find((api) => hayMatch(api, hintsBySlot[slot] || []));
+    return preferred?.uuid || sorted[0]?.uuid;
+  }, []);
 
   const loadCandidates = useCallback(
     async ({
@@ -155,8 +238,8 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
       const res = await warehouseApi.purchaseReceipt.list({
         keyword: keyword || undefined,
         status: '已入库',
-        skip: Math.max(0, (page - 1) * pageSize),
-        limit: pageSize,
+        current: page,
+        page_size: pageSize,
       });
       let data = ((res.items || []) as Record<string, unknown>[])
         .map(toCandidate)
@@ -164,6 +247,25 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
 
       if (preferIds.length && page === 1) {
         const preferSet = new Set(preferIds);
+        const missing = preferIds.filter((id) => !data.some((row) => row.id === id));
+        if (missing.length) {
+          const extras = (
+            await Promise.all(
+              missing.map(async (id) => {
+                try {
+                  const one = (await warehouseApi.purchaseReceipt.get(String(id))) as Record<
+                    string,
+                    unknown
+                  >;
+                  return toCandidate({ ...one, id });
+                } catch {
+                  return null;
+                }
+              }),
+            )
+          ).filter((row): row is PurchaseReceiptPushCandidate => !!row);
+          data = [...extras, ...data];
+        }
         const preferred = data.filter((row) => preferSet.has(row.id));
         const rest = data.filter((row) => !preferSet.has(row.id));
         data = [...preferred, ...rest];
@@ -203,11 +305,14 @@ export const PurchaseReceiptDocumentPushPanel: React.FC<PurchaseReceiptDocumentP
       getRowLabel={(row) => row.receipt_code || String(row.id)}
       loadCandidates={loadCandidates}
       matchSaveApi={isKingdeeImPurinbillAddApi}
+      matchBindingApi={matchPurinbillBindingApi}
       preferSaveApi={preferPurinbillApiUuid}
       saveApiSearchHints={PR_SAVE_API_HINTS}
       loadBinding={loadBinding}
       saveBinding={saveBinding}
       bindActionOptions={bindActionOptions}
+      multiApiTargetRows
+      resolveActionApiUuid={resolveActionApiUuid}
       showScheduleControls={false}
       successCountKey="app.kuaizhizao.documentPush.batch.success"
       partialCountKey="app.kuaizhizao.documentPush.batch.partial"

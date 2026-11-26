@@ -9,17 +9,13 @@ import {
   mapPartnerReferenceDisplayItem,
   resolveReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
-import { buildSupplierContactPickOptions } from './partnerSupplierFormSnapshot';
+import {
+  buildSupplierContactPickOptions,
+  preferPartnerSupplierDetail,
+} from './partnerSupplierFormSnapshot';
 import { resolveFullSupplierFromList, type SupplierLike } from './applySupplierFormFields';
 
 const SupplierPartnerDetailContext = createContext<SupplierLike | null>(null);
-
-function partnerHasContactDetail(supplier: SupplierLike | null): boolean {
-  if (!supplier) return false;
-  if (Array.isArray(supplier.contacts) && supplier.contacts.length > 0) return true;
-  if (Array.isArray(supplier.addresses) && supplier.addresses.length > 0) return true;
-  return false;
-}
 
 export function usePurchaseSupplierPartnerDetail(
   supplierId: unknown,
@@ -40,10 +36,6 @@ export function usePurchaseSupplierPartnerDetail(
       setFetched(null);
       return;
     }
-    if (partnerHasContactDetail(listSupplier)) {
-      setFetched(null);
-      return;
-    }
     let cancelled = false;
     void resolveReferenceDisplay({
       resource: 'master-data:supply-chain:supplier',
@@ -60,13 +52,12 @@ export function usePurchaseSupplierPartnerDetail(
     return () => {
       cancelled = true;
     };
-  }, [supplierId, hostResource, listSupplier]);
+  }, [supplierId, hostResource]);
 
-  return useMemo(() => {
-    if (partnerHasContactDetail(listSupplier)) return listSupplier;
-    if (partnerHasContactDetail(fetched)) return fetched;
-    return listSupplier ?? fetched;
-  }, [fetched, listSupplier]);
+  return useMemo(
+    () => preferPartnerSupplierDetail(listSupplier, fetched),
+    [fetched, listSupplier],
+  );
 }
 
 function SupplierPartnerDetailBridgeInner({
@@ -116,25 +107,51 @@ export const PurchaseSupplierContactFormField: React.FC<{
     () => (supplier ? buildSupplierContactPickOptions(supplier) : []),
     [supplier],
   );
-  if (contactOptions.length > 0) {
+  const multi = contactOptions.length >= 2;
+  if (multi) {
     return (
-      <ProFormSelect
-        name="supplier_contact"
-        label={label}
-        placeholder={placeholder}
-        showSearch
-        allowClear
-        options={contactOptions.map((o) => ({ value: o.value, label: o.label }))}
-        fieldProps={{
-          optionFilterProp: 'label',
-          onChange: (value: string) => {
-            const opt = contactOptions.find((o) => o.value === value);
-            if (opt?.phone) {
-              formRef.current?.setFieldValue('supplier_phone', opt.phone);
-            }
-          },
-        }}
-      />
+      <>
+        <ProFormText name="supplier_contact" hidden />
+        <ProFormDependency name={['supplier_contact', 'supplier_phone']}>
+          {({ supplier_contact, supplier_phone }) => {
+            const contactStr = String(supplier_contact ?? '').trim();
+            const phoneStr = String(supplier_phone ?? '').trim();
+            const selectedValue =
+              contactOptions.find(
+                (o) => o.contact === contactStr && (o.phone ?? '') === phoneStr,
+              )?.value ?? undefined;
+            return (
+              <ProFormSelect
+                label={label}
+                placeholder={placeholder}
+                showSearch
+                allowClear
+                options={contactOptions.map((o) => ({ value: o.value, label: o.label }))}
+                fieldProps={{
+                  value: selectedValue,
+                  optionFilterProp: 'label',
+                  onChange: (value: string | undefined) => {
+                    if (!value) {
+                      formRef.current?.setFieldsValue({
+                        supplier_contact: undefined,
+                        supplier_phone: undefined,
+                      });
+                      return;
+                    }
+                    const opt = contactOptions.find((o) => o.value === value);
+                    if (opt) {
+                      formRef.current?.setFieldsValue({
+                        supplier_contact: opt.contact,
+                        supplier_phone: opt.phone,
+                      });
+                    }
+                  },
+                }}
+              />
+            );
+          }}
+        </ProFormDependency>
+      </>
     );
   }
   return <ProFormText name="supplier_contact" label={label} placeholder={placeholder} />;
@@ -147,7 +164,7 @@ export const PurchaseSupplierPhoneFormField: React.FC<{
   <ProFormText name="supplier_phone" label={label} placeholder={placeholder} />
 );
 
-/** 询价邀请供应商表、子表等：按 supplier_id 渲染联系人下拉（无明细时回退 Input） */
+/** 询价邀请供应商表、子表等：按 supplier_id 渲染联系人下拉 */
 export const PurchaseSupplierContactPickInput: React.FC<{
   supplierId?: number | null;
   supplierList: SupplierLike[];
@@ -162,6 +179,8 @@ export const PurchaseSupplierContactPickInput: React.FC<{
     [supplier],
   );
   if (contactOptions.length > 0) {
+    const selectedValue =
+      contactOptions.find((o) => o.contact === String(value ?? '').trim())?.value ?? undefined;
     return (
       <Select
         size="small"
@@ -170,12 +189,15 @@ export const PurchaseSupplierContactPickInput: React.FC<{
         style={{ width: '100%' }}
         placeholder={placeholder}
         optionFilterProp="label"
-        value={value || undefined}
+        value={selectedValue}
         options={contactOptions.map((o) => ({ value: o.value, label: o.label }))}
         onChange={(picked) => {
-          const v = picked == null ? undefined : String(picked);
-          const opt = contactOptions.find((o) => o.value === v);
-          onChange(v, opt?.phone);
+          if (picked == null) {
+            onChange(undefined, undefined);
+            return;
+          }
+          const opt = contactOptions.find((o) => o.value === String(picked));
+          onChange(opt?.contact, opt?.phone);
         }}
       />
     );

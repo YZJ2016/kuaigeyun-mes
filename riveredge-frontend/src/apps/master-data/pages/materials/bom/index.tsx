@@ -8,12 +8,12 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemProps, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm, ProFormField } from '@ant-design/pro-components';
 import CodeField from '../../../../../components/code-field';
-import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions, theme, Progress } from 'antd';
+import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions, theme, Progress, Typography, Result, Row, Col } from 'antd';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined, NodeIndexOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined, CopyOutlined, PrinterOutlined, SearchOutlined, NodeIndexOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { UniTable, type UniTableRequestMeta, readPersistedUniTableViewType, uniTableViewTypePreferencePath } from '../../../../../components/uni-table';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
@@ -23,8 +23,29 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import {
+  UniPullQueryModal,
+  useUniPullQuery,
+  toUniPullQueryHttpParams,
+} from '../../../../../components/uni-pull-query';
+import { getDepartmentTree } from '../../../../../services/department';
+import { DocumentAttachmentsField } from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import {
+  DOCUMENT_DETAIL_COL_WIDTH,
+  DOCUMENT_DETAIL_CONTROL_SIZE,
+} from '../../../../kuaizhizao/components/document-detail-table/documentDetailTable';
+import {
+  mapSopAttachmentsToUploadList,
+  resolveSopAttachmentsPayload,
+} from '../../../utils/sopAttachments';
+import { resolvePrimaryDefaultWarehouseId } from '../../../utils/materialDefaultWarehouse';
 import { SecureImage } from '../../../../../components/secure-image';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
+import {
+  FORM_FIELD_TITLE_SEGMENTED_CLASS,
+  FormFieldTitleSegmentedRow,
+} from '../../../../../components/form-field-title-segmented';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { StatusTag, MarkerTag, RE_STATUS_BADGE_DRAFT } from '../../../../../constants/statusBadges';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -38,7 +59,19 @@ import { getEngineeringBomSyncBinding } from '../../../services/material';
 import { openPrintHtmlWindow } from '../../../../../utils/printResponseHelpers';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { formatQuantity, formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
-import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
+import {
+  ListPageTemplate,
+  FormModalTemplate,
+  DocumentFormPageLayout,
+  DocumentFormPageHeaderActions,
+  DetailDrawerSection,
+  MODAL_CONFIG,
+  MODAL_NESTED_ABOVE_PARENT_OFFSET,
+} from '../../../../../components/layout-templates';
+import { DOCUMENT_DETAIL_PAGE_TITLE_STYLE, FORM_LAYOUT } from '../../../../../components/layout-templates/constants';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../../../../utils/modalEventIsolation';
 import { bomApi, materialApi } from '../../../services/material';
 import BomInquiryDrawer from './BomInquiryDrawer';
@@ -97,7 +130,10 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
+const BOM_LIST_PATH = '/apps/master-data/process/engineering-bom';
+const BOM_CREATE_PATH = `${BOM_LIST_PATH}/new`;
 const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v9';
+const BOM_FORM_COL_FLEX = { flex: '1 1 0', style: { minWidth: 0 } } as const;
 const BOM_LIST_VIEW_TYPES = ['productBom', 'semiProductBom', 'allBom'] as const;
 type BomListViewType = (typeof BOM_LIST_VIEW_TYPES)[number];
 
@@ -192,12 +228,19 @@ interface BOMGroupRow {
   children?: BOMTableTreeNode[]; // 树形数据的子节点
 }
 
-interface BomCopySourceOption {
-  value: string;
+/** 复制其他 BOM 子件：取单候选行（物料主数据已补齐） */
+type BomCopySourcePullRow = {
+  id: string;
   materialId: number;
   version: string;
-  label: string;
-}
+  bomCode: string;
+  bomName: string;
+  materialCode: string;
+  materialName: string;
+  approvalStatus: string;
+  itemCount: number;
+  isDefault: boolean;
+};
 
 const buildDefaultBomName = (
   material?: { name?: string; mainCode?: string; code?: string },
@@ -209,8 +252,20 @@ const buildDefaultBomName = (
   return mainLabel || code;
 };
 
+const BOM_LINE_OUTSOURCE_MAKE = 'Make';
+const BOM_LINE_OUTSOURCE_TYPE = 'Outsource';
+
+const resolveBomLineOutsourceDefault = (sourceType: string): boolean =>
+  normalizeMaterialSourceType(sourceType) === BOM_LINE_OUTSOURCE_TYPE;
+
+const canEditBomLineOutsource = (sourceType: string): boolean =>
+  normalizeMaterialSourceType(sourceType) === BOM_LINE_OUTSOURCE_MAKE;
+
 const buildDefaultBomItem = (overrides?: Partial<Record<string, unknown>>) => ({
   componentId: undefined,
+  installPosition: undefined,
+  warehouseId: undefined,
+  isOutsource: false,
   quantity: 1,
   unit: '',
   wasteRate: 0,
@@ -392,6 +447,10 @@ const BOMPage: React.FC = () => {
   );
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isCreatePage = location.pathname.endsWith('/engineering-bom/new');
+  const leaveBomFormTab = useLeaveFormTab(BOM_LIST_PATH);
+  const bomCreateInitRef = useRef(false);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [bomSyncFreshnessKey, setBomSyncFreshnessKey] = useState(0);
@@ -416,11 +475,6 @@ const BOMPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
-  const [copySourceModalVisible, setCopySourceModalVisible] = useState(false);
-  const [copySourceLoading, setCopySourceLoading] = useState(false);
-  const [copySourceSubmitting, setCopySourceSubmitting] = useState(false);
-  const [copySourceOptions, setCopySourceOptions] = useState<BomCopySourceOption[]>([]);
-  const [selectedCopySource, setSelectedCopySource] = useState<string>();
   /** 编辑时：按主料+版本定位整份 BOM，保存时 replaceVersionItems */
   const [editContext, setEditContext] = useState<{ materialId: number; version: string; uuidsToReplace: string[] } | null>(null);
   const [editFormInitialValues, setEditFormInitialValues] = useState<Record<string, unknown> | null>(null);
@@ -434,7 +488,11 @@ const BOMPage: React.FC = () => {
     extractFormValues: extractBomFormValues,
     saveCustomFieldValues: saveBomCustomFieldValues,
     resetFieldValues: resetBomFormFieldValues,
-  } = useCustomFields({ tableName: BOM_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+  } = useCustomFields({
+    tableName: BOM_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: modalVisible || isCreatePage,
+  });
 
   const {
     customFields: bomListCustomFields,
@@ -621,8 +679,35 @@ const BOMPage: React.FC = () => {
     return map;
   }, [materials]);
   const [mainMaterialScope, setMainMaterialScope] = useState<'make' | 'all'>('make');
+  const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: number }>>([]);
   
   const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t]);
+
+  useEffect(() => {
+    let cancelled = false;
+  const flattenDepts = (
+    nodes: Array<{ id: number; name: string; children?: typeof nodes }>,
+    acc: Array<{ label: string; value: number }> = [],
+  ) => {
+    nodes.forEach((n) => {
+      acc.push({ label: n.name, value: n.id });
+      if (n.children?.length) flattenDepts(n.children, acc);
+    });
+    return acc;
+  };
+    void (async () => {
+      try {
+        const tree = await getDepartmentTree({ is_active: true });
+        if (cancelled) return;
+        setDepartmentOptions(flattenDepts(tree?.items ?? []));
+      } catch {
+        if (!cancelled) setDepartmentOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getComponentMaterialSourceType = (componentId?: number | null): string => {
     if (componentId == null) return '';
@@ -835,7 +920,7 @@ const BOMPage: React.FC = () => {
 
   /** 切到「自制件」时：已选非 Make 才清空；勿因选项未含已搜到的编码而误清 */
   useEffect(() => {
-    if (!(modalVisible && !isEdit)) return;
+    if (!((modalVisible || isCreatePage) && !isEdit)) return;
     if (mainMaterialScope !== 'make') return;
     const currentId = Number(formRef.current?.getFieldValue('materialId'));
     if (!currentId) return;
@@ -858,7 +943,7 @@ const BOMPage: React.FC = () => {
     };
     // ensureMaterialsByIds 稳定于 materialsRef；仅随范围切换触发
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mainMaterialScope, modalVisible, isEdit]);
+  }, [mainMaterialScope, modalVisible, isCreatePage, isEdit]);
 
   /**
    * 重新生成BOM编号（根据当前表单值 / 刚选中的主物料）
@@ -964,18 +1049,12 @@ const BOMPage: React.FC = () => {
   /**
    * 处理新建BOM
    */
-  const handleCreate = async () => {
-    setIsEdit(false);
-    setEditContext(null);
-    setEditFormInitialValues(null);
-    setEditFormHeaderId(null);
-    setCurrentBOMUuid(null);
-    bomNameTouchedRef.current = false;
-    setModalVisible(true);
-    resetBomFormFieldValues();
+  const handleCreate = () => {
+    if (!bomPerms.canCreate) return;
+    navigate(BOM_CREATE_PATH);
   };
 
-  useNewShortcut(handleCreate);
+  useNewShortcut(isCreatePage ? undefined : handleCreate);
 
   const handleBomModalAfterOpenChange = (open: boolean) => {
     if (!open || isEdit) return;
@@ -987,6 +1066,53 @@ const BOMPage: React.FC = () => {
       regenerateBomName();
     });
   };
+
+  useEffect(() => {
+    if (!isCreatePage) {
+      bomCreateInitRef.current = false;
+      return;
+    }
+    if (bomCreateInitRef.current) return;
+    bomCreateInitRef.current = true;
+    setIsEdit(false);
+    setEditContext(null);
+    setEditFormInitialValues(null);
+    setEditFormHeaderId(null);
+    setCurrentBOMUuid(null);
+    bomNameTouchedRef.current = false;
+    resetBomFormFieldValues();
+    requestAnimationFrame(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        isActive: true,
+        version: '1.0',
+        baseQuantity: 1,
+        approvalStatus: 'draft',
+        items: [buildDefaultBomItem()],
+      });
+      regenerateBomName();
+    });
+  }, [isCreatePage, location.pathname, resetBomFormFieldValues]);
+
+  useEffect(() => {
+    if (!isCreatePage) return;
+    const title = t('app.master-data.menu.process.engineering-bom.new');
+    const params = new URLSearchParams(location.search || '');
+    params.delete('_refresh');
+    const cleanSearch = params.toString();
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    setCustomPageTitle(location.pathname, title);
+    setCustomPageTitle(tabKey, title);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(location.pathname);
+      removeCustomPageTitle(tabKey);
+    };
+  }, [isCreatePage, location.pathname, location.search, t]);
 
   /**
    * 处理编辑BOM（按主料+版本加载完整 BOM 结构，支持增删改子件）
@@ -1018,6 +1144,9 @@ const BOMPage: React.FC = () => {
         const materialSource = getMaterialSourceTypeFromRecord(compMaterial);
         return {
           componentId: b.componentId,
+          installPosition: b.installPosition ?? (b as { install_position?: string }).install_position,
+          warehouseId: b.warehouseId ?? (b as { warehouse_id?: number }).warehouse_id,
+          isOutsource: b.isOutsource ?? (b as { is_outsource?: boolean }).is_outsource ?? false,
           quantity: b.quantity,
           unit: b.unit,
           wasteRate: b.wasteRate ?? 0,
@@ -1038,9 +1167,14 @@ const BOMPage: React.FC = () => {
         baseQuantity: first.baseQuantity ?? 1,
         bomName: first.bomName ?? undefined,
         bomCode: bomCodeValue,
+        materialWarehouseId:
+          first.materialWarehouseId ?? (first as { material_warehouse_id?: number }).material_warehouse_id,
+        manufacturingDepartmentId:
+          first.manufacturingDepartmentId
+          ?? (first as { manufacturing_department_id?: number }).manufacturing_department_id,
+        attachments: mapSopAttachmentsToUploadList(first.attachments),
         effectiveDate: first.effectiveDate,
         expiryDate: first.expiryDate,
-        approvalStatus: first.approvalStatus,
         description: first.description,
         remark: first.remark,
         isActive: first.isActive,
@@ -1562,6 +1696,44 @@ const BOMPage: React.FC = () => {
 
       await detectBomItemCycles(standardValues.materialId, standardValues.items);
 
+      const nonAltItems = standardValues.items.filter((item: { isAlternative?: boolean }) => !item.isAlternative);
+      const componentCounts = new Map<number, number>();
+      for (const item of nonAltItems) {
+        const cid = Number(item.componentId);
+        if (Number.isFinite(cid) && cid > 0) {
+          componentCounts.set(cid, (componentCounts.get(cid) ?? 0) + 1);
+        }
+      }
+      const positionKeys = new Set<string>();
+      for (const item of nonAltItems) {
+        const cid = Number(item.componentId);
+        if (!Number.isFinite(cid) || cid <= 0) continue;
+        const pos = String(item.installPosition ?? '').trim();
+        if ((componentCounts.get(cid) ?? 0) > 1 && !pos) {
+          messageApi.error(t('app.master-data.bom.installPositionRequiredForDuplicate'));
+          return;
+        }
+        const key = `${cid}::${pos}`;
+        if (positionKeys.has(key)) {
+          messageApi.error(t('app.master-data.bom.installPositionDuplicate'));
+          return;
+        }
+        positionKeys.add(key);
+      }
+
+      for (const item of nonAltItems) {
+        const cid = Number(item.componentId);
+        if (!Number.isFinite(cid) || cid <= 0) continue;
+        const src = getComponentMaterialSourceType(cid) || normalizeMaterialSourceType(item.sourceType);
+        const isOutsource = !!item.isOutsource;
+        if (isOutsource && !canEditBomLineOutsource(src) && normalizeMaterialSourceType(src) !== BOM_LINE_OUTSOURCE_TYPE) {
+          messageApi.error(t('app.master-data.bom.isOutsourceNotAllowed'));
+          return;
+        }
+      }
+
+      const attachmentPayload = resolveSopAttachmentsPayload(standardValues.attachments);
+
       const buildBatch = () => {
         const toPositiveNumber = (raw: unknown, fallback?: number): number | undefined => {
           if (raw == null || raw === '') return fallback;
@@ -1581,8 +1753,19 @@ const BOMPage: React.FC = () => {
             const materialSource = getComponentMaterialSourceType(item.componentId);
             const formSource = normalizeMaterialSourceType(item.sourceType);
             const sourceTypeForApi = materialSource ? null : (formSource || null);
+            const installPosition = String(item.installPosition ?? '').trim();
+            const src = getComponentMaterialSourceType(item.componentId) || normalizeMaterialSourceType(item.sourceType);
+            let isOutsource = !!item.isOutsource;
+            if (normalizeMaterialSourceType(src) === BOM_LINE_OUTSOURCE_TYPE) {
+              isOutsource = true;
+            } else if (!canEditBomLineOutsource(src)) {
+              isOutsource = false;
+            }
             return {
               component_id: item.componentId,
+              install_position: installPosition || null,
+              warehouse_id: item.warehouseId != null ? Number(item.warehouseId) : null,
+              is_outsource: isOutsource,
               quantity,
               unit: unitValue,
               waste_rate: wasteRate,
@@ -1598,6 +1781,13 @@ const BOMPage: React.FC = () => {
           }),
           version: standardValues.version || '1.0',
           base_quantity: toPositiveNumber(standardValues.baseQuantity, 1) ?? 1,
+          material_warehouse_id:
+            standardValues.materialWarehouseId != null ? Number(standardValues.materialWarehouseId) : null,
+          manufacturing_department_id:
+            standardValues.manufacturingDepartmentId != null
+              ? Number(standardValues.manufacturingDepartmentId)
+              : null,
+          attachments: attachmentPayload,
           bom_name: standardValues.bomName != null ? String(standardValues.bomName).trim() : undefined,
           bom_code: standardValues.bomCode,
           effective_date: standardValues.effectiveDate,
@@ -1633,7 +1823,11 @@ const BOMPage: React.FC = () => {
 
       patchLocalMaterialSourcesAfterSave(standardValues.items);
 
-      setModalVisible(false);
+      if (isCreatePage) {
+        leaveBomFormTab();
+      } else {
+        setModalVisible(false);
+      }
       formRef.current?.resetFields();
       resetBomFormFieldValues();
       actionRef.current?.reload();
@@ -1812,67 +2006,81 @@ const BOMPage: React.FC = () => {
 
   const appendItemsFromMaterials = (selectedMaterials: Material[]) => {
     setMaterials((prev) => upsertMaterialsById(prev, selectedMaterials));
-    const rows = selectedMaterials.map((material) =>
-      buildDefaultBomItem({
+    const rows = selectedMaterials.map((material) => {
+      const source = getMaterialSourceTypeFromRecord(material);
+      return buildDefaultBomItem({
         componentId: material.id,
         unit: material.baseUnit ?? '',
-        sourceType: getMaterialSourceTypeFromRecord(material) || undefined,
-      }),
-    );
+        sourceType: source || undefined,
+        warehouseId: resolvePrimaryDefaultWarehouseId(material),
+        isOutsource: resolveBomLineOutsourceDefault(source),
+      });
+    });
     appendBomItemsToForm(rows);
   };
 
-  const handleOpenCopySourceModal = async () => {
-    try {
-      setCopySourceLoading(true);
-      const groups = (await bomApi.getGroups({ includeObsolete: false })).data;
-      const currentMaterialId = Number(formRef.current?.getFieldValue('materialId'));
-      const currentVersion = String(formRef.current?.getFieldValue('version') || '1.0');
-      const options: BomCopySourceOption[] = groups
-        .map((group) => {
+  const copyBomSourceQuery = useUniPullQuery<BomCopySourcePullRow>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    loadData: async (params) => {
+      try {
+        const http = toUniPullQueryHttpParams(params);
+        const res = await bomApi.getGroups({
+          includeObsolete: false,
+          skip: http.skip,
+          limit: http.limit,
+          keyword: http.keyword,
+        });
+        const currentMaterialId = Number(formRef.current?.getFieldValue('materialId'));
+        const currentVersion = String(formRef.current?.getFieldValue('version') || '1.0');
+        const groups = (res.data || []).filter((group) => {
+          const materialId = Number(group.material_id);
+          const version = String(group.version || '1.0');
+          return !(materialId === currentMaterialId && version === currentVersion);
+        });
+        // 编码/名称由 groups 接口 JOIN 一次带回，禁止再 ensureMaterialsByIds 二次请求
+        const data: BomCopySourcePullRow[] = groups.map((group) => {
           const materialId = Number(group.material_id);
           const version = String(group.version || '1.0');
           return {
-            value: `${materialId}::${version}`,
+            id: `${materialId}::${version}`,
             materialId,
             version,
-            label: (() => {
-              const sourceMaterial = materials.find((item) => item.id === materialId);
-              const code = sourceMaterial?.mainCode || sourceMaterial?.code || `${t('app.master-data.bom.materialIdPrefix')}:${materialId}`;
-              const name = sourceMaterial?.name || '-';
-              return `${code} - ${name} (${t('app.master-data.bom.versionLabel')} ${version})`;
-            })(),
+            bomCode: String(group.bom_code || '').trim(),
+            bomName: String(group.bom_name || '').trim(),
+            materialCode: String(group.material_code || '').trim(),
+            materialName: String(group.material_name || '').trim(),
+            approvalStatus: String(group.approval_status || 'draft'),
+            itemCount: Number(group.item_count || 0),
+            isDefault: !!group.is_default,
           };
-        })
-        .filter((option) => !(option.materialId === currentMaterialId && option.version === currentVersion));
-      setCopySourceOptions(options);
-      setSelectedCopySource(undefined);
-      setCopySourceModalVisible(true);
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.bom.getListFailed'));
-    } finally {
-      setCopySourceLoading(false);
-    }
-  };
-
-  const handleCopyItemsFromSourceBom = async () => {
-    if (!selectedCopySource) {
-      messageApi.warning(t('app.master-data.bom.copyOtherBomItemsSelectRequired'));
-      return;
-    }
-    const source = copySourceOptions.find((item) => item.value === selectedCopySource);
-    if (!source) return;
-    try {
-      setCopySourceSubmitting(true);
-      const sourceItems = await bomApi.getByMaterial(source.materialId, source.version, false);
+        });
+        return { data, total: res.total ?? data.length };
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.master-data.bom.getListFailed'));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (_keys, rows) => {
+      const selected = rows[0];
+      if (!selected) {
+        messageApi.warning(t('app.master-data.bom.copyOtherBomItemsSelectRequired'));
+        return;
+      }
+      const sourceItems = await bomApi.getByMaterial(selected.materialId, selected.version, false);
       if (!sourceItems.length) {
         messageApi.warning(t('app.master-data.bom.addAtLeastOneChild'));
         return;
       }
+      const componentMats = await ensureMaterialsByIds(sourceItems.map((item) => item.componentId));
+      const componentById = new Map(componentMats.map((m) => [m.id, m]));
       const mappedItems = sourceItems.map((item) => {
-        const compMaterial = materials.find((material) => material.id === item.componentId);
+        const compMaterial = componentById.get(item.componentId);
         return buildDefaultBomItem({
           componentId: item.componentId,
+          installPosition: item.installPosition,
+          warehouseId: item.warehouseId,
+          isOutsource: item.isOutsource,
           quantity: item.quantity,
           unit: item.unit ?? (compMaterial?.baseUnit ?? ''),
           wasteRate: item.wasteRate ?? 0,
@@ -1887,14 +2095,94 @@ const BOMPage: React.FC = () => {
         });
       });
       appendBomItemsToForm(mappedItems);
-      setCopySourceModalVisible(false);
-      setSelectedCopySource(undefined);
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.bom.getListFailed'));
-    } finally {
-      setCopySourceSubmitting(false);
-    }
-  };
+      copyBomSourceQuery.closeModal();
+    },
+  });
+
+  const copyBomSourcePullModal = (
+    <UniPullQueryModal<BomCopySourcePullRow>
+      open={copyBomSourceQuery.open}
+      title={t('app.master-data.bom.copyOtherBomItemsTitle')}
+      onCancel={copyBomSourceQuery.closeModal}
+      onOk={copyBomSourceQuery.handleConfirm}
+      rowKey="id"
+      zIndex={nestedBomModalZIndex}
+      columns={[
+        {
+          title: t('app.master-data.bom.bomCode'),
+          dataIndex: 'bomCode',
+          width: 168,
+          ellipsis: true,
+          render: (v: string) => v || '-',
+        },
+        {
+          title: t('app.master-data.bom.colMaterialCode'),
+          dataIndex: 'materialCode',
+          width: 120,
+          ellipsis: true,
+          render: (v: string) => v || '-',
+        },
+        {
+          title: t('app.master-data.bom.colMaterialName'),
+          dataIndex: 'materialName',
+          ellipsis: true,
+          render: (v: string) => v || '-',
+        },
+        {
+          title: t('app.master-data.bom.bomName'),
+          dataIndex: 'bomName',
+          width: 140,
+          ellipsis: true,
+          render: (v: string) => v || '-',
+        },
+        {
+          title: t('app.master-data.bom.versionTitle'),
+          dataIndex: 'version',
+          width: 88,
+          ellipsis: true,
+        },
+        {
+          title: t('app.master-data.bom.versionHistoryItemCount'),
+          dataIndex: 'itemCount',
+          width: 88,
+          align: 'right' as const,
+        },
+        {
+          title: t('app.master-data.bom.approvalStatusTitle'),
+          dataIndex: 'approvalStatus',
+          width: 100,
+          render: (status: string) => getApprovalStatusTag(status),
+        },
+        {
+          title: t('app.master-data.bom.defaultTag'),
+          dataIndex: 'isDefault',
+          width: 72,
+          render: (v: boolean) =>
+            v ? <MarkerTag color="processing">{t('app.master-data.bom.defaultTag')}</MarkerTag> : '-',
+        },
+      ]}
+      dataSource={copyBomSourceQuery.dataSource}
+      loading={copyBomSourceQuery.loading}
+      confirmLoading={copyBomSourceQuery.confirmLoading}
+      selectionType={copyBomSourceQuery.selectionType}
+      selectedRowKeys={copyBomSourceQuery.selectedRowKeys}
+      selectedRows={copyBomSourceQuery.selectedRows}
+      onSelectedRowKeysChange={copyBomSourceQuery.handleSelectedRowKeysChange}
+      searchDraft={copyBomSourceQuery.searchDraft}
+      onSearchDraftChange={copyBomSourceQuery.setSearchDraft}
+      onSearchApply={copyBomSourceQuery.handleSearchApply}
+      onSearchClear={copyBomSourceQuery.handleSearchClear}
+      appliedKeyword={copyBomSourceQuery.appliedKeyword}
+      searchPlaceholder={t('app.master-data.bom.copyOtherBomItemsSearchPlaceholder')}
+      getRowLabel={(row) =>
+        [row.bomCode, row.materialCode, row.materialName, row.version].filter(Boolean).join(' ')
+      }
+      page={copyBomSourceQuery.page}
+      pageSize={copyBomSourceQuery.pageSize}
+      total={copyBomSourceQuery.total}
+      onPageChange={copyBomSourceQuery.handlePageChange}
+    />
+  );
 
   /**
    * 按 bomCode + materialId + version 分组，转换为树形数据结构
@@ -3219,6 +3507,16 @@ const BOMPage: React.FC = () => {
       render: (_, record) => getMaterialName(record.componentId),
     },
     {
+      title: t('app.master-data.bom.installPositionCol'),
+      dataIndex: 'installPosition',
+      width: 96,
+      render: (_, record) => {
+        const pos = record.installPosition ?? (record as { install_position?: string }).install_position;
+        const text = pos != null ? String(pos).trim() : '';
+        return text || '-';
+      },
+    },
+    {
       title: t('app.master-data.bom.quantityTitle'),
       dataIndex: 'quantity',
     },
@@ -3369,6 +3667,36 @@ const BOMPage: React.FC = () => {
         render: (_, record) => getMaterialName(record.componentId),
       },
       {
+        title: t('app.master-data.bom.installPositionCol'),
+        dataIndex: 'installPosition',
+        width: 88,
+        render: (_, record) => {
+          const pos = record.installPosition ?? (record as { install_position?: string }).install_position;
+          const text = pos != null ? String(pos).trim() : '';
+          return text || '-';
+        },
+      },
+      {
+        title: t('app.master-data.bom.lineWarehouse'),
+        dataIndex: 'warehouseId',
+        width: 100,
+        render: (_, record) => {
+          const id = record.warehouseId ?? (record as { warehouse_id?: number }).warehouse_id;
+          if (id == null) return '-';
+          return String(id);
+        },
+      },
+      {
+        title: t('app.master-data.bom.isOutsourceCol'),
+        dataIndex: 'isOutsource',
+        width: 72,
+        align: 'center' as const,
+        render: (_, record) => {
+          const v = record.isOutsource ?? (record as { is_outsource?: boolean }).is_outsource;
+          return v ? t('common.yes') : t('common.no');
+        },
+      },
+      {
         title: t('app.master-data.bom.quantityTitle'),
         dataIndex: 'quantity',
         width: 80,
@@ -3473,6 +3801,794 @@ const BOMPage: React.FC = () => {
     ],
     [t, materials],
   );
+
+  const renderBomFormFields = () => (
+    <>
+      <style>{`
+        .bom-form-modal .bom-items-list-form-item .ant-form-item-label {
+          padding-left: 8px;
+          padding-right: 8px;
+        }
+        .bom-form-modal .bom-items-detail-table .ant-table-thead > tr > th,
+        .bom-form-modal .bom-items-detail-table .ant-table-thead > tr > th .ant-table-cell,
+        .bom-form-modal .bom-items-detail-table .ant-table-thead > tr > th .ant-table-column-title {
+          white-space: nowrap !important;
+        }
+        .bom-form-modal .bom-items-detail-table .ant-table-cell {
+          overflow: hidden;
+        }
+        .bom-form-modal .bom-items-detail-table .ant-form-item,
+        .bom-form-modal .bom-items-detail-table .ant-form-item-control,
+        .bom-form-modal .bom-items-detail-table .ant-form-item-control-input,
+        .bom-form-modal .bom-items-detail-table .ant-form-item-control-input-content,
+        .bom-form-modal .bom-items-detail-table .ant-select,
+        .bom-form-modal .bom-items-detail-table .ant-input-number,
+        .bom-form-modal .bom-items-detail-table .ant-input {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+        .bom-form-modal .bom-alternative-group-compact {
+          width: 100%;
+          min-width: 0;
+        }
+        .bom-form-modal .bom-alternative-group-compact .ant-select {
+          width: auto !important;
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+        .bom-form-modal .bom-alternative-group-compact .bom-alternative-group-plus {
+          flex: 0 0 auto;
+        }
+        .bom-form-modal .bom-main-material-field .ant-form-item-label > label {
+          width: 100%;
+          align-items: center;
+        }
+      `}</style>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+            <Row gutter={16} wrap={false}>
+            <Col {...BOM_FORM_COL_FLEX}>
+              <ProFormField
+                key={`bom-main-material-field-${mainMaterialScope}`}
+                name="materialId"
+                formItemProps={{ className: 'bom-main-material-field' }}
+                label={(
+                  <FormFieldTitleSegmentedRow title={t('app.master-data.bom.mainMaterialLabel')}>
+                    <ThemedSegmented
+                      className={FORM_FIELD_TITLE_SEGMENTED_CLASS}
+                      size="small"
+                      value={mainMaterialScope}
+                      onChange={(v) => setMainMaterialScope(v as 'make' | 'all')}
+                      disabled={isEdit}
+                      options={[
+                        { label: t('app.master-data.bom.mainMaterialScopeMake'), value: 'make' },
+                        { label: t('app.master-data.bom.mainMaterialScopeAll'), value: 'all' },
+                      ]}
+                    />
+                  </FormFieldTitleSegmentedRow>
+                )}
+                rules={[{ required: true, message: t('app.master-data.bom.mainMaterialRequired') }]}
+                renderFormItem={(_, { onChange: notifyProForm }) => (
+                  <UniMaterialSelect
+                    key={`bom-main-material-${mainMaterialScope}`}
+                    embedInProFormField
+                    proFormFieldOnChange={notifyProForm as (value: number | number[] | undefined) => void}
+                    name="materialId"
+                    placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
+                    disabled={isEdit}
+                    mastersOnly
+                    sourceType={mainMaterialScope === 'make' ? 'Make' : undefined}
+                    hostResource={BOM_RESOURCE}
+                    showQuickCreate={!isEdit}
+                    showAdvancedSearch={!isEdit}
+                    fillMapping={{}}
+                    fallbackOption={(() => {
+                      const mid = Number(
+                        (isEdit && editFormInitialValues
+                          ? editFormInitialValues.materialId
+                          : formRef.current?.getFieldValue('materialId')) ?? 0,
+                      );
+                      if (!Number.isFinite(mid) || mid <= 0) return undefined;
+                      const material = materialsById.get(mid);
+                      return material
+                        ? { value: material.id, label: formatMaterialLabel(material) }
+                        : { value: mid, label: String(mid) };
+                    })()}
+                    onChange={(_val, material) => {
+                      const mat =
+                        material && !Array.isArray(material)
+                          ? (material as Material)
+                          : undefined;
+                      if (mat) {
+                        const next = upsertMaterialsById(materialsRef.current, [mat]);
+                        materialsRef.current = next;
+                        setMaterials(next);
+                        const whId = resolvePrimaryDefaultWarehouseId(mat);
+                        if (whId != null && formRef.current) {
+                          formRef.current.setFieldValue('materialWarehouseId', whId);
+                        }
+                      }
+                      if (!isEdit) {
+                        void regenerateBOMCode(mat);
+                        regenerateBomName(undefined, mat);
+                      }
+                    }}
+                  />
+                )}
+              />
+            </Col>
+            <Col {...BOM_FORM_COL_FLEX}>
+              <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
+                {({ getFieldValue }) => {
+                  const materialId = Number(getFieldValue('materialId'));
+                  const version = getFieldValue('version') || '1.0';
+                  const context: Record<string, any> = { version };
+                  if (Number.isFinite(materialId) && materialId > 0) {
+                    const selectedMaterial =
+                      materialsById.get(materialId) ??
+                      materialsRef.current.find((m) => Number(m.id) === materialId);
+                    if (selectedMaterial) {
+                      context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
+                      context.material_name = selectedMaterial.name;
+                    }
+                  }
+                  return (
+                    <CodeField
+                      pageCode="master-data-engineering-bom"
+                      name="bomCode"
+                      label={t('app.master-data.bom.bomCode')}
+                      autoGenerateOnCreate={false}
+                      showGenerateButton={false}
+                      formRef={formRef}
+                      documentId={isEdit ? editFormHeaderId ?? undefined : undefined}
+                      context={context}
+                      fieldProps={{
+                        maxLength: 100,
+                        onChange: () => { if (!isEdit) regenerateBomName(); },
+                      }}
+                    />
+                  );
+                }}
+              </ProForm.Item>
+            </Col>
+            <Col {...BOM_FORM_COL_FLEX}>
+              <ProFormText
+                name="bomName"
+                label={t('app.master-data.bom.bomName')}
+                placeholder={t('app.master-data.bom.bomNamePlaceholder')}
+                fieldProps={{
+                  maxLength: 200,
+                  allowClear: true,
+                  onChange: () => { bomNameTouchedRef.current = true; },
+                }}
+                extra={t('app.master-data.bom.bomNameExtra')}
+              />
+            </Col>
+            <Col {...BOM_FORM_COL_FLEX}>
+              <ProFormText
+                name="version"
+                label={t('app.master-data.bom.versionLabel')}
+                placeholder={t('app.master-data.bom.versionPlaceholder')}
+                rules={[
+                  { required: true, message: t('app.master-data.bom.versionRequired') },
+                  { max: 50, message: t('app.master-data.bom.versionMax') },
+                ]}
+                fieldProps={{
+                  disabled: isEdit,
+                  onChange: (e) => { if (!isEdit && e?.target?.value) { setTimeout(() => regenerateBOMCode(), 300); setTimeout(() => regenerateBomName(), 350); } },
+                }}
+              />
+            </Col>
+            <Col {...BOM_FORM_COL_FLEX}>
+              <ProFormDigit
+                name="baseQuantity"
+                label={t('app.master-data.bom.baseQuantity')}
+                min={0.0001}
+                rules={[
+                  { required: true, message: t('app.master-data.bom.baseQuantityRequired') },
+                ]}
+                fieldProps={{
+                  precision: 4,
+                  style: { width: '100%' },
+                }}
+                extra={t('app.master-data.bom.baseQuantityTooltip')}
+                initialValue={1}
+              />
+            </Col>
+          </Row>
+            <Row gutter={16} wrap={false} style={{ marginTop: 0 }}>
+              <Col {...BOM_FORM_COL_FLEX}>
+                <UniWarehouseSelect
+                  name="materialWarehouseId"
+                  label={t('app.master-data.bom.materialWarehouse')}
+                  placeholder={t('app.master-data.bom.materialWarehousePlaceholder')}
+                  hostResource={BOM_RESOURCE}
+                  allowClear
+                />
+              </Col>
+              <Col {...BOM_FORM_COL_FLEX}>
+                <ProFormSelect
+                  name="manufacturingDepartmentId"
+                  label={t('app.master-data.bom.manufacturingDepartment')}
+                  placeholder={t('app.master-data.bom.manufacturingDepartmentPlaceholder')}
+                  options={departmentOptions}
+                  showSearch
+                  allowClear
+                  fieldProps={{ optionFilterProp: 'label' }}
+                />
+              </Col>
+              <Col {...BOM_FORM_COL_FLEX}>
+                <ProFormDateTimePicker
+                  name="effectiveDate"
+                  label={t('app.master-data.bom.effectiveDateLabel')}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+              <Col {...BOM_FORM_COL_FLEX}>
+                <ProFormDateTimePicker
+                  name="expiryDate"
+                  label={t('app.master-data.bom.expiryDateLabel')}
+                  fieldProps={buildFutureDateShortcutFieldProps({
+                    getForm: () => formRef.current,
+                    fieldName: 'expiryDate',
+                    baseFieldName: 'effectiveDate',
+                    t,
+                    fieldProps: { style: { width: '100%' } },
+                  })}
+                />
+              </Col>
+              <Col {...BOM_FORM_COL_FLEX} aria-hidden />
+            </Row>
+          </div>
+        </div>
+        <CustomFieldsFormSection
+          customFields={bomFormCustomFields}
+          customFieldValues={bomFormCustomFieldValues}
+          gridColumns={4}
+        />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
+      <ProForm.Item style={{ width: '100%' }} className="bom-items-list-form-item">
+        <UniTableDetail
+          name="items"
+          title={t('app.master-data.bom.childMaterialList')}
+          required
+          requiredMessage={t('app.master-data.bom.childMaterialListRequired')}
+          addText={t('app.master-data.bom.addChildMaterial')}
+          initialValue={buildDefaultBomItem}
+          onBatchSelect={() => setMaterialPickerOpen(true)}
+          batchSelectText={t('app.kuaizhizao.common.materialBatchSelect')}
+          headerExtra={(
+            <Button
+              type="default"
+              icon={<CopyOutlined />}
+              onClick={() => copyBomSourceQuery.openModal()}
+            >
+              {t('app.master-data.bom.copyOtherBomItems')}
+            </Button>
+          )}
+          containerStyle={{
+            width: '100%',
+            paddingLeft: 8,
+            paddingRight: 8,
+            boxSizing: 'border-box',
+          }}
+          tableProps={{ className: 'bom-items-detail-table', size: 'middle' }}
+          columns={[
+            {
+              title: t('app.master-data.bom.childMaterialTitleCol'),
+              dataIndex: 'componentId',
+              width: DOCUMENT_DETAIL_COL_WIDTH.material,
+              render: (_, __, index) => {
+                const componentId = Number(getFormItems()[index]?.componentId);
+                const material =
+                  Number.isFinite(componentId) && componentId > 0
+                    ? materialsById.get(componentId)
+                    : undefined;
+                const fallbackOption = material
+                  ? {
+                      value: material.id,
+                      label: formatMaterialLabel(material),
+                    }
+                  : undefined;
+                return (
+                <UniMaterialSelect
+                  name={[index, 'componentId']}
+                  label=""
+                  placeholder={t('app.master-data.bom.childMaterialPlaceholder')}
+                  required
+                  size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                  formItemProps={{ style: { margin: 0 } }}
+                  listFieldKey={index}
+                  listFieldName="items"
+                  showQuickCreate
+                  showAdvancedSearch
+                  fallbackOption={fallbackOption}
+                  fillMapping={{
+                    unit: 'baseUnit',
+                  }}
+                  onChange={(_val, material) => {
+                    const items = getFormItems();
+                    if (!items[index]) return;
+                    setItemField(index, 'unit', material?.baseUnit ?? '');
+                    const materialSource = getMaterialSourceTypeFromRecord(material as Material | null);
+                    setItemField(index, 'sourceType', materialSource || undefined);
+                    const whId = resolvePrimaryDefaultWarehouseId(material as Material | null);
+                    if (whId != null) {
+                      setItemField(index, 'warehouseId', whId);
+                    }
+                    setItemField(index, 'isOutsource', resolveBomLineOutsourceDefault(materialSource));
+                    if (material?.id != null) {
+                      setMaterials((prev) => upsertMaterialsById(prev, [material as Material]));
+                    }
+                  }}
+                />
+                );
+              },
+            },
+            {
+              title: t('app.master-data.bom.installPositionCol'),
+              dataIndex: 'installPosition',
+              width: 112,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'installPosition']}
+                  rules={[{ max: 100, message: t('app.master-data.bom.installPositionMax') }]}
+                  style={{ margin: 0 }}
+                >
+                  <Input
+                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                    placeholder={t('app.master-data.bom.installPositionPlaceholder')}
+                    maxLength={100}
+                  />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.materialImage'),
+              dataIndex: 'materialImage',
+              width: 72,
+              align: 'center' as const,
+              render: (_, __, index) => {
+                const componentId = Number(getFormItems()[index]?.componentId);
+                const material =
+                  Number.isFinite(componentId) && componentId > 0
+                    ? materialsById.get(componentId)
+                    : undefined;
+                const images = material?.images || [];
+                if (!images.length) return '-';
+                const fileUuid = resolveBomMaterialImageFileUuid(images[0]);
+                if (!fileUuid) return '-';
+                return (
+                  <SecureImage
+                    fileUuid={fileUuid}
+                    width={36}
+                    height={36}
+                    lazyLoad
+                    thumbSize={64}
+                    alt={material?.name || t('app.master-data.bom.materialImage')}
+                  />
+                );
+              },
+            },
+            {
+              title: t('app.master-data.bom.quantityLabel'),
+              dataIndex: 'quantity',
+              width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'quantity']}
+                  rules={[
+                    { required: true, message: t('app.master-data.bom.quantityRequiredMsg') },
+                    { type: 'number', min: 0.0001, message: t('app.master-data.bom.quantityMinMsg') },
+                  ]}
+                  style={{ margin: 0 }}
+                >
+                  <InputNumber
+                    placeholder={t('app.master-data.bom.quantityPlaceholderShort')}
+                    precision={4}
+                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                    style={{ width: '100%' }}
+                    min={0.0001}
+                  />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('common.unit'),
+              dataIndex: 'unit',
+              width: 80,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'unit']}
+                  rules={[{ max: 20, message: t('app.master-data.bom.unitMax') }]}
+                  style={{ margin: 0 }}
+                >
+                  <UnitDisplayCell />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.lineWarehouse'),
+              dataIndex: 'warehouseId',
+              width: 148,
+              render: (_, __, index) => (
+                <UniWarehouseSelect
+                  name={[index, 'warehouseId']}
+                  label=""
+                  hostResource={BOM_RESOURCE}
+                  placeholder={t('app.master-data.bom.lineWarehousePlaceholder')}
+                  formItemProps={{ style: { margin: 0 } }}
+                  fieldProps={{ size: DOCUMENT_DETAIL_CONTROL_SIZE }}
+                />
+              ),
+            },
+            {
+              title: t('app.master-data.bom.isOutsourceCol'),
+              dataIndex: 'isOutsource',
+              width: 72,
+              align: 'center' as const,
+              render: (_, __, index) => (
+                <AntForm.Item noStyle shouldUpdate>
+                  {() => {
+                    const items = getFormItems();
+                    const componentId = items[index]?.componentId;
+                    const src =
+                      getComponentMaterialSourceType(componentId)
+                      || normalizeMaterialSourceType(items[index]?.sourceType);
+                    const norm = normalizeMaterialSourceType(src);
+                    const outsourceLocked = norm === BOM_LINE_OUTSOURCE_TYPE;
+                    const makeEditable = canEditBomLineOutsource(src);
+                    return (
+                      <AntForm.Item name={[index, 'isOutsource']} valuePropName="checked" style={{ margin: 0 }}>
+                        <Switch size="small" disabled={!makeEditable && !outsourceLocked} />
+                      </AntForm.Item>
+                    );
+                  }}
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.wasteRateLabel'),
+              dataIndex: 'wasteRate',
+              width: DOCUMENT_DETAIL_COL_WIDTH.taxRate,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'wasteRate']}
+                  rules={[
+                    { type: 'number', min: 0, max: 100, message: t('app.master-data.bom.wasteRateRangeMsg') },
+                  ]}
+                  style={{ margin: 0 }}
+                >
+                  <InputNumber
+                    placeholder={t('app.master-data.bom.wasteRatePlaceholderShort')}
+                    precision={2}
+                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                    style={{ width: '100%' }}
+                    min={0}
+                    max={100}
+                  />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.materialSource'),
+              dataIndex: 'sourceType',
+              width: 120,
+              render: (_, __, index) => (
+                <AntForm.Item noStyle shouldUpdate>
+                  {() => {
+                    const items = getFormItems();
+                    const componentId = items[index]?.componentId;
+                    const materialSource = getComponentMaterialSourceType(componentId);
+                    const locked = !!materialSource;
+                    if (locked) {
+                      return (
+                        <Select
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                          disabled
+                          value={materialSource}
+                          options={sourceTypeOptions}
+                          style={{ width: '100%' }}
+                        />
+                      );
+                    }
+                    return (
+                      <AntForm.Item name={[index, 'sourceType']} style={{ margin: 0 }}>
+                        <Select
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                          allowClear
+                          placeholder={t('app.master-data.bom.materialSourcePlaceholder')}
+                          options={sourceTypeOptions}
+                          style={{ width: '100%' }}
+                        />
+                      </AntForm.Item>
+                    );
+                  }}
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.issueMethod'),
+              dataIndex: 'issueMethod',
+              width: 124,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'issueMethod']}
+                  initialValue="pick"
+                  style={{ margin: 0 }}
+                >
+                  <Select size={DOCUMENT_DETAIL_CONTROL_SIZE} options={bomIssueMethodOptions} style={{ width: '100%' }} />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.isRequiredTitle'),
+              dataIndex: 'isRequired',
+              width: 88,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'isRequired']}
+                  valuePropName="checked"
+                  style={{ margin: 0 }}
+                >
+                  <Switch size="small" />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.alternativeLabel'),
+              dataIndex: 'isAlternative',
+              width: 88,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'isAlternative']}
+                  valuePropName="checked"
+                  style={{ margin: 0 }}
+                >
+                  <Switch
+                    size="small"
+                    onChange={(checked) => handleAlternativeToggle(index, checked)}
+                  />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.alternativeGroupIdLabel'),
+              dataIndex: 'alternativeGroupId',
+              width: 168,
+              render: (_, __, index) => (
+                <AntForm.Item noStyle shouldUpdate>
+                  {() => {
+                    const items = getFormItems();
+                    const item = items[index] || {};
+                    const isAlternative = !!item?.isAlternative;
+                    const groupOptions = getAlternativeGroupOptions(items);
+                    return (
+                      <Space.Compact
+                        className="bom-alternative-group-compact"
+                        style={{ width: '100%' }}
+                        block
+                      >
+                        <AntForm.Item
+                          noStyle
+                          name={[index, 'alternativeGroupId']}
+                          rules={[
+                            {
+                              validator: async (_, value) => {
+                                const all = getFormItems();
+                                const current = all[index];
+                                if (
+                                  current?.isAlternative &&
+                                  (value === undefined || value === null || value === '')
+                                ) {
+                                  throw new Error(t('app.master-data.bom.alternativeGroupIdRequired'));
+                                }
+                              },
+                            },
+                          ]}
+                        >
+                          <Select
+                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                            style={{ width: '100%' }}
+                            disabled={!isAlternative}
+                            placeholder={t('app.master-data.bom.alternativeGroupIdPlaceholder')}
+                            options={groupOptions}
+                            onChange={(val) => applyAlternativeGroupToRow(index, Number(val))}
+                          />
+                        </AntForm.Item>
+                        <Button
+                          className="bom-alternative-group-plus"
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                          icon={<PlusOutlined />}
+                          title={t('app.master-data.bom.createAlternativeGroup')}
+                          disabled={!isAlternative}
+                          onClick={() => handleCreateAlternativeGroup(index)}
+                        />
+                      </Space.Compact>
+                    );
+                  }}
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('app.master-data.bom.priorityLabel'),
+              dataIndex: 'priority',
+              width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'priority']}
+                  rules={[
+                    { type: 'number', min: 0, message: t('app.master-data.bom.priorityMin') },
+                  ]}
+                  style={{ margin: 0 }}
+                >
+                  <InputNumber
+                    placeholder={t('app.master-data.bom.priorityPlaceholder')}
+                    precision={0}
+                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                    style={{ width: '100%', minWidth: 0 }}
+                    min={0}
+                  />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: t('common.remark'),
+              dataIndex: 'description',
+              width: DOCUMENT_DETAIL_COL_WIDTH.notes,
+              render: (_, __, index) => (
+                <AntForm.Item
+                  name={[index, 'description']}
+                  style={{ margin: 0 }}
+                >
+                  <Input.TextArea
+                    placeholder={t('app.master-data.bom.descPlaceholder')}
+                    rows={1}
+                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                    maxLength={500}
+                    autoSize={{ minRows: 1, maxRows: 2 }}
+                  />
+                </AntForm.Item>
+              ),
+            },
+          ]}
+        />
+      </ProForm.Item>
+        <ProFormTextArea
+          name="description"
+          label={t('common.remark')}
+          placeholder={t('app.master-data.bom.descFormPlaceholder')}
+          fieldProps={{ rows: 2, maxLength: 500, showCount: true }}
+        />
+      </DetailDrawerSection>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+        <DocumentAttachmentsField
+          category="engineering_bom_attachments"
+          name="attachments"
+          label={false}
+        />
+      </DetailDrawerSection>
+      <ProFormSwitch
+        name="isActive"
+        label={t('common.enabled')}
+      />
+    </>
+  );
+
+  const triggerBomFormSubmit = useCallback(() => {
+    formRef.current?.submit?.();
+  }, []);
+
+  useSubmitShortcut(triggerBomFormSubmit, isCreatePage);
+
+  const bomCreateFormInitialValues = useMemo(
+    () => ({
+      isActive: true,
+      version: '1.0',
+      baseQuantity: 1,
+      approvalStatus: 'draft' as const,
+      items: [buildDefaultBomItem()],
+    }),
+    [],
+  );
+
+  if (isCreatePage) {
+    const createTitle = t('app.master-data.menu.process.engineering-bom.new');
+    if (!bomPerms.canCreate) {
+      return (
+        <DocumentFormPageLayout
+          header={
+            <Space align="center" size={8}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                aria-label={t('common.back')}
+                onClick={leaveBomFormTab}
+              />
+              <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                {createTitle}
+              </Typography.Title>
+            </Space>
+          }
+        >
+          <Result
+            status="403"
+            title={t('common.permissionDenied')}
+            subTitle={t('common.noPermission')}
+            extra={
+              <Button type="primary" onClick={leaveBomFormTab}>
+                {t('common.back')}
+              </Button>
+            }
+          />
+        </DocumentFormPageLayout>
+      );
+    }
+    return (
+      <>
+        <DocumentFormPageLayout
+          header={
+            <>
+              <Space align="center" size={8}>
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  aria-label={t('common.back')}
+                  onClick={leaveBomFormTab}
+                />
+                <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+                  {createTitle}
+                </Typography.Title>
+              </Space>
+              <DocumentFormPageHeaderActions
+                onCancel={leaveBomFormTab}
+                onSaveDraft={triggerBomFormSubmit}
+                onPrimarySubmit={triggerBomFormSubmit}
+                isCreatePage
+                showSaveDraft={false}
+                primaryLoading={formLoading}
+                saveDraftLoading={formLoading}
+              />
+            </>
+          }
+        >
+          <div className="form-modal-content-inner bom-form-modal">
+            <ProForm
+              formRef={formRef}
+              layout="vertical"
+              grid={false}
+              rowProps={{ gutter: FORM_LAYOUT.GRID_GUTTER }}
+              submitter={false}
+              scrollToFirstError={{ behavior: 'smooth', block: 'center' }}
+              initialValues={bomCreateFormInitialValues}
+              onFinish={handleSubmit}
+              onFinishFailed={({ errorFields }) => {
+                const first = errorFields?.[0];
+                const errText = first?.errors?.filter(Boolean)[0];
+                messageApi.error(errText || t('components.layoutTemplates.formModal.checkFormHint'));
+              }}
+            >
+              {renderBomFormFields()}
+            </ProForm>
+          </div>
+        </DocumentFormPageLayout>
+
+        {copyBomSourcePullModal}
+
+        <UniMaterialBatchPicker
+          hostResource="master-data:bom"
+          open={materialPickerOpen}
+          zIndex={nestedBomModalZIndex}
+          onCancel={() => setMaterialPickerOpen(false)}
+          onConfirm={appendItemsFromMaterials}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -4148,18 +5264,18 @@ const BOMPage: React.FC = () => {
         }
       />
 
-      {/* 创建/编辑BOM Modal - 两栏网格：基础字段每行两列，子物料列表通栏 */}
+      {/* 创建/编辑 BOM Modal：表头 document-form-untitled-groups 一行五格，明细通栏，附件在备注与启用之后 */}
       <FormModalTemplate
         key={isEdit && editContext ? `edit-${editContext.materialId}-${editContext.version}` : 'create-bom'}
         title={(isEdit ? t('app.master-data.bom.editBom') : t('app.master-data.bom.createBom')).replace(/\s*[（(][^）)]*[）)]\s*$/u, '')}
-        open={modalVisible}
+        open={modalVisible && isEdit}
         onClose={handleCloseModal}
         afterOpenChange={handleBomModalAfterOpenChange}
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        grid={true}
+        grid={false}
         formRef={formRef}
         initialValues={
           isEdit && editFormInitialValues
@@ -4174,623 +5290,10 @@ const BOMPage: React.FC = () => {
         }
         className="bom-form-modal"
       >
-        <style>{`
-          .bom-form-modal .bom-items-list-form-item .ant-form-item-label {
-            padding-left: 8px;
-            padding-right: 8px;
-          }
-          .bom-form-modal .bom-items-detail-table .ant-table-thead > tr > th,
-          .bom-form-modal .bom-items-detail-table .ant-table-thead > tr > th .ant-table-cell,
-          .bom-form-modal .bom-items-detail-table .ant-table-thead > tr > th .ant-table-column-title {
-            white-space: nowrap !important;
-          }
-          .bom-form-modal .bom-alternative-group-compact {
-            height: 24px !important;
-          }
-          .bom-form-modal .bom-alternative-group-compact .ant-space-compact-item {
-            height: 24px !important;
-            min-height: 24px !important;
-          }
-          .bom-form-modal .bom-alternative-group-compact .ant-select {
-            height: 24px !important;
-          }
-          .bom-form-modal .bom-alternative-group-compact .ant-select-single.ant-select-sm .ant-select-selector {
-            height: 24px !important;
-            min-height: 24px !important;
-            line-height: 22px !important;
-            display: flex;
-            align-items: center;
-          }
-          .bom-form-modal .bom-alternative-group-compact .ant-select-single.ant-select-sm .ant-select-selection-item,
-          .bom-form-modal .bom-alternative-group-compact .ant-select-single.ant-select-sm .ant-select-selection-placeholder {
-            line-height: 22px !important;
-          }
-          .bom-form-modal .bom-alternative-group-compact .bom-alternative-group-plus.ant-btn.ant-btn-sm {
-            height: 24px !important;
-            min-height: 24px !important;
-            line-height: 22px !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .bom-form-modal .bom-main-material-control {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-            flex-wrap: nowrap;
-          }
-          .bom-form-modal .bom-main-material-control .form-field-segmented {
-            flex-shrink: 0;
-          }
-          .bom-form-modal .bom-main-material-select {
-            flex: 1;
-            min-width: 0;
-          }
-        `}</style>
-        <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
-          {({ getFieldValue }) => {
-            const materialId = Number(getFieldValue('materialId'));
-            const version = getFieldValue('version') || '1.0';
-            const context: Record<string, any> = { version };
-            if (Number.isFinite(materialId) && materialId > 0) {
-              const selectedMaterial =
-                materialsById.get(materialId) ??
-                materialsRef.current.find((m) => Number(m.id) === materialId);
-              if (selectedMaterial) {
-                context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
-                context.material_name = selectedMaterial.name;
-              }
-            }
-            return (
-              <CodeField
-                pageCode="master-data-engineering-bom"
-                name="bomCode"
-                label={t('app.master-data.bom.bomCode')}
-                colProps={{ span: 12 }}
-                // 规则依赖主物料编码：未选物料时禁止自动预览，避免一打开弹窗就误报
-                autoGenerateOnCreate={false}
-                showGenerateButton={false}
-                formRef={formRef}
-                documentId={isEdit ? editFormHeaderId ?? undefined : undefined}
-                context={context}
-                fieldProps={{
-                  maxLength: 100,
-                  onChange: () => { if (!isEdit) regenerateBomName(); },
-                }}
-              />
-            );
-          }}
-        </ProForm.Item>
-        <ProFormText
-          name="bomName"
-          label={t('app.master-data.bom.bomName')}
-          colProps={{ span: 12 }}
-          placeholder={t('app.master-data.bom.bomNamePlaceholder')}
-          fieldProps={{
-            maxLength: 200,
-            allowClear: true,
-            onChange: () => { bomNameTouchedRef.current = true; },
-          }}
-          extra={t('app.master-data.bom.bomNameExtra')}
-        />
-        <ProFormField
-          key={`bom-main-material-field-${mainMaterialScope}`}
-          name="materialId"
-          colProps={{ span: 12 }}
-          formItemProps={{ className: 'bom-main-material-field' }}
-          label={t('app.master-data.bom.mainMaterialLabel')}
-          rules={[{ required: true, message: t('app.master-data.bom.mainMaterialRequired') }]}
-          renderFormItem={() => (
-            <div className="bom-main-material-control">
-              <div className="bom-main-material-select">
-                <UniMaterialSelect
-                  key={`bom-main-material-${mainMaterialScope}`}
-                  name="materialId"
-                  placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
-                  disabled={isEdit}
-                  mastersOnly
-                  sourceType={mainMaterialScope === 'make' ? 'Make' : undefined}
-                  hostResource={BOM_RESOURCE}
-                  showQuickCreate={!isEdit}
-                  showAdvancedSearch={!isEdit}
-                  fillMapping={{}}
-                  fallbackOption={(() => {
-                    const mid = Number(
-                      (isEdit && editFormInitialValues
-                        ? editFormInitialValues.materialId
-                        : formRef.current?.getFieldValue('materialId')) ?? 0,
-                    );
-                    if (!Number.isFinite(mid) || mid <= 0) return undefined;
-                    const material = materialsById.get(mid);
-                    return material
-                      ? { value: material.id, label: formatMaterialLabel(material) }
-                      : { value: mid, label: String(mid) };
-                  })()}
-                  onChange={(_val, material) => {
-                    const mat =
-                      material && !Array.isArray(material)
-                        ? (material as Material)
-                        : undefined;
-                    if (mat) {
-                      const next = upsertMaterialsById(materialsRef.current, [mat]);
-                      materialsRef.current = next;
-                      setMaterials(next);
-                    }
-                    if (!isEdit) {
-                      // 传入刚选中的物料，避免依赖尚未 flush 的 materials state / 表单值
-                      void regenerateBOMCode(mat);
-                      regenerateBomName(undefined, mat);
-                    }
-                  }}
-                />
-              </div>
-              <ThemedSegmented
-                className="form-field-segmented"
-                size="medium"
-                style={{ width: 'fit-content' }}
-                value={mainMaterialScope}
-                onChange={(v) => setMainMaterialScope(v as 'make' | 'all')}
-                disabled={isEdit}
-                options={[
-                  { label: t('app.master-data.bom.mainMaterialScopeMake'), value: 'make' },
-                  { label: t('app.master-data.bom.mainMaterialScopeAll'), value: 'all' },
-                ]}
-              />
-            </div>
-          )}
-        />
-        <ProFormText
-          name="version"
-          label={t('app.master-data.bom.versionLabel')}
-          placeholder={t('app.master-data.bom.versionPlaceholder')}
-          colProps={{ span: 12 }}
-          rules={[
-            { required: true, message: t('app.master-data.bom.versionRequired') },
-            { max: 50, message: t('app.master-data.bom.versionMax') },
-          ]}
-          fieldProps={{
-            disabled: isEdit,
-            onChange: (e) => { if (!isEdit && e?.target?.value) { setTimeout(() => regenerateBOMCode(), 300); setTimeout(() => regenerateBomName(), 350); } },
-          }}
-        />
-        <ProFormDigit
-          name="baseQuantity"
-          label={t('app.master-data.bom.baseQuantity')}
-          colProps={{ span: 12 }}
-          min={0.0001}
-          rules={[
-            { required: true, message: t('app.master-data.bom.baseQuantityRequired') },
-          ]}
-          fieldProps={{
-            precision: 4,
-            style: { width: '100%' },
-          }}
-          extra={t('app.master-data.bom.baseQuantityTooltip')}
-          initialValue={1}
-        />
-        <ProFormSelect
-          name="approvalStatus"
-          label={t('app.master-data.bom.approvalStatusLabel')}
-          colProps={{ span: 12 }}
-          options={[
-            { label: t('app.master-data.bom.statusDraft'), value: 'draft' },
-            { label: t('app.master-data.bom.statusPending'), value: 'pending' },
-            { label: t('app.master-data.bom.statusApproved'), value: 'approved' },
-            { label: t('app.master-data.bom.statusRejected'), value: 'rejected' },
-          ]}
-        />
-        <ProFormDateTimePicker
-          name="effectiveDate"
-          label={t('app.master-data.bom.effectiveDateLabel')}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDateTimePicker
-          name="expiryDate"
-          label={t('app.master-data.bom.expiryDateLabel')}
-          colProps={{ span: 12 }}
-          fieldProps={buildFutureDateShortcutFieldProps({
-            getForm: () => formRef.current,
-            fieldName: 'expiryDate',
-            baseFieldName: 'effectiveDate',
-            t,
-            fieldProps: { style: { width: '100%' } },
-          })}
-        />
-        <CustomFieldsFormSection
-          customFields={bomFormCustomFields}
-          customFieldValues={bomFormCustomFieldValues}
-          gridColumns={2}
-        />
-        <ProForm.Item colProps={{ span: 24 }} style={{ width: '100%' }} className="bom-items-list-form-item">
-          <UniTableDetail
-            name="items"
-            title={t('app.master-data.bom.childMaterialList')}
-            required
-            requiredMessage={t('app.master-data.bom.childMaterialListRequired')}
-            addText={t('app.master-data.bom.addChildMaterial')}
-            initialValue={buildDefaultBomItem}
-            onBatchSelect={() => setMaterialPickerOpen(true)}
-            batchSelectText={t('app.kuaizhizao.common.materialBatchSelect')}
-            headerExtra={(
-              <Button
-                type="default"
-                icon={<CopyOutlined />}
-                onClick={() => void handleOpenCopySourceModal()}
-                loading={copySourceLoading}
-              >
-                {t('app.master-data.bom.copyOtherBomItems')}
-              </Button>
-            )}
-            containerStyle={{
-              width: '100%',
-              paddingLeft: 8,
-              paddingRight: 8,
-              boxSizing: 'border-box',
-            }}
-            tableProps={{ className: 'bom-items-detail-table', size: 'small' }}
-            columns={[
-              {
-                title: t('app.master-data.bom.childMaterialTitleCol'),
-                dataIndex: 'componentId',
-                width: 210,
-                render: (_, __, index) => {
-                  const componentId = Number(getFormItems()[index]?.componentId);
-                  const material =
-                    Number.isFinite(componentId) && componentId > 0
-                      ? materialsById.get(componentId)
-                      : undefined;
-                  const fallbackOption = material
-                    ? {
-                        value: material.id,
-                        label: formatMaterialLabel(material),
-                      }
-                    : undefined;
-                  return (
-                  <UniMaterialSelect
-                    name={[index, 'componentId']}
-                    label=""
-                    placeholder={t('app.master-data.bom.childMaterialPlaceholder')}
-                    required
-                    size="small"
-                    formItemProps={{ style: { margin: 0 } }}
-                    listFieldKey={index}
-                    listFieldName="items"
-                    showQuickCreate
-                    showAdvancedSearch
-                    fallbackOption={fallbackOption}
-                    fillMapping={{
-                      unit: 'baseUnit',
-                    }}
-                    onChange={(_val, material) => {
-                      const items = getFormItems();
-                      if (!items[index]) return;
-                      setItemField(index, 'unit', material?.baseUnit ?? '');
-                      const materialSource = getMaterialSourceTypeFromRecord(material as Material | null);
-                      setItemField(index, 'sourceType', materialSource || undefined);
-                      if (material?.id != null) {
-                        setMaterials((prev) => upsertMaterialsById(prev, [material as Material]));
-                      }
-                    }}
-                  />
-                  );
-                },
-              },
-              {
-                title: t('app.master-data.bom.materialImage'),
-                dataIndex: 'materialImage',
-                width: 72,
-                align: 'center' as const,
-                render: (_, __, index) => {
-                  const componentId = Number(getFormItems()[index]?.componentId);
-                  const material =
-                    Number.isFinite(componentId) && componentId > 0
-                      ? materialsById.get(componentId)
-                      : undefined;
-                  const images = material?.images || [];
-                  if (!images.length) return '-';
-                  const fileUuid = resolveBomMaterialImageFileUuid(images[0]);
-                  if (!fileUuid) return '-';
-                  return (
-                    <SecureImage
-                      fileUuid={fileUuid}
-                      width={36}
-                      height={36}
-                      lazyLoad
-                      thumbSize={64}
-                      alt={material?.name || t('app.master-data.bom.materialImage')}
-                    />
-                  );
-                },
-              },
-              {
-                title: t('app.master-data.bom.quantityLabel'),
-                dataIndex: 'quantity',
-                width: 100,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'quantity']}
-                    rules={[
-                      { required: true, message: t('app.master-data.bom.quantityRequiredMsg') },
-                      { type: 'number', min: 0.0001, message: t('app.master-data.bom.quantityMinMsg') },
-                    ]}
-                    style={{ margin: 0 }}
-                  >
-                    <InputNumber
-                      placeholder={t('app.master-data.bom.quantityPlaceholderShort')}
-                      precision={4}
-                      size="small"
-                      style={{ width: '100%' }}
-                      min={0.0001}
-                    />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('common.unit'),
-                dataIndex: 'unit',
-                width: 80,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'unit']}
-                    rules={[{ max: 20, message: t('app.master-data.bom.unitMax') }]}
-                    style={{ margin: 0 }}
-                  >
-                    <UnitDisplayCell />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('app.master-data.bom.wasteRateLabel'),
-                dataIndex: 'wasteRate',
-                width: 116,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'wasteRate']}
-                    rules={[
-                      { type: 'number', min: 0, max: 100, message: t('app.master-data.bom.wasteRateRangeMsg') },
-                    ]}
-                    style={{ margin: 0 }}
-                  >
-                    <InputNumber
-                      placeholder={t('app.master-data.bom.wasteRatePlaceholderShort')}
-                      precision={2}
-                      size="small"
-                      style={{ width: '100%' }}
-                      min={0}
-                      max={100}
-                    />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('app.master-data.bom.materialSource'),
-                dataIndex: 'sourceType',
-                width: 120,
-                render: (_, __, index) => (
-                  <AntForm.Item noStyle shouldUpdate>
-                    {() => {
-                      const items = getFormItems();
-                      const componentId = items[index]?.componentId;
-                      const materialSource = getComponentMaterialSourceType(componentId);
-                      const locked = !!materialSource;
-                      if (locked) {
-                        return (
-                          <Select
-                            size="small"
-                            disabled
-                            value={materialSource}
-                            options={sourceTypeOptions}
-                            style={{ width: '100%' }}
-                          />
-                        );
-                      }
-                      return (
-                        <AntForm.Item name={[index, 'sourceType']} style={{ margin: 0 }}>
-                          <Select
-                            size="small"
-                            allowClear
-                            placeholder={t('app.master-data.bom.materialSourcePlaceholder')}
-                            options={sourceTypeOptions}
-                            style={{ width: '100%' }}
-                          />
-                        </AntForm.Item>
-                      );
-                    }}
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('app.master-data.bom.issueMethod'),
-                dataIndex: 'issueMethod',
-                width: 120,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'issueMethod']}
-                    initialValue="pick"
-                    style={{ margin: 0 }}
-                  >
-                    <Select size="small" options={bomIssueMethodOptions} />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('app.master-data.bom.isRequiredTitle'),
-                dataIndex: 'isRequired',
-                width: 88,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'isRequired']}
-                    valuePropName="checked"
-                    style={{ margin: 0 }}
-                  >
-                    <Switch size="small" />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('app.master-data.bom.alternativeLabel'),
-                dataIndex: 'isAlternative',
-                width: 100,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'isAlternative']}
-                    valuePropName="checked"
-                    style={{ margin: 0 }}
-                  >
-                    <Switch
-                      size="small"
-                      onChange={(checked) => handleAlternativeToggle(index, checked)}
-                    />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('app.master-data.bom.alternativeGroupIdLabel'),
-                dataIndex: 'alternativeGroupId',
-                width: 170,
-                render: (_, __, index) => (
-                  <AntForm.Item noStyle shouldUpdate>
-                    {() => {
-                      const items = getFormItems();
-                      const item = items[index] || {};
-                      const isAlternative = !!item?.isAlternative;
-                      const groupOptions = getAlternativeGroupOptions(items);
-                      return (
-                        <Space.Compact
-                          className="bom-alternative-group-compact"
-                          style={{ width: '100%', height: 24 }}
-                          block
-                        >
-                          <AntForm.Item
-                            noStyle
-                            name={[index, 'alternativeGroupId']}
-                            rules={[
-                              {
-                                validator: async (_, value) => {
-                                  const all = getFormItems();
-                                  const current = all[index];
-                                  if (
-                                    current?.isAlternative &&
-                                    (value === undefined || value === null || value === '')
-                                  ) {
-                                    throw new Error(t('app.master-data.bom.alternativeGroupIdRequired'));
-                                  }
-                                },
-                              },
-                            ]}
-                          >
-                            <Select
-                              size="small"
-                              style={{ width: '100%' }}
-                              disabled={!isAlternative}
-                              placeholder={t('app.master-data.bom.alternativeGroupIdPlaceholder')}
-                              options={groupOptions}
-                              onChange={(val) => applyAlternativeGroupToRow(index, Number(val))}
-                            />
-                          </AntForm.Item>
-                          <Button
-                            className="bom-alternative-group-plus"
-                            size="small"
-                            icon={<PlusOutlined />}
-                            title={t('app.master-data.bom.createAlternativeGroup')}
-                            disabled={!isAlternative}
-                            onClick={() => handleCreateAlternativeGroup(index)}
-                          />
-                        </Space.Compact>
-                      );
-                    }}
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('app.master-data.bom.priorityLabel'),
-                dataIndex: 'priority',
-                width: 80,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'priority']}
-                    rules={[
-                      { type: 'number', min: 0, message: t('app.master-data.bom.priorityMin') },
-                    ]}
-                    style={{ margin: 0 }}
-                  >
-                    <InputNumber
-                      placeholder={t('app.master-data.bom.priorityPlaceholder')}
-                      precision={0}
-                      size="small"
-                      style={{ width: '100%' }}
-                      min={0}
-                    />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: t('common.remark'),
-                dataIndex: 'description',
-                width: 150,
-                render: (_, __, index) => (
-                  <AntForm.Item
-                    name={[index, 'description']}
-                    style={{ margin: 0 }}
-                  >
-                    <Input.TextArea
-                      placeholder={t('app.master-data.bom.descPlaceholder')}
-                      rows={1}
-                      size="small"
-                      maxLength={500}
-                      autoSize={{ minRows: 1, maxRows: 2 }}
-                    />
-                  </AntForm.Item>
-                ),
-              },
-            ]}
-          />
-        </ProForm.Item>
-        <ProFormTextArea
-          name="description"
-          label={t('common.remark')}
-          placeholder={t('app.master-data.bom.descFormPlaceholder')}
-          colProps={{ span: 24 }}
-          fieldProps={{ rows: 2, maxLength: 500, showCount: true }}
-        />
-        <ProFormSwitch
-          name="isActive"
-          label={t('common.enabled')}
-          colProps={{ span: 12 }}
-        />
+        {renderBomFormFields()}
       </FormModalTemplate>
 
-      <Modal
-        title={t('app.master-data.bom.copyOtherBomItemsTitle')}
-        open={copySourceModalVisible}
-        confirmLoading={copySourceSubmitting}
-        destroyOnHidden
-        zIndex={nestedBomModalZIndex}
-        maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
-        wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
-        onCancel={() => {
-          setCopySourceModalVisible(false);
-          setSelectedCopySource(undefined);
-        }}
-        onOk={() => void handleCopyItemsFromSourceBom()}
-      >
-        <Select
-          showSearch
-          loading={copySourceLoading}
-          value={selectedCopySource}
-          style={{ width: '100%' }}
-          placeholder={t('app.master-data.bom.copyOtherBomItemsPlaceholder')}
-          options={copySourceOptions}
-          onChange={(value) => setSelectedCopySource(value)}
-          filterOption={(input, option) =>
-            String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }
-        />
-      </Modal>
+      {copyBomSourcePullModal}
 
       <UniMaterialBatchPicker
         hostResource="master-data:bom"

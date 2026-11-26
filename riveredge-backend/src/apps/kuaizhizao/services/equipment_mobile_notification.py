@@ -257,6 +257,81 @@ async def notify_spot_check_overdue_supervision(
     )
 
 
+async def _resolve_maintenance_reminder_recipient_ids(
+    tenant_id: int,
+    reminders: list[MaintenanceReminder],
+) -> list[int]:
+    from apps.kuaizhizao.models.maintenance_plan import MaintenancePlan
+
+    out: list[int] = []
+    seen: set[int] = set()
+    plan_ids = {
+        int(r.maintenance_plan_id)
+        for r in reminders
+        if r.maintenance_plan_id is not None
+    }
+    plan_map: dict[int, MaintenancePlan] = {}
+    if plan_ids:
+        rows = await MaintenancePlan.filter(
+            tenant_id=tenant_id,
+            id__in=list(plan_ids),
+            deleted_at__isnull=True,
+        )
+        plan_map = {int(p.id): p for p in rows}
+    for rem in reminders:
+        pid = rem.maintenance_plan_id
+        if pid is not None:
+            plan = plan_map.get(int(pid))
+            if plan and plan.responsible_person_id:
+                uid = int(plan.responsible_person_id)
+                if uid not in seen:
+                    seen.add(uid)
+                    out.append(uid)
+    for uid in await _resolve_equipment_notify_user_ids(
+        tenant_id,
+        "maintenance_overdue_notify_user_ids",
+    ):
+        if uid not in seen:
+            seen.add(uid)
+            out.append(uid)
+    return out
+
+
+async def notify_maintenance_due_soon_reminder(
+    *,
+    tenant_id: int,
+    reminders: list[MaintenanceReminder],
+) -> None:
+    """定期保养到期前/当日提醒（站内信）。"""
+    if not reminders:
+        return
+    user_ids = await _resolve_maintenance_reminder_recipient_ids(tenant_id, reminders)
+    if not user_ids:
+        logger.info(
+            "租户 {} 定期保养提醒无接收人（未配置负责人与 maintenance_overdue_notify_user_ids）",
+            tenant_id,
+        )
+        return
+    lines = ["【设备保养提醒】以下定期保养任务需要关注："]
+    for reminder in reminders[:50]:
+        msg = (reminder.reminder_message or "").strip()
+        if msg:
+            lines.append(f"- {msg}")
+        else:
+            name = (reminder.equipment_name or reminder.equipment_code or "").strip() or "设备"
+            lines.append(f"- {name}")
+    if len(reminders) > 50:
+        lines.append(f"… 共 {len(reminders)} 条，请登录系统查看。")
+    content = "\n".join(lines)
+    subject = f"设备保养定期提醒:{date.today().isoformat()}"
+    await _send_to_notify_users(
+        tenant_id=tenant_id,
+        user_ids=user_ids,
+        subject=subject,
+        content=content,
+    )
+
+
 async def notify_maintenance_overdue_supervision(
     *,
     tenant_id: int,

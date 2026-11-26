@@ -432,6 +432,36 @@ class BalanceService:
         result.sort(key=lambda x: str(x.get("account_code") or ""))
         return result
 
+    async def _load_accounts_by_id(self, tenant_id: int) -> Dict[int, ChartOfAccount]:
+        return {
+            a.id: a
+            for a in await ChartOfAccount.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).all()
+        }
+
+    async def _trial_rows_for_totals(
+        self,
+        tenant_id: int,
+        year: int,
+        month: int,
+        *,
+        include_unposted: bool = False,
+        merge_aux: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """试算合计真源：末级科目，合并辅助，不做上下级轧卷（避免父子双计）。"""
+        accounts = await self._load_accounts_by_id(tenant_id)
+        leaf_ids = {aid for aid, acc in accounts.items() if acc.is_leaf}
+        rows = await self.account_balance_sheet(
+            tenant_id,
+            year,
+            month,
+            include_unposted=include_unposted,
+            merge_aux=merge_aux,
+            rollup_hierarchy=False,
+        )
+        return [r for r in rows if int(r.get("account_id") or 0) in leaf_ids]
+
     async def trial_balance(
         self,
         tenant_id: int,
@@ -440,22 +470,39 @@ class BalanceService:
         *,
         include_unposted: bool = False,
         merge_aux: bool = True,
-        rollup_hierarchy: bool = True,
+        expand_hierarchy: bool = False,
+        rollup_hierarchy: bool | None = None,
     ) -> Dict[str, Any]:
-        rows = await self.account_balance_sheet(
+        """试算合计仅计末级；rows 可选 expand_hierarchy 展示上级汇总行。"""
+        if rollup_hierarchy is not None:
+            expand_hierarchy = bool(rollup_hierarchy)
+
+        total_rows = await self._trial_rows_for_totals(
             tenant_id,
             year,
             month,
             include_unposted=include_unposted,
             merge_aux=merge_aux,
-            rollup_hierarchy=rollup_hierarchy,
         )
-        opening_d = sum(Decimal(str(r["opening_debit"])) for r in rows)
-        opening_c = sum(Decimal(str(r["opening_credit"])) for r in rows)
-        period_d = sum(Decimal(str(r["period_debit"])) for r in rows)
-        period_c = sum(Decimal(str(r["period_credit"])) for r in rows)
-        ending_d = sum(Decimal(str(r["ending_debit"])) for r in rows)
-        ending_c = sum(Decimal(str(r["ending_credit"])) for r in rows)
+        opening_d = sum(_d(r["opening_debit"]) for r in total_rows)
+        opening_c = sum(_d(r["opening_credit"]) for r in total_rows)
+        period_d = sum(_d(r["period_debit"]) for r in total_rows)
+        period_c = sum(_d(r["period_credit"]) for r in total_rows)
+        ending_d = sum(_d(r["ending_debit"]) for r in total_rows)
+        ending_c = sum(_d(r["ending_credit"]) for r in total_rows)
+
+        if expand_hierarchy:
+            display_rows = await self.account_balance_sheet(
+                tenant_id,
+                year,
+                month,
+                include_unposted=include_unposted,
+                merge_aux=merge_aux,
+                rollup_hierarchy=True,
+            )
+        else:
+            display_rows = total_rows
+
         return {
             "opening_debit": float(opening_d),
             "opening_credit": float(opening_c),
@@ -464,7 +511,7 @@ class BalanceService:
             "ending_debit": float(ending_d),
             "ending_credit": float(ending_c),
             "balanced": opening_d == opening_c and period_d == period_c and ending_d == ending_c,
-            "rows": rows,
+            "rows": display_rows,
         }
 
     async def detail_ledger(

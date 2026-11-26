@@ -105,4 +105,19 @@ export const salesInvoiceService = {
       `/apps/kuaicaiwu/sales-invoices/from-receivable/${receivableId}/pull-preview`,
       { method: 'GET', notifyOnGatewayError: true, timeoutMs: 60_000 },
     ),
+
+  commitSalesInvoice: (id: number) =>
+    apiRequest<SalesInvoice>(`/core/uni-audit/sales_invoice/${id}/submit`, { method: 'POST' }),
+
+  submitSalesInvoiceForReview: (id: number) =>
+    apiRequest<SalesInvoice>(`/core/uni-audit/sales_invoice/${id}/submit_review`, { method: 'POST' }),
+
+  withdrawSalesInvoice: (id: number) =>
+    apiRequest<SalesInvoice>(`/core/uni-audit/sales_invoice/${id}/withdraw`, { method: 'POST' }),
+
+  approveSalesInvoice: (id: number) =>
+    apiRequest<SalesInvoice>(`/core/uni-audit/sales_invoice/${id}/approve`, { method: 'POST' }),
+
+  revokeSalesInvoice: (id: number) =>
+    apiRequest<SalesInvoice>(`/core/uni-audit/sales_invoice/${id}/revoke`, { method: 'POST' }),
 };

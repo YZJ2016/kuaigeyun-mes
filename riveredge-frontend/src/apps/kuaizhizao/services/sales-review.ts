@@ -288,3 +288,35 @@ export const salesReviewApi = {
       data: { quotation_id: quotationId },
     }),
 };
+
+export type SalesReviewSalesOrderPullLine = {
+  id: number;
+  sales_review_id: number;
+  review_code?: string;
+  review_status?: string;
+  document_date?: string | null;
+  delivery_date?: string | null;
+  customer_name?: string | null;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  can_push?: boolean;
+};
+
+export async function listSalesReviewSalesOrderPullLines(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  sales_review_id?: number;
+  pullable_only?: boolean;
+}): Promise<{ data: SalesReviewSalesOrderPullLine[]; total: number }> {
+  return apiRequest(`${BASE}/sales-order-pull-lines`, {
+    method: 'GET',
+    params,
+  });
+}

@@ -171,12 +171,24 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaizhizao:purchase-return:create",
         "kuaizhizao:purchase-return:update",
     ),
+    "payment_application_attachments": (
+        "kuaizhizao:payment-application:create",
+        "kuaizhizao:payment-application:update",
+    ),
     # kuaizhizao — 生产执行
     "work_order_attachments": (
         "kuaizhizao:work-order:create",
         "kuaizhizao:work-order:update",
     ),
     "rework_order_attachments": (
+        "kuaizhizao:rework-order:create",
+        "kuaizhizao:rework-order:update",
+    ),
+    "rework_order_inventory_plan": (
+        "kuaizhizao:rework-order:create",
+        "kuaizhizao:rework-order:update",
+    ),
+    "rework_order_inventory_summary": (
         "kuaizhizao:rework-order:create",
         "kuaizhizao:rework-order:update",
     ),
@@ -241,6 +253,30 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaizhizao:quality-management-management-reviews:create",
         "kuaizhizao:quality-management-management-reviews:update",
     ),
+    "fai_order_attachments": (
+        "kuaizhizao:quality-management-fai-orders:create",
+        "kuaizhizao:quality-management-fai-orders:update",
+    ),
+    "inspection_step_photos": (
+        "kuaizhizao:quality-management-incoming-inspection:create",
+        "kuaizhizao:quality-management-incoming-inspection:update",
+        "kuaizhizao:quality-management-incoming-inspection:execute",
+        "kuaizhizao:quality-management-process-inspection:create",
+        "kuaizhizao:quality-management-process-inspection:update",
+        "kuaizhizao:quality-management-process-inspection:execute",
+        "kuaizhizao:quality-management-finished-goods-inspection:create",
+        "kuaizhizao:quality-management-finished-goods-inspection:update",
+        "kuaizhizao:quality-management-finished-goods-inspection:execute",
+        "kuaizhizao:quality-management-oqc-inspection:create",
+        "kuaizhizao:quality-management-oqc-inspection:update",
+        "kuaizhizao:quality-management-oqc-inspection:execute",
+        "kuaizhizao:quality-management-outsource-inspection:create",
+        "kuaizhizao:quality-management-outsource-inspection:update",
+        "kuaizhizao:quality-management-outsource-inspection:execute",
+        "kuaizhizao:quality-management-quality-patrol:create",
+        "kuaizhizao:quality-management-quality-patrol:update",
+        "kuaizhizao:quality-management-quality-patrol:execute",
+    ),
     # kuaizhizao — 设备管理
     "equipment_attachments": (
         "kuaizhizao:equipment-management-equipment:create",
@@ -294,6 +330,10 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaizhizao:maintenance-plan:update",
     ),
     "maintenance_execution_attachments": (
+        "kuaizhizao:maintenance-plan:create",
+        "kuaizhizao:maintenance-plan:update",
+    ),
+    "maintenance_execution_item": (
         "kuaizhizao:maintenance-plan:create",
         "kuaizhizao:maintenance-plan:update",
     ),
@@ -428,6 +468,14 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaicaiwu:gl:create",
         "kuaicaiwu:gl:update",
     ),
+    "other_income_attachments": (
+        "kuaicaiwu:other-income:create",
+        "kuaicaiwu:other-income:update",
+    ),
+    "other_expense_attachments": (
+        "kuaicaiwu:other-expense:create",
+        "kuaicaiwu:other-expense:update",
+    ),
     "haolisales-attachment": (
         "haoligo:order-tracking:create",
         "haoligo:order-tracking:update",
@@ -462,6 +510,30 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
     "lab-request-attachment": (
         "kuaiplm:lab-request:create",
         "kuaiplm:lab-request:update",
+    ),
+    # 主数据 / 个人头像 / 视觉模型（与 PC 上传 category 一致）
+    "engineering_bom_attachments": (
+        "master-data:process:engineering-bom:create",
+        "master-data:process:engineering-bom:update",
+    ),
+    "material_images": (
+        "master-data:material:create",
+        "master-data:material:update",
+    ),
+    "sop-node-attachment": (
+        "master-data:process:sop:create",
+        "master-data:process:sop:update",
+    ),
+    "sop_controlled_original": (
+        "master-data:process:sop:create",
+        "master-data:process:sop:update",
+    ),
+    "avatar": (
+        "system:user-profile:update",
+    ),
+    "kuaivision-model": (
+        "kuaivision:model:create",
+        "kuaivision:model:update",
     ),
 }
 

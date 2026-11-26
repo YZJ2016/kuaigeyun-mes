@@ -175,33 +175,41 @@ class DataScopeService:
         return result
 
     @classmethod
-    async def _department_context(cls, tenant_id: int, user: User) -> tuple[str | None, list[int]]:
+    async def _department_context(cls, tenant_id: int, user: User) -> tuple[list[str], list[int]]:
         memo = _request_memo()
         cache_key = f"dept:{int(tenant_id)}:{int(user.id)}"
         cached = memo.get(cache_key)
         if cached is not None:
             return cached
 
-        await user.fetch_related("department")
-        dept = getattr(user, "department", None)
-        if not dept:
-            result: tuple[str | None, list[int]] = (None, [user.id])
+        from core.models.department import Department
+        from core.services.user.user_department_assignment_service import (
+            UserDepartmentAssignmentService,
+        )
+
+        dept_ids = await UserDepartmentAssignmentService.list_membership_department_ids(
+            tenant_id, int(user.id)
+        )
+        if not dept_ids:
+            result: tuple[list[str], list[int]] = ([], [user.id])
             memo[cache_key] = result
             return result
-        dept_uuid = str(getattr(dept, "uuid", "") or "").strip() or None
-        dept_id = getattr(user, "department_id", None)
-        if dept_id is None:
-            result = (dept_uuid, [user.id])
-            memo[cache_key] = result
-            return result
-        user_ids = await User.filter(
+        departments = await Department.filter(
             tenant_id=tenant_id,
-            department_id=dept_id,
+            id__in=dept_ids,
             deleted_at__isnull=True,
-            is_active=True,
-        ).values_list("id", flat=True)
-        ids = [int(x) for x in user_ids] if user_ids else [user.id]
-        result = (dept_uuid, ids)
+        ).all()
+        by_id = {int(d.id): d for d in departments}
+        dept_uuids = [
+            str(by_id[i].uuid).strip()
+            for i in dept_ids
+            if i in by_id and str(by_id[i].uuid or "").strip()
+        ]
+        user_ids = await UserDepartmentAssignmentService.list_users_in_departments(
+            tenant_id, dept_ids
+        )
+        ids = user_ids if user_ids else [user.id]
+        result = (dept_uuids, ids)
         memo[cache_key] = result
         return result
 
@@ -214,9 +222,10 @@ class DataScopeService:
         user: User,
         resource: str,
         profile,
-        dept_uuid: str | None,
+        dept_uuids: list[str],
         dept_user_ids: list[int],
     ) -> Q | None:
+        dept_uuid = dept_uuids[0] if dept_uuids else None
         scope = (policy.scope_type or "").strip().lower()
         if scope == DataScopeType.ALL:
             return None
@@ -233,6 +242,7 @@ class DataScopeService:
                         profile=profile,
                         scope_payload=None,
                         department_uuid=dept_uuid,
+                        department_uuids=dept_uuids,
                         department_user_ids=dept_user_ids,
                     )
                     return await custom_self(ctx)
@@ -245,6 +255,7 @@ class DataScopeService:
                 profile=profile,
                 scope_payload=None,
                 department_uuid=dept_uuid,
+                department_uuids=dept_uuids,
                 department_user_ids=dept_user_ids,
             )
             resolver = BUILTIN_SCOPE_RESOLVERS[scope]
@@ -277,6 +288,7 @@ class DataScopeService:
                 profile=profile,
                 scope_payload=payload,
                 department_uuid=dept_uuid,
+                department_uuids=dept_uuids,
                 department_user_ids=dept_user_ids,
             )
             return await custom(ctx)
@@ -448,7 +460,7 @@ class DataScopeService:
                 roles=roles_for_scope,
             )
 
-        dept_uuid, dept_user_ids = await cls._department_context(tenant_id, user)
+        dept_uuids, dept_user_ids = await cls._department_context(tenant_id, user)
         any_unrestricted = False
         q_parts: list[Q] = []
         partner_field = (getattr(profile, "partner_code_field", None) or "").strip()
@@ -497,7 +509,7 @@ class DataScopeService:
                     user=user,
                     resource=resource_key,
                     profile=profile,
-                    dept_uuid=dept_uuid,
+                    dept_uuids=dept_uuids,
                     dept_user_ids=dept_user_ids,
                 )
                 if part is None:

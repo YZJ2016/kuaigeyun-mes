@@ -2474,6 +2474,7 @@ async def list_outsource_inspections(
         inspection_end_date=inspection_end_date,
         created_start_date=created_start_date,
         created_end_date=created_end_date,
+        viewer_id=current_user.id,
     )
 
 
@@ -2635,7 +2636,7 @@ async def apply_plan_outsource_inspection(
 )
 async def revoke_conduct_outsource_inspection(
     inspection_id: int,
-    _auth=_OSQC_EXECUTE,
+    _auth=_OSQC_UPDATE,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OutsourceInspectionResponse:
@@ -2673,6 +2674,7 @@ async def list_quality_patrols(
     created_start_date: Optional[str] = Query(None),
     created_end_date: Optional[str] = Query(None),
     _auth=_PATROL_READ,
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await _quality_patrol_service.list(
@@ -2686,6 +2688,7 @@ async def list_quality_patrols(
         inspection_end_date=inspection_end_date,
         created_start_date=created_start_date,
         created_end_date=created_end_date,
+        viewer_id=current_user.id,
     )
 
 
@@ -2806,7 +2809,7 @@ async def apply_plan_quality_patrol(
 )
 async def revoke_conduct_quality_patrol(
     inspection_id: int,
-    _auth=_PATROL_EXECUTE,
+    _auth=_PATROL_UPDATE,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> QualityPatrolResponse:

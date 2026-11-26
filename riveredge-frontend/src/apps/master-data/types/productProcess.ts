@@ -31,12 +31,20 @@ export type ProductProcessLine = {
   outsourceSupplierName?: string;
 };
 
+export type ProductProcessInheritanceGroup = {
+  materialGroupUuid: string;
+  materialGroupCode?: string;
+  materialGroupName?: string;
+};
+
 export type MaterialProductProcess = {
   materialUuid: string;
   materialId: number;
   processRouteUuid?: string;
   processRouteId?: number;
   allowOperationJump: boolean;
+  hasOwnRecord?: boolean;
+  inheritedFromGroup?: ProductProcessInheritanceGroup;
   lines: ProductProcessLine[];
   createdAt?: string;
   updatedAt?: string;
@@ -53,6 +61,21 @@ export type MaterialProductProcessSave = {
   newRouteCode?: string;
   newRouteName?: string;
 };
+
+export type MaterialGroupProductProcess = {
+  materialGroupUuid: string;
+  materialGroupId: number;
+  processRouteUuid?: string;
+  processRouteId?: number;
+  allowOperationJump: boolean;
+  lines: ProductProcessLine[];
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  updatedByName?: string;
+};
+
+export type MaterialGroupProductProcessSave = MaterialProductProcessSave;
 
 export type ProcessRouteOperationTemplate = {
   allowOperationJump: boolean;

@@ -39,7 +39,7 @@ import {
   Tag,
 } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniBatchButton } from '../../../../../components/uni-batch';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { packingBindingBatchPrintAllowed } from '../../../../../hooks/useDocumentCapabilities';
@@ -61,12 +61,23 @@ import {
 import { warehouseApi } from '../../../services/production';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 import { qrcodeApi } from '../../../../../services/qrcode';
 import {
   PackingBindingQrcodePreviewModal,
   type PackingBindingQrcodePreviewItem,
 } from './PackingBindingQrcodePreviewModal';
+import {
+  PackingBindingScanSessionModal,
+  type PackingScanSessionSource,
+} from './PackingBindingScanSessionModal';
 
 const LazyQRCodeGenerator = lazy(() =>
   import('../../../../../components/qrcode/QRCodeGenerator').then((m) => ({ default: m.QRCodeGenerator })),
@@ -92,6 +103,8 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 
 /** 与后端 DECIMAL(12,2) 一致 */
 const MAX_PACKING_QUANTITY = 9999999999.99;
+
+const PACKING_BINDING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_packing_bindings';
 
 interface PackingBinding {
   id?: number;
@@ -364,18 +377,48 @@ const PackingBindingPage: React.FC = () => {
 
   const [pbTrackingRefreshKey, setPbTrackingRefreshKey] = useState(0);
 
+  const {
+    customFields: packingBindingFormCustomFields,
+    customFieldValues: packingBindingFormCustomFieldValues,
+    loadFieldValues: loadPackingBindingFormFieldValues,
+    extractFormValues: extractPackingBindingFormValues,
+    saveCustomFieldValues: savePackingBindingCustomFieldValues,
+    resetFieldValues: resetPackingBindingFormFieldValues,
+  } = useCustomFields({
+    tableName: PACKING_BINDING_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible || editModalVisible,
+  });
+
+  const {
+    customFields: packingBindingListCustomFields,
+    generateCustomFieldColumns: generatePackingBindingCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichPackingBindingRecordsWithCustomFields,
+    customFieldValues: packingBindingDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadPackingBindingFieldValuesForDetail,
+    resetDetailFieldValues: resetPackingBindingDetailFieldValues,
+  } = useCustomFieldsForList<PackingBinding>({ tableName: PACKING_BINDING_CUSTOM_FIELD_TABLE });
+
+  const packingBindingCustomFieldColumns = generatePackingBindingCustomFieldColumns();
+
   const handleDetail = useCallback(async (record: PackingBinding) => {
     try {
+      resetPackingBindingDetailFieldValues();
       const detail = await packingBindingApi.get(record.id!.toString());
       setCurrentBinding(detail);
       setDetailDrawerVisible(true);
       setPbTrackingRefreshKey((k) => k + 1);
+      if (record.id != null) {
+        await loadPackingBindingFieldValuesForDetail(record.id);
+      }
     } catch (error: any) {
       messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.fetchDetailFailed'));
     }
-  }, [messageApi]);
+  }, [getErrorMessage, loadPackingBindingFieldValuesForDetail, messageApi, resetPackingBindingDetailFieldValues]);
 
   const [localStats, setLocalStats] = useState({ total: 0, scan: 0, manual: 0 });
+  const [scanSessionOpen, setScanSessionOpen] = useState(false);
+  const [scanSessionSource, setScanSessionSource] = useState<PackingScanSessionSource | null>(null);
   const [taskPoolVisible, setTaskPoolVisible] = useState(false);
   const [taskPoolLoading, setTaskPoolLoading] = useState(false);
   const [taskPool, setTaskPool] = useState<PackingTaskPoolResult>({
@@ -448,7 +491,8 @@ const PackingBindingPage: React.FC = () => {
     setCreateSourceLoading(false);
     setCreateLineRemaining(undefined);
     createFormRef.current?.resetFields();
-  }, []);
+    resetPackingBindingFormFieldValues();
+  }, [resetPackingBindingFormFieldValues]);
 
   const handleSourceItemChange = useCallback((lineKey: string | undefined) => {
     if (!lineKey) return;
@@ -544,6 +588,38 @@ const PackingBindingPage: React.FC = () => {
     }
   }, [closeCreateModal, getErrorMessage, messageApi, packingBindingPerms.canCreate, packingBindingPerms.canRead, t]);
 
+  const openScanSessionFromSource = useCallback(
+    async (sourceType: PackingBindingSourceType, sourceId: number) => {
+      if (!packingBindingPerms.canCreate) {
+        messageApi.error(t('app.kuaizhizao.packingBinding.noCreatePermission'));
+        return;
+      }
+      try {
+        const remaining = await packingBindingApi.sourceRemaining({
+          source_type: sourceType,
+          source_id: sourceId,
+        });
+        const line = (remaining?.lines || []).find((l) => Number(l.remaining_quantity) > 0);
+        if (!line) {
+          messageApi.warning(t('app.kuaizhizao.packingBinding.noBindableItems'));
+          return;
+        }
+        setScanSessionSource({
+          source_type: sourceType,
+          source_id: sourceId,
+          source_line_id: line.source_line_id,
+          product_id: line.product_id,
+          product_code: line.product_code,
+          product_name: line.product_name,
+        });
+        setScanSessionOpen(true);
+      } catch (error: unknown) {
+        messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.loadSourceFailed'));
+      }
+    },
+    [getErrorMessage, messageApi, packingBindingPerms.canCreate, t],
+  );
+
   useEffect(() => {
     void refreshLocalStats();
   }, [statsVersion, refreshLocalStats]);
@@ -619,45 +695,49 @@ const PackingBindingPage: React.FC = () => {
       messageApi.error(t('app.kuaizhizao.packingBinding.invalidSourceParam'));
       return false;
     }
-    const productId = Number(values.product_id);
+    const { standardValues, customData } = extractPackingBindingFormValues(values);
+    const productId = Number(standardValues.product_id);
     if (!Number.isFinite(productId) || productId <= 0) {
       messageApi.error(t('app.kuaizhizao.packingBinding.ruleSelectSourceItem'));
       return false;
     }
-    const sourceLineId = Number(values.source_line_id);
-    const serialRaw = values.serial_numbers;
+    const sourceLineId = Number(standardValues.source_line_id);
+    const serialRaw = standardValues.serial_numbers;
     const serialNumbers = Array.isArray(serialRaw)
       ? serialRaw.map((x) => String(x).trim()).filter(Boolean)
       : typeof serialRaw === 'string'
         ? String(serialRaw).split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
         : undefined;
     const scanned =
-      (values.barcode && String(values.barcode).trim())
+      (standardValues.barcode && String(standardValues.barcode).trim())
       || (serialNumbers && serialNumbers.length > 0);
     const payload = {
       product_id: productId,
       source_line_id: Number.isFinite(sourceLineId) && sourceLineId > 0 ? sourceLineId : undefined,
-      product_code: values.product_code,
-      product_name: values.product_name,
-      product_serial_no: values.product_serial_no,
+      product_code: standardValues.product_code,
+      product_name: standardValues.product_name,
+      product_serial_no: standardValues.product_serial_no,
       serial_numbers: serialNumbers,
-      packing_material_id: values.packing_material_id ? Number(values.packing_material_id) : undefined,
-      packing_material_code: values.packing_material_code,
-      packing_material_name: values.packing_material_name,
-      packing_quantity: values.packing_quantity,
-      box_no: values.box_no,
-      packing_level: values.packing_level || 'carton',
-      parent_box_no: values.parent_box_no,
-      pallet_no: values.pallet_no,
+      packing_material_id: standardValues.packing_material_id ? Number(standardValues.packing_material_id) : undefined,
+      packing_material_code: standardValues.packing_material_code,
+      packing_material_name: standardValues.packing_material_name,
+      packing_quantity: standardValues.packing_quantity,
+      box_no: standardValues.box_no,
+      packing_level: standardValues.packing_level || 'carton',
+      parent_box_no: standardValues.parent_box_no,
+      pallet_no: standardValues.pallet_no,
       binding_method: scanned ? 'scan' : 'manual',
-      barcode: values.barcode,
-      remarks: values.remarks,
+      barcode: standardValues.barcode,
+      remarks: standardValues.remarks,
     };
     try {
-      if (createSourceType === 'sales_delivery') {
-        await packingBindingApi.createFromDelivery(String(createSourceId), payload);
-      } else {
-        await packingBindingApi.createFromReceipt(String(createSourceId), payload);
+      const created =
+        createSourceType === 'sales_delivery'
+          ? await packingBindingApi.createFromDelivery(String(createSourceId), payload)
+          : await packingBindingApi.createFromReceipt(String(createSourceId), payload);
+      const recordId = Number((created as { id?: number })?.id ?? 0);
+      if (recordId > 0 && Object.keys(customData).length > 0) {
+        await savePackingBindingCustomFieldValues(recordId, customData);
       }
       messageApi.success(t('app.kuaizhizao.packingBinding.createSuccess'));
       setStatsVersion((v) => v + 1);
@@ -694,6 +774,7 @@ const PackingBindingPage: React.FC = () => {
       if (itemOptions.length === 0) {
         closeCreateModal();
       } else {
+        resetPackingBindingFormFieldValues();
         setCreateSourceItems(itemOptions);
         const preferred = itemOptions[0];
         createFormRef.current?.resetFields();
@@ -721,10 +802,13 @@ const PackingBindingPage: React.FC = () => {
     closeCreateModal,
     createSourceId,
     createSourceType,
+    extractPackingBindingFormValues,
     getErrorMessage,
     invalidateMenuBadgeCounts,
     messageApi,
     openTaskPool,
+    resetPackingBindingFormFieldValues,
+    savePackingBindingCustomFieldValues,
     t,
     taskPoolVisible,
   ]);
@@ -830,10 +914,17 @@ const PackingBindingPage: React.FC = () => {
         remarks: detail.remarks,
         attachments: mapAttachmentsToUploadList(detail.attachments),
       });
+      if (record.id != null) {
+        window.setTimeout(() => {
+          void loadPackingBindingFormFieldValues(record.id!).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues);
+          });
+        }, 100);
+      }
     } catch (error: any) {
       messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.fetchDetailFailed'));
     }
-  }, [messageApi]);
+  }, [getErrorMessage, loadPackingBindingFormFieldValues, messageApi]);
 
   const handleEditSubmit = async (values: any) => {
     try {
@@ -842,28 +933,31 @@ const PackingBindingPage: React.FC = () => {
         return;
       }
 
-      const serialRaw = values.serial_numbers;
+      const { standardValues, customData } = extractPackingBindingFormValues(values);
+      const serialRaw = standardValues.serial_numbers;
       const serialNumbers = Array.isArray(serialRaw)
         ? serialRaw.map((x: unknown) => String(x).trim()).filter(Boolean)
         : typeof serialRaw === 'string'
           ? String(serialRaw).split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
           : undefined;
       await packingBindingApi.update(currentBindingId.toString(), {
-        packing_quantity: values.packing_quantity,
-        box_no: values.box_no,
-        product_serial_no: values.product_serial_no,
+        packing_quantity: standardValues.packing_quantity,
+        box_no: standardValues.box_no,
+        product_serial_no: standardValues.product_serial_no,
         serial_numbers: serialNumbers,
-        packing_material_id: values.packing_material_id ? Number(values.packing_material_id) : undefined,
-        packing_material_code: values.packing_material_code,
-        packing_material_name: values.packing_material_name,
-        remarks: values.remarks,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        packing_material_id: standardValues.packing_material_id ? Number(standardValues.packing_material_id) : undefined,
+        packing_material_code: standardValues.packing_material_code,
+        packing_material_name: standardValues.packing_material_name,
+        remarks: standardValues.remarks,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
       });
+      await savePackingBindingCustomFieldValues(currentBindingId, customData);
       messageApi.success(t('app.kuaizhizao.packingBinding.updateSuccess'));
       const oid = currentBindingId;
       setEditModalVisible(false);
       setCurrentBindingId(null);
       formRef.current?.resetFields();
+      resetPackingBindingFormFieldValues();
       setStatsVersion((v) => v + 1);
       invalidateMenuBadgeCounts();
 
@@ -873,6 +967,7 @@ const PackingBindingPage: React.FC = () => {
           const fresh = await packingBindingApi.get(String(oid));
           setCurrentBinding(fresh);
           setPbTrackingRefreshKey((k) => k + 1);
+          await loadPackingBindingFieldValuesForDetail(oid);
         } catch {
           /* ignore */
         }
@@ -1113,27 +1208,6 @@ const PackingBindingPage: React.FC = () => {
           </Popconfirm>,
         );
       }
-      if (record.capabilities?.delete?.allowed !== false) {
-        nodes.push(
-          <Popconfirm {...rowActionKind('delete')}
-            key="del"
-            title={t('app.kuaizhizao.packingBinding.confirmDeleteOne')}
-            onConfirm={() => void handleDeleteOne(record)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {t('common.delete')}
-            </Button>
-          </Popconfirm>
-        );
-      }
       return nodes;
     },
     [handleDetail, handleEdit, handleSeal, t],
@@ -1361,6 +1435,7 @@ const PackingBindingPage: React.FC = () => {
           );
         },
       },
+      ...packingBindingCustomFieldColumns,
       {
         title: t('common.actions'),
         key: 'option',
@@ -1370,7 +1445,7 @@ const PackingBindingPage: React.FC = () => {
           renderPbRowActions(renderPbRowActionNodes(record), `pb-${record.id ?? 'row'}`),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [bindingMethodTag, bindingSourceTag, packingBindingMethodValueEnum, packingBindingSourceValueEnum, renderPbRowActionNodes, t],
+    [bindingMethodTag, bindingSourceTag, packingBindingCustomFieldColumns, packingBindingMethodValueEnum, packingBindingSourceValueEnum, renderPbRowActionNodes, t],
   );
 
   const handleRequest = async (
@@ -1378,6 +1453,7 @@ const PackingBindingPage: React.FC = () => {
     sort: Record<string, 'ascend' | 'descend' | null>,
     _filter: Record<string, React.ReactText[] | null>,
     searchFormValues?: Record<string, unknown>,
+    meta?: UniTableRequestMeta,
   ) => {
     try {
       const apiParams = resolvePackingBindingListApiParams(params, sort, searchFormValues) as Parameters<
@@ -1385,7 +1461,10 @@ const PackingBindingPage: React.FC = () => {
       >[0];
 
       const result = (await packingBindingApi.listPage(apiParams)) as PackingBindingPageResult;
-      const data = Array.isArray(result?.data) ? result.data : [];
+      const raw = Array.isArray(result?.data) ? result.data : [];
+      const data = meta?.purpose === 'prefetch'
+        ? raw
+        : await enrichPackingBindingRecordsWithCustomFields(raw);
       return {
         data,
         success: result.success !== false,
@@ -1469,28 +1548,45 @@ const PackingBindingPage: React.FC = () => {
       {
         title: t('common.actions'),
         dataIndex: 'actions',
-        width: 120,
+        width: 200,
         fixed: 'right' as const,
         render: (_: unknown, row: PackingTaskPoolItem) => (
-          <Button
-            {...rowActionKind('execute')}
-            {...rowActionLabelKeep()}
-            type="link"
-            size="small"
-            disabled={!packingBindingPerms.canCreate}
-            onClick={() =>
-              void openCreateFromSource(
-                row.source_type === 'finished_goods_receipt' ? 'finished_goods_receipt' : 'sales_delivery',
-                row.id,
-              )
-            }
-          >
-            {t('app.kuaizhizao.packingBinding.actionGoBind')}
-          </Button>
+          <Space size={4}>
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              type="link"
+              size="small"
+              disabled={!packingBindingPerms.canCreate}
+              onClick={() =>
+                void openScanSessionFromSource(
+                  row.source_type === 'finished_goods_receipt' ? 'finished_goods_receipt' : 'sales_delivery',
+                  row.id,
+                )
+              }
+            >
+              {t('app.kuaizhizao.packingBinding.actionScanSession')}
+            </Button>
+            <Button
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
+              type="link"
+              size="small"
+              disabled={!packingBindingPerms.canCreate}
+              onClick={() =>
+                void openCreateFromSource(
+                  row.source_type === 'finished_goods_receipt' ? 'finished_goods_receipt' : 'sales_delivery',
+                  row.id,
+                )
+              }
+            >
+              {t('app.kuaizhizao.packingBinding.actionGoBind')}
+            </Button>
+          </Space>
         ),
       },
     ],
-    [openCreateFromSource, packingBindingPerms.canCreate, t],
+    [openCreateFromSource, openScanSessionFromSource, packingBindingPerms.canCreate, t],
   );
 
   const timeconfigBasicItems = useDetailDrawerDescriptionItems(
@@ -1498,6 +1594,19 @@ const PackingBindingPage: React.FC = () => {
     currentBinding,
     'packing_binding',
   );
+
+  const detailSupplementary = useMemo(() => {
+    if (!currentBinding) return undefined;
+    if (!hasCustomFieldsDetailContent(packingBindingListCustomFields, packingBindingDetailCustomFieldValues)) {
+      return undefined;
+    }
+    return (
+      <CustomFieldsDetailSection
+        customFields={packingBindingListCustomFields}
+        customFieldValues={packingBindingDetailCustomFieldValues}
+      />
+    );
+  }, [currentBinding, packingBindingDetailCustomFieldValues, packingBindingListCustomFields]);
 
   return (
     <>
@@ -1512,7 +1621,7 @@ const PackingBindingPage: React.FC = () => {
           headerTitle={t('app.kuaizhizao.packingBinding.title')}
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.packingBinding)}
-          columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding-width-v3"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -1528,6 +1637,7 @@ const PackingBindingPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.packingBinding.confirmBatchDelete', { count })}
           toolBarActionsAfterCreate={[
@@ -1656,6 +1766,11 @@ const PackingBindingPage: React.FC = () => {
           label={t('app.kuaizhizao.packingBinding.colBarcode')}
           placeholder={t('app.kuaizhizao.packingBinding.placeholderBarcodeScan')}
         />
+        <CustomFieldsFormSection
+          customFields={packingBindingFormCustomFields}
+          customFieldValues={packingBindingFormCustomFieldValues}
+          gridColumns={2}
+        />
         <ProFormTextArea
           name="remarks"
           label={t('common.remark')}
@@ -1672,6 +1787,7 @@ const PackingBindingPage: React.FC = () => {
           setEditModalVisible(false);
           setCurrentBindingId(null);
           formRef.current?.resetFields();
+          resetPackingBindingFormFieldValues();
         }}
         onFinish={handleEditSubmit}
         formRef={formRef}
@@ -1712,6 +1828,11 @@ const PackingBindingPage: React.FC = () => {
           label={t('app.kuaizhizao.packingBinding.fieldBoxNo')}
           placeholder={t('app.kuaizhizao.packingBinding.placeholderBoxNo')}
         />
+        <CustomFieldsFormSection
+          customFields={packingBindingFormCustomFields}
+          customFieldValues={packingBindingFormCustomFieldValues}
+          gridColumns={2}
+        />
         <ProFormTextArea
           name="remarks"
           label={t('common.remark')}
@@ -1729,6 +1850,7 @@ const PackingBindingPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentBinding(null);
+          resetPackingBindingDetailFieldValues();
         }}
         extra={
           currentBinding ? (
@@ -1806,6 +1928,7 @@ const PackingBindingPage: React.FC = () => {
             </div>
           ) : undefined
         }
+        supplementary={detailSupplementary}
         collaboration={
           currentBinding && (packingDetailLifecycle?.mainStages ?? []).length > 0 ? (
             <UniLifecycleStepper
@@ -1848,6 +1971,22 @@ const PackingBindingPage: React.FC = () => {
               }
             : undefined
         }
+      />
+
+      <PackingBindingScanSessionModal
+        open={scanSessionOpen}
+        source={scanSessionSource}
+        onClose={() => {
+          setScanSessionOpen(false);
+          setScanSessionSource(null);
+        }}
+        onCompleted={() => {
+          void refreshLocalStats();
+          actionRef.current?.reload();
+          if (taskPoolVisible) {
+            void openTaskPool();
+          }
+        }}
       />
 
       <Modal

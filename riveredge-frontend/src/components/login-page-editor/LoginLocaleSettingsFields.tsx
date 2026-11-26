@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { Form, Input } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ThemedSegmented } from '../themed-segmented';
+import {
+  FORM_FIELD_TITLE_SEGMENTED_CLASS,
+  FormFieldTitleSegmentedRow,
+} from '../form-field-title-segmented';
 import LoginRichTextEditor, { type LoginRichTextEditorMode } from './LoginRichTextEditor';
 
 export type LoginLocaleSettingsFieldsProps = {
@@ -57,9 +61,9 @@ const LoginLocaleSettingsFields: React.FC<LoginLocaleSettingsFieldsProps> = ({
         name={isEn ? 'login_content_en' : 'login_content'}
         colon={false}
         label={
-          <div className="login-rich-text-editor-label-row">
-            <span className="login-rich-text-editor-label-text">{contentLabel}</span>
+          <FormFieldTitleSegmentedRow title={contentLabel}>
             <ThemedSegmented
+              className={FORM_FIELD_TITLE_SEGMENTED_CLASS}
               size="small"
               value={editorMode}
               onChange={(next) => setEditorMode(next as LoginRichTextEditorMode)}
@@ -68,7 +72,7 @@ const LoginLocaleSettingsFields: React.FC<LoginLocaleSettingsFieldsProps> = ({
                 { label: t('pages.system.siteSettings.loginEditorCode'), value: 'code' },
               ]}
             />
-          </div>
+          </FormFieldTitleSegmentedRow>
         }
       >
         <LoginRichTextEditor

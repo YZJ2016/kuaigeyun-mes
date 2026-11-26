@@ -16,7 +16,7 @@ from apps.kuaicaiwu.utils.calendar_date_coerce import coerce_api_calendar_date
 from apps.kuaicaiwu.services.finance_note_service import FinanceNoteService
 from core.api.deps.deps import get_current_user
 from core.schemas.base import BaseSchema
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
 service = FinanceNoteService()
 
@@ -115,6 +115,7 @@ class FinanceNoteResponse(BaseSchema):
     receivable_id: Optional[int] = None
     payable_id: Optional[int] = None
     status: str
+    review_status: Optional[str] = None
     endorse_to_name: Optional[str] = None
     discount_bank: Optional[str] = None
     discount_date: Optional[date] = None
@@ -151,6 +152,28 @@ def build_finance_notes_router(
         dependencies=[Depends(require_kuaicaiwu_module_access(module_code))],
     )
 
+    async def _attach_audit(
+        tenant_id: int,
+        user_id: int,
+        items: list[FinanceNoteResponse],
+    ) -> list[FinanceNoteResponse]:
+        entity_type = (
+            "notes_receivable"
+            if direction == "receivable"
+            else "notes_payable"
+            if direction == "payable"
+            else None
+        )
+        if not entity_type or not items:
+            return items
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        payloads = [item.model_dump() for item in items]
+        enriched = await enrich_items(
+            tenant_id, entity_type, payloads, viewer_id=user_id
+        )
+        return [FinanceNoteResponse.model_validate(row) for row in enriched]
+
     @router.post("", response_model=FinanceNoteResponse, status_code=status.HTTP_201_CREATED)
     async def create_note(data: FinanceNoteCreate, current_user: Any = Depends(get_current_user)):
         try:
@@ -160,7 +183,9 @@ def build_finance_notes_router(
                 current_user=current_user,
                 **data.model_dump(exclude={"audit"}),
             )
-            return FinanceNoteResponse.model_validate(row)
+            item = FinanceNoteResponse.model_validate(row)
+            audited = await _attach_audit(current_user.tenant_id, current_user.id, [item])
+            return audited[0]
         except ValidationError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
@@ -170,6 +195,7 @@ def build_finance_notes_router(
         limit: int = Query(50, ge=1, le=500),
         keyword: Optional[str] = Query(None),
         status: Optional[str] = Query(None),
+        review_status: Optional[str] = Query(None),
         bill_type: Optional[str] = Query(None),
         expiring_within_days: Optional[int] = Query(None, ge=0, le=365),
         due_date_start: Optional[str] = Query(None),
@@ -189,6 +215,7 @@ def build_finance_notes_router(
             limit=limit,
             keyword=keyword,
             status=status,
+            review_status=review_status,
             bill_type=bill_type,
             expiring_within_days=expiring_within_days,
             due_date_start=due_date_start,
@@ -200,8 +227,10 @@ def build_finance_notes_router(
             sort_field=sort_field,
             sort_order=sort_order,
         )
+        items = [FinanceNoteResponse.model_validate(r) for r in rows]
+        items = await _attach_audit(current_user.tenant_id, current_user.id, items)
         return FinanceNoteListResponse(
-            items=[FinanceNoteResponse.model_validate(r) for r in rows],
+            items=items,
             total=total,
             skip=skip,
             limit=limit,
@@ -211,7 +240,9 @@ def build_finance_notes_router(
     async def get_note(note_id: int, current_user: Any = Depends(get_current_user)):
         try:
             row = await service.get_by_id(current_user.tenant_id, note_id, direction=direction)
-            return FinanceNoteResponse.model_validate(row)
+            item = FinanceNoteResponse.model_validate(row)
+            audited = await _attach_audit(current_user.tenant_id, current_user.id, [item])
+            return audited[0]
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
 
@@ -229,10 +260,12 @@ def build_finance_notes_router(
                 current_user=current_user,
                 **data.model_dump(exclude_unset=True),
             )
-            return FinanceNoteResponse.model_validate(row)
+            item = FinanceNoteResponse.model_validate(row)
+            audited = await _attach_audit(current_user.tenant_id, current_user.id, [item])
+            return audited[0]
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        except ValidationError as exc:
+        except (ValidationError, BusinessLogicError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
     @router.put("/{note_id}/action", response_model=FinanceNoteResponse)
@@ -249,10 +282,12 @@ def build_finance_notes_router(
                 current_user=current_user,
                 **data.model_dump(exclude_unset=True),
             )
-            return FinanceNoteResponse.model_validate(row)
+            item = FinanceNoteResponse.model_validate(row)
+            audited = await _attach_audit(current_user.tenant_id, current_user.id, [item])
+            return audited[0]
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        except ValidationError as exc:
+        except (ValidationError, BusinessLogicError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
     @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -261,7 +296,7 @@ def build_finance_notes_router(
             await service.delete(current_user.tenant_id, note_id, direction=direction)
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
-        except ValidationError as exc:
+        except (ValidationError, BusinessLogicError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
     return router

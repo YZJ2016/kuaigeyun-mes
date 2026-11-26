@@ -132,7 +132,7 @@ export function buildMaterialBatchPickerGroupTree(
       key: 'all',
       isLeaf: children.length === 0,
       children: children.length ? children : undefined,
-    },
+    } as DataNode & { searchLabel?: string },
   ];
 }
 

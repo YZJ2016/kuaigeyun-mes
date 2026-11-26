@@ -53,6 +53,7 @@ const FlowDataGeneratePage = lazy(() => import('./pages/app-management/flow-data
 // 生产执行页面
 const ManufacturingDashboardPage = lazy(() => import('./pages/production-execution/dashboard'));
 const WorkOrdersPage = lazy(() => import('./pages/production-execution/work-orders'));
+const WorkOrderFormPage = lazy(() => import('./pages/production-execution/work-orders/WorkOrderFormPage'));
 const ProductionOutboundPage = lazy(() => import('./pages/production-execution/outbound'));
 const ProductionInboundPage = lazy(() => import('./pages/production-execution/inbound'));
 // 生产终端路由已下线，页面保留：./pages/production-execution/work-orders/kiosk.tsx
@@ -90,6 +91,7 @@ const PurchaseDemandPartiesPage = lazy(() => import('./pages/purchase-management
 const ReceiptNoticesPage = lazy(() => import('./pages/purchase-management/receipt-notices'));
 const PurchaseReturnsPage = lazy(() => import('./pages/purchase-management/purchase-returns'));
 const PurchaseInboundPage = lazy(() => import('./pages/purchase-management/inbound'));
+const PurchaseOutboundPage = lazy(() => import('./pages/purchase-management/outbound'));
 
 // 销售管理页面
 const SalesDashboardPage = lazy(() => import('./pages/sales-management/dashboard'));
@@ -360,6 +362,8 @@ const PurchaseOrderQueryPage = lazy(() => import('./pages/purchase-management/re
 const PurchaseOrderProgressPage = lazy(() => import('./pages/purchase-management/reports/PurchaseOrderProgress'));
 const SupplierDeliverySummaryPage = lazy(() => import('./pages/purchase-management/reports/SupplierDeliverySummary'));
 const PurchaseReconciliationPage = lazy(() => import('./pages/purchase-management/reports/PurchaseReconciliation'));
+const PurchaseReceiptDetailPage = lazy(() => import('./pages/purchase-management/reports/PurchaseReceiptDetail'));
+const MaterialPurchaseSummaryPage = lazy(() => import('./pages/purchase-management/reports/MaterialPurchaseSummary'));
 
 // 生产执行报表
 const WorkOrderQueryPage = lazy(() => import('./pages/production-execution/reports/WorkOrderQuery'));
@@ -471,10 +475,13 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-returns/new" element={withPageSuspense(PurchaseReturnsPage)} />
       <Route path="purchase-management/purchase-returns/:id/edit" element={withPageSuspense(PurchaseReturnsPage)} />
       <Route path="purchase-management/purchase-returns" element={withPageSuspense(PurchaseReturnsPage)} />
+      <Route path="purchase-management/outbound" element={withPageSuspense(PurchaseOutboundPage)} />
       <Route path="purchase-management/inbound" element={withPageSuspense(PurchaseInboundPage)} />
 
       {/* 生产执行路由 */}
       <Route path="production-execution/dashboard" element={withPageSuspense(ManufacturingDashboardPage)} />
+      <Route path="production-execution/work-orders/new" element={withPageSuspense(WorkOrderFormPage)} />
+      <Route path="production-execution/work-orders/:id/edit" element={withPageSuspense(WorkOrderFormPage)} />
       <Route path="production-execution/work-orders" element={withPageSuspense(WorkOrdersPage)} />
       <Route path="production-execution/outbound" element={withPageSuspense(ProductionOutboundPage)} />
       <Route path="production-execution/inbound" element={withPageSuspense(ProductionInboundPage)} />
@@ -882,6 +889,8 @@ const KuaizhizaoApp: React.FC = () => {
       {/* 采购管理报表 */}
       <Route path="purchase-management/reports/purchase-requisition-tracking" element={withPageSuspense(PurchaseRequisitionTrackingPage)} />
       <Route path="purchase-management/reports/purchase-order-query" element={withPageSuspense(PurchaseOrderQueryPage)} />
+      <Route path="purchase-management/reports/purchase-receipt-detail" element={withPageSuspense(PurchaseReceiptDetailPage)} />
+      <Route path="purchase-management/reports/material-purchase-summary" element={withPageSuspense(MaterialPurchaseSummaryPage)} />
       <Route path="purchase-management/reports/purchase-order-progress" element={withPageSuspense(PurchaseOrderProgressPage)} />
       <Route path="purchase-management/reports/supplier-delivery-summary" element={withPageSuspense(SupplierDeliverySummaryPage)} />
       <Route path="purchase-management/reports/purchase-reconciliation" element={withPageSuspense(PurchaseReconciliationPage)} />

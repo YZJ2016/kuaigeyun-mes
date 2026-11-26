@@ -44,6 +44,8 @@ export interface PaymentVoucher {
   advance_payee_id?: number | null;
   advance_payee_name?: string | null;
   status: string;
+  review_status?: string;
+  audit?: { phase?: string; allowed_actions?: string[] };
   settlement_type?: string;
   refunded_amount?: number;
   refund_execution_status?: string;
@@ -203,6 +205,21 @@ export const paymentService = {
       method: 'GET',
     });
   },
+
+  commitPayment: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment/${id}/submit`, { method: 'POST' }),
+
+  submitPaymentForReview: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment/${id}/submit_review`, { method: 'POST' }),
+
+  withdrawPayment: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment/${id}/withdraw`, { method: 'POST' }),
+
+  approvePayment: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment/${id}/approve`, { method: 'POST' }),
+
+  revokePayment: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment/${id}/revoke`, { method: 'POST' }),
 
   confirmPayment: (id: number) => {
     return apiRequest<PaymentVoucher>(`${PAYMENT_API}/${id}/confirm`, {

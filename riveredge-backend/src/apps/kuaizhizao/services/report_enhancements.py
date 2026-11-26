@@ -1147,10 +1147,12 @@ async def build_slow_moving_inventory(
     skip: int = 0,
     limit: int = 100,
 ) -> Dict[str, Any]:
-    """呆滞料：MaterialBatch 在库 + 库龄（updated_at）。"""
+    """呆滞料：MaterialBatch 在库 + 库龄（updated_at 早于 stale_days）。"""
     from apps.master_data.models.material_batch import MaterialBatch
 
-    cutoff = resolve_business_datetime() - timedelta(days=stale_days)
+    days = max(1, min(int(stale_days or 90), 3650))
+    now = resolve_business_datetime()
+    cutoff = now - timedelta(days=days)
     q = MaterialBatch.filter(
         tenant_id=tenant_id,
         deleted_at__isnull=True,
@@ -1158,13 +1160,16 @@ async def build_slow_moving_inventory(
         status="in_stock",
         updated_at__lt=cutoff,
     )
+    if warehouse_id:
+        q = q.filter(warehouse_id=int(warehouse_id))
     total = await q.count()
+    # 完整结果交报表 finalize 做分页；此处仍按 order 拉全量（体量受在库批次约束）
     batches = await q.order_by("updated_at").prefetch_related("material").all()
-    today = date.today()
+    today = now.date()
     items = []
     for b in batches:
         ut = b.updated_at
-        age_days = (today - ut.date()).days if ut else stale_days
+        age_days = (today - ut.date()).days if ut else days
         material = getattr(b, "material", None)
         items.append({
             "batch_no": b.batch_no,
@@ -1173,12 +1178,13 @@ async def build_slow_moving_inventory(
             "quantity": float(b.quantity or 0),
             "last_move_date": to_api_isoformat(ut.date()) if ut else None,
             "age_days": age_days,
+            "warehouse_id": int(getattr(b, "warehouse_id", 0) or 0),
             "warehouse_name": "",
         })
     return {
         "data": items,
         "success": True,
-        "summary": {"stale_days": stale_days, "material_count": total},
+        "summary": {"stale_days": days, "material_count": total},
     }
 
 

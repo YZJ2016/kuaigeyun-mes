@@ -44,3 +44,25 @@ def test_pricing_reads_terms_only():
     assert partner_settlement_terms_for_pricing(_PartnerStub("monthly")) == "net_terms"
     assert partner_settlement_terms_for_pricing(_PartnerStub("net_terms")) == "net_terms"
     assert partner_settlement_terms_for_pricing(_PartnerStub("cash")) is None
+
+
+def test_expand_legacy_partner_settlement_mapped_row():
+    from apps.kuaiconnect.services.inbound_sync.master_data_sync_common import (
+        expand_legacy_partner_settlement_mapped_row,
+    )
+
+    expanded = expand_legacy_partner_settlement_mapped_row(
+        {"code": "C1", "settlement_method_code": "月结"}
+    )
+    assert "settlement_method_code" not in expanded
+    assert expanded["settlement_terms_code"] == "net_terms"
+    assert "default_payment_method_code" not in expanded
+
+    keep_new = expand_legacy_partner_settlement_mapped_row(
+        {
+            "settlement_method_code": "cash",
+            "default_payment_method_code": "bank_transfer",
+        }
+    )
+    assert keep_new["default_payment_method_code"] == "bank_transfer"
+    assert "settlement_method_code" not in keep_new

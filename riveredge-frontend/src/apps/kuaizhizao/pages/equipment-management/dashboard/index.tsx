@@ -157,6 +157,11 @@ const EquipmentDashboard: React.FC = () => {
     () => mesDashboardService.getTodosByModule('equipment', 8),
     'kz:equipment-dashboard:todos',
   );
+  const { data: todayTasksData, loading: todayTasksLoading } = useDashboardRequest(
+    () => mesDashboardService.getEquipmentTodayTasks(TODO_DISPLAY_ROWS),
+    'kz:equipment-dashboard:today-tasks',
+    { pollingInterval: 120_000 },
+  );
   const { data: recentFaultsResult, loading: faultsLoading } = useDashboardRequest(async () => {
     const res = await equipmentFaultApi.list({ limit: 6 });
     return unwrapList(res);
@@ -187,6 +192,21 @@ const EquipmentDashboard: React.FC = () => {
   const spotChecks = spotChecksResult || [];
   const spareAlerts = spareAlertsResult || [];
   const todos = todosData?.items || [];
+  const todayTasks = useMemo(
+    () =>
+      (todayTasksData?.items || []).map((row) => ({
+        id: row.id,
+        type: row.kind || 'equipment',
+        title: row.title,
+        description: row.description ?? undefined,
+        priority: row.priority || 'medium',
+        due_date: row.due_date ?? undefined,
+        status: row.status || 'pending',
+        link: row.link ?? undefined,
+        created_at: row.created_at,
+      })),
+    [todayTasksData?.items],
+  );
 
   const plantOptions = useMemo(
     () => [
@@ -690,6 +710,30 @@ const EquipmentDashboard: React.FC = () => {
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
         <ModuleActionMasonry>
+          {showMasonryCard(
+            todayTasksLoading,
+            todayTasks.length > 0,
+            masonryEmptyFallback,
+          ) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaizhizao.equipmentDashboard.todayTasksTitle')}
+              loading={todayTasksLoading}
+              masonryWeight={masonryWeightFromRows(Math.min(todayTasks.length, TODO_DISPLAY_ROWS))}
+              extra={
+                todayTasksData?.task_date ? (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {todayTasksData.task_date}
+                  </Text>
+                ) : null
+              }
+            >
+              <ModuleTodoList
+                items={todayTasks}
+                emptyText={t('app.kuaizhizao.equipmentDashboard.noTodayTasks')}
+              />
+            </ModuleActionPanel>
+          ) : null}
           {showMasonryCard(todosLoading, todos.length > 0, masonryEmptyFallback) ? (
             <ModuleActionPanel
               layout="masonry"

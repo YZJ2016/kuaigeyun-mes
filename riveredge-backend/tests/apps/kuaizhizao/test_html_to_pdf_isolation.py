@@ -12,11 +12,15 @@ from apps.kuaizhizao.services.html_to_pdf_engine import (
     parse_css_page_size,
 )
 from core.services.pdf.playwright_engine import (
+    _PLACEHOLDER_DATA_IMAGE,
     _is_playwright_set_content_timeout,
     _is_playwright_target_crashed,
     describe_print_html_for_error,
+    replace_all_data_images_with_placeholder,
     should_inject_base_href_for_pdf,
+    shrink_data_image_url,
     strip_chromium_risky_print_margin_boxes,
+    wrap_html_document_for_print,
 )
 from apps.kuaizhizao.services.print_service import (
     _MAX_PRINT_HTML_BYTES,
@@ -49,9 +53,29 @@ def test_is_playwright_target_crashed_printtopdf_protocol():
     assert _is_playwright_target_crashed(err) is True
 
 
+def test_wrap_html_document_for_print_fragment():
+    out = wrap_html_document_for_print("<style></style><div>x</div>")
+    assert "<!DOCTYPE html>" in out
+    assert '<meta charset="utf-8"/>' in out
+    assert "<div>x</div>" in out
+
+
 def test_strip_chromium_risky_print_margin_boxes():
     html = "<style>@page { @bottom-center { content: counter(page); } }</style>"
     assert "@bottom-center" not in strip_chromium_risky_print_margin_boxes(html)
+
+
+def test_shrink_svg_data_image_force_placeholder():
+    svg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4="
+    assert shrink_data_image_url(svg, force=True) == _PLACEHOLDER_DATA_IMAGE
+
+
+def test_replace_all_data_images_with_placeholder():
+    html = '<img src="data:image/png;base64,UEMtVEVTVC1BLQ=="/><img src="data:image/jpeg;base64,UEMtVEVTVC1CLQ=="/>'
+    out = replace_all_data_images_with_placeholder(html)
+    assert out.count(_PLACEHOLDER_DATA_IMAGE) == 2
+    assert "UEMtVEVTVC1BLQ" not in out
+    assert "UEMtVEVTVC1CLQ" not in out
 
 
 def test_describe_print_html_for_error():

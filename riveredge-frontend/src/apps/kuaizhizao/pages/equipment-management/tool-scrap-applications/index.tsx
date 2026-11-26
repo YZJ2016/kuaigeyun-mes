@@ -1,4 +1,5 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -36,6 +37,10 @@ import {
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import {
+  clearOpsOpenCreateParams,
+  openCreateQuerySignature,
+} from '../shared/opsDocumentOpenCreate';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const P = 'app.kuaizhizao.toolOps.scrap';
@@ -60,6 +65,8 @@ interface ToolScrapApplication {
 const ToolScrapApplicationsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openCreateHandledRef = useRef<string | null>(null);
   const perms = useResourcePermissions(RESOURCE);
   const canAudit = perms.canAction?.('audit') ?? perms.canAction?.('approve') ?? false;
   const actionRef = useRef<ActionType>(null);
@@ -84,15 +91,40 @@ const ToolScrapApplicationsPage: React.FC = () => {
     );
   };
 
-  const handleCreate = () => {
+  const beginCreate = (prefillToolId?: number) => {
     setIsEdit(false);
     setCurrent(null);
     setModalVisible(true);
     void loadToolOptions();
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ scrap_date: dayjs() });
+    formRef.current?.setFieldsValue({
+      scrap_date: dayjs(),
+      ...(prefillToolId != null ? { tool_id: prefillToolId } : {}),
+    });
+  };
+
+  const handleCreate = () => {
+    beginCreate();
   };
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    const sig = openCreateQuerySignature(searchParams);
+    if (!sig || !perms.canCreate) return;
+    if (openCreateHandledRef.current === sig) return;
+    void (async () => {
+      let toolId = Number(searchParams.get('tool_id'));
+      const toolUuid = searchParams.get('tool_uuid');
+      if (!Number.isFinite(toolId) && toolUuid) {
+        const tool = await toolApi.get(toolUuid);
+        toolId = Number(tool.id);
+      }
+      if (!Number.isFinite(toolId)) return;
+      openCreateHandledRef.current = sig;
+      setSearchParams(clearOpsOpenCreateParams(searchParams), { replace: true });
+      beginCreate(toolId);
+    })();
+  }, [searchParams, perms.canCreate, setSearchParams]);
 
   const handleDetail = (record: ToolScrapApplication) => {
     if (!record.id) return;
@@ -419,6 +451,7 @@ const ToolScrapApplicationsPage: React.FC = () => {
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count })}
           onDelete={executeDelete}

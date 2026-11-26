@@ -93,7 +93,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: AUDIT_BINDINGS_QUERY_KEY,
     queryFn: getAuditBindings,
     staleTime: 60_000,
@@ -170,9 +170,12 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
   }, [data?.items]);
 
   const visibleCategories = useMemo(() => {
-    if (!data?.items) return AUDIT_CATEGORIES;
+    if (!data?.items) {
+      // 加载中保留完整侧栏骨架；失败后不再假装每个模块都有条目
+      return isError ? [] : AUDIT_CATEGORIES;
+    }
     return AUDIT_CATEGORIES.filter((c) => (categoryCounts.get(c.id) || 0) > 0);
-  }, [categoryCounts, data?.items]);
+  }, [categoryCounts, data?.items, isError]);
 
   useEffect(() => {
     if (!visibleCategories.some((c) => c.id === selectedCatId)) {
@@ -325,6 +328,12 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
           >
             <Text strong>{t('pages.system.configCenter.auditSwitch.sectionTitle')}</Text>
             <Spin spinning={isLoading}>
+              {isError ? (
+                <Paragraph type="danger" style={{ marginTop: 12, marginBottom: 0 }}>
+                  {(error as Error)?.message ||
+                    t('pages.system.configCenter.auditSwitch.loadFailed')}
+                </Paragraph>
+              ) : null}
               <div
                 style={{
                   display: 'grid',
@@ -402,7 +411,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
                     </Card>
                   );
                 })}
-                {categoryItems.length === 0 && (
+                {!isError && categoryItems.length === 0 && (
                   <Text type="secondary">{t('pages.system.configCenter.auditSwitch.empty')}</Text>
                 )}
               </div>

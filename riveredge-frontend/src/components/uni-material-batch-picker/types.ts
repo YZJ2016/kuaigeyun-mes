@@ -13,4 +13,6 @@ export interface UniMaterialBatchPickerProps {
   hostResource?: string;
   /** 限定为指定仓库内有库存的物料（即时库存汇总口径，与 UniMaterialSelect.warehouseId 一致） */
   warehouseId?: number;
+  /** 传入后按该来源筛选，且来源筛选不可改 */
+  sourceType?: string;
 }

@@ -18,6 +18,15 @@ function norm(s: string | undefined): string {
   return (s ?? '').trim();
 }
 
+/** 与需求计算列表页一致：已运算成功可下推工/采 */
+const COMPUTATION_COMPLETED_STATUSES = new Set(['完成', '已完成', 'completed', 'success']);
+
+export function isDemandComputationCompleted(status?: string): boolean {
+  const raw = norm(status);
+  if (!raw) return false;
+  return COMPUTATION_COMPLETED_STATUSES.has(raw) || COMPUTATION_COMPLETED_STATUSES.has(raw.toLowerCase());
+}
+
 const STATUS_TO_STAGE: Record<string, string> = {
   待执行: '待执行',
   计算中: '计算中',

@@ -112,6 +112,14 @@ export async function submitPurchaseOrderChange(id: number): Promise<PurchaseOrd
   return apiRequest(`/apps/kuaizhizao/purchase-order-change-orders/${id}/submit`, { method: 'POST' });
 }
 
+export async function submitPurchaseOrderChangeForReview(id: number): Promise<PurchaseOrderChange> {
+  return apiRequest(`/core/uni-audit/purchase_order_change/${id}/submit_review`, { method: 'POST' });
+}
+
+export async function revokePurchaseOrderChange(id: number): Promise<PurchaseOrderChange> {
+  return apiRequest(`/core/uni-audit/purchase_order_change/${id}/revoke`, { method: 'POST' });
+}
+
 export async function approvePurchaseOrderChange(id: number, approved: boolean, reviewRemarks?: string): Promise<PurchaseOrderChange> {
   return apiRequest(`/apps/kuaizhizao/purchase-order-change-orders/${id}/approve`, {
     method: 'POST',

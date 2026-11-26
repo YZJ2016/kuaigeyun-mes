@@ -15,7 +15,13 @@ from tortoise.functions import Count
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, normalize_status, is_draft_status
+from apps.kuaizhizao.constants import (
+    DocumentStatus,
+    ReviewStatus,
+    is_draft_status,
+    is_submitted_status,
+    normalize_status,
+)
 from apps.kuaizhizao.constants.purchase_inquiry import (
     INQUIRY_ACTIVE_STATUSES,
     INQUIRY_STATUS_LABELS,
@@ -115,6 +121,62 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         except Exception:
             import uuid
             return f"CGXJ{today_site_str()}{uuid.uuid4().hex[:6].upper()}"
+
+    async def _sync_vendor_system_attachments(
+        self,
+        tenant_id: int,
+        inquiry_id: int,
+        user_id: int,
+        *,
+        require_vendors: bool = False,
+    ) -> PurchaseInquiry:
+        """
+        按当前受邀供应商重写系统询价 PDF，并保留人工附件。
+        无供应商时：仅清掉旧系统附件（require_vendors=True 则报错，供发布用）。
+        """
+        from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import (
+            generate_purchase_inquiry_vendor_attachments,
+            keep_manual_attachments,
+        )
+
+        inquiry = await PurchaseInquiry.get_or_none(
+            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
+        )
+        if not inquiry:
+            raise NotFoundError(f"询价单不存在: {inquiry_id}")
+
+        vendor_count = await PurchaseInquiryVendor.filter(
+            tenant_id=tenant_id, inquiry_id=inquiry_id
+        ).count()
+        manual = keep_manual_attachments(inquiry.attachments)
+
+        if vendor_count == 0:
+            if require_vendors:
+                raise BusinessLogicError("请至少邀请一家供应商")
+            if manual != (inquiry.attachments or []):
+                await inquiry.update_from_dict(
+                    {
+                        "attachments": manual,
+                        "updated_by": user_id,
+                        "updated_by_name": (await self.get_user_info(user_id))["name"],
+                    }
+                ).save()
+            return inquiry
+
+        system_attachments = await generate_purchase_inquiry_vendor_attachments(
+            tenant_id=tenant_id,
+            inquiry=inquiry,
+            user_id=user_id,
+        )
+        merged = manual + system_attachments
+        await inquiry.update_from_dict(
+            {
+                "attachments": merged,
+                "updated_by": user_id,
+                "updated_by_name": (await self.get_user_info(user_id))["name"],
+            }
+        ).save()
+        return inquiry
 
     def _status_label(self, status: str) -> str:
         return INQUIRY_STATUS_LABELS.get(status, status)
@@ -353,6 +415,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         source_id: Optional[int] = None,
         order_by: Optional[str] = None,
         include_items: bool = False,
+        viewer_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         qs = PurchaseInquiry.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if source_id:
@@ -448,7 +511,9 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         enriched = enrich_purchase_inquiry_list_capabilities(page_rows, out)
         from core.services.approval.audit_record_enricher import enrich_items
 
-        enriched_items = await enrich_items(tenant_id, "purchase_inquiry", enriched)
+        enriched_items = await enrich_items(
+            tenant_id, "purchase_inquiry", enriched, viewer_id=viewer_id
+        )
         return {
             "data": [item.model_dump() for item in enriched_items],
             "total": total,
@@ -459,6 +524,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         self, tenant_id: int, data: PurchaseInquiryCreate, created_by: int
     ) -> PurchaseInquiryResponse:
         await self._ensure_module_enabled(tenant_id)
+        from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import keep_manual_attachments
+
         async with in_transaction():
             code = data.inquiry_code
             if not code:
@@ -505,7 +572,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 source_code=data.source_code,
                 total_quantity=total_qty,
                 notes=data.notes,
-                attachments=data.attachments,
+                # 人工附件先落库；系统 PDF 在事务外按供应商生成
+                attachments=keep_manual_attachments(data.attachments),
                 created_by=created_by,
                 created_by_name=creator_info["name"],
                 updated_by=created_by,
@@ -582,6 +650,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         is_draft = inquiry.status == PurchaseInquiryStatus.DRAFT.value
+        if is_draft and is_submitted_status(str(inquiry.review_status or "")):
+            assert_purchase_inquiry_capability(inquiry, "update")
         if not is_draft:
             # 非草稿仅允许维护人工附件；系统按供应商生成的 PDF 服务端强制保留
             from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import (
@@ -661,6 +731,30 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             if data.vendors is not None and not is_field_editable("purchase_inquiry", "vendors", node_editable):
                 raise ValidationError("字段「供应商」不允许在审核中修改")
 
+        from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import (
+            is_vendor_system_attachment,
+            keep_manual_attachments,
+        )
+
+        # 仅改人工附件：保留系统 PDF，不重跑生成（上传盖章件走此路径）
+        fields_set = set(data.model_fields_set)
+        if fields_set and fields_set <= {"attachments"}:
+            user_info = await self.get_user_info(updated_by)
+            existing_system = [
+                dict(e) if isinstance(e, dict) else e
+                for e in (inquiry.attachments or [])
+                if is_vendor_system_attachment(e)
+            ]
+            merged = existing_system + keep_manual_attachments(data.attachments)
+            await inquiry.update_from_dict(
+                {
+                    "attachments": merged,
+                    "updated_by": updated_by,
+                    "updated_by_name": user_info["name"],
+                }
+            ).save()
+            return await self.get_inquiry_by_id(tenant_id, inquiry_id)
+
         async with in_transaction():
             user_info = await self.get_user_info(updated_by)
             update_fields = {
@@ -691,7 +785,11 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             for field in header_fields:
                 if field not in data.model_fields_set:
                     continue
-                update_fields[field] = getattr(data, field)
+                value = getattr(data, field)
+                # 客户端可能丢系统标记；人工附件先落库，系统 PDF 事务外重生成
+                if field == "attachments":
+                    value = keep_manual_attachments(value)
+                update_fields[field] = value
             if data.items is not None:
                 await PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).delete()
                 total_qty = Decimal(0)
@@ -726,8 +824,15 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                         status=PurchaseInquiryVendorStatus.INVITED.value,
                         notes=vendor.notes,
                     )
+            # 未改 attachments 时先去掉旧系统条目，避免与重生成重复
+            if "attachments" not in update_fields:
+                update_fields["attachments"] = keep_manual_attachments(inquiry.attachments)
             await inquiry.update_from_dict(update_fields).save()
-            return await self.get_inquiry_by_id(tenant_id, inquiry_id)
+
+        await self._sync_vendor_system_attachments(
+            tenant_id, inquiry_id, updated_by, require_vendors=False
+        )
+        return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
     async def delete_inquiry(self, tenant_id: int, inquiry_id: int, deleted_by: int) -> None:
         await self._ensure_module_enabled(tenant_id)
@@ -736,8 +841,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        if inquiry.status != PurchaseInquiryStatus.DRAFT.value:
-            raise BusinessLogicError("只有草稿状态的询价单可删除")
+        assert_purchase_inquiry_capability(inquiry, "delete")
         await inquiry.update_from_dict({"deleted_at": resolve_business_datetime(), "updated_by": deleted_by}).save()
 
     async def _recommend_supplier_ids(self, tenant_id: int, material_ids: List[int]) -> List[int]:
@@ -816,6 +920,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         primary = req_by_id[requisition_ids[0]]
         return PurchaseInquiryCreate(
             inquiry_name=inquiry_name or f"询价-{primary.requisition_code}",
+            tax_rate=Decimal("0"),
             quote_deadline=quote_deadline,
             source_type="PurchaseRequisition",
             source_id=primary.id,
@@ -1031,12 +1136,103 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             codes = ", ".join(i.inquiry_code for i in active_inquiries)
             raise BusinessLogicError(f"所选采购申请行已在进行中的询价单（{codes}），不可重复下推或直转采购订单")
 
-    async def publish_inquiry(self, tenant_id: int, inquiry_id: int, user_id: int) -> PurchaseInquiryResponse:
-        from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import (
-            generate_purchase_inquiry_vendor_attachments,
-            keep_manual_attachments,
-        )
+    async def _send_vendor_notify_emails_on_quoting(
+        self,
+        tenant_id: int,
+        inquiry: PurchaseInquiry,
+    ) -> None:
+        """
+        进入询价中前：对勾选邮件通知的受邀供应商，经消息渠道邮件配置发信，并附带该供应商系统 PDF。
+        任一家失败则抛错，调用方不得改状态。
+        """
+        from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import is_vendor_system_attachment
+        from core.services.file.file_service import FileService
+        from core.services.messaging.message_config_service import MessageConfigService
 
+        vendors = await PurchaseInquiryVendor.filter(
+            tenant_id=tenant_id, inquiry_id=inquiry.id
+        ).order_by("id")
+        notify_vendors = [v for v in vendors if bool(getattr(v, "email_notify", False))]
+        if not notify_vendors:
+            return
+
+        missing_email = [
+            (v.supplier_name or str(v.supplier_id) or "供应商")
+            for v in notify_vendors
+            if not str(getattr(v, "contact_email", None) or "").strip()
+        ]
+        if missing_email:
+            raise BusinessLogicError(
+                "以下供应商已勾选邮件通知但未填写邮箱：" + "、".join(missing_email)
+            )
+
+        mail_config = await MessageConfigService.resolve_active_config(tenant_id, "email")
+        if not mail_config or not mail_config.config:
+            raise BusinessLogicError(
+                "未配置可用的邮件消息渠道，请先在系统配置「消息渠道」中新增并启用邮件配置"
+            )
+
+        attachments_raw = inquiry.attachments if isinstance(inquiry.attachments, list) else []
+        system_by_supplier: Dict[int, Dict[str, Any]] = {}
+        for entry in attachments_raw:
+            if not is_vendor_system_attachment(entry) or not isinstance(entry, dict):
+                continue
+            sid = entry.get("supplier_id")
+            try:
+                sid_int = int(sid) if sid is not None else None
+            except (TypeError, ValueError):
+                sid_int = None
+            if sid_int is None:
+                continue
+            system_by_supplier[sid_int] = entry
+
+        inquiry_label = inquiry.inquiry_name or inquiry.inquiry_code
+        for vendor in notify_vendors:
+            to_email = str(vendor.contact_email or "").strip()
+            supplier_label = vendor.supplier_name or str(vendor.supplier_id) or "供应商"
+            att_entry = system_by_supplier.get(int(vendor.supplier_id)) if vendor.supplier_id else None
+            if not att_entry or not str(att_entry.get("uid") or "").strip():
+                raise BusinessLogicError(
+                    f"供应商「{supplier_label}」缺少系统询价附件，无法发送邮件通知"
+                )
+            file_uuid = str(att_entry["uid"]).strip()
+            file_name = str(att_entry.get("name") or f"{inquiry.inquiry_code}-{supplier_label}.pdf")
+            try:
+                pdf_bytes = await FileService.get_file_content(tenant_id, file_uuid)
+            except Exception as exc:
+                raise BusinessLogicError(
+                    f"读取供应商「{supplier_label}」询价附件失败：{exc}"
+                ) from exc
+
+            subject = f"采购询价单 {inquiry.inquiry_code} - {inquiry_label}"
+            body = (
+                f"您好：\n\n"
+                f"现邀请贵司参与采购询价。\n"
+                f"询价单号：{inquiry.inquiry_code}\n"
+                f"询价名称：{inquiry_label}\n"
+                f"报价截止日期：{inquiry.quote_deadline or '（未填写）'}\n\n"
+                f"询价单 PDF 见附件，请查收。\n"
+            )
+            success, _message, error = await MessageConfigService._send_email(
+                mail_config.config or {},
+                to_email,
+                subject=subject,
+                content=body,
+                attachments=[
+                    {
+                        "filename": file_name,
+                        "content": pdf_bytes,
+                        "subtype": "pdf",
+                    }
+                ],
+            )
+            if not success:
+                raise BusinessLogicError(
+                    f"向供应商「{supplier_label}」({to_email}) 发送询价邮件失败："
+                    f"{error or _message or '未知错误'}"
+                )
+
+    async def publish_inquiry(self, tenant_id: int, inquiry_id: int, user_id: int) -> PurchaseInquiryResponse:
         inquiry = await PurchaseInquiry.get_or_none(
             tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
         )
@@ -1045,26 +1241,20 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         if inquiry.status != PurchaseInquiryStatus.DRAFT.value:
             raise BusinessLogicError("只有草稿状态的询价单可发布")
         items = await PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).count()
-        vendors = await PurchaseInquiryVendor.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).count()
         if items == 0:
             raise BusinessLogicError("询价单无明细，无法发布")
-        if vendors == 0:
-            raise BusinessLogicError("请至少邀请一家供应商")
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
         if audit_required and inquiry.review_status != ReviewStatus.APPROVED.value:
             raise BusinessLogicError("询价单需审核通过后方可发布")
 
-        # 先生成系统附件；失败则不改状态（禁止半发布）
-        system_attachments = await generate_purchase_inquiry_vendor_attachments(
-            tenant_id=tenant_id,
-            inquiry=inquiry,
-            user_id=user_id,
+        # 先同步系统附件；失败则不改状态（禁止半发布）
+        inquiry = await self._sync_vendor_system_attachments(
+            tenant_id, inquiry_id, user_id, require_vendors=True
         )
-        merged_attachments = keep_manual_attachments(inquiry.attachments) + system_attachments
-
+        # 进入询价中前发邮件；失败则保持草稿
+        await self._send_vendor_notify_emails_on_quoting(tenant_id, inquiry)
         await inquiry.update_from_dict({
             "status": PurchaseInquiryStatus.QUOTING.value,
-            "attachments": merged_attachments,
             "updated_by": user_id,
             "updated_by_name": (await self.get_user_info(user_id))["name"],
         }).save()
@@ -1442,7 +1632,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         tenant_id: int,
         item_ids: List[int],
     ) -> Tuple[Dict[int, Decimal], Dict[int, Decimal]]:
-        """按询价行汇总下游采购订单占用（含草稿；删除的 PO 不计）。"""
+        """按询价行汇总下游采购订单占用（含草稿；删除的 PO 不计）。返回 (主, 副)。"""
         if not item_ids:
             return {}, {}
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
@@ -1574,8 +1764,9 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             lines.append(row)
 
         lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
-        total = len(lines)
-        return {"data": lines[skip : skip + limit], "total": total}
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
 
     class _InquiryPoPlan(NamedTuple):
         po_create: PurchaseOrderCreate
@@ -2001,13 +2192,73 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "purchase_orders": purchase_orders_out,
         }
 
+    async def commit_inquiry(self, tenant_id: int, inquiry_id: int, user_id: int) -> PurchaseInquiryResponse:
+        """草稿或已驳回 → 已提交。业务状态仍为草稿，不启动审批。"""
+        inquiry = await PurchaseInquiry.get_or_none(
+            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
+        )
+        if not inquiry:
+            raise NotFoundError(f"询价单不存在: {inquiry_id}")
+        if is_submitted_status(str(inquiry.review_status or "")):
+            return await self.get_inquiry_by_id(tenant_id, inquiry_id)
+        assert_purchase_inquiry_capability(inquiry, "submit")
+        user_info = await self.get_user_info(user_id)
+        await inquiry.update_from_dict({
+            "review_status": DocumentStatus.SUBMITTED.value,
+            "reviewer_id": None,
+            "reviewer_name": None,
+            "review_time": None,
+            "review_remarks": None,
+            "updated_by": user_id,
+            "updated_by_name": user_info["name"],
+        }).save()
+        return await self.get_inquiry_by_id(tenant_id, inquiry_id)
+
+    async def submit_inquiry_for_review(
+        self,
+        tenant_id: int,
+        inquiry_id: int,
+        user_id: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
+    ) -> PurchaseInquiryResponse:
+        """已提交 → 待审核，或未开审核时直接审核通过。业务状态保持草稿，发布仍走 publish。"""
+        inquiry = await PurchaseInquiry.get_or_none(
+            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
+        )
+        if not inquiry:
+            raise NotFoundError(f"询价单不存在: {inquiry_id}")
+        if not is_submitted_status(str(inquiry.review_status or "")):
+            raise BusinessLogicError("请先提交采购询价，再提交审核")
+        return await self._enter_inquiry_review(
+            tenant_id,
+            inquiry,
+            user_id,
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
+        )
+
     async def submit_inquiry(self, tenant_id: int, inquiry_id: int, user_id: int) -> PurchaseInquiryResponse:
+        """内部一次性提交审核。页面提交走 commit_inquiry。"""
         inquiry = await PurchaseInquiry.get_or_none(
             tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         assert_purchase_inquiry_capability(inquiry, "submit")
+        return await self._enter_inquiry_review(tenant_id, inquiry, user_id)
+
+    async def _enter_inquiry_review(
+        self,
+        tenant_id: int,
+        inquiry: PurchaseInquiry,
+        user_id: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
+    ) -> PurchaseInquiryResponse:
+        inquiry_id = int(inquiry.id)
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
         user_info = await self.get_user_info(user_id)
         if not audit_required:
@@ -2032,6 +2283,8 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 title=f"采购询价审批: {inquiry.inquiry_code}",
                 content=f"询价单: {inquiry.inquiry_code}",
                 doc_label="采购询价",
+                selected_approver_user_ids=selected_approver_user_ids,
+                selected_approver_by_node=selected_approver_by_node,
             )
             await inquiry.update_from_dict({
                 "review_status": DocumentStatus.PENDING_REVIEW.value,
@@ -2051,17 +2304,29 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
     async def withdraw_inquiry(
         self, tenant_id: int, inquiry_id: int, user_id: int
     ) -> PurchaseInquiryResponse:
-        """撤回提交：草稿 + 待审核 → 草稿（重置审核状态，非反审核）"""
+        """已提交撤销为草稿审核态；待审核撤回为已提交。业务状态不变。"""
         inquiry = await PurchaseInquiry.get_or_none(
             tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         assert_purchase_inquiry_capability(inquiry, "withdraw_submit")
+        user_info = await self.get_user_info(user_id)
+        if is_submitted_status(str(inquiry.review_status or "")):
+            await inquiry.update_from_dict({
+                "review_status": DocumentStatus.DRAFT.value,
+                "reviewer_id": None,
+                "reviewer_name": None,
+                "review_time": None,
+                "review_remarks": None,
+                "updated_by": user_id,
+                "updated_by_name": user_info["name"],
+            }).save()
+            return await self.get_inquiry_by_id(tenant_id, inquiry_id)
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
 
         try:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
-
             await ApprovalInstanceService.cancel_approval(
                 tenant_id=tenant_id,
                 entity_type="purchase_inquiry",
@@ -2069,16 +2334,17 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 operator_id=user_id,
             )
         except Exception as e:
-            logger.warning("取消询价单审批流程失败或无需取消: {}", e)
+            logger.exception("取消询价单审批流程失败 inquiry_id={}: {}", inquiry_id, e)
+            raise BusinessLogicError("撤回失败：无法取消审批流程，请重试") from e
 
         await inquiry.update_from_dict({
-            "review_status": DocumentStatus.DRAFT.value,
+            "review_status": DocumentStatus.SUBMITTED.value,
             "reviewer_id": None,
             "reviewer_name": None,
             "review_time": None,
             "review_remarks": None,
             "updated_by": user_id,
-            "updated_by_name": (await self.get_user_info(user_id))["name"],
+            "updated_by_name": user_info["name"],
         }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
@@ -2187,7 +2453,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
         await inquiry.update_from_dict({
-            "review_status": "",
+            "review_status": DocumentStatus.DRAFT.value,
             "reviewer_id": None,
             "reviewer_name": None,
             "review_time": None,

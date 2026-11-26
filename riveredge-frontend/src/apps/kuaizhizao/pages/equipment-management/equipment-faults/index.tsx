@@ -66,6 +66,7 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 const P = 'app.kuaizhizao.equipmentFault';
+const P_REPAIR = 'app.kuaizhizao.equipmentRepair';
 const FAULT_RESOURCE = 'kuaizhizao:equipment-fault';
 const MAINT_RESOURCE = 'kuaizhizao:maintenance-plan';
 
@@ -148,6 +149,54 @@ const EquipmentFaultsPage: React.FC = () => {
     useEquipmentDetailDrawer<EquipmentFault>();
 
   const [faultTrackingRefreshKey, setFaultTrackingRefreshKey] = useState(0);
+
+  type FaultLinkedRepairSummary = {
+    status?: string;
+    repair_no?: string;
+    repairer_name?: string;
+    created_at?: string;
+    arrival_at?: string;
+    started_at?: string;
+    completed_at?: string;
+  };
+  const [linkedRepair, setLinkedRepair] = useState<FaultLinkedRepairSummary | null>(null);
+  const [linkedRepairLoading, setLinkedRepairLoading] = useState(false);
+
+  useEffect(() => {
+    if (!detailVisible || !faultDetail?.uuid) {
+      setLinkedRepair(null);
+      return;
+    }
+    let cancelled = false;
+    setLinkedRepairLoading(true);
+    void (async () => {
+      try {
+        const res = await equipmentFaultApi.listRepairs({
+          equipment_fault_uuid: faultDetail.uuid,
+          skip: 0,
+          limit: 50,
+        });
+        const { data } = normalizeEquipmentListResponse(res);
+        const rows = data as FaultLinkedRepairSummary[];
+        const inProgress = rows.find((row) => row.status === '进行中');
+        const picked = inProgress ?? rows[0] ?? null;
+        if (!cancelled) {
+          setLinkedRepair(picked);
+        }
+      } catch {
+        if (!cancelled) {
+          setLinkedRepair(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLinkedRepairLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailVisible, faultDetail?.uuid, faultTrackingRefreshKey]);
 
   const faultTracking = useDocumentTracking(
     detailVisible && faultDetail?.id ? 'equipment_fault' : undefined,
@@ -422,9 +471,11 @@ const EquipmentFaultsPage: React.FC = () => {
         repair_type: values.repair_type ?? '现场维修',
         repair_description: values.repair_description ?? '',
         status: values.status ?? '进行中',
+        repairer_id: values.repairer_id,
+        repairer_name: values.repairer_name,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success(t(`${P}.repairCreated`));
+      messageApi.success(t(`${P}.repairAssigned`));
       setRepairModalVisible(false);
       setRepairFault(null);
       setRepairFormInitialValues(undefined);
@@ -668,7 +719,7 @@ const EquipmentFaultsPage: React.FC = () => {
           handleCreateRepair(record);
         }}
         >
-          {t(`${P}.action.createRepair`)}
+          {t(`${P}.action.assignRepair`)}
         </Button>
       );
     }
@@ -887,6 +938,7 @@ const EquipmentFaultsPage: React.FC = () => {
             style: { cursor: 'pointer' },
           })}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           deleteConfirmTitle={t(`${P}.batchDeleteTitle`)}
           deleteConfirmDescription={(count) => t(`${P}.batchDeleteContent`, { count: count })}
           
@@ -1022,7 +1074,7 @@ const EquipmentFaultsPage: React.FC = () => {
 
       {/* 创建维修记录 Modal */}
       <FormModalTemplate
-        title={t(`${P}.repairModal`)}
+        title={t(`${P}.assignRepairModal`)}
         open={repairModalVisible}
         onClose={() => {
           setRepairModalVisible(false);
@@ -1038,6 +1090,24 @@ const EquipmentFaultsPage: React.FC = () => {
         grid={false}
       >
         <Row gutter={16}>
+          <Col span={12}>
+            <UniUserSelect
+              name="repairer_uuid"
+              label={t(`${P}.form.repairer`)}
+              placeholder={t(`${P}.form.selectRepairer`)}
+              required
+              rules={[{ required: true, message: t(`${P}.form.selectRepairer`) }]}
+              onChange={(_value, user) => {
+                const picked = Array.isArray(user) ? user[0] : user;
+                repairFormRef.current?.setFieldsValue({
+                  repairer_id: picked?.id ?? undefined,
+                  repairer_name: picked?.full_name || picked?.username || undefined,
+                });
+              }}
+            />
+            <ProFormText name="repairer_id" hidden rules={[{ required: true }]} />
+            <ProFormText name="repairer_name" hidden />
+          </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="repair_date"
@@ -1185,7 +1255,7 @@ const EquipmentFaultsPage: React.FC = () => {
                   style={{ marginLeft: 8 }}
                   onClick={() => handleCreateRepair(faultDetail)}
                 >
-                  {t(`${P}.action.createRepair`)}
+                  {t(`${P}.action.assignRepair`)}
                 </Button>
               ) : null}
               {canStartMaint(faultDetail) ? (
@@ -1244,16 +1314,77 @@ const EquipmentFaultsPage: React.FC = () => {
               }
             : null
         }
+        supplementaryVisible={Boolean(faultDetail?.uuid)}
         supplementary={
-          faultDetail?.attachments?.length ? (
-            <LineAttachmentsUpload
-              category="equipment_fault_attachments"
-              value={faultDetail.attachments}
-              readOnly
-            />
-          ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
-          )
+          faultDetail?.uuid ? (
+            <>
+              {linkedRepairLoading ? (
+                <Spin size="small" />
+              ) : linkedRepair ? (
+                <Descriptions
+                  column={3}
+                  size="small"
+                  items={[
+                    {
+                      key: 'repair_no',
+                      label: t(`${P_REPAIR}.col.repairNo`),
+                      children: linkedRepair.repair_no ?? '-',
+                    },
+                    {
+                      key: 'repairer_name',
+                      label: t(`${P_REPAIR}.col.repairerName`),
+                      children:
+                        linkedRepair.repairer_name != null && linkedRepair.repairer_name !== ''
+                          ? String(linkedRepair.repairer_name)
+                          : '-',
+                    },
+                    {
+                      key: 'task_created_at',
+                      label: t(`${P_REPAIR}.col.taskCreatedAt`),
+                      children: linkedRepair.created_at
+                        ? formatDateTimeBySiteSetting(linkedRepair.created_at)
+                        : '-',
+                    },
+                    {
+                      key: 'arrival_at',
+                      label: t(`${P_REPAIR}.col.arrivalAt`),
+                      children: linkedRepair.arrival_at
+                        ? formatDateTimeBySiteSetting(linkedRepair.arrival_at)
+                        : '-',
+                    },
+                    {
+                      key: 'started_at',
+                      label: t(`${P_REPAIR}.col.startedAt`),
+                      children: linkedRepair.started_at
+                        ? formatDateTimeBySiteSetting(linkedRepair.started_at)
+                        : '-',
+                    },
+                    {
+                      key: 'completed_at',
+                      label: t(`${P_REPAIR}.col.completedAt`),
+                      children: linkedRepair.completed_at
+                        ? formatDateTimeBySiteSetting(linkedRepair.completed_at)
+                        : '-',
+                    },
+                  ]}
+                />
+              ) : (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={t(`${P}.repairTimesEmpty`)}
+                />
+              )}
+              {faultDetail?.attachments?.length ? (
+                <LineAttachmentsUpload
+                  category="equipment_fault_attachments"
+                  value={faultDetail.attachments}
+                  readOnly
+                />
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
+              )}
+            </>
+          ) : undefined
         }
         supplementaryTitle={t(`${P}.section.detailInfo`)}
         timeline={

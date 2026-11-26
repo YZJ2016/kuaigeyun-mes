@@ -2,7 +2,7 @@
  * 订单评审新建/编辑弹窗
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import {
   App,
   Button,
@@ -76,11 +76,20 @@ const getCustomerName = (c: any): string => {
 const getCustomerCode = (c: any): string =>
   String(c?.code ?? c?.customer_code ?? '').trim();
 
+type DocumentFlowSubmitExtras = {
+  documentFlowSourceType?: string;
+  documentFlowSourceId?: number;
+  documentFlowSourceItemIds?: number[];
+};
+
 export type SalesReviewFormModalProps = {
   open: boolean;
   onClose: () => void;
   onSuccess?: (row: SalesReview) => void;
   editing?: SalesReview | null;
+  /** 上拉/下推 handoff 预填（仅新建） */
+  createSeed?: Record<string, unknown> | null;
+  documentFlowSubmitExtrasRef?: MutableRefObject<DocumentFlowSubmitExtras | null>;
   zIndex?: number;
 };
 
@@ -104,11 +113,51 @@ function LineAmountCell({ index }: { index: number }) {
   return <span>{formatAmount(amount)}</span>;
 }
 
+function applyCreateSeedToForm(
+  form: ReturnType<typeof Form.useForm>[0],
+  seed: Record<string, unknown>,
+): void {
+  const items = seed.items;
+  form.setFieldsValue({
+    customer_id: seed.customer_id,
+    customer_code: seed.customer_code,
+    customer_name: seed.customer_name,
+    customer_contact: seed.customer_contact,
+    customer_phone: seed.customer_phone,
+    project_name: seed.project_name,
+    review_date: seed.review_date ? dayjs(String(seed.review_date)) : dayjs(),
+    delivery_date: seed.delivery_date ? dayjs(String(seed.delivery_date)) : undefined,
+    urgency: seed.urgency || 'normal',
+    risk_level: seed.risk_level || 'medium',
+    payment_cycle: seed.payment_cycle,
+    delivery_location: seed.delivery_location,
+    transport_method: seed.transport_method,
+    remarks: seed.remarks,
+    items: Array.isArray(items)
+      ? items.map((it) => {
+          const row = it as Record<string, unknown>;
+          return {
+            material_id: row.material_id,
+            material_code: row.material_code,
+            material_name: row.material_name,
+            material_spec: row.material_spec ?? undefined,
+            material_unit: row.material_unit ?? undefined,
+            quantity: Number(row.quantity) || 1,
+            unit_price: Number(row.unit_price) || 0,
+            notes: row.notes ?? undefined,
+          };
+        })
+      : undefined,
+  });
+}
+
 export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
   open,
   onClose,
   onSuccess,
   editing = null,
+  createSeed = null,
+  documentFlowSubmitExtrasRef,
   zIndex,
 }) => {
   const { t } = useTranslation();
@@ -268,11 +317,14 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
       } else {
         setPreviewCode(null);
       }
+      if (createSeed && !cancelled) {
+        applyCreateSeedToForm(form, createSeed);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, editing, form]);
+  }, [open, editing, form, createSeed]);
 
   const handleClose = () => {
     form.resetFields();
@@ -351,6 +403,8 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
     }
 
     const customerOpt = customerOptions.find((o) => o.value === Number(values.customer_id));
+    const flowExtras = documentFlowSubmitExtrasRef?.current;
+    const seed = createSeed;
     const payload: SalesReviewCreatePayload = {
       ...(isEdit ? {} : { review_code: reviewCode }),
       customer_id: Number(values.customer_id),
@@ -365,9 +419,22 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
       risk_level: values.risk_level || 'medium',
       settlement_method: values.settlement_method || null,
       payment_cycle: values.payment_cycle || null,
+      delivery_location: values.delivery_location || (seed?.delivery_location as string | undefined) || null,
+      transport_method: values.transport_method || (seed?.transport_method as string | undefined) || null,
       remarks: values.remarks || null,
+      quotation_id: (seed?.quotation_id as number | undefined) ?? null,
+      quotation_code: (seed?.quotation_code as string | undefined) ?? null,
+      salesman_id: (seed?.salesman_id as number | undefined) ?? null,
+      salesman_name: (seed?.salesman_name as string | undefined) ?? null,
       items,
       review_dept_plan: reviewDeptPlan,
+      ...(flowExtras?.documentFlowSourceType
+        ? {
+            documentFlowSourceType: flowExtras.documentFlowSourceType,
+            documentFlowSourceId: flowExtras.documentFlowSourceId,
+            documentFlowSourceItemIds: flowExtras.documentFlowSourceItemIds,
+          }
+        : {}),
     };
     if (!payload.customer_name) {
       message.error(t('app.kuaizhizao.salesReview.customerRequired'));

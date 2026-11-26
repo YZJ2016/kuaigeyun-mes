@@ -775,8 +775,15 @@ class SalesReviewService(AppBaseService):
                     user_id=current_user.id, role_id__in=list(role_ids)
                 ).exists()
         if not matched and department_ids:
-            user_dept = getattr(current_user, "department_id", None)
-            if user_dept is not None and int(user_dept) in {int(x) for x in department_ids}:
+            from core.services.user.user_department_assignment_service import (
+                UserDepartmentAssignmentService,
+            )
+
+            slot_ids = {int(x) for x in department_ids}
+            member_ids = await UserDepartmentAssignmentService.list_membership_department_ids(
+                tenant_id, int(current_user.id)
+            )
+            if slot_ids.intersection(member_ids):
                 matched = True
         if not matched:
             raise BusinessLogicError(f"当前用户无权提交「{dept_code}」部门评审意见")
@@ -881,6 +888,106 @@ class SalesReviewService(AppBaseService):
             tenant_id, action="rejected", row=row, extra={"reject_reason": note}
         )
         return await self.get(tenant_id, review_id)
+
+    async def list_sales_review_sales_order_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        sales_review_id: Optional[int] = None,
+        pullable_only: bool = True,
+    ) -> Dict[str, Any]:
+        """开口订单评审明细，供销售订单跨单取单（整单下推，按行展示物料）。"""
+        from apps.kuaizhizao.models.sales_review import SalesReview
+
+        q = SalesReview.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if sales_review_id is not None:
+            q = q.filter(id=int(sales_review_id))
+        reviews = await q.only(
+            "id",
+            "review_code",
+            "status",
+            "customer_name",
+            "delivery_date",
+            "sales_order_id",
+            "sales_order_code",
+        )
+        if not reviews:
+            return {"data": [], "total": 0}
+        review_by_id = {int(r.id): r for r in reviews}
+        review_ids = list(review_by_id.keys())
+        items = await SalesReviewItem.filter(
+            tenant_id=tenant_id, sales_review_id__in=review_ids
+        ).order_by("sales_review_id", "line_no", "id")
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for item in items:
+            review = review_by_id.get(int(item.sales_review_id))
+            if not review:
+                continue
+            can_push = (
+                (review.status or "") == "passed"
+                and not review.sales_order_id
+            )
+            qty = float(item.quantity or 0)
+            if qty <= 0:
+                continue
+            remaining = qty if can_push else 0.0
+            pushed = 0.0 if can_push else qty
+            selectable = can_push and remaining > 0
+            if pullable_only and not selectable:
+                continue
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            if kw:
+                haystack = " ".join([material_code, material_name, material_spec]).lower()
+                if kw not in haystack:
+                    continue
+            delivery_date = (
+                review.delivery_date.isoformat()
+                if getattr(review, "delivery_date", None)
+                else None
+            )
+            from apps.kuaizhizao.utils.pull_open_line_quantity import enrich_pull_line_from_source_item
+
+            row: Dict[str, Any] = {
+                "id": int(item.id),
+                "sales_review_id": int(review.id),
+                "review_code": review.review_code,
+                "review_status": review.status,
+                "document_date": delivery_date,
+                "delivery_date": delivery_date,
+                "customer_name": getattr(review, "customer_name", None),
+                "material_id": item.material_id,
+                "material_code": material_code,
+                "material_name": material_name,
+                "material_spec": material_spec or None,
+                "unit": item.material_unit or "件",
+                "can_push": can_push,
+            }
+            enrich_pull_line_from_source_item(
+                row,
+                item,
+                suggested_primary=qty,
+                pushed_primary=pushed,
+                remaining_primary=remaining,
+                already_pushed=not can_push,
+                push_allowed=can_push,
+            )
+            lines.append(row)
+        lines.sort(
+            key=lambda r: (
+                str(r.get("review_code") or ""),
+                str(r.get("material_code") or ""),
+                int(r.get("id") or 0),
+            )
+        )
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
 
     async def preview_push_to_sales_order(
         self, tenant_id: int, review_id: int

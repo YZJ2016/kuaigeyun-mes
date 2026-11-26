@@ -94,6 +94,8 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.outsource_work_order",
     "apps.kuaizhizao.models.outsource_settlement",
     "apps.kuaizhizao.models.packing_binding",
+    "apps.kuaizhizao.models.packing_binding_line",
+    "apps.kuaizhizao.models.packing_profile",
     "apps.kuaizhizao.models.label_station",
     "apps.kuaizhizao.models.process_inspection",
     "apps.kuaizhizao.models.production_picking",

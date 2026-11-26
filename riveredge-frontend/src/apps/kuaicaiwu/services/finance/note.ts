@@ -48,10 +48,19 @@ export interface FinanceNote {
   settle_date?: string | null;
   notes?: string | null;
   attachments?: Record<string, unknown>[] | null;
+  review_status?: string | null;
   created_at?: string;
   updated_at?: string;
   created_by_name?: string | null;
   updated_by_name?: string | null;
+  audit?: {
+    allowed_actions?: string[];
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+    viewer_actions?: unknown;
+  } | null;
+  capabilities?: Record<string, { allowed?: boolean; reason?: string | null }> | null;
 }
 
 export interface FinanceNoteListParams {
@@ -59,6 +68,7 @@ export interface FinanceNoteListParams {
   limit?: number;
   keyword?: string;
   status?: string;
+  review_status?: string;
   bill_type?: FinanceNoteBillType;
   expiring_within_days?: number;
   due_date_start?: string;
@@ -108,7 +118,33 @@ export const financeNoteService = {
   ) => apiRequest<FinanceNote>(`${apiBase(direction)}/${id}/action`, { method: 'PUT', data }),
   delete: (direction: FinanceNoteDirection, id: number) =>
     apiRequest<void>(`${apiBase(direction)}/${id}`, { method: 'DELETE' }),
+  /** 页面提交：草稿→已提交 */
+  commit: (direction: FinanceNoteDirection, id: number) =>
+    apiRequest<FinanceNote>(`/core/uni-audit/${auditEntity(direction)}/${id}/submit`, {
+      method: 'POST',
+    }),
+  submitForReview: (direction: FinanceNoteDirection, id: number) =>
+    apiRequest<FinanceNote>(`/core/uni-audit/${auditEntity(direction)}/${id}/submit_review`, {
+      method: 'POST',
+    }),
+  withdraw: (direction: FinanceNoteDirection, id: number) =>
+    apiRequest<FinanceNote>(`/core/uni-audit/${auditEntity(direction)}/${id}/withdraw`, {
+      method: 'POST',
+    }),
+  approve: (direction: FinanceNoteDirection, id: number) =>
+    apiRequest<FinanceNote>(`/core/uni-audit/${auditEntity(direction)}/${id}/approve`, {
+      method: 'POST',
+      data: {},
+    }),
+  revoke: (direction: FinanceNoteDirection, id: number) =>
+    apiRequest<FinanceNote>(`/core/uni-audit/${auditEntity(direction)}/${id}/revoke`, {
+      method: 'POST',
+    }),
 };
+
+function auditEntity(direction: FinanceNoteDirection): 'notes_receivable' | 'notes_payable' {
+  return direction === 'receivable' ? 'notes_receivable' : 'notes_payable';
+}
 
 export const NOTES_RECEIVABLE_RESOURCE = 'kuaicaiwu:notes-receivable';
 export const NOTES_PAYABLE_RESOURCE = 'kuaicaiwu:notes-payable';

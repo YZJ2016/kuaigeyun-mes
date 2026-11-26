@@ -112,6 +112,26 @@ export function deriveReportingWorkTimeUpdates(
   return {};
 }
 
+/**
+ * 新建报工默认工时区：开始=工序实际开始（无则当前），结束=当前；工时由区间推算。
+ * 表单字段可改，勿在 UI 侧禁用。
+ */
+export function buildDefaultReportingWorkTime(operationActualStart?: unknown): {
+  work_start_time: Dayjs;
+  work_end_time: Dayjs;
+  work_hours: number;
+} {
+  const tz = getTimezoneFromSiteSetting();
+  const now = dayjs().tz(tz);
+  const start = toReportingDayjs(operationActualStart) ?? now;
+  const end = now.isBefore(start) ? start : now;
+  return {
+    work_start_time: start,
+    work_end_time: end,
+    work_hours: hoursFromRange(start, end),
+  };
+}
+
 export function resolveReportingWorkTimeForSubmit(values: Record<string, unknown>): {
   work_hours: number;
   reported_at: string;

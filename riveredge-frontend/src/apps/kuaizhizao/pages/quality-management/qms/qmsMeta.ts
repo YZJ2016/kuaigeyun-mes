@@ -70,9 +70,87 @@ export const QMS_AUDIT_STATUS_OPTIONS = [
   { value: 'closed', labelKey: 'app.kuaizhizao.quality.qms.auditStatus.closed' },
 ] as const;
 
+export const QMS_CHECKLIST_CONCLUSION_OPTIONS = [
+  { value: 'pending', labelKey: 'app.kuaizhizao.quality.qms.checklistConclusion.pending' },
+  { value: 'conform', labelKey: 'app.kuaizhizao.quality.qms.checklistConclusion.conform' },
+  { value: 'nonconform', labelKey: 'app.kuaizhizao.quality.qms.checklistConclusion.nonconform' },
+  { value: 'observation', labelKey: 'app.kuaizhizao.quality.qms.checklistConclusion.observation' },
+] as const;
+
+export const QMS_NC_SEVERITY_OPTIONS = [
+  { value: 'severe', labelKey: 'app.kuaizhizao.quality.qms.ncSeverity.severe' },
+  { value: 'general', labelKey: 'app.kuaizhizao.quality.qms.ncSeverity.general' },
+  { value: 'observation', labelKey: 'app.kuaizhizao.quality.qms.ncSeverity.observation' },
+] as const;
+
+export const QMS_NC_STATUS_OPTIONS = [
+  { value: 'open', labelKey: 'app.kuaizhizao.quality.qms.ncStatus.open' },
+  { value: 'rectifying', labelKey: 'app.kuaizhizao.quality.qms.ncStatus.rectifying' },
+  { value: 'pending_verify', labelKey: 'app.kuaizhizao.quality.qms.ncStatus.pendingVerify' },
+  { value: 'closed', labelKey: 'app.kuaizhizao.quality.qms.ncStatus.closed' },
+] as const;
+
+export const QMS_NC_SOURCE_OPTIONS = [
+  { value: 'internal_audit', labelKey: 'app.kuaizhizao.quality.qms.ncSource.internalAudit' },
+  { value: 'external_audit', labelKey: 'app.kuaizhizao.quality.qms.ncSource.externalAudit' },
+] as const;
+
+export const QMS_CA_SOURCE_OPTIONS = [
+  {
+    value: 'nonconformity_report',
+    labelKey: 'app.kuaizhizao.quality.qms.caSource.nonconformityReport',
+  },
+  {
+    value: 'quality_complaint',
+    labelKey: 'app.kuaizhizao.quality.qms.caSource.qualityComplaint',
+  },
+  {
+    value: 'management_review_resolution',
+    labelKey: 'app.kuaizhizao.quality.qms.caSource.managementReviewResolution',
+  },
+] as const;
+
+export const QMS_CA_STATUS_OPTIONS = [
+  { value: 'registered', labelKey: 'app.kuaizhizao.quality.qms.caStatus.registered' },
+  { value: 'in_progress', labelKey: 'app.kuaizhizao.quality.qms.caStatus.inProgress' },
+  { value: 'pending_verify', labelKey: 'app.kuaizhizao.quality.qms.caStatus.pendingVerify' },
+  { value: 'closed', labelKey: 'app.kuaizhizao.quality.qms.caStatus.closed' },
+] as const;
+
 export const QMS_REVIEW_STATUS_OPTIONS = [
   { value: 'draft', labelKey: 'app.kuaizhizao.quality.qms.reviewStatus.draft' },
   { value: 'in_progress', labelKey: 'app.kuaizhizao.quality.qms.reviewStatus.inProgress' },
   { value: 'completed', labelKey: 'app.kuaizhizao.quality.qms.reviewStatus.completed' },
   { value: 'closed', labelKey: 'app.kuaizhizao.quality.qms.reviewStatus.closed' },
+] as const;
+
+export const QMS_OBJECTIVE_STATUS_OPTIONS = [
+  { value: 'draft', labelKey: 'app.kuaizhizao.quality.qms.objectiveStatus.draft' },
+  { value: 'published', labelKey: 'app.kuaizhizao.quality.qms.objectiveStatus.published' },
+  { value: 'ended', labelKey: 'app.kuaizhizao.quality.qms.objectiveStatus.ended' },
+] as const;
+
+export const QMS_OBJECTIVE_PERIOD_OPTIONS = [
+  { value: 'month', labelKey: 'app.kuaizhizao.quality.qms.objectivePeriod.month' },
+  { value: 'quarter', labelKey: 'app.kuaizhizao.quality.qms.objectivePeriod.quarter' },
+] as const;
+
+export const QMS_LEGAL_CONCLUSION_OPTIONS = [
+  { value: 'conform', labelKey: 'app.kuaizhizao.quality.qms.legalConclusion.conform' },
+  { value: 'need_rectify', labelKey: 'app.kuaizhizao.quality.qms.legalConclusion.needRectify' },
+] as const;
+
+export const QMS_EXTERNAL_AUDIT_TYPE_OPTIONS = [
+  { value: 'initial', labelKey: 'app.kuaizhizao.quality.qms.externalAuditType.initial' },
+  { value: 'surveillance', labelKey: 'app.kuaizhizao.quality.qms.externalAuditType.surveillance' },
+  {
+    value: 'recertification',
+    labelKey: 'app.kuaizhizao.quality.qms.externalAuditType.recertification',
+  },
+] as const;
+
+export const QMS_CERTIFICATE_STATUS_OPTIONS = [
+  { value: 'valid', labelKey: 'app.kuaizhizao.quality.qms.certificateStatus.valid' },
+  { value: 'expiring', labelKey: 'app.kuaizhizao.quality.qms.certificateStatus.expiring' },
+  { value: 'expired', labelKey: 'app.kuaizhizao.quality.qms.certificateStatus.expired' },
 ] as const;

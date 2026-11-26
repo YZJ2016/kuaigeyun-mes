@@ -24,6 +24,7 @@ from apps.kuaizhizao.services.sales_review_service import (
     SalesReviewService,
 )
 from core.api.deps import get_current_tenant, get_current_user
+from core.api.deps.access import require_read_or_display
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -120,6 +121,38 @@ async def list_sales_reviews(
         include_items=include_items,
         current_user=current_user,
     )
+
+
+@router.get(
+    "/sales-order-pull-lines",
+    summary="Open sales review lines for sales order pull",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:sales-review"))],
+)
+async def list_sales_review_sales_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    sales_review_id: Optional[int] = Query(None, description="来源订单评审"),
+    pullable_only: bool = Query(True, description="仅可下推评审的明细行"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.list_sales_review_sales_order_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            sales_review_id=sales_review_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出销售订单取单评审开口行失败")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出销售订单取单评审开口行失败",
+        )
 
 
 @router.get("/{review_id:int}", response_model=SalesReviewResponse, summary="Get sales review")

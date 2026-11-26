@@ -2,9 +2,11 @@
  * 工程图纸新建/编辑弹窗
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ProForm,
+  ProFormField,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
@@ -20,12 +22,10 @@ import { drawingApi, DRAWING_TYPE_DICTIONARY_CODE, type EngineeringDrawing, type
 import { DictionarySelect } from '../../../components/dictionary-select';
 import type { DrawingFolder } from '../services/drawingFolder';
 import { FolderTreeSelectField } from '../pages/process/drawings/drawingFolderModals';
-import {
-  formatProjectRefLabel,
-  Phase2ProjectSelect,
-  resolveProjectRefPick,
-} from '../../kuaiplm/components/Phase2ProjectSelect';
+import { DrawingProjectRefSelect } from './DrawingProjectRefSelect';
+import { formatProjectRefLabel, resolveProjectRefPick } from '../utils/projectRefLabel';
 import { materialApi } from '../services/material';
+import type { Material } from '../types/material';
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../services/process';
 import { uploadMultipleFiles, buildImageUploadFileUrls } from '../../../services/file';
 import {
@@ -42,6 +42,7 @@ import {
   extractUploadFileUuids,
   normalizeUploadFileList,
 } from '../../../components/custom-fields/customFieldFileUtils';
+import { UniMaterialSelect } from '../../../components/uni-material-select';
 
 const PAGE_CODE = 'master-data-process-drawing';
 const CUSTOM_FIELD_TABLE = 'apps_master_data_engineering_drawings';
@@ -98,10 +99,36 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
-  const [materialOptions, setMaterialOptions] = useState<{ label: string; value: string }[]>([]);
   const [routeOptions, setRouteOptions] = useState<{ label: string; value: string }[]>([]);
   const [operationOptions, setOperationOptions] = useState<{ label: string; value: string }[]>([]);
   const [businessConfig, setBusinessConfig] = useState<BusinessConfig | null>(null);
+
+  /** 编辑回显：uuid → 物料，供 UniMaterialSelect 用 numeric id 回填 */
+  const ensureMaterialsByUuids = useCallback(async (uuids: string[]): Promise<Material[]> => {
+    const unique = [...new Set((uuids || []).filter(Boolean))];
+    if (!unique.length) return [];
+    const loaded = await Promise.all(
+      unique.map(async (uuid) => {
+        try {
+          return await materialApi.get(uuid);
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return loaded.filter((m): m is Material => m != null && m.id != null);
+  }, []);
+
+  const syncMaterialUuidsFromSelection = useCallback(
+    (materials: Material | Material[] | undefined) => {
+      const list = Array.isArray(materials) ? materials : materials ? [materials] : [];
+      formRef.current?.setFieldValue(
+        'materialUuids',
+        list.map((m) => m.uuid).filter((u): u is string => Boolean(u)),
+      );
+    },
+    [],
+  );
 
   const isEdit = Boolean(editUuid);
   const drawingMaxUploadMb = resolveDrawingMaxUploadSizeMb(businessConfig);
@@ -141,18 +168,10 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
 
   const loadRelationOptions = async () => {
     try {
-      const [materialsRes, routesRes, opsRes] = await Promise.all([
-        materialApi.list({ limit: 500 }),
+      const [routesRes, opsRes] = await Promise.all([
         processRouteApi.list({ limit: 500 }),
         operationApi.list({ limit: 500 }),
       ]);
-      const materials = materialsRes?.items ?? [];
-      setMaterialOptions(
-        materials.map((m: { uuid: string; mainCode?: string; code?: string; name: string }) => ({
-          label: `${m.mainCode || m.code || ''} ${m.name}`.trim(),
-          value: m.uuid,
-        }))
-      );
       const routes = unwrapProcessPagedList(routesRes);
       setRouteOptions(routes.map((r) => ({ label: `${r.code} ${r.name}`, value: r.uuid })));
       const ops = unwrapProcessPagedList(opsRes);
@@ -165,7 +184,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   useEffect(() => {
     if (!open) return;
     projectRefIdMapRef.current = new Map();
-    loadRelationOptions();
+    void loadRelationOptions();
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       revision: 'A',
@@ -223,6 +242,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           const label = formatProjectRefLabel(detail.projectCode, detail.projectName);
           if (label) projectRefIdMapRef.current.set(label, detail.projectId);
         }
+        const boundMaterials = await ensureMaterialsByUuids(detail.materialUuids ?? []);
         formRef.current?.setFieldsValue({
           code: detail.code,
           name: detail.name,
@@ -234,7 +254,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           projectRef: detail.projectId
             ? formatProjectRefLabel(detail.projectCode, detail.projectName)
             : detail.projectCode || undefined,
-          materialUuids: detail.materialUuids ?? [],
+          materialUuids: boundMaterials.map((m) => m.uuid).filter(Boolean),
+          materialIds: boundMaterials.map((m) => m.id),
           processRouteUuids: detail.processRouteUuids ?? [],
           operationUuids: detail.operationUuids ?? [],
           folderUuid: detail.folderUuid ?? undefined,
@@ -261,6 +282,9 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       }
     };
 
+  /** 双栏拖拽区同高，避免两侧说明文案行数不同导致高低不一 */
+  const DRAWING_UPLOAD_DRAG_MIN_HEIGHT = 168;
+
   const makeUploadFieldProps = (
     multiple: boolean,
     fieldName: 'mainFile' | 'supplementaryFiles',
@@ -268,7 +292,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     accept: DRAWING_ACCEPT,
     multiple,
     maxCount: multiple ? undefined : 1,
-    style: { width: '100%' },
+    style: { width: '100%', minHeight: DRAWING_UPLOAD_DRAG_MIN_HEIGHT },
     beforeUpload: rejectOversizedDrawingFile,
     onChange: syncUploadField(fieldName),
     customRequest: async (options: any) => {
@@ -394,7 +418,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       onFinish={handleSubmit}
       isEdit={isEdit}
       loading={formLoading}
-      width={MODAL_CONFIG.STANDARD_WIDTH}
+      width={MODAL_CONFIG.LARGE_WIDTH}
       formRef={formRef as React.RefObject<ProFormInstance>}
       layout="vertical"
       grid
@@ -405,6 +429,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         folderUuid: defaultFolderUuid ?? undefined,
       }}
     >
+      {/* 标识：图号 / 名称 */}
       <ProFormText
         name="code"
         label={t('app.master-data.drawings.code')}
@@ -420,52 +445,87 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         fieldProps={{ maxLength: 200 }}
         colProps={{ span: 12 }}
       />
+      {/* 版本与分类：修订 / 类型 / 图档格式 */}
       <ProFormText
         name="revision"
         label={t('app.master-data.drawings.revision')}
         rules={[{ required: true }]}
         disabled={isEdit}
         fieldProps={{ maxLength: 20 }}
-        colProps={{ span: 12 }}
+        colProps={{ span: 8 }}
       />
       {fixedDrawingType ? (
-        <ProFormText name="drawingType" hidden initialValue={fixedDrawingType} />
+        <>
+          <ProFormText name="drawingType" hidden initialValue={fixedDrawingType} />
+          <ProFormSelect
+            name="drawingFormat"
+            label={t('app.master-data.drawings.drawingFormat')}
+            allowClear
+            options={[
+              { label: t('app.master-data.drawings.drawingFormat.2d'), value: '2d' },
+              { label: t('app.master-data.drawings.drawingFormat.3d'), value: '3d' },
+            ]}
+            colProps={{ span: 8 }}
+          />
+          <ProFormSelect
+            name="securityLevel"
+            label={t('app.master-data.drawings.securityLevel')}
+            options={[
+              { label: t('app.master-data.drawings.securityLevel.public'), value: 'public' },
+              { label: t('app.master-data.drawings.securityLevel.internal'), value: 'internal' },
+              { label: t('app.master-data.drawings.securityLevel.secret'), value: 'secret' },
+              { label: t('app.master-data.drawings.securityLevel.confidential'), value: 'confidential' },
+            ]}
+            rules={[{ required: true }]}
+            colProps={{ span: 8 }}
+          />
+        </>
       ) : (
-        <DictionarySelect
-          name="drawingType"
-          label={t('app.master-data.drawings.type')}
-          dictionaryCode={DRAWING_TYPE_DICTIONARY_CODE}
-          required
-          simpleQuickCreate
-          formRef={formRef}
-          hostResource="master-data:process:drawing"
-          colProps={{ span: 12 }}
-        />
+        <>
+          <DictionarySelect
+            name="drawingType"
+            label={t('app.master-data.drawings.type')}
+            dictionaryCode={DRAWING_TYPE_DICTIONARY_CODE}
+            required
+            simpleQuickCreate
+            formRef={formRef}
+            hostResource="master-data:process:drawing"
+            colProps={{ span: 8 }}
+          />
+          <ProFormSelect
+            name="drawingFormat"
+            label={t('app.master-data.drawings.drawingFormat')}
+            allowClear
+            options={[
+              { label: t('app.master-data.drawings.drawingFormat.2d'), value: '2d' },
+              { label: t('app.master-data.drawings.drawingFormat.3d'), value: '3d' },
+            ]}
+            colProps={{ span: 8 }}
+          />
+        </>
       )}
-      <ProFormSelect
-        name="securityLevel"
-        label={t('app.master-data.drawings.securityLevel')}
-        options={[
-          { label: t('app.master-data.drawings.securityLevel.public'), value: 'public' },
-          { label: t('app.master-data.drawings.securityLevel.internal'), value: 'internal' },
-          { label: t('app.master-data.drawings.securityLevel.secret'), value: 'secret' },
-          { label: t('app.master-data.drawings.securityLevel.confidential'), value: 'confidential' },
-        ]}
-        rules={[{ required: true }]}
-        colProps={{ span: 12 }}
-      />
-      <FolderTreeSelectField folders={folders} />
-      <ProFormSelect
-        name="drawingFormat"
-        label={t('app.master-data.drawings.drawingFormat')}
-        allowClear
-        options={[
-          { label: t('app.master-data.drawings.drawingFormat.2d'), value: '2d' },
-          { label: t('app.master-data.drawings.drawingFormat.3d'), value: '3d' },
-        ]}
-        colProps={{ span: 12 }}
-      />
+      {/* 密级与存放 */}
+      {fixedDrawingType ? (
+        <FolderTreeSelectField folders={folders} colProps={{ span: 24 }} />
+      ) : (
+        <>
+          <ProFormSelect
+            name="securityLevel"
+            label={t('app.master-data.drawings.securityLevel')}
+            options={[
+              { label: t('app.master-data.drawings.securityLevel.public'), value: 'public' },
+              { label: t('app.master-data.drawings.securityLevel.internal'), value: 'internal' },
+              { label: t('app.master-data.drawings.securityLevel.secret'), value: 'secret' },
+              { label: t('app.master-data.drawings.securityLevel.confidential'), value: 'confidential' },
+            ]}
+            rules={[{ required: true }]}
+            colProps={{ span: 12 }}
+          />
+          <FolderTreeSelectField folders={folders} colProps={{ span: 12 }} />
+        </>
+      )}
       <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
+      {/* 图档文件：主文件 + 附加页并排 */}
       <ProFormUploadDragger
         name="mainFile"
         label={t('app.master-data.drawings.uploadMain')}
@@ -505,7 +565,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         fieldProps={makeUploadFieldProps(true, 'supplementaryFiles')}
         colProps={{ span: 12 }}
       />
-      <Phase2ProjectSelect
+      {/* 业务关联 */}
+      <DrawingProjectRefSelect
         name="projectRef"
         label={t('app.master-data.drawings.project')}
         allowManualProjectCode
@@ -513,14 +574,29 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         placeholder={t('app.master-data.drawings.projectPlaceholder')}
         colProps={{ span: 12 }}
       />
-      <ProFormSelect
-        name="materialUuids"
+      <ProForm.Item name="materialUuids" hidden />
+      <ProFormField
+        name="materialIds"
         label={t('app.master-data.drawings.materials')}
-        mode="multiple"
-        options={materialOptions}
-        showSearch
-        fieldProps={{ optionFilterProp: 'label' }}
         colProps={{ span: 12 }}
+        renderFormItem={(_, { onChange: notifyProForm }) => (
+          <UniMaterialSelect
+            embedInProFormField
+            proFormFieldOnChange={notifyProForm as (value: number | number[] | undefined) => void}
+            name="materialIds"
+            placeholder={t('app.master-data.drawings.materialsPlaceholder', {
+              defaultValue: '输入编码或名称搜索物料',
+            })}
+            mode="multiple"
+            showQuickCreate={false}
+            showAdvancedSearch
+            fillMapping={{}}
+            hostResource="master-data:process:drawing"
+            onChange={(_ids, materials) => {
+              syncMaterialUuidsFromSelection(materials as Material | Material[] | undefined);
+            }}
+          />
+        )}
       />
       <ProFormSelect
         name="processRouteUuids"
@@ -540,6 +616,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         fieldProps={{ optionFilterProp: 'label' }}
         colProps={{ span: 12 }}
       />
+      {/* 备注通栏（新建默认隐藏；升版/编辑按规则展示） */}
       {requireChangeSummary || isEdit ? (
         <ProFormTextArea
           name="description"

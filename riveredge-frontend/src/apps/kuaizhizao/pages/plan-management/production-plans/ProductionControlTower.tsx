@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { 
   Card, Row, Col, Progress, Table, Tag, Typography, Space, Empty, 
-  Button, Drawer, Form, Select, InputNumber, DatePicker, message, 
+  Button, Drawer, Form, InputNumber, DatePicker, message, 
   theme, List, Divider, Alert, Spin
 } from 'antd';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { KUAIZHIZAO_DOC_HOST } from '../../../../../utils/documentFormReferenceLoad';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   RocketOutlined,
@@ -53,8 +55,6 @@ const ProductionControlTower: React.FC = () => {
   const [simulationVisible, setSimulationVisible] = useState(false);
   const [simulateLoading, setSimulateLoading] = useState(false);
   const [simulationResult, setSimulationResult] = useState<any>(null);
-  const [materials, setMaterials] = useState<any[]>([]);
-  const [materialsLoading, setMaterialsLoading] = useState(false);
 
   const { data: summary, loading, refresh: refreshSummary } = useDashboardRequest(async () => {
     return apiRequest('/apps/kuaizhizao/production-control/summary');
@@ -92,26 +92,6 @@ const ProductionControlTower: React.FC = () => {
       : 100;
   const notFullyKitted = readinessList.filter((r: any) => (r.readiness_rate ?? 0) < 100).length;
 
-  // 获取物料列表用于插单下拉选择
-  const fetchMaterials = async () => {
-    try {
-      setMaterialsLoading(true);
-      const res = await apiRequest('/apps/master-data/materials');
-      if (Array.isArray(res)) {
-        setMaterials(res);
-      } else if (res && Array.isArray(res.items)) {
-        setMaterials(res.items);
-      } else if (res && typeof res === 'object') {
-        const possibleArray = Object.values(res).find(val => Array.isArray(val));
-        if (possibleArray) setMaterials(possibleArray);
-      }
-    } catch (err) {
-      console.error("Failed to load materials", err);
-    } finally {
-      setMaterialsLoading(false);
-    }
-  };
-
   // 提交插单模拟
   const handleSimulate = async (values: any) => {
     try {
@@ -133,13 +113,6 @@ const ProductionControlTower: React.FC = () => {
       setSimulateLoading(false);
     }
   };
-
-  // 监听 Drawer 打开以获取物料
-  useEffect(() => {
-    if (simulationVisible && materials.length === 0) {
-      fetchMaterials();
-    }
-  }, [simulationVisible]);
 
   const kpiShortcuts: ModuleShortcutDef[] = useMemo(
     () => [
@@ -278,24 +251,19 @@ const ProductionControlTower: React.FC = () => {
           onFinish={handleSimulate}
           initialValues={{ quantity: 10, dates: [dayjs(), dayjs().add(7, 'day')] }}
         >
-          <Form.Item
+          <UniMaterialSelect
             name="product_id"
             label={t('app.kuaizhizao.planControlTower.simulation.productLabel')}
-            rules={[{ required: true, message: t('app.kuaizhizao.planControlTower.simulation.productRequired') }]}
-          >
-            <Select
-              showSearch
-              placeholder={t('app.kuaizhizao.planControlTower.simulation.productPlaceholder')}
-              loading={materialsLoading}
-              filterOption={(input, option) =>
-                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={materials.map(m => ({
-                value: m.id,
-                label: `[${m.code}] ${m.name}`
-              }))}
-            />
-          </Form.Item>
+            placeholder={t('app.kuaizhizao.planControlTower.simulation.productPlaceholder')}
+            required
+            hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
+            showQuickCreate={false}
+            showAdvancedSearch
+            fillMapping={{}}
+            formItemProps={{
+              rules: [{ required: true, message: t('app.kuaizhizao.planControlTower.simulation.productRequired') }],
+            }}
+          />
 
           <Row gutter={16}>
             <Col span={12}>

@@ -737,6 +737,153 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                 results.append(alert)
         return results
 
+    async def _aggregate_inventory_balances_for_alert(
+        self,
+        tenant_id: int,
+        *,
+        material_id: Optional[int] = None,
+        warehouse_id: Optional[int] = None,
+    ) -> Dict[Tuple[int, int], Dict[str, Any]]:
+        """
+        预警扫描专用余额：按物料×仓库聚合数量与最近效期。
+
+        禁止走报表 ``_load_inventory_rows``（会 heal 批号、逐行纠数量、逐批解析仓），
+        定时任务全租户扫描时易语句超时。
+        """
+        from tortoise.functions import Min, Sum
+
+        from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
+        from apps.kuaizhizao.utils.inventory_helper import _material_default_warehouse_ids
+        from apps.master_data.constants.batch_quality_status import QUALIFIED
+        from apps.master_data.models.material_batch import MaterialBatch
+        from apps.master_data.models.warehouse import Warehouse
+        from core.utils.timezone_utils import to_site_date, resolve_business_datetime
+
+        site_today = to_site_date(resolve_business_datetime())
+        grouped: Dict[Tuple[int, int], Dict[str, Any]] = {}
+
+        def _add_balance(
+            *,
+            mid: int,
+            wid: int,
+            qty: Decimal,
+            wh_name: str = "",
+            min_expiry: Optional[date] = None,
+        ) -> None:
+            if mid <= 0 or wid <= 0 or qty <= 0:
+                return
+            key = (mid, wid)
+            if key not in grouped:
+                grouped[key] = {
+                    "material_id": mid,
+                    "warehouse_id": wid,
+                    "warehouse_name": (wh_name or "").strip() or f"仓库({wid})",
+                    "quantity": Decimal("0"),
+                    "min_expiry_days": None,
+                }
+            grouped[key]["quantity"] += qty
+            if min_expiry is not None:
+                days_left = (min_expiry - site_today).days
+                prev = grouped[key]["min_expiry_days"]
+                if prev is None or days_left < prev:
+                    grouped[key]["min_expiry_days"] = days_left
+            if wh_name and not str(grouped[key].get("warehouse_name") or "").strip():
+                grouped[key]["warehouse_name"] = wh_name
+
+        batch_base = MaterialBatch.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            quality_status=QUALIFIED,
+            quantity__gt=0,
+        ).filter(~Q(status__in=["out_stock", "scrapped", "expired"]))
+        if material_id:
+            batch_base = batch_base.filter(material_id=material_id)
+
+        # 已归属主仓：SQL 聚合
+        assigned_q = batch_base.filter(warehouse_id__gt=0)
+        if warehouse_id:
+            assigned_q = assigned_q.filter(warehouse_id=warehouse_id)
+        assigned_rows = (
+            await assigned_q.group_by("material_id", "warehouse_id")
+            .annotate(qty=Sum("quantity"), min_expiry=Min("expiry_date"))
+            .values("material_id", "warehouse_id", "qty", "min_expiry")
+        )
+        wh_ids: set[int] = set()
+        for row in assigned_rows:
+            wid = int(row["warehouse_id"] or 0)
+            if wid > 0:
+                wh_ids.add(wid)
+            _add_balance(
+                mid=int(row["material_id"]),
+                wid=wid,
+                qty=Decimal(str(row.get("qty") or 0)),
+                min_expiry=row.get("min_expiry") if isinstance(row.get("min_expiry"), date) else None,
+            )
+
+        # 历史未归属（warehouse_id=0）：按物料默认仓归集，避免报表逐行解析
+        if warehouse_id is None or warehouse_id > 0:
+            unassigned_rows = (
+                await batch_base.filter(warehouse_id=0)
+                .group_by("material_id")
+                .annotate(qty=Sum("quantity"), min_expiry=Min("expiry_date"))
+                .values("material_id", "qty", "min_expiry")
+            )
+            unassigned_mids = [int(r["material_id"]) for r in unassigned_rows if r.get("material_id")]
+            default_wh = await _material_default_warehouse_ids(tenant_id, unassigned_mids)
+            for row in unassigned_rows:
+                mid = int(row["material_id"])
+                wid = int(default_wh.get(mid) or 0)
+                if warehouse_id and wid != int(warehouse_id):
+                    continue
+                if wid > 0:
+                    wh_ids.add(wid)
+                _add_balance(
+                    mid=mid,
+                    wid=wid,
+                    qty=Decimal(str(row.get("qty") or 0)),
+                    min_expiry=row.get("min_expiry") if isinstance(row.get("min_expiry"), date) else None,
+                )
+
+        line_q = LineSideInventory.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="available",
+        )
+        if material_id:
+            line_q = line_q.filter(material_id=material_id)
+        if warehouse_id:
+            line_q = line_q.filter(warehouse_id=warehouse_id)
+        line_rows = (
+            await line_q.group_by("material_id", "warehouse_id")
+            .annotate(qty=Sum("quantity"), reserved_qty=Sum("reserved_quantity"), min_expiry=Min("expiry_date"))
+            .values("material_id", "warehouse_id", "qty", "reserved_qty", "min_expiry")
+        )
+        for row in line_rows:
+            wid = int(row["warehouse_id"] or 0)
+            if wid > 0:
+                wh_ids.add(wid)
+            net = Decimal(str(row.get("qty") or 0)) - Decimal(str(row.get("reserved_qty") or 0))
+            _add_balance(
+                mid=int(row["material_id"]),
+                wid=wid,
+                qty=net,
+                min_expiry=row.get("min_expiry") if isinstance(row.get("min_expiry"), date) else None,
+            )
+
+        if wh_ids:
+            wh_rows = await Warehouse.filter(
+                tenant_id=tenant_id,
+                id__in=list(wh_ids),
+                deleted_at__isnull=True,
+            ).all()
+            name_by_id = {int(w.id): str(w.name or "").strip() for w in wh_rows}
+            for key, bal in grouped.items():
+                name = name_by_id.get(key[1]) or ""
+                if name:
+                    bal["warehouse_name"] = name
+
+        return grouped
+
     async def run_inventory_alert_check(
         self,
         tenant_id: int,
@@ -750,44 +897,13 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         批量检查库存余额并触发/解除预警（立即检查）。
         阈值链：匹配规则 → 物料 defaults.safetyStock/maxStock。
         """
-        from apps.kuaizhizao.services.report_service import ReportService
         from apps.master_data.models.material import Material
 
-        report = ReportService()
-        rows = await report._load_inventory_rows(
-            tenant_id=tenant_id,
+        grouped = await self._aggregate_inventory_balances_for_alert(
+            tenant_id,
             material_id=material_id,
             warehouse_id=warehouse_id,
-            include_expired=True,
         )
-        grouped: Dict[Tuple[int, int], Dict[str, Any]] = {}
-        for row in rows:
-            mid = row.get("material_id")
-            wid = row.get("warehouse_id")
-            if mid is None or wid is None:
-                continue
-            key = (int(mid), int(wid))
-            if key not in grouped:
-                grouped[key] = {
-                    "material_id": int(mid),
-                    "warehouse_id": int(wid),
-                    "warehouse_name": row.get("warehouse_name") or f"仓库({wid})",
-                    "material_code": row.get("material_code") or "",
-                    "material_name": row.get("material_name") or "",
-                    "quantity": Decimal("0"),
-                    "min_expiry_days": None,
-                }
-            grouped[key]["quantity"] += Decimal(str(row.get("quantity") or 0))
-            expiry = row.get("expiry_date")
-            if expiry:
-                try:
-                    exp_date = date.fromisoformat(str(expiry)[:10])
-                    days_left = (exp_date - date.today()).days
-                    prev = grouped[key]["min_expiry_days"]
-                    if prev is None or days_left < prev:
-                        grouped[key]["min_expiry_days"] = days_left
-                except Exception:
-                    pass
 
         material_ids = sorted({g["material_id"] for g in grouped.values()})
         materials = await Material.filter(
@@ -799,6 +915,24 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             deleted_at__isnull=True,
             is_enabled=True,
         ).all()
+
+        # 一次预取未结案预警，避免每个物料×仓×类型各查一次导致超时
+        open_alerts = await InventoryAlert.filter(
+            tenant_id=tenant_id,
+            status__in=["pending", "processing"],
+            deleted_at__isnull=True,
+        ).all()
+        open_by_key: Dict[Tuple[int, int, str], InventoryAlert] = {}
+        for row in open_alerts:
+            if material_id and int(row.material_id) != int(material_id):
+                continue
+            if warehouse_id and int(row.warehouse_id) != int(warehouse_id):
+                continue
+            open_by_key[(int(row.material_id), int(row.warehouse_id), str(row.alert_type))] = row
+
+        notified_today_ids: Optional[set[int]] = None
+        if scheduled:
+            notified_today_ids = await self._inventory_alert_ids_notified_today(tenant_id)
 
         touched: List[InventoryAlertResponse] = []
         triggered = 0
@@ -818,14 +952,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                     rules=rules,
                 )
                 breached = is_threshold_breached(qty, threshold)
-                before = await InventoryAlert.get_or_none(
-                    tenant_id=tenant_id,
-                    material_id=int(material.id),
-                    warehouse_id=wid,
-                    alert_type=alert_type,
-                    status__in=["pending", "processing"],
-                    deleted_at__isnull=True,
-                )
+                before = open_by_key.get((int(material.id), wid, alert_type))
                 had_open = before is not None
                 alert = await self._upsert_open_alert(
                     tenant_id=tenant_id,
@@ -839,6 +966,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                     operator_id=operator_id,
                     existing=before,
                     notify_if_scheduled=scheduled,
+                    notified_today_ids=notified_today_ids,
                 )
                 if alert is None:
                     continue
@@ -861,14 +989,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                 and days_left is not None
                 and Decimal(str(days_left)) <= (exp_threshold.effective_quantity or Decimal("0"))
             )
-            before_exp = await InventoryAlert.get_or_none(
-                tenant_id=tenant_id,
-                material_id=int(material.id),
-                warehouse_id=wid,
-                alert_type="expired",
-                status__in=["pending", "processing"],
-                deleted_at__isnull=True,
-            )
+            before_exp = open_by_key.get((int(material.id), wid, "expired"))
             had_open_exp = before_exp is not None
             alert_exp = await self._upsert_open_alert(
                 tenant_id=tenant_id,
@@ -887,6 +1008,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                     else None
                 ),
                 notify_if_scheduled=scheduled,
+                notified_today_ids=notified_today_ids,
             )
             if alert_exp is not None:
                 touched.append(alert_exp)
@@ -912,23 +1034,39 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             return "过期"
         return alert_type
 
-    async def _inventory_alert_notified_today(self, tenant_id: int, alert_id: int) -> bool:
+    async def _inventory_alert_ids_notified_today(self, tenant_id: int) -> set[int]:
+        """站点日历日内已发过站内信的预警 id（一次查出，禁止每条预警扫 MessageLog）。"""
         from core.models.message_log import MessageLog
-        from core.utils.timezone_utils import resolve_business_datetime, to_site_date
+        from core.utils.timezone_utils import (
+            resolve_business_datetime,
+            site_day_bounds_utc,
+            to_site_date,
+        )
 
         site_today = to_site_date(resolve_business_datetime())
+        start_utc, end_utc = site_day_bounds_utc(site_today)
         logs = await MessageLog.filter(
             tenant_id=tenant_id,
             type="internal",
             deleted_at__isnull=True,
-        ).order_by("-created_at").limit(400)
+            created_at__gte=start_utc,
+            created_at__lt=end_utc,
+        ).only("variables")
+        out: set[int] = set()
         for log in logs:
-            if to_site_date(log.created_at) != site_today:
-                continue
             variables = log.variables if isinstance(log.variables, dict) else {}
-            if str(variables.get("inventory_alert_id") or "") == str(alert_id):
-                return True
-        return False
+            raw = variables.get("inventory_alert_id")
+            if raw is None or raw == "":
+                continue
+            try:
+                out.add(int(raw))
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    async def _inventory_alert_notified_today(self, tenant_id: int, alert_id: int) -> bool:
+        ids = await self._inventory_alert_ids_notified_today(tenant_id)
+        return int(alert_id) in ids
 
     async def _dispatch_inventory_alert_notification(
         self,
@@ -984,6 +1122,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         existing: Optional[InventoryAlert] = None,
         override_message: Optional[str] = None,
         notify_if_scheduled: bool = False,
+        notified_today_ids: Optional[set[int]] = None,
     ) -> Optional[InventoryAlertResponse]:
         """有突破则创建/更新 pending；已恢复则自动 resolved。"""
         if existing is None:
@@ -1018,6 +1157,13 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
         level = alert_level_for(quantity, alert_type)
         eff = threshold.effective_quantity
 
+        async def _should_notify(alert_id: int) -> bool:
+            if not notify_if_scheduled:
+                return False
+            if notified_today_ids is not None:
+                return int(alert_id) not in notified_today_ids
+            return not await self._inventory_alert_notified_today(tenant_id, int(alert_id))
+
         if existing is not None:
             existing.current_quantity = quantity
             existing.threshold_value = eff
@@ -1026,9 +1172,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             existing.alert_rule_id = threshold.rule_id
             existing.warehouse_name = warehouse_name or existing.warehouse_name
             await existing.save()
-            if notify_if_scheduled and not await self._inventory_alert_notified_today(
-                tenant_id, int(existing.id)
-            ):
+            if await _should_notify(int(existing.id)):
                 await self._dispatch_inventory_alert_notification(
                     tenant_id,
                     existing,
@@ -1039,6 +1183,8 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
                     message=message,
                     operator_id=operator_id,
                 )
+                if notified_today_ids is not None:
+                    notified_today_ids.add(int(existing.id))
             return InventoryAlertResponse.model_validate(existing)
 
         alert = await InventoryAlert.create(
@@ -1068,5 +1214,7 @@ class InventoryAlertService(AppBaseService[InventoryAlert]):
             message=message,
             operator_id=operator_id,
         )
+        if notified_today_ids is not None:
+            notified_today_ids.add(int(alert.id))
         return InventoryAlertResponse.model_validate(alert)
 

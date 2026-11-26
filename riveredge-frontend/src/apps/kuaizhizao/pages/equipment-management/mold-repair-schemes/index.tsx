@@ -29,6 +29,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import CodeField from '../../../../../components/code-field';
 
 import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
 
@@ -136,6 +137,11 @@ const MoldRepairSchemesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
 
   const [current, setCurrent] = useState<RepairScheme | null>(null);
+  const [createCodeSessionKey, setCreateCodeSessionKey] = useState(0);
+
+  const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(
+    undefined,
+  );
 
   const [itemOptions, setItemOptions] = useState<{ label: string; value: number }[]>([]);
 
@@ -181,13 +187,13 @@ const MoldRepairSchemesPage: React.FC = () => {
 
     setCurrent(null);
 
+    setCreateCodeSessionKey((k) => k + 1);
+
+    setFormInitialValues({ is_active: true, lines: [{ sort_order: 0 }] });
+
     setModalVisible(true);
 
     void loadItemOptions();
-
-    formRef.current?.resetFields();
-
-    formRef.current?.setFieldsValue({ is_active: true, lines: [{ sort_order: 0 }] });
 
   };
 
@@ -207,11 +213,7 @@ const MoldRepairSchemesPage: React.FC = () => {
 
       setCurrent(loaded);
 
-      setModalVisible(true);
-
-      void loadItemOptions();
-
-      formRef.current?.setFieldsValue({
+      setFormInitialValues({
 
         ...loaded,
 
@@ -224,6 +226,10 @@ const MoldRepairSchemesPage: React.FC = () => {
         })),
 
       });
+
+      setModalVisible(true);
+
+      void loadItemOptions();
 
     } catch (error: unknown) {
 
@@ -634,11 +640,16 @@ const MoldRepairSchemesPage: React.FC = () => {
 
         open={modalVisible}
 
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          setFormInitialValues(undefined);
+        }}
 
         onFinish={handleSubmit}
 
         isEdit={isEdit}
+
+        initialValues={formInitialValues}
 
         width={MODAL_CONFIG.LARGE_WIDTH}
 
@@ -652,7 +663,22 @@ const MoldRepairSchemesPage: React.FC = () => {
 
           <Col span={12}>
 
-            <ProFormText name="code" label={t('common.code')} rules={[{ required: true }]} />
+            <CodeField
+              key={
+                isEdit
+                  ? `mold-repair-scheme-code-edit-${current?.id ?? 'none'}`
+                  : `mold-repair-scheme-code-create-${createCodeSessionKey}`
+              }
+              pageCode="kuaizhizao-mold-repair-scheme"
+              name="code"
+              label={t('common.code')}
+              required={false}
+              autoGenerateOnCreate={!isEdit}
+              showGenerateButton={false}
+              documentId={isEdit ? current?.id : undefined}
+              formRef={formRef}
+              generateSessionKey={createCodeSessionKey}
+            />
 
           </Col>
 

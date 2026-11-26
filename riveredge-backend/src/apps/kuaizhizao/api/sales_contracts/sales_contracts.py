@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from loguru import logger
 
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_permission_codes
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -120,6 +120,38 @@ async def execution_summary(
     return await service.get_execution_summaries(tenant_id, current_user=current_user)
 
 
+@router.get(
+    "/sales-order-pull-lines",
+    summary="Open contract lines for sales order pull",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:sales-contract"))],
+)
+async def list_sales_contract_sales_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    contract_id: Optional[int] = Query(None, description="来源销售合同"),
+    pullable_only: bool = Query(True, description="仅剩余可释放量大于 0"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.list_sales_contract_sales_order_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            contract_id=contract_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出销售订单取单合同开口行失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出销售订单取单合同开口行失败",
+        )
+
+
 @router.get("/{contract_id}", response_model=SalesContractResponse, summary="Get sales contract")
 async def get_contract(
     contract_id: int = Path(...),
@@ -169,14 +201,14 @@ async def delete_contract(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{contract_id}/submit", response_model=SalesContractResponse, summary="Submit contract")
+@router.post("/{contract_id}/submit", response_model=SalesContractResponse, summary="草稿或已驳回变为已提交，不启动审批")
 async def submit_contract(
     contract_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.submit_contract(
+        return await service.commit_contract(
             tenant_id, contract_id, current_user.id, current_user=current_user
         )
     except NotFoundError as e:

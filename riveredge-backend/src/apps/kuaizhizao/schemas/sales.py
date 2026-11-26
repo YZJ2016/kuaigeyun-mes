@@ -207,6 +207,7 @@ class SalesOrderItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     delivered_quantity: float = Field(0, ge=0, description="已交货数量")
     remaining_quantity: float = Field(..., ge=0, description="剩余数量")
     unit_price: float = Field(..., ge=0, description="单价")
+    tax_rate: float = Field(..., ge=0, le=100, description="税率（%，必填）")
     total_amount: float = Field(..., ge=0, description="金额")
     delivery_date: date = Field(..., description="交货日期")
     delivery_status: str = Field("待交货", max_length=20, description="交货状态")

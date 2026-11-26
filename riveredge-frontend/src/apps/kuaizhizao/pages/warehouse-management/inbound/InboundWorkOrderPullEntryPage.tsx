@@ -5,9 +5,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
-import { type Dayjs } from 'dayjs';
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Typography,
+} from 'antd';
+import { ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
   DocumentFormPageLayout,
@@ -29,11 +44,15 @@ import {
   mapWarehouseSelectOptions,
   useInboundReceiverSelect,
 } from './inboundEntryShared';
+import {
+  PurchaseInboundLineLocationCell,
+} from './PurchaseInboundLineWhCells';
+import { lineLocationSelectionRequired } from '../../../../../components/uni-wh-dropdown';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundWorkOrderEntryPath } from './inboundPaths';
 import type { InboundReceiptType } from './inboundHubTypes';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
-import { draftDayjs, draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
+import { draftOptionalNumber, usePullEntryFormDraft } from '../shared/pullEntryFormDraft';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import {
   MaterialUnitSelect,
@@ -41,7 +60,36 @@ import {
 } from '../../../../../components/material-unit-select';
 import { recalculateQuantityOnUnitChange } from '../../../../../components/quantity-with-unit/formHelpers';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
-import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+import { coerceFormDate, toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+
+const MIN_INBOUND_RECEIPT_YEAR = 2000;
+
+/** 入库日期默认今天；草稿合法日期可覆盖（对齐采购取单录入）。 */
+function resolveInboundReceiptDate(draftValue: unknown): Dayjs {
+  if (draftValue != null && draftValue !== '') {
+    const parsed = coerceFormDate(draftValue);
+    if (parsed?.isValid() && parsed.year() >= MIN_INBOUND_RECEIPT_YEAR) {
+      return parsed.startOf('day');
+    }
+  }
+  return dayjs().startOf('day');
+}
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import {
+  loadConfirmPreviewMaterialMeta,
+  type ConfirmPreviewMaterialMeta,
+} from './inboundItemTracking';
+import {
+  materialBatchApi,
+  materialSerialApi,
+  MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+} from '../../../../master-data/services/material';
+import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 
 type PreviewLine = {
   material_id: number;
@@ -73,7 +121,13 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
+  const trackingFlags = useWarehouseTrackingFlags();
   const initRef = useRef(false);
+  const [lineMaterialMeta, setLineMaterialMeta] = useState<ConfirmPreviewMaterialMeta | null>(null);
+  const [batchNumber, setBatchNumber] = useState('');
+  const [serialNumbers, setSerialNumbers] = useState<string[]>([]);
+  const [generatingBatch, setGeneratingBatch] = useState(false);
+  const [generatingSerial, setGeneratingSerial] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -86,6 +140,8 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const [displayDocQty, setDisplayDocQty] = useState(0);
   const [displayReceivedQty, setDisplayReceivedQty] = useState(0);
   const [warehouseId, setWarehouseId] = useState<number | undefined>();
+  const [locationId, setLocationId] = useState<number | undefined>();
+  const [locationCode, setLocationCode] = useState('');
   const [receiptTime, setReceiptTime] = useState<Dayjs | null>(null);
   const [receiptNotes, setReceiptNotes] = useState('');
   const { bindSnapshot, persistNow, clearDraft, applyDraftOnce } = usePullEntryFormDraft(
@@ -114,6 +170,10 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
     bindSnapshot(() => ({
       receiptQty,
       warehouseId,
+      locationId,
+      locationCode,
+      batchNumber,
+      serialNumbers,
       receiptTime,
       receiptNotes,
       receiverUuid: receiverHook.receiverUuid,
@@ -123,6 +183,10 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   }, [
     receiptQty,
     warehouseId,
+    locationId,
+    locationCode,
+    batchNumber,
+    serialNumbers,
     receiptTime,
     receiptNotes,
     receiverHook.receiverUuid,
@@ -169,29 +233,58 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         setPreview(previewRaw);
         setWorkOrder(woRaw as Record<string, unknown>);
+        const firstLine = previewRaw.lines[0];
+        if (firstLine?.material_id) {
+          const metaMap = await loadConfirmPreviewMaterialMeta([
+            { ...firstLine, id: firstLine.material_id },
+          ]);
+          setLineMaterialMeta(metaMap[firstLine.material_id] ?? null);
+        }
         const ln = previewRaw.lines[0];
         const unit = ln.material_unit || '个';
         setReceiptUnit(unit);
-        setDisplayPendingQty(Number(ln.source_pending_quantity ?? 0));
+        const pendingQty = Number(ln.source_pending_quantity ?? 0);
+        setDisplayPendingQty(pendingQty);
         setDisplayDocQty(Number(ln.source_doc_quantity ?? 0));
         setDisplayReceivedQty(Number(ln.source_received_quantity ?? 0));
-        const defaultReceiptQty = Number(ln.receipt_quantity ?? 0);
-        setReceiptQty(defaultReceiptQty > 0 ? defaultReceiptQty : 0);
+        // 本次入库默认 = 待入库数量（预览 receipt_quantity 仅作兜底）
+        const suggestedQty = Number(ln.receipt_quantity ?? 0);
+        setReceiptQty(pendingQty > 0 ? pendingQty : suggestedQty > 0 ? suggestedQty : 0);
+
+        let receiptFromDraft: Dayjs | null = null;
+        let restoredReceiverFromDraft = false;
         applyDraftOnce((draft) => {
           const qty = draftOptionalNumber(draft.receiptQty);
-          if (qty != null) setReceiptQty(qty);
+          // 仅正数草稿覆盖，避免下推写入 0 冲掉待入库默认
+          if (qty != null && qty > 0) setReceiptQty(qty);
           const whId = draftOptionalNumber(draft.warehouseId);
           if (whId != null) setWarehouseId(whId);
-          if (draft.receiptTime) {
-            const parsed = draftDayjs(draft.receiptTime);
-            setReceiptTime(parsed?.isValid() ? parsed.startOf('day') : null);
+          const locId = draftOptionalNumber(draft.locationId);
+          if (locId != null) setLocationId(locId);
+          if (typeof draft.locationCode === 'string') setLocationCode(draft.locationCode);
+          if (typeof draft.batchNumber === 'string') setBatchNumber(draft.batchNumber);
+          if (Array.isArray(draft.serialNumbers)) {
+            setSerialNumbers(draft.serialNumbers.map((s) => String(s).trim()).filter(Boolean));
+          }
+          if (draft.receiptTime != null && draft.receiptTime !== '') {
+            receiptFromDraft = resolveInboundReceiptDate(draft.receiptTime);
           }
           if (typeof draft.receiptNotes === 'string') setReceiptNotes(draft.receiptNotes);
-          receiverHook.restoreReceiver({
-            uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
-            name: typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
-          });
+          const hasReceiverDraft =
+            (typeof draft.receiverUuid === 'string' && draft.receiverUuid.trim() !== '') ||
+            (typeof draft.receiverName === 'string' && draft.receiverName.trim() !== '');
+          if (hasReceiverDraft) {
+            restoredReceiverFromDraft = true;
+            receiverHook.restoreReceiver({
+              uuid: typeof draft.receiverUuid === 'string' ? draft.receiverUuid : undefined,
+              name: typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
+            });
+          }
         });
+        setReceiptTime(receiptFromDraft ?? resolveInboundReceiptDate(undefined));
+        if (!restoredReceiverFromDraft) {
+          receiverHook.restoreReceiver();
+        }
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.workOrder.loadFailed'));
         leavePage();
@@ -222,6 +315,49 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
     }
     const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
     if (!whOpt) return;
+
+    const materialLabel = line.material_code || line.material_name || '-';
+    const needLoc = await lineLocationSelectionRequired(warehouseId, locationId, locationCode);
+    if (needLoc) {
+      messageApi.error(
+        t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', { material: materialLabel }),
+      );
+      return;
+    }
+    const lineLocationPayload = {
+      location_id: locationId != null && locationId > 0 ? locationId : undefined,
+      location_code: locationCode.trim() || undefined,
+    };
+    const batchTrim = batchNumber.trim();
+    if (isMaterialBatchEntryEnabled(trackingFlags, lineMaterialMeta?.batchManaged) && !batchTrim) {
+      messageApi.error(
+        t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+          material: materialLabel,
+          batches: '—',
+        }),
+      );
+      return;
+    }
+    if (isMaterialSerialEntryEnabled(trackingFlags, lineMaterialMeta?.serialManaged)) {
+      const expected = Math.floor(qty);
+      const serials = serialNumbers.map((s) => String(s).trim()).filter(Boolean);
+      if (serials.length !== expected) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+            material: materialLabel,
+            required: expected,
+            actual: serials.length,
+          }),
+        );
+        return;
+      }
+    }
+    const trackingPayload = {
+      batch_number: batchTrim || undefined,
+      serial_numbers: serialNumbers.length
+        ? serialNumbers.map((s) => String(s).trim()).filter(Boolean)
+        : undefined,
+    };
 
     setSubmitting(true);
     try {
@@ -258,6 +394,8 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
               unqualified_quantity: 0,
               quality_status: '合格',
               status: '待入库',
+              ...lineLocationPayload,
+              ...trackingPayload,
             },
           ],
         })) as { id?: number; receipt_code?: string };
@@ -294,6 +432,8 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
               unqualified_quantity: 0,
               quality_status: '合格',
               status: '待入库',
+              ...lineLocationPayload,
+              ...trackingPayload,
             },
           ],
         })) as { id?: number; receipt_code?: string };
@@ -321,9 +461,12 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
           INBOUND_LIST_PATH,
           pullEntryTabKey(location.pathname, location.search),
           {
-            inboundDirectConfirm: {
+            inboundOpenDetail: {
               id: Number(createdId),
               receipt_type: receiptType,
+            },
+            inboundHubEntry: {
+              receiptTypeFilter: receiptType,
             },
           },
         );
@@ -339,7 +482,9 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   };
 
   const entryColumns = useMemo(
-    () => [
+    () =>
+      filterWarehouseTrackingColumns(
+        [
       { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v: unknown) => v || '—' },
@@ -390,9 +535,111 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
             optionFilterProp="label"
             value={warehouseId}
             options={warehouseOptions}
-            onChange={(v) => setWarehouseId(v ?? undefined)}
+            onChange={(v) => {
+              setWarehouseId(v ?? undefined);
+              setLocationId(undefined);
+              setLocationCode('');
+              setBatchNumber('');
+              setSerialNumbers([]);
+            }}
           />
         ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.location'),
+        width: 150,
+        render: () => (
+          <PurchaseInboundLineLocationCell
+            materialId={line?.material_id}
+            warehouseId={warehouseId}
+            locationId={locationId}
+            selectWarehouseFirstPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst')}
+            selectLocationPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectLocation')}
+            onChange={(v, loc) => {
+              setLocationId(v ?? undefined);
+              setLocationCode(loc?.code ?? '');
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
+        width: 130,
+        render: () => {
+          if (!isMaterialBatchEntryEnabled(trackingFlags, lineMaterialMeta?.batchManaged)) return '—';
+          return (
+            <Space size={2}>
+              <Input
+                size="small"
+                style={{ width: 96 }}
+                value={batchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+              />
+              <Button
+                type="link"
+                size="small"
+                icon={<ThunderboltOutlined />}
+                loading={generatingBatch}
+                style={{ padding: 0 }}
+                onClick={() => {
+                  const uuid = lineMaterialMeta?.materialUuid;
+                  if (!uuid) return;
+                  setGeneratingBatch(true);
+                  void materialBatchApi
+                    .generate(uuid, {})
+                    .then((res) => {
+                      setBatchNumber(res.batch_no);
+                      messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerated'));
+                    })
+                    .catch((e: Error) => {
+                      messageApi.error(
+                        e?.message || t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerateFailed'),
+                      );
+                    })
+                    .finally(() => setGeneratingBatch(false));
+                }}
+              />
+            </Space>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+        width: 160,
+        render: () => {
+          if (!isMaterialSerialEntryEnabled(trackingFlags, lineMaterialMeta?.serialManaged)) return '—';
+          const qty = Math.floor(Number(receiptQty));
+          return (
+            <SerialNumbersImportTrigger
+              serials={serialNumbers}
+              expectedCount={qty > 0 ? qty : undefined}
+              materialLabel={line?.material_code || line?.material_name}
+              generateLoading={generatingSerial}
+              onSerialsChange={setSerialNumbers}
+              onGenerate={async () => {
+                const uuid = lineMaterialMeta?.materialUuid;
+                if (!uuid || !(qty > 0)) return [];
+                const count = Math.min(qty, MATERIAL_SERIAL_GENERATE_MAX_COUNT);
+                setGeneratingSerial(true);
+                try {
+                  const res = await materialSerialApi.generate(String(uuid), count, {});
+                  setSerialNumbers(res.serial_nos);
+                  messageApi.success(
+                    t('app.kuaizhizao.warehouseInbound.msg.serialGenerated', { count: res.count }),
+                  );
+                  return res.serial_nos;
+                } catch (e: unknown) {
+                  messageApi.error(
+                    (e as Error)?.message || t('app.kuaizhizao.warehouseInbound.msg.serialGenerateFailed'),
+                  );
+                  return [];
+                } finally {
+                  setGeneratingSerial(false);
+                }
+              }}
+            />
+          );
+        },
       },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.thisReceipt'),
@@ -410,8 +657,38 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         ),
       },
     ],
-    [t, warehouseId, warehouseOptions, receiptQty, maxQty, line, receiptUnit, displayDocQty, displayReceivedQty, displayPendingQty],
+        trackingFlags,
+      ),
+    [
+      t,
+      warehouseId,
+      warehouseOptions,
+      locationId,
+      locationCode,
+      receiptQty,
+      maxQty,
+      line,
+      receiptUnit,
+      displayDocQty,
+      displayReceivedQty,
+      displayPendingQty,
+      trackingFlags,
+      lineMaterialMeta,
+      batchNumber,
+      serialNumbers,
+      generatingBatch,
+      generatingSerial,
+      messageApi,
+    ],
   );
+
+  const applyDefaultWarehouse = useCallback((v: number | undefined) => {
+    setWarehouseId(v);
+    setLocationId(undefined);
+    setLocationCode('');
+    setBatchNumber('');
+    setSerialNumbers([]);
+  }, []);
 
   return (
     <DocumentFormPageLayout
@@ -509,7 +786,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
                         optionFilterProp="label"
                         value={warehouseId}
                         options={warehouseOptions}
-                        onChange={(v) => setWarehouseId(v ?? undefined)}
+                        onChange={(v) => applyDefaultWarehouse(v ?? undefined)}
                       />
                     </Form.Item>
                   </Col>
@@ -539,7 +816,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
                       size="small"
                       rowKey="material_id"
                       pagination={false}
-                      scroll={{ x: 900 }}
+                      scroll={{ x: 1050 }}
                       dataSource={[line]}
                       columns={entryColumns}
                     />

@@ -12,8 +12,14 @@ import { CopyOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../../components/layout-templates';
-import type { SalesOrder } from '../../../../services/sales-order';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+import { salesOrderCapabilityReasonMessage } from '../../../../../../hooks/useDocumentCapabilities';
+import {
+  patchSalesOrderAttachments,
+  type SalesOrder,
+} from '../../../../services/sales-order';
 import type { CustomField } from '../../../../../../services/customField';
+import type { DocumentAttachmentFile } from '../../../../utils/documentAttachments';
 import {
   SalesOrderDetailProvider,
   SalesOrderDetailBasicPane,
@@ -46,6 +52,8 @@ export type SalesOrderDetailDrawerProps = {
   /** 覆盖默认只读 extra（打印 + 工作流）；列表页可传入完整操作区 */
   extra?: React.ReactNode;
   onWorkflowSuccess?: () => void;
+  /** 附件中心保存本单附件后回写详情（列表页刷新抽屉订单） */
+  onAttachmentsUpdated?: (order: SalesOrder) => void;
   /** 是否展示默认只读 extra；传入 extra 时忽略 */
   showReadonlyActions?: boolean;
 };
@@ -71,16 +79,24 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
   customFieldValues,
   extra,
   onWorkflowSuccess,
+  onAttachmentsUpdated,
   showReadonlyActions = true,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const salesOrderPerms = useResourcePermissions('kuaizhizao:sales-order');
 
   const effectiveOrder = order ?? PLACEHOLDER_ORDER;
   const contentReady = Boolean(order);
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
+
+  const attachmentCap = order?.capabilities?.update_attachments;
+  const canUploadAttachments =
+    contentReady
+    && salesOrderPerms.canUpdate
+    && attachmentCap?.allowed === true;
 
   const title = (
     <Space size={4}>
@@ -183,6 +199,26 @@ export const SalesOrderDetailDrawer: React.FC<SalesOrderDetailDrawerProps> = ({
                     navigate,
                     closeDrawer: onClose,
                   }),
+              }
+            : undefined
+        }
+        attachmentCenter={
+          contentReady && order?.id != null
+            ? {
+                documentType: 'sales_order',
+                documentId: order.id,
+                hostUpload: {
+                  category: 'sales_order_attachments',
+                  allowed: canUploadAttachments,
+                  disabledReason: !salesOrderPerms.canUpdate
+                    ? t('common.noPermission')
+                    : salesOrderCapabilityReasonMessage(attachmentCap?.reason, t) || null,
+                  initialAttachments: (order.attachments || []) as DocumentAttachmentFile[],
+                  onSave: async (attachments) => {
+                    const updated = await patchSalesOrderAttachments(order.id!, attachments);
+                    onAttachmentsUpdated?.(updated);
+                  },
+                },
               }
             : undefined
         }

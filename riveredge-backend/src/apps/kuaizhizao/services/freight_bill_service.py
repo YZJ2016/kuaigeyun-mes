@@ -7,6 +7,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
+from apps.common.optional_pro import require_finance_orm
 from apps.kuaizhizao.models.logistics import FreightBill, FreightBillItem, FreightOrder, LogisticsCarrier
 from apps.kuaizhizao.schemas.logistics import FreightBillCreate, FreightBillItemInput, FreightBillUpdate
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
@@ -219,12 +220,20 @@ class FreightBillService(AppBaseService):
             return await self.approve_freight_bill(tenant_id, bill_id, submitted_by)
         return await self.get_bill(tenant_id, bill_id)
 
+    async def _resolve_payable_carrier(self, tenant_id: int, bill: FreightBill) -> LogisticsCarrier:
+        """审核推应付前校验：承运商须已关联财务供应商。"""
+        carrier = await LogisticsCarrier.get_or_none(
+            id=bill.carrier_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not carrier or not carrier.supplier_id:
+            raise BusinessLogicError("承运商未关联财务供应商，无法推送应付单。请先在承运商档案中关联供应商后再审核。")
+        return carrier
+
     async def _push_payable(self, tenant_id: int, bill: FreightBill, operator_id: int) -> None:
         if bill.payable_id:
             return
-        carrier = await LogisticsCarrier.get_or_none(id=bill.carrier_id, tenant_id=tenant_id, deleted_at__isnull=True)
-        if not carrier or not carrier.supplier_id:
-            raise BusinessLogicError("承运商未关联轻财务供应商，无法推送应付单")
+        carrier = await self._resolve_payable_carrier(tenant_id, bill)
+        require_finance_orm()
         from apps.kuaicaiwu.schemas.finance import PayableCreate
         from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
         from apps.kuaicaiwu.services.finance_service import PayableService
@@ -305,6 +314,9 @@ class FreightBillService(AppBaseService):
                 doc_label="运费单",
                 verb="审核",
             )
+        # 推应付前置校验须在改状态之前，避免审核成功但应付失败导致界面仍待审/再点报错
+        await self._resolve_payable_carrier(tenant_id, bill)
+        require_finance_orm()
         now = resolve_business_datetime()
         user = await self.get_user_info(approver_id)
         bill.review_status = "approved"

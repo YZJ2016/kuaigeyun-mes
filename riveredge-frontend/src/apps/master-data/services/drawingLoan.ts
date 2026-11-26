@@ -67,6 +67,7 @@ export const drawingLoanApi = {
     limit?: number;
     status?: string;
     keyword?: string;
+    drawingUuid?: string;
   }): Promise<DrawingLoanListResponse> => {
     return api.get<DrawingLoanListResponse>(BASE, { params });
   },

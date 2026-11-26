@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTP
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes, require_read_or_display
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
@@ -313,6 +314,7 @@ async def list_demands(
             tenant_id=tenant_id,
             skip=skip,
             limit=limit,
+            current_user=current_user,
             **filters
         )
         return result
@@ -341,6 +343,107 @@ async def inspect_orphan_demands(
             http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"巡检孤儿需求失败: {str(e)}",
             "/demands/orphan-report",
+            tenant_id,
+        )
+
+
+@router.get(
+    "/mrp-pull-lines",
+    summary="Open demand plan lines for MRP pull",
+    dependencies=[
+        Depends(require_read_or_display("kuaizhizao:plan-management-demand-management")),
+        Depends(require_permission_codes("kuaizhizao:plan-management-demand-computation:create")),
+    ],
+)
+async def list_demand_plan_mrp_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="单号/物料"),
+    demand_id: Optional[int] = Query(None, description="来源计划单"),
+    pullable_only: bool = Query(True, description="仅剩余可分析量大于 0"),
+    date_from: Optional[date] = Query(None, description="计划日期起"),
+    date_to: Optional[date] = Query(None, description="计划日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await demand_service.list_demand_plan_mrp_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            demand_id=demand_id,
+            pullable_only=pullable_only,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/demands/mrp-pull-lines",
+            tenant_id,
+        )
+    except Exception:
+        logger.exception("列出计划生产 MRP 开口行失败")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "列出计划生产 MRP 开口行失败",
+            "/demands/mrp-pull-lines",
+            tenant_id,
+        )
+
+
+@router.get(
+    "/work-order-pull-lines",
+    summary="Open demand plan lines for work order pull",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:plan-management-demand-management:read",
+                "kuaizhizao:plan-management-demand-management:display",
+                "kuaizhizao:work-order:create",
+                "kuaizhizao:work-order:read",
+                require_all=False,
+            )
+        ),
+    ],
+)
+async def list_demand_plan_work_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="单号/物料"),
+    demand_id: Optional[int] = Query(None, description="来源计划单"),
+    pullable_only: bool = Query(True, description="仅剩余可转单量大于 0"),
+    date_from: Optional[date] = Query(None, description="计划日期起"),
+    date_to: Optional[date] = Query(None, description="计划日期止"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await demand_service.list_demand_plan_work_order_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            demand_id=demand_id,
+            pullable_only=pullable_only,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/demands/work-order-pull-lines",
+            tenant_id,
+        )
+    except Exception:
+        logger.exception("列出计划生产工单开口行失败")
+        raise _http_exception_with_trace(
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "列出计划生产工单开口行失败",
+            "/demands/work-order-pull-lines",
             tenant_id,
         )
 
@@ -756,7 +859,7 @@ async def withdraw_demand_from_computation(
     撤回需求计算
 
     将已下推到需求计算的需求撤回，清除计算记录及关联。
-    若下游单据（工单/采购单/生产计划/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
+    若下游仅为草稿且未审核，允许撤回并级联清理；已审核/已下达/已履约须先反审核并删除下游。
     """
     try:
         result = await demand_service.withdraw_from_computation(

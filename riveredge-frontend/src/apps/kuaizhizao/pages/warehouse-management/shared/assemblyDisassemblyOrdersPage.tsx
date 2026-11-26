@@ -7,10 +7,10 @@ import {
   ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Form as AntForm, Modal, Row, Select, Space, Table, Tag, Typography, Descriptions } from 'antd';
+import { App, Button, Col, Form as AntForm, Input, Modal, Row, Select, Space, Table, Tag, Typography, Descriptions } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, SnippetsOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import {
@@ -23,6 +23,13 @@ import {
   useDetailDrawerDescriptionItems,
   detailDrawerBasicColumn,
 } from '../../../../../components/layout-templates';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { LifecycleTranslateFn } from '../../../utils/lifecycleI18n';
@@ -147,6 +154,8 @@ type PageConfig = {
   enableTemplateApply?: boolean;
   /** product=拆卸扣成品；items=组装扣组件 */
   stockConsumeKind: 'product' | 'items';
+  /** 自定义字段绑定表名（注册于 custom_field_pages） */
+  customFieldTableName: string;
 };
 
 const orderStatusKeys: Record<string, { key: string; color: string }> = {
@@ -192,12 +201,37 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>();
   const [productBatchManaged, setProductBatchManaged] = useState(false);
   const [productBatchOptions, setProductBatchOptions] = useState<InventoryPickOption[]>([]);
+  const [productBatchAllocs, setProductBatchAllocs] = useState<OutboundBatchAllocation[]>([]);
   const [productBatchLoading, setProductBatchLoading] = useState(false);
   const [itemBatchManaged, setItemBatchManaged] = useState(false);
   const [itemBatchOptions, setItemBatchOptions] = useState<InventoryPickOption[]>([]);
   const [itemBatchAllocs, setItemBatchAllocs] = useState<OutboundBatchAllocation[]>([]);
   const [itemBatchLoading, setItemBatchLoading] = useState(false);
   const trackingFlags = useWarehouseTrackingFlags();
+
+  const {
+    customFields: orderFormCustomFields,
+    customFieldValues: orderFormCustomFieldValues,
+    loadFieldValues: loadOrderFormFieldValues,
+    extractFormValues: extractOrderFormValues,
+    saveCustomFieldValues: saveOrderCustomFieldValues,
+    resetFieldValues: resetOrderFormFieldValues,
+  } = useCustomFields({
+    tableName: config.customFieldTableName,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: orderListCustomFields,
+    generateCustomFieldColumns: generateOrderCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichOrderRecordsWithCustomFields,
+    customFieldValues: orderDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadOrderFieldValuesForDetail,
+    resetDetailFieldValues: resetOrderDetailFieldValues,
+  } = useCustomFieldsForList<OrderLike>({ tableName: config.customFieldTableName });
+
+  const orderCustomFieldColumns = generateOrderCustomFieldColumns();
 
   const resolveMaterialBatchManaged = async (
     material?: Material | null,
@@ -302,6 +336,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       next = undefined;
     }
     createFormRef.current?.setFieldsValue({ product_batch_number: next });
+    const qty = Number(createFormRef.current?.getFieldValue('total_quantity') ?? 0);
+    setProductBatchAllocs(next ? [{ batchNo: next, quantity: qty > 0 ? qty : 0 }] : []);
   };
 
   const syncItemOutboundBatch = async (
@@ -340,6 +376,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const resetProductBatchUi = () => {
     setProductBatchManaged(false);
     setProductBatchOptions([]);
+    setProductBatchAllocs([]);
   };
 
   const resetItemBatchUi = () => {
@@ -391,6 +428,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const openCreateModal = () => {
     setEditingOrder(null);
     resetProductBatchUi();
+    resetOrderFormFieldValues();
     setCreateModalVisible(true);
     setTimeout(() => {
       createFormRef.current?.resetFields();
@@ -412,7 +450,9 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const openEditOrderModal = (order: OrderLike) => {
     setEditingOrder(order);
     setCreateModalVisible(true);
-    setTimeout(() => {
+    void (async () => {
+      const fieldFormValues =
+        order.id != null ? await loadOrderFormFieldValues(order.id) : {};
       createFormRef.current?.resetFields();
       createFormRef.current?.setFieldsValue({
         warehouse_id: order.warehouse_id,
@@ -427,6 +467,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         assembly_template_id: order.assembly_template_id,
         remarks: order.remarks,
         attachments: mapAttachmentsToUploadList(order.attachments),
+        ...fieldFormValues,
       });
       if (config.enableTemplateApply) {
         void loadTemplateOptions(order.product_material_id);
@@ -437,34 +478,44 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         order.warehouse_id,
         order.product_batch_number,
       );
-    }, 0);
+    })();
   };
 
   const submitCreateOrder = async (values: any) => {
     try {
+      const { standardValues, customData } = extractOrderFormValues(values);
       const payload = {
-        warehouse_id: values.warehouse_id,
-        warehouse_name: values.warehouse_name || values._warehouse_name || '',
-        [config.dateField]: toApiDateTimeString(values[config.dateField]) ?? nowSiteDateTimeString(),
-        product_material_id: values.product_material_id,
-        product_material_code: values.product_material_code || '',
-        product_material_name: values.product_material_name || '',
-        product_batch_number: values.product_batch_number || undefined,
-        total_quantity: Number(values.total_quantity || 0),
-        assembly_template_id: values.assembly_template_id || undefined,
-        remarks: values.remarks,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        warehouse_id: standardValues.warehouse_id,
+        warehouse_name: standardValues.warehouse_name || standardValues._warehouse_name || '',
+        [config.dateField]: toApiDateTimeString(standardValues[config.dateField]) ?? nowSiteDateTimeString(),
+        product_material_id: standardValues.product_material_id,
+        product_material_code: standardValues.product_material_code || '',
+        product_material_name: standardValues.product_material_name || '',
+        product_batch_number:
+          productBatchAllocs.length === 1
+            ? productBatchAllocs[0].batchNo
+            : standardValues.product_batch_number || undefined,
+        total_quantity: Number(standardValues.total_quantity || 0),
+        assembly_template_id: standardValues.assembly_template_id || undefined,
+        remarks: standardValues.remarks,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
       if (editingOrder?.id) {
         await api.update(String(editingOrder.id), payload);
+        await saveOrderCustomFieldValues(editingOrder.id, customData);
         messageApi.success(config.updateSuccessText || t('app.kuaizhizao.warehouseCommon.updateSuccess', { noun: config.actionNoun }));
       } else {
-        await api.create(payload);
+        const created = await api.create(payload);
+        const recordId = Number((created as { id?: number })?.id ?? 0);
+        if (recordId > 0) {
+          await saveOrderCustomFieldValues(recordId, customData);
+        }
         messageApi.success(config.createSuccessText);
       }
       setCreateModalVisible(false);
       setEditingOrder(null);
       createFormRef.current?.resetFields();
+      resetOrderFormFieldValues();
       invalidateMenuBadgeCounts();
       reloadList();
       if (currentOrder?.id && editingOrder?.id === currentOrder.id) {
@@ -480,10 +531,14 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setCurrentOrder(null);
+    resetOrderDetailFieldValues();
     try {
       const detail = await api.get(String(record.id));
       setCurrentOrder(detail as OrderLike);
       setSelectedTemplateId(detail.assembly_template_id ?? undefined);
+      if (detail.id != null) {
+        await loadOrderFieldValuesForDetail(detail.id);
+      }
       if (config.enableTemplateApply && detail.product_material_id) {
         await loadTemplateOptions(detail.product_material_id);
       }
@@ -538,21 +593,6 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     runApply(false);
   };
 
-  const executeconfirmDeleteOrder = async (record: OrderLike) => {
-    try {
-          await api.delete(String(record.id));
-          messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteOrderSuccess', { noun: config.deleteSuccessNoun }));
-          invalidateMenuBadgeCounts();
-          if (currentOrder?.id === record.id) {
-            setDetailDrawerVisible(false);
-            setCurrentOrder(null);
-          }
-          reloadList();
-        } catch (error: any) {
-          messageApi.error(error?.message || t('common.deleteFailed'));
-        }
-  };
-
   const openItemModal = (record: OrderLike, item?: ItemLike) => {
     setCurrentOrderId(record.id ?? null);
     setEditingItem(item ?? null);
@@ -585,7 +625,6 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       if (
         config.stockConsumeKind === 'items' &&
         itemBatchManaged &&
-        !editingItem?.id &&
         !isValidOutboundBatchAllocations(itemBatchAllocs, itemBatchOptions, itemQty)
       ) {
         messageApi.error(
@@ -599,7 +638,10 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         await api.updateItem(String(currentOrderId), String(editingItem.id), {
           quantity: itemQty,
           unit_price: Number(values.unit_price || 0),
-          batch_number: values.batch_number || undefined,
+          batch_number:
+            itemBatchAllocs.length === 1
+              ? itemBatchAllocs[0].batchNo
+              : values.batch_number || undefined,
           remarks: values.remarks,
         });
         messageApi.success(config.updateItemSuccessText || t('app.kuaizhizao.warehouseCommon.updateItemSuccess', { noun: config.actionNoun }));
@@ -763,6 +805,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       render: formatQuantity,
     },
     ...buildDocumentAuditColumns<OrderLike>(t),
+    ...orderCustomFieldColumns,
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -811,16 +854,13 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               </Button>
             </ActionConfirmPopconfirm>
               ) : null}
-              <ActionConfirmPopconfirm title={t('app.kuaizhizao.warehouseCommon.deleteOrderTitle', { noun: config.actionNoun })} description={t('app.kuaizhizao.warehouseCommon.deleteOrderConfirm', { noun: config.actionNoun, code: record.code })} onConfirm={() => executeconfirmDeleteOrder(record)}>
-              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-            </ActionConfirmPopconfirm>
             </>
           )}
         </Space>
       ),
     },
   ], WAREHOUSE_DOC_LIST_FIELD_RANK),
-    [config, t, workflowStatusValueEnum],
+    [config, t, workflowStatusValueEnum, orderCustomFieldColumns],
   );
 
   const detailColumns = useMemo(
@@ -830,7 +870,17 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     { title: config.dateLabel, dataIndex: config.dateField, valueType: 'date' },
     { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name' },
     ...(config.stockConsumeKind === 'product'
-      ? [{ title: t('app.kuaizhizao.warehouseCommon.colBatchNo'), dataIndex: 'product_batch_number' as const }]
+      ? [
+          { title: t('app.kuaizhizao.warehouseCommon.colBatchNo'), dataIndex: 'product_batch_number' as const },
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
+            dataIndex: 'product_serial_numbers' as const,
+            render: (val: unknown) => {
+              const list = Array.isArray(val) ? val : [];
+              return list.length ? String(list.length) : '—';
+            },
+          },
+        ]
       : []),
     {
       title: t('common.status'),
@@ -871,16 +921,21 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   }, [config, currentOrder, t]);
 
   const detailSupplementary = useMemo(() => {
-    if (
-      !config.enableTemplateApply ||
-      !canApplyTemplate ||
-      !currentOrder ||
-      currentOrder.status !== 'draft' ||
-      !api.applyTemplate
-    ) {
-      return undefined;
-    }
-    return (
+    const customFieldsSection =
+      currentOrder &&
+      hasCustomFieldsDetailContent(orderListCustomFields, orderDetailCustomFieldValues) ? (
+        <CustomFieldsDetailSection
+          customFields={orderListCustomFields}
+          customFieldValues={orderDetailCustomFieldValues}
+        />
+      ) : null;
+    const showTemplate =
+      config.enableTemplateApply &&
+      canApplyTemplate &&
+      currentOrder &&
+      currentOrder.status === 'draft' &&
+      !!api.applyTemplate;
+    const templateSection = showTemplate ? (
       <>
         <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
           {t('app.kuaizhizao.assemblyOrder.applyTemplate')}
@@ -904,15 +959,44 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           </Button>
         </Space>
       </>
+    ) : null;
+    if (!customFieldsSection && !templateSection) return undefined;
+    return (
+      <>
+        {customFieldsSection}
+        {templateSection}
+      </>
     );
-  }, [api.applyTemplate, canApplyTemplate, config.enableTemplateApply, confirmApplyTemplate, currentOrder, selectedTemplateId, t, templateOptions]);
+  }, [
+    api.applyTemplate,
+    canApplyTemplate,
+    config.enableTemplateApply,
+    confirmApplyTemplate,
+    currentOrder,
+    orderDetailCustomFieldValues,
+    orderListCustomFields,
+    selectedTemplateId,
+    t,
+    templateOptions,
+  ]);
 
   const detailItemColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
       { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
       ...(config.stockConsumeKind === 'items'
-        ? [{ title: t('app.kuaizhizao.warehouseCommon.colBatchNo'), dataIndex: 'batch_number', width: 120 }]
+        ? [
+            { title: t('app.kuaizhizao.warehouseCommon.colBatchNo'), dataIndex: 'batch_number', width: 120 },
+            {
+              title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
+              dataIndex: 'serial_numbers',
+              width: 100,
+              render: (val: unknown) => {
+                const list = Array.isArray(val) ? val : [];
+                return list.length ? String(list.length) : '—';
+              },
+            },
+          ]
         : []),
       { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right' as const, render: formatQuantity },
       {
@@ -996,6 +1080,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         onCreate={openCreateModal}
         enableRowSelection
         showDeleteButton
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           getAntdModal().confirm({
             title: t('app.kuaizhizao.warehouseCommon.batchDeleteTitle', { noun: config.actionNoun }),
@@ -1014,7 +1099,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             },
           });
         }}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
           const listParams = resolveAssemblyDisassemblyOrderListParams(searchFormValues, sort, {
             dateField: config.dateField as 'assembly_date' | 'disassembly_date',
@@ -1026,7 +1111,11 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             status: lifecycleStage ?? listParams.status,
           });
           const { data, total } = normalizeWarehouseListResponse(result);
-          return { data, success: true, total };
+          const enriched =
+            meta?.purpose === 'prefetch'
+              ? data
+              : await enrichOrderRecordsWithCustomFields(data);
+          return { data: enriched, success: true, total };
         }}
         locale={{ emptyText: config.listEmptyText }}
       />
@@ -1039,6 +1128,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           setEditingOrder(null);
           resetProductBatchUi();
           createFormRef.current?.resetFields();
+          resetOrderFormFieldValues();
         }}
         onFinish={submitCreateOrder}
         formRef={createFormRef}
@@ -1097,30 +1187,41 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           }}
         />
         {config.stockConsumeKind === 'product' && productBatchManaged && (
-          <AntForm.Item
-            name="product_batch_number"
-            label={t('app.kuaizhizao.warehouseCommon.colBatchNo')}
-            rules={[
-              {
-                required: true,
-                message: t('app.kuaizhizao.warehouseCommon.batchRequiredOutbound'),
-              },
-            ]}
-          >
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              loading={productBatchLoading}
-              placeholder={t('app.kuaizhizao.warehouseCommon.selectBatchPlaceholder')}
-              options={productBatchOptions}
-              notFoundContent={
-                productBatchLoading
-                  ? undefined
-                  : t('app.kuaizhizao.warehouseCommon.batchOptionsEmpty')
-              }
-            />
-          </AntForm.Item>
+          <>
+            <AntForm.Item name="product_batch_number" hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item
+              label={t('app.kuaizhizao.warehouseCommon.colBatchNo')}
+              required
+              rules={[
+                {
+                  validator: async () => {
+                    const qty = Number(createFormRef.current?.getFieldValue('total_quantity') ?? 0);
+                    if (!isValidOutboundBatchAllocations(productBatchAllocs, productBatchOptions, qty)) {
+                      return Promise.reject(
+                        new Error(t('app.kuaizhizao.warehouseCommon.batchRequiredOutbound')),
+                      );
+                    }
+                    return Promise.resolve();
+                  },
+                },
+              ]}
+            >
+              <OutboundBatchAllocationField
+                value={productBatchAllocs}
+                onChange={(next) => {
+                  setProductBatchAllocs(next);
+                  createFormRef.current?.setFieldsValue({
+                    product_batch_number: next.length === 1 ? next[0].batchNo : undefined,
+                  });
+                }}
+                options={productBatchOptions}
+                totalQuantity={Number(createFormRef.current?.getFieldValue('total_quantity') ?? 0)}
+                loading={productBatchLoading}
+              />
+            </AntForm.Item>
+          </>
         )}
         {config.enableTemplateApply && (
           <AntForm.Item name="assembly_template_id" label={t('app.kuaizhizao.assemblyOrder.assemblyTemplate')}>
@@ -1137,6 +1238,11 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.enterField', { label: config.quantityLabel }) }]}
           min={0.01}
           fieldProps={{ precision: 2 }}
+        />
+        <CustomFieldsFormSection
+          customFields={orderFormCustomFields}
+          customFieldValues={orderFormCustomFieldValues}
+          gridColumns={2}
         />
         <DocumentAttachmentsField category={config.attachmentCategory} />
         <ProFormTextArea name="remarks" label={t('common.remark')} placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')} fieldProps={{ rows: 3 }} />
@@ -1179,39 +1285,18 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             void syncItemOutboundBatch(mat, typeof mid === 'number' ? mid : undefined);
           }}
         />
-        {config.stockConsumeKind === 'items' && itemBatchManaged && editingItem ? (
-          <AntForm.Item
-            name="batch_number"
-            label={t('app.kuaizhizao.warehouseCommon.colBatchNo')}
-            rules={[
-              {
-                required: true,
-                message: t('app.kuaizhizao.warehouseCommon.batchRequiredOutbound'),
-              },
-            ]}
-          >
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              loading={itemBatchLoading}
-              placeholder={t('app.kuaizhizao.warehouseCommon.selectBatchPlaceholder')}
-              options={itemBatchOptions}
-              notFoundContent={
-                itemBatchLoading
-                  ? undefined
-                  : t('app.kuaizhizao.warehouseCommon.batchOptionsEmpty')
-              }
-            />
-          </AntForm.Item>
-        ) : null}
-        {config.stockConsumeKind === 'items' && itemBatchManaged && !editingItem ? (
+        {config.stockConsumeKind === 'items' && itemBatchManaged ? (
           <AntForm.Item label={t('app.kuaizhizao.warehouseCommon.colBatchNo')} required>
+            <AntForm.Item name="batch_number" hidden>
+              <Input />
+            </AntForm.Item>
             <OutboundBatchAllocationField
               value={itemBatchAllocs}
               onChange={(next) => {
                 setItemBatchAllocs(next);
-                itemFormRef.current?.setFieldsValue({ batch_number: next[0]?.batchNo });
+                itemFormRef.current?.setFieldsValue({
+                  batch_number: next.length === 1 ? next[0].batchNo : undefined,
+                });
               }}
               options={itemBatchOptions}
               totalQuantity={Number(itemFormRef.current?.getFieldValue('quantity') ?? 0)}
@@ -1239,6 +1324,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
+          resetOrderDetailFieldValues();
         }}
         size={DRAWER_CONFIG.HALF_WIDTH}
         extra={
@@ -1250,7 +1336,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               <Button size="small" onClick={() => openItemModal(currentOrder)}>
                 {t('app.kuaizhizao.warehouseCommon.addItem')}
               </Button>
-              <Button size="small" type="primary" onClick={() => executeconfirmExecuteOrder(currentOrder)}>
+              <Button size="small" type="primary" onClick={() => confirmExecuteOrder(currentOrder)}>
                 {config.executeActionLabel}
               </Button>
             </Space>

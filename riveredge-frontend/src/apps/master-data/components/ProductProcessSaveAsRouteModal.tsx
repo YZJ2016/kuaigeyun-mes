@@ -14,7 +14,8 @@ const PAGE_CODE = 'master-data-process-route';
 
 export type ProductProcessSaveAsRouteModalProps = {
   open: boolean;
-  material: Material;
+  material?: Material;
+  nameForRouteSuggestion?: string;
   loading?: boolean;
   onClose: () => void;
   onSubmit: (values: { newRouteCode: string; newRouteName: string }) => void | Promise<void>;
@@ -23,6 +24,7 @@ export type ProductProcessSaveAsRouteModalProps = {
 export const ProductProcessSaveAsRouteModal: React.FC<ProductProcessSaveAsRouteModalProps> = ({
   open,
   material,
+  nameForRouteSuggestion,
   loading = false,
   onClose,
   onSubmit,
@@ -33,15 +35,16 @@ export const ProductProcessSaveAsRouteModal: React.FC<ProductProcessSaveAsRouteM
 
   useEffect(() => {
     if (!open) return;
-    const suggestedName = material.name
-      ? t('app.master-data.productProcess.saveAsNewRouteNameDefault', { name: material.name })
+    const nameSeed = nameForRouteSuggestion ?? material?.name ?? '';
+    const suggestedName = nameSeed
+      ? t('app.master-data.productProcess.saveAsNewRouteNameDefault', { name: nameSeed })
       : '';
     form.resetFields();
     form.setFieldsValue({
       newRouteCode: '',
       newRouteName: suggestedName,
     });
-  }, [form, material.name, open, t]);
+  }, [form, material?.name, nameForRouteSuggestion, open, t]);
 
   const resolveFinalRouteCode = async (inputCode: string): Promise<string> => {
     let ruleCode: string | undefined;

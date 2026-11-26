@@ -4,30 +4,61 @@
 
 import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Alert, App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Timeline, Tooltip, theme } from 'antd';
+import { App, Button, Dropdown, Grid, Input, Modal, Popconfirm, Segmented, Space, Spin, Switch, Tooltip, theme } from 'antd';
+import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
+  AuditOutlined,
+  BookOutlined,
   CheckOutlined,
+  CloseCircleOutlined,
+  CloudUploadOutlined,
   CompressOutlined,
   DeleteOutlined,
+  DiffOutlined,
+  DownloadOutlined,
   EditOutlined,
   ExpandOutlined,
+  ExportOutlined,
+  EyeOutlined,
   FilterOutlined,
   FolderOutlined,
+  ImportOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MoreOutlined,
+  NodeIndexOutlined,
   PartitionOutlined,
   PlusOutlined,
-  EyeOutlined,
+  PrinterOutlined,
+  RollbackOutlined,
   SendOutlined,
   SettingOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
-import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
+  normalizeActionTree,
+  renderRowActionsOverflow,
+  rowActionDownloadFirmware,
+  rowActionDrawingCheckin,
+  rowActionDrawingCheckout,
+  rowActionDrawingDistribute,
+  rowActionDrawingEngineeringChange,
+  rowActionDrawingImportStepBom,
+  rowActionDrawingLoan,
+  rowActionDrawingNewRevision,
+  rowActionDrawingUndoCheckout,
+  rowActionDrawingWhereUsed,
+  rowActionKind,
+  rowActionLabelKeep,
+} from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import { fetchCoreFileBytesByUuid } from '../../../../../utils/fetchCoreFileBytes';
+import { downloadFile } from '../../../../../utils/fileDownload';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   TwoColumnLayout,
@@ -43,11 +74,11 @@ import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
-import { formatProjectRefLabel } from '../../../../kuaiplm/components/Phase2ProjectSelect';
+import { formatProjectRefLabel } from '../../../utils/projectRefLabel';
 import { getDictionaryOptions } from '../../../services/supply-chain';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { DrawingBatchUploadModal } from '../../../components/DrawingBatchUploadModal';
-import { UniBatchMenuButton, type UniBatchMenuItem } from '../../../../../components/uni-batch';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
 import FilePreviewModal from '../../../../../components/file-preview';
 import { CadPreviewLoading } from '../../../../../components/cad-preview/CadPreviewLoading';
@@ -56,7 +87,6 @@ import { processRouteApi, unwrapProcessPagedList } from '../../../services/proce
 import {
   drawingApi,
   normalizeFileBrief,
-  type DrawingCatalogTab,
   type DrawingListView,
   type DrawingSecurityLevel,
   type DrawingStatus,
@@ -93,18 +123,27 @@ import {
 } from './drawingFolderModals';
 import { DrawingWatermarkSettingsModal } from './DrawingWatermarkSettingsModal';
 import { buildWatermarkInlineStyle } from './drawingWatermarkUtils';
+import {
+  DrawingDetailRecordTabs,
+  DrawingDistributeFromDrawingModal,
+  DrawingLoanFromDrawingModal,
+  DrawingWhereUsedModal,
+} from './DrawingIntegratedPanels';
+import { drawingDistributionApi } from '../../../services/drawingDistribution';
 import { isStepFile } from '../../../../../utils/filePreviewKind';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { alignProColumns } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
+import {
+  UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+  UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS,
+} from '../../../../../utils/uniTableLayoutColumns';
 import { MASTER_DATA_LIST_FIELD_RANK } from '../../../utils/masterListCore';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/masterListCore';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
-import { canViewDocumentHistory } from '../../../../../utils/permissionContract';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import { buildDrawingChangeCreateUrl } from '../../../../kuaiplm/services/master-data-links';
+import { buildDrawingChangeCreateUrl } from '../../../utils/plmDeepLinks';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const DRAWING_PERMISSION = 'master-data:process:drawing';
 
@@ -259,13 +298,18 @@ const DrawingsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const currentUser = useCurrentUser();
-  const { canCreate, canUpdate, canDelete, canPrint, canImport, canAction } = useResourcePermissions(DRAWING_PERMISSION);
+  const { canCreate, canUpdate, canDelete, canPrint, canImport, canExport, canAction } =
+    useResourcePermissions(DRAWING_PERMISSION);
   const changePerms = useResourcePermissions('kuaiplm:change');
+  const whereUsedPerms = useResourcePermissions('master-data:process:drawing-where-used');
+  const distPerms = useResourcePermissions('master-data:process:drawing-distribution');
+  const loanPerms = useResourcePermissions('master-data:process:drawing-loan');
   const canSubmit = !!canAction?.('submit');
   const canApprove = !!canAction?.('approve');
   const canReject = !!canAction?.('reject');
   const canRevoke = !!canAction?.('revoke');
   const canObsolete = !!canAction?.('obsolete');
+  const canDownload = canExport || canPrint || canUpdate || canCreate;
 
   const openDrawingPrint = useCallback(async (record: EngineeringDrawing) => {
     try {
@@ -384,18 +428,18 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const [stepBomOpen, setStepBomOpen] = useState(false);
   const [stepBomDrawing, setStepBomDrawing] = useState<EngineeringDrawing | null>(null);
   const [listView, setListView] = useState<DrawingListView>('current');
-  const [catalogTab, setCatalogTab] = useState<DrawingCatalogTab>('engineering');
-  const [rdListViewScope, setRdListViewScope] = useState<'all' | 'production'>('all');
+  /** 与 params.listView 双写：request 读 ref，避免 ProTable 入参尚未提交时闭包仍用旧 view */
+  const listViewRef = useRef<DrawingListView>(listView);
+  listViewRef.current = listView;
   const [requireChangeSummaryOnEdit, setRequireChangeSummaryOnEdit] = useState(false);
   const [revisions, setRevisions] = useState<EngineeringDrawingRevisionBrief[]>([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
-  const canViewHistory = canViewDocumentHistory(currentUser);
-  const rdProductionView = rdListViewScope === 'production';
-  const fixedCatalogDrawingType: DrawingType | undefined =
-    catalogTab === 'product_spec' ? 'product_spec' : undefined;
-  const excludeCatalogDrawingTypes =
-    catalogTab === 'engineering' ? 'product_spec' : undefined;
-
+  const [whereUsedDrawing, setWhereUsedDrawing] = useState<EngineeringDrawing | null>(null);
+  const [distributeDrawing, setDistributeDrawing] = useState<EngineeringDrawing | null>(null);
+  const [loanDrawing, setLoanDrawing] = useState<EngineeringDrawing | null>(null);
+  const [detailRecordsReloadToken, setDetailRecordsReloadToken] = useState(0);
+  const [distPolicyEnabled, setDistPolicyEnabled] = useState(false);
+  const [distPolicyLoading, setDistPolicyLoading] = useState(false);
   const showPreviewPane = showInlinePreview && !!inlinePreviewFile?.uuid;
 
   const typeLabel = (type: DrawingType) =>
@@ -445,10 +489,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const loadFolders = useCallback(async () => {
     setTreeLoading(true);
     try {
-      const result = await drawingFolderApi.tree({
-        drawingType: fixedCatalogDrawingType,
-        excludeDrawingTypes: excludeCatalogDrawingTypes,
-      });
+      const result = await drawingFolderApi.tree({});
       setFolders(result.data);
       setFolderTreeSummary({
         totalDrawingCount: result.totalDrawingCount,
@@ -460,7 +501,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     } finally {
       setTreeLoading(false);
     }
-  }, [excludeCatalogDrawingTypes, fixedCatalogDrawingType]);
+  }, []);
 
   useEffect(() => {
     void loadFolders();
@@ -825,6 +866,35 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     void loadDetail(uuid);
   };
 
+  useEffect(() => {
+    if (!distPerms.canRead) return;
+    void drawingDistributionApi
+      .getPolicy()
+      .then((p) => setDistPolicyEnabled(!!p.isEnabled))
+      .catch(() => undefined);
+  }, [distPerms.canRead]);
+
+  const handleDownloadDrawing = useCallback(
+    async (record: EngineeringDrawing) => {
+      const file = record.file;
+      if (!file?.uuid) {
+        messageApi.warning(t('app.master-data.drawings.downloadNoFile'));
+        return;
+      }
+      try {
+        const bytes = await fetchCoreFileBytesByUuid(
+          file.uuid,
+          t('app.master-data.drawings.downloadFailed'),
+        );
+        downloadFile(new Blob([bytes]), file.originalName || `${record.code}.bin`);
+        messageApi.success(t('app.master-data.drawings.downloadSuccess'));
+      } catch (err: unknown) {
+        messageApi.error(getApiErrorMessage(err) || t('app.master-data.drawings.downloadFailed'));
+      }
+    },
+    [messageApi, t],
+  );
+
   const handleCreate = useCallback(() => {
     setEditUuid(null);
     setRequireChangeSummaryOnEdit(false);
@@ -1072,7 +1142,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   }, []);
 
   const drawingBatchMenuItems = useMemo(() => {
-    const items: UniBatchMenuItem[] = [];
+    const items = [];
     if (canSubmit) {
       items.push({
         key: 'batchSubmit',
@@ -1149,129 +1219,225 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     };
   }, [detail?.uuid]);
 
-  const renderLifecycleActions = useCallback(
-    (record: EngineeringDrawing, compact = false) => (
-      <Space size={compact ? 8 : 0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-        {canImport && canImportStepBom(record) ? (
-          <Button
-            key="importStepBom"
-            {...rowActionKind('create')}
-            {...rowActionLabelKeep()}
-            icon={<PartitionOutlined />}
-            onClick={() => openStepBomWizard(record)}
-          >
-            {t('app.master-data.drawings.importStepBom')}
-          </Button>
-        ) : null}
-        {record.status === 'Draft' && (
-          <>
-            {canUpdate ? (
-              <Button key="checkout" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={() => handleCheckout(record)}>
-                {t('app.master-data.drawings.checkout')}
-              </Button>
-            ) : null}
-            {canSubmit ? (
-              <ActionConfirmPopconfirm title={t('common.submit')} description={t('app.master-data.drawings.submitConfirm')} onConfirm={() => executeSubmit(record)}>
-              <Button key="submit" {...rowActionKind('submit')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
-                {t('common.submit')}
-              </Button>
-            </ActionConfirmPopconfirm>
-            ) : null}
-            {canDelete ? (
-              <Popconfirm
-                key="delete"
-                title={t('common.confirmDelete')}
-                onConfirm={() => handleDeleteDrawing(record)}
-              >
-                <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
-              </Popconfirm>
-            ) : null}
-          </>
-        )}
-        {record.status === 'Editing' && isCheckoutOwner(record) && (
-          <>
-            {canUpdate ? (
-              <Button
-                key="edit"
-                {...rowActionKind('update')}
-                onClick={() => {
-                  setRequireChangeSummaryOnEdit(record.revision !== 'A');
-                  setEditUuid(record.uuid);
-                  setModalVisible(true);
-                }}
-              />
-            ) : null}
-            {canUpdate ? (
-              <Button key="checkin" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={() => handleCheckin(record)}>
-                {t('app.master-data.drawings.checkin')}
-              </Button>
-            ) : null}
-            {canUpdate ? (
-              <ActionConfirmPopconfirm title={t('app.master-data.drawings.undoCheckout')} description={t('app.master-data.drawings.undoCheckoutConfirm')} onConfirm={() => executeUndoCheckout(record)}>
-              <Button key="undoCheckout" {...rowActionKind('update')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
-                {t('app.master-data.drawings.undoCheckout')}
-              </Button>
-            </ActionConfirmPopconfirm>
-            ) : null}
-          </>
-        )}
-        {record.status === 'Pending' && (
-          <>
-            {canApprove ? (
-              <ActionConfirmPopconfirm title={t('app.master-data.drawings.approve')} description={t('app.master-data.drawings.approveConfirm')} onConfirm={() => executeApprove(record)}>
-              <Button key="approve" {...rowActionKind('approve')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
-                {t('app.master-data.drawings.approve')}
-              </Button>
-            </ActionConfirmPopconfirm>
-            ) : null}
-            {canReject ? (
-              <Button key="reject" {...rowActionKind('reject')} {...rowActionLabelKeep()} onClick={() => handleReject(record)}>
-                {t('app.master-data.drawings.reject')}
-              </Button>
-            ) : null}
-            {canRevoke ? (
-              <ActionConfirmPopconfirm title={t('app.master-data.drawings.revoke')} description={t('app.master-data.drawings.revokeConfirm')} onConfirm={() => executeRevoke(record)}>
-              <Button key="revoke" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={(e) => e.stopPropagation()}>
-                {t('app.master-data.drawings.revoke')}
-              </Button>
-            </ActionConfirmPopconfirm>
-            ) : null}
-          </>
-        )}
-        {record.status === 'Released' && (
-          <>
-            {changePerms.canCreate ? (
-              <Button
-                key="engineeringChange"
-                {...rowActionKind('create')}
-                {...rowActionLabelKeep()}
-                onClick={() => navigate(buildDrawingChangeCreateUrl(record.uuid))}
-              >
-                {t('app.master-data.drawings.engineeringChange')}
-              </Button>
-            ) : null}
-            {canCreate ? (
-              <Button key="create" {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleRevision(record)}>
-                {t('app.master-data.drawings.newRevision')}
-              </Button>
-            ) : null}
-            {canObsolete ? (
-              <Button key="obsolete" {...rowActionKind('obsolete')} {...rowActionLabelKeep()} onClick={() => handleObsolete(record)}>
-                {t('app.master-data.drawings.obsolete')}
-              </Button>
-            ) : null}
-          </>
-        )}
-        {canPrint ? (
-          <Button key="print" {...rowActionKind('print')} onClick={() => void openDrawingPrint(record)} />
-        ) : null}
-        {!compact && record.file && !showInlinePreview && (
-          <Button key="preview" {...rowActionKind('read')} {...rowActionLabelKeep()} onClick={() => openPreview(record.file)}>
-            {t('app.master-data.drawings.preview')}
-          </Button>
-        )}
-      </Space>
-    ),
+  /** 列表「更多」：自管分组菜单（对齐 BOM 更多），图标齐全；确认类走 Modal */
+  const buildDrawingMoreMenuItems = useCallback(
+    (record: EngineeringDrawing, options?: { includePreview?: boolean }): MenuProps['items'] => {
+      const includePreview = options?.includePreview === true;
+      const editItems: NonNullable<MenuProps['items']> = [];
+      const workflowItems: NonNullable<MenuProps['items']> = [];
+      const versionItems: NonNullable<MenuProps['items']> = [];
+      const collaborateItems: NonNullable<MenuProps['items']> = [];
+      const fileItems: NonNullable<MenuProps['items']> = [];
+
+      if (record.status === 'Draft') {
+        if (canUpdate) {
+          editItems.push({
+            key: 'checkout',
+            icon: <ExportOutlined />,
+            label: t('app.master-data.drawings.checkout'),
+            onClick: () => void handleCheckout(record),
+          });
+        }
+        if (canSubmit) {
+          workflowItems.push({
+            key: 'submit',
+            icon: <SendOutlined />,
+            label: t('common.submit'),
+            onClick: () => {
+              getAntdModal().confirm({
+                title: t('common.submit'),
+                content: t('app.master-data.drawings.submitConfirm'),
+                onOk: () => executeSubmit(record),
+              });
+            },
+          });
+        }
+        if (canDelete) {
+          editItems.push({
+            key: 'delete',
+            icon: <DeleteOutlined />,
+            label: t('common.delete'),
+            danger: true,
+            onClick: () => {
+              getAntdModal().confirm({
+                title: t('common.confirmDelete'),
+                okButtonProps: { danger: true },
+                onOk: () => handleDeleteDrawing(record),
+              });
+            },
+          });
+        }
+      }
+
+      if (record.status === 'Editing' && isCheckoutOwner(record) && canUpdate) {
+        editItems.push({
+          key: 'edit',
+          icon: <EditOutlined />,
+          label: t('common.edit'),
+          onClick: () => {
+            setRequireChangeSummaryOnEdit(record.revision !== 'A');
+            setEditUuid(record.uuid);
+            setModalVisible(true);
+          },
+        });
+        editItems.push({
+          key: 'checkin',
+          icon: <ImportOutlined />,
+          label: t('app.master-data.drawings.checkin'),
+          onClick: () => void handleCheckin(record),
+        });
+        editItems.push({
+          key: 'undoCheckout',
+          icon: <RollbackOutlined />,
+          label: t('app.master-data.drawings.undoCheckout'),
+          onClick: () => {
+            getAntdModal().confirm({
+              title: t('app.master-data.drawings.undoCheckout'),
+              content: t('app.master-data.drawings.undoCheckoutConfirm'),
+              onOk: () => executeUndoCheckout(record),
+            });
+          },
+        });
+      }
+
+      if (record.status === 'Pending') {
+        if (canApprove) {
+          workflowItems.push({
+            key: 'approve',
+            icon: <AuditOutlined />,
+            label: t('app.master-data.drawings.approve'),
+            onClick: () => {
+              getAntdModal().confirm({
+                title: t('app.master-data.drawings.approve'),
+                content: t('app.master-data.drawings.approveConfirm'),
+                onOk: () => executeApprove(record),
+              });
+            },
+          });
+        }
+        if (canReject) {
+          workflowItems.push({
+            key: 'reject',
+            icon: <CloseCircleOutlined />,
+            label: t('app.master-data.drawings.reject'),
+            danger: true,
+            onClick: () => handleReject(record),
+          });
+        }
+        if (canRevoke) {
+          workflowItems.push({
+            key: 'revoke',
+            icon: <RollbackOutlined />,
+            label: t('app.master-data.drawings.revoke'),
+            onClick: () => {
+              getAntdModal().confirm({
+                title: t('app.master-data.drawings.revoke'),
+                content: t('app.master-data.drawings.revokeConfirm'),
+                onOk: () => executeRevoke(record),
+              });
+            },
+          });
+        }
+      }
+
+      if (record.status === 'Released') {
+        if (changePerms.canCreate) {
+          versionItems.push({
+            key: 'engineeringChange',
+            icon: <DiffOutlined />,
+            label: t('app.master-data.drawings.engineeringChange'),
+            onClick: () => navigate(buildDrawingChangeCreateUrl(record.uuid)),
+          });
+        }
+        if (canCreate) {
+          versionItems.push({
+            key: 'newRevision',
+            icon: <CloudUploadOutlined />,
+            label: t('app.master-data.drawings.newRevision'),
+            onClick: () => void handleRevision(record),
+          });
+        }
+        if (canObsolete) {
+          versionItems.push({
+            key: 'obsolete',
+            icon: <DeleteOutlined />,
+            label: t('app.master-data.drawings.obsolete'),
+            danger: true,
+            onClick: () => void handleObsolete(record),
+          });
+        }
+      }
+
+      if (whereUsedPerms.canRead) {
+        collaborateItems.push({
+          key: 'whereUsed',
+          icon: <NodeIndexOutlined />,
+          label: t('app.master-data.drawings.actionWhereUsed'),
+          onClick: () => setWhereUsedDrawing(record),
+        });
+      }
+      if (distPerms.canCreate && record.status === 'Released') {
+        collaborateItems.push({
+          key: 'distribute',
+          icon: <SendOutlined />,
+          label: t('app.master-data.drawings.actionDistribute'),
+          onClick: () => setDistributeDrawing(record),
+        });
+      }
+      if (loanPerms.canCreate && record.status === 'Released') {
+        collaborateItems.push({
+          key: 'loan',
+          icon: <BookOutlined />,
+          label: t('app.master-data.drawings.actionLoan'),
+          onClick: () => setLoanDrawing(record),
+        });
+      }
+
+      if (canDownload && record.file?.uuid) {
+        fileItems.push({
+          key: 'download',
+          icon: <DownloadOutlined />,
+          label: t('components.uniAction.downloadFirmware'),
+          onClick: () => void handleDownloadDrawing(record),
+        });
+      }
+      if (canPrint) {
+        fileItems.push({
+          key: 'print',
+          icon: <PrinterOutlined />,
+          label: t('common.print'),
+          onClick: () => void openDrawingPrint(record),
+        });
+      }
+      if (includePreview && record.file && !showInlinePreview) {
+        fileItems.push({
+          key: 'preview',
+          icon: <EyeOutlined />,
+          label: t('app.master-data.drawings.preview'),
+          onClick: () => openPreview(record.file),
+        });
+      }
+      if (canImport && canImportStepBom(record)) {
+        fileItems.push({
+          key: 'importStepBom',
+          icon: <PartitionOutlined />,
+          label: t('app.master-data.drawings.importStepBom'),
+          onClick: () => openStepBomWizard(record),
+        });
+      }
+
+      const items: NonNullable<MenuProps['items']> = [];
+      const pushGroup = (key: string, label: string, children: NonNullable<MenuProps['items']>) => {
+        if (!children.length) return;
+        items.push({ type: 'group', key, label, children });
+      };
+      pushGroup('edit', t('app.master-data.drawings.actionGroup.edit'), editItems);
+      pushGroup('workflow', t('app.master-data.drawings.actionGroup.workflow'), workflowItems);
+      pushGroup('version', t('app.master-data.drawings.actionGroup.version'), versionItems);
+      pushGroup('collaborate', t('app.master-data.drawings.actionGroup.collaborate'), collaborateItems);
+      pushGroup('file', t('app.master-data.drawings.actionGroup.file'), fileItems);
+      return items;
+    },
     [
       t,
       showInlinePreview,
@@ -1285,6 +1451,10 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       canCreate,
       canObsolete,
       canPrint,
+      canDownload,
+      whereUsedPerms.canRead,
+      distPerms.canCreate,
+      loanPerms.canCreate,
       openDrawingPrint,
       openStepBomWizard,
       changePerms.canCreate,
@@ -1293,6 +1463,252 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       handleDeleteDrawing,
       handleObsolete,
       handleRevision,
+      handleDownloadDrawing,
+    ],
+  );
+
+  const renderDrawingRowActions = useCallback(
+    (record: EngineeringDrawing): React.ReactNode[] => {
+      const moreItems = buildDrawingMoreMenuItems(record);
+      const nodes: React.ReactNode[] = [
+        <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record.uuid)} />,
+      ];
+      if (moreItems && moreItems.length > 0) {
+        nodes.push(
+          <Dropdown key="more" {...rowActionKind('skip')} menu={{ items: moreItems }} trigger={['click']}>
+            <Button
+              type="text"
+              size="small"
+              className="ant-btn-row-action"
+              icon={<MoreOutlined />}
+              {...rowActionLabelKeep()}
+            >
+              {t('common.more')}
+            </Button>
+          </Dropdown>,
+        );
+      }
+      return nodes;
+    },
+    [buildDrawingMoreMenuItems, t, handleOpenDetail],
+  );
+
+  /** 详情抽屉：仍直出按钮；图标走 uni-action 视觉配置 */
+  const renderLifecycleActions = useCallback(
+    (record: EngineeringDrawing, compact = false): React.ReactNode[] => {
+      const nodes: React.ReactNode[] = [];
+      if (canDownload && record.file?.uuid) {
+        nodes.push(
+          <Button
+            key="download"
+            {...rowActionDownloadFirmware(canExport ? 'export' : 'read')}
+            onClick={() => void handleDownloadDrawing(record)}
+          />,
+        );
+      }
+      if (whereUsedPerms.canRead) {
+        nodes.push(
+          <Button key="whereUsed" {...rowActionDrawingWhereUsed('skip')} onClick={() => setWhereUsedDrawing(record)} />,
+        );
+      }
+      if (distPerms.canCreate && record.status === 'Released') {
+        nodes.push(
+          <Button
+            key="distribute"
+            {...rowActionDrawingDistribute('skip')}
+            onClick={() => setDistributeDrawing(record)}
+          />,
+        );
+      }
+      if (loanPerms.canCreate && record.status === 'Released') {
+        nodes.push(
+          <Button key="loan" {...rowActionDrawingLoan('skip')} onClick={() => setLoanDrawing(record)} />,
+        );
+      }
+      if (canImport && canImportStepBom(record)) {
+        // 抽屉 compact：走目录短文案「导入BOM」，勿 labelKeep 长句，避免标题区横向撑爆
+        nodes.push(
+          <Button
+            key="importStepBom"
+            {...rowActionDrawingImportStepBom(canImport ? 'import' : 'skip')}
+            {...(compact ? {} : rowActionLabelKeep())}
+            onClick={() => openStepBomWizard(record)}
+          >
+            {compact ? null : t('app.master-data.drawings.importStepBom')}
+          </Button>,
+        );
+      }
+      if (record.status === 'Draft') {
+        if (canUpdate) {
+          nodes.push(
+            <Button
+              key="checkout"
+              {...rowActionDrawingCheckout('update')}
+              onClick={() => handleCheckout(record)}
+            />,
+          );
+        }
+        if (canSubmit) {
+          nodes.push(
+            <ActionConfirmPopconfirm
+              key="submit"
+              title={t('common.submit')}
+              description={t('app.master-data.drawings.submitConfirm')}
+              onConfirm={() => executeSubmit(record)}
+            >
+              <Button {...rowActionKind('submit')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
+          );
+        }
+        if (canDelete) {
+          nodes.push(
+            <Popconfirm
+              key="delete"
+              title={t('common.confirmDelete')}
+              onConfirm={() => handleDeleteDrawing(record)}
+            >
+              <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+            </Popconfirm>,
+          );
+        }
+      }
+      if (record.status === 'Editing' && isCheckoutOwner(record)) {
+        if (canUpdate) {
+          nodes.push(
+            <Button
+              key="edit"
+              {...rowActionKind('update')}
+              onClick={() => {
+                setRequireChangeSummaryOnEdit(record.revision !== 'A');
+                setEditUuid(record.uuid);
+                setModalVisible(true);
+              }}
+            />,
+          );
+          nodes.push(
+            <Button key="checkin" {...rowActionDrawingCheckin('update')} onClick={() => handleCheckin(record)} />,
+          );
+          nodes.push(
+            <ActionConfirmPopconfirm
+              key="undoCheckout"
+              title={t('app.master-data.drawings.undoCheckout')}
+              description={t('app.master-data.drawings.undoCheckoutConfirm')}
+              onConfirm={() => executeUndoCheckout(record)}
+            >
+              <Button {...rowActionDrawingUndoCheckout('update')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
+          );
+        }
+      }
+      if (record.status === 'Pending') {
+        if (canApprove) {
+          nodes.push(
+            <ActionConfirmPopconfirm
+              key="approve"
+              title={t('app.master-data.drawings.approve')}
+              description={t('app.master-data.drawings.approveConfirm')}
+              onConfirm={() => executeApprove(record)}
+            >
+              <Button {...rowActionKind('approve')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
+          );
+        }
+        if (canReject) {
+          nodes.push(
+            <Button key="reject" {...rowActionKind('reject')} onClick={() => handleReject(record)} />,
+          );
+        }
+        if (canRevoke) {
+          nodes.push(
+            <ActionConfirmPopconfirm
+              key="revoke"
+              title={t('app.master-data.drawings.revoke')}
+              description={t('app.master-data.drawings.revokeConfirm')}
+              onConfirm={() => executeRevoke(record)}
+            >
+              <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()} />
+            </ActionConfirmPopconfirm>,
+          );
+        }
+      }
+      if (record.status === 'Released') {
+        if (changePerms.canCreate) {
+          nodes.push(
+            <Button
+              key="engineeringChange"
+              {...rowActionDrawingEngineeringChange('skip')}
+              onClick={() => navigate(buildDrawingChangeCreateUrl(record.uuid))}
+            />,
+          );
+        }
+        if (canCreate) {
+          nodes.push(
+            <Button
+              key="create"
+              {...rowActionDrawingNewRevision('create')}
+              onClick={() => handleRevision(record)}
+            />,
+          );
+        }
+        if (canObsolete) {
+          nodes.push(
+            <Button
+              key="obsolete"
+              {...rowActionKind('obsolete')}
+              onClick={() => handleObsolete(record)}
+            />,
+          );
+        }
+      }
+      if (canPrint) {
+        nodes.push(
+          <Button key="print" {...rowActionKind('print')} onClick={() => void openDrawingPrint(record)} />,
+        );
+      }
+      if (!compact && record.file && !showInlinePreview) {
+        nodes.push(
+          <Button
+            key="preview"
+            {...rowActionKind('read')}
+            {...rowActionLabelKeep()}
+            onClick={() => openPreview(record.file)}
+          >
+            {t('app.master-data.drawings.preview')}
+          </Button>,
+        );
+      }
+      // 抽屉 extra 不经操作列 normalize，须主动注入图标/文案，否则会渲染成空按钮框
+      return nodes.map((node) =>
+        normalizeActionTree(node, { suppressAuditSemanticActions: false }),
+      );
+    },
+    [
+      t,
+      showInlinePreview,
+      canImport,
+      canUpdate,
+      canDelete,
+      canSubmit,
+      canApprove,
+      canReject,
+      canRevoke,
+      canCreate,
+      canObsolete,
+      canPrint,
+      canDownload,
+      canExport,
+      whereUsedPerms.canRead,
+      distPerms.canCreate,
+      loanPerms.canCreate,
+      openDrawingPrint,
+      openStepBomWizard,
+      changePerms.canCreate,
+      navigate,
+      isCheckoutOwner,
+      handleDeleteDrawing,
+      handleObsolete,
+      handleRevision,
+      handleDownloadDrawing,
     ],
   );
 
@@ -1458,30 +1874,32 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       const customFieldColumns = generateCustomFieldColumns();
       return [
       {
-        // 稀疏主数据：业务列不叠；名称 RemainderFlex；状态 StatusTag 右固
-        title: t('app.master-data.drawings.code'),
-        dataIndex: 'code',
-        width: 140,
-        minWidth: 140,
-        uniTableKeepWidth: true,
-        resizable: false,
-        fixed: 'left' as const,
-        ellipsis: true,
-      },
-      {
+        // 名称/图号叠列 = 唯一 RemainderFlex（长短不一；禁止再叠 primaryFlexMax）
         title: t('app.master-data.drawings.name'),
         dataIndex: 'name',
-        minWidth: 160,
+        minWidth: 200,
         uniTableRemainderFlex: true,
         uniTablePrimaryFlex: true,
         resizable: false,
-        ellipsis: true,
+        ellipsis: false,
+        fixed: 'left' as const,
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.name ?? '')}
+            secondary={String(record.code ?? '')}
+          />
+        ),
+      },
+      {
+        title: t('app.master-data.drawings.code'),
+        dataIndex: 'code',
+        hideInTable: true,
       },
       {
         title: t('app.master-data.drawings.revision'),
         dataIndex: 'revision',
-        width: 100,
-        minWidth: 100,
+        width: 112,
+        minWidth: 112,
         uniTableKeepWidth: true,
         resizable: false,
       },
@@ -1489,8 +1907,8 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         title: t('app.master-data.drawings.folder'),
         dataIndex: 'folderName',
         search: false,
-        width: 140,
-        minWidth: 140,
+        width: 160,
+        minWidth: 160,
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
@@ -1555,8 +1973,8 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         title: t('app.master-data.drawings.checkedOutBy'),
         dataIndex: 'checkedOutByName',
         search: false,
-        width: 112,
-        minWidth: 112,
+        width: 120,
+        minWidth: 120,
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
@@ -1567,8 +1985,8 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         key: 'drawing_linked_bom',
         dataIndex: 'linkedBom',
         search: false,
-        width: 160,
-        minWidth: 160,
+        width: 168,
+        minWidth: 168,
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
@@ -1610,20 +2028,16 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         dataIndex: ['file', 'originalName'],
         ellipsis: true,
         search: false,
-        width: 180,
-        minWidth: 180,
+        width: 200,
+        minWidth: 200,
         uniTableKeepWidth: true,
         resizable: false,
       },
       {
         title: t('app.master-data.drawings.releasedAt'),
         dataIndex: 'releasedAt',
-        valueType: 'dateTime',
         search: false,
-        width: 180,
-        minWidth: 180,
-        uniTableKeepWidth: true,
-        resizable: false,
+        ...UNI_TABLE_SITE_DATETIME_COLUMN_DEFAULTS,
       },
       ...masterCrudCreatedUpdatedColumns<EngineeringDrawing>(t),
       ...customFieldColumns,
@@ -1641,14 +2055,11 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         fixed: 'right' as const,
         hideInSearch: true,
         onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
-        render: (_, record) => [
-          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record.uuid)} />,
-          renderLifecycleActions(record),
-        ],
+        render: (_, record) => renderDrawingRowActions(record),
       },
     ];
     },
-    [t, customFields, generateCustomFieldColumns, renderLifecycleActions, navigate, statusLabel],
+    [t, customFields, generateCustomFieldColumns, renderDrawingRowActions, navigate, statusLabel],
   );
 
   const tableQueryKey = useMemo(
@@ -1657,8 +2068,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       paneMode,
       navMode,
       listView,
-      catalogTab,
-      rdListViewScope,
       treeFilter.drawingType ?? '',
       treeFilter.status ?? '',
       treeFilter.materialUuid ?? '',
@@ -1666,7 +2075,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       treeFilter.folderUuid ?? '',
       treeFilter.unclassified ? '1' : '',
     ],
-    [paneMode, navMode, listView, catalogTab, rdListViewScope, treeFilter],
+    [paneMode, navMode, listView, treeFilter],
   );
 
   const tableScrollOffsetPx =
@@ -1691,23 +2100,15 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           ['--uni-table-scroll-offset' as string]: `${tableScrollOffsetPx}px`,
         }}
       >
-        {!canViewHistory && rdListViewScope === 'all' && listView === 'current' ? (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 12 }}
-            title={t('app.master-data.drawings.messages.latestVersionOnlyHint')}
-          />
-        ) : null}
         <UniTable<EngineeringDrawing>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.drawings')}
           actionRef={actionRef}
           rowKey="uuid"
-          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v6"
+          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v9"
           showAdvancedSearch
           permissionResource={DRAWING_PERMISSION}
-          params={{ drawingTreeFilter: treeFilter }}
+          params={{ drawingTreeFilter: treeFilter, listView }}
           tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           headerTitle={t('app.master-data.menu.process.drawings')}
@@ -1722,39 +2123,15 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               <ThemedSegmented
                 surfaceBackground
                 size="medium"
-                value={catalogTab}
-                onChange={(v) => {
-                  setCatalogTab(v as DrawingCatalogTab);
-                  setSelectedRowKeys([]);
-                  actionRef.current?.reload();
-                }}
-                options={[
-                  { label: t('app.master-data.drawings.catalogTab.engineering'), value: 'engineering' },
-                  { label: t('app.master-data.drawings.catalogTab.productSpec'), value: 'product_spec' },
-                ]}
-              />
-              <ThemedSegmented
-                surfaceBackground
-                size="medium"
-                value={rdListViewScope}
-                onChange={(v) => {
-                  setRdListViewScope(v as 'all' | 'production');
-                  actionRef.current?.reload();
-                }}
-                options={[
-                  { label: t('app.master-data.drawings.viewScope.all'), value: 'all' },
-                  { label: t('app.master-data.drawings.viewScope.production'), value: 'production' },
-                ]}
-              />
-              <Segmented
                 value={listView}
                 options={[
                   { label: t('app.master-data.drawings.viewCurrent'), value: 'current' },
                   { label: t('app.master-data.drawings.viewAllRevisions'), value: 'all' },
                 ]}
                 onChange={(value) => {
-                  setListView(value as DrawingListView);
-                  actionRef.current?.reload();
+                  const next = value as DrawingListView;
+                  listViewRef.current = next;
+                  setListView(next);
                 }}
               />
             </>
@@ -1804,6 +2181,30 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                   </Button>,
                 ]
               : []),
+            ...(distPerms.canRead
+              ? [
+                  <Space key="drawing-dist-policy">
+                    <span>{t('app.master-data.drawingDistributions.policyLabel')}</span>
+                    <Switch
+                      checked={distPolicyEnabled}
+                      loading={distPolicyLoading}
+                      disabled={!distPerms.canUpdate}
+                      onChange={async (checked) => {
+                        setDistPolicyLoading(true);
+                        try {
+                          const next = await drawingDistributionApi.updatePolicy(checked);
+                          setDistPolicyEnabled(!!next.isEnabled);
+                          messageApi.success(t('app.master-data.drawingDistributions.policyUpdated'));
+                        } catch (e) {
+                          messageApi.error(getApiErrorMessage(e) || t('common.saveFailed'));
+                        } finally {
+                          setDistPolicyLoading(false);
+                        }
+                      }}
+                    />
+                  </Space>,
+                ]
+              : []),
           ]}
           onTableDataChange={(rows) => {
             drawingRowsRef.current = rows;
@@ -1819,14 +2220,14 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
               const advancedDrawingType = pickSearchString(searchFormValues, 'drawingType') as
                 | DrawingType
                 | undefined;
+              const view =
+                (params.listView as DrawingListView | undefined) ?? listViewRef.current;
               const res = await drawingApi.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 keyword,
                 status: advancedStatus ?? tf.status,
-                drawingType:
-                  fixedCatalogDrawingType ?? (advancedDrawingType ?? tf.drawingType),
-                excludeDrawingTypes: excludeCatalogDrawingTypes,
+                drawingType: advancedDrawingType ?? tf.drawingType,
                 securityLevel: pickSearchString(searchFormValues, 'securityLevel') as
                   | DrawingSecurityLevel
                   | undefined,
@@ -1834,8 +2235,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
                 processRouteUuid: tf.processRouteUuid,
                 folderUuid: tf.folderUuid,
                 unclassified: tf.unclassified,
-                view: listView,
-                productionView: rdProductionView && listView === 'current',
+                view,
               });
               const enriched = meta?.purpose === 'prefetch'
                 ? res.data ?? []
@@ -1872,12 +2272,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       selectedRowKeys,
       selectRowForPreview,
       listView,
-      catalogTab,
-      rdListViewScope,
-      canViewHistory,
-      fixedCatalogDrawingType,
-      excludeCatalogDrawingTypes,
-      rdProductionView,
       treeFilter,
       enrichRecordsWithCustomFields,
     ],
@@ -1992,69 +2386,62 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
             <DetailDrawerActions
               items={[
                 {
-                  key: 'whereUsed',
-                  render: (
-                    <Link to={`/apps/master-data/process/drawing-where-used?drawingUuid=${detail.uuid}`}>
-                      {t('app.master-data.menu.process.drawing-where-used')}
-                    </Link>
-                  ),
-                },
-                {
                   key: 'lifecycle',
-                  render: renderLifecycleActions(detail, true),
+                  // 与操作列同一套溢出：主行少量直出，其余进「更多」，避免标题被挤成竖排
+                  render: renderRowActionsOverflow(
+                    renderLifecycleActions(detail, true),
+                    `drawing-detail-${detail.uuid}`,
+                    { directMax: 3 },
+                  ),
                 },
               ]}
             />
           ) : null
         }
-        linesTitle={t('app.master-data.drawings.revisionHistory')}
+        linesTitle={t('app.master-data.drawings.detailRecords')}
         lines={
-          revisionsLoading ? (
-            <Spin />
-          ) : revisions.length ? (
-            <Timeline
-              items={revisions.map((rev) => ({
-                color: STATUS_COLOR[rev.status],
-                children: (
-                  <Space orientation="vertical" size={0}>
-                    <Space wrap>
-                      <Button
-                        type={rev.uuid === detail?.uuid ? 'primary' : 'default'}
-                        size="small"
-                        onClick={() => {
-                          if (rev.uuid !== detail?.uuid) {
-                            detailRetryUuidRef.current = rev.uuid;
-                            void loadDetail(rev.uuid);
-                            if (rev.uuid) {
-                              void drawingApi.get(rev.uuid).then(selectRowForPreview);
-                            }
-                          }
-                        }}
-                      >
-                        {t('app.master-data.drawings.revision')} {rev.revision}
-                      </Button>
-                      <MarkerTag color={STATUS_COLOR[rev.status]}>{statusLabel(rev.status)}</MarkerTag>
-                    </Space>
-                    {rev.releasedAt ? (
-                      <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
-                        {t('app.master-data.drawings.releasedAt')}: {rev.releasedAt}
-                      </span>
-                    ) : null}
-                    {rev.obsoleteReason ? (
-                      <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
-                        {rev.obsoleteReason}
-                      </span>
-                    ) : null}
-                  </Space>
-                ),
-              }))}
-            />
-          ) : (
-            <span style={{ color: 'var(--ant-color-text-secondary)' }}>
-              {t('app.master-data.drawings.noRevisionHistory')}
-            </span>
-          )
+          <DrawingDetailRecordTabs
+            drawing={detail}
+            revisions={revisions}
+            revisionsLoading={revisionsLoading}
+            statusLabel={statusLabel}
+            statusColor={STATUS_COLOR}
+            reloadToken={detailRecordsReloadToken}
+            onOpenRevision={(rev) => {
+              if (rev.uuid !== detail?.uuid) {
+                detailRetryUuidRef.current = rev.uuid;
+                void loadDetail(rev.uuid);
+                if (rev.uuid) {
+                  void drawingApi.get(rev.uuid).then(selectRowForPreview);
+                }
+              }
+            }}
+          />
         }
+      />
+
+      <DrawingWhereUsedModal
+        open={!!whereUsedDrawing}
+        drawing={whereUsedDrawing}
+        onClose={() => setWhereUsedDrawing(null)}
+      />
+      <DrawingDistributeFromDrawingModal
+        open={!!distributeDrawing}
+        drawing={distributeDrawing}
+        onClose={() => setDistributeDrawing(null)}
+        onSuccess={() => {
+          setDetailRecordsReloadToken((n) => n + 1);
+          actionRef.current?.reload();
+        }}
+      />
+      <DrawingLoanFromDrawingModal
+        open={!!loanDrawing}
+        drawing={loanDrawing}
+        onClose={() => setLoanDrawing(null)}
+        onSuccess={() => {
+          setDetailRecordsReloadToken((n) => n + 1);
+          actionRef.current?.reload();
+        }}
       />
 
       {folderCtx ? (
@@ -2143,7 +2530,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
         editUuid={editUuid}
         defaultFolderUuid={defaultCreateFolderUuid}
         folders={folders}
-        fixedDrawingType={fixedCatalogDrawingType}
         requireChangeSummary={requireChangeSummaryOnEdit}
         onClose={() => {
           setModalVisible(false);

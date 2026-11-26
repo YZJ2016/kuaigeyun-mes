@@ -498,7 +498,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
         tenant_id: int,
         call_req: MaterialCallRequest,
         user: User,
-        batch_by_item_id: Optional[Dict[int, str]] = None,
+        batch_by_item_id: Optional[Dict[int, List[Tuple[str, Decimal]]]] = None,
     ) -> None:
         """
         叫料完成后：仅主仓→线边备料转移（与配料同口径）。
@@ -548,54 +548,63 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
 
         batch_map = batch_by_item_id or {}
         for it, dq in lines_to_move:
-            confirmed = (batch_map.get(it.id) or "").strip()
+            moves = list(batch_map.get(it.id) or [])
+            if not moves:
+                moves = [("", Decimal(str(dq)))]
+            elif len(moves) == 1 and moves[0][1] <= 0:
+                # 旧客户端只传批号、不分摊数量：整量记在该批
+                moves = [(moves[0][0], Decimal(str(dq)))]
             mat = await Material.get_or_none(
                 tenant_id=tenant_id, id=it.material_id, deleted_at__isnull=True
             )
             batch_managed = bool(mat and getattr(mat, "batch_managed", False))
-            inv_batch_no = confirmed if batch_managed else None
-
-            await InventoryService.decrease_stock(
-                tenant_id=tenant_id,
-                material_id=it.material_id,
-                quantity=Decimal(str(dq)),
-                warehouse_id=src_wh_id,
-                batch_no=inv_batch_no,
-                source_type="material_call",
-                source_doc_id=call_req.id,
-                source_doc_code=call_req.code,
-                enforce_fifo=enforce_fifo,
-                work_order_id=wo.id,
-                work_order_code=wo.code,
-                movement_type="staging_to_line",
-                from_warehouse_id=src_wh_id,
-                from_warehouse_name=src_wh_name or None,
-                to_warehouse_id=tgt_wh_id,
-                to_warehouse_name=tgt_wh_name or None,
-                operator_id=user.id,
-                operator_name=(user.full_name or user.username or "").strip() or None,
-                idempotency_key=f"material_call:{call_req.id}:dec:{it.id}",
-            )
-            await InventoryService.increase_stock(
-                tenant_id=tenant_id,
-                material_id=it.material_id,
-                quantity=Decimal(str(dq)),
-                warehouse_id=tgt_wh_id,
-                batch_no=inv_batch_no,
-                source_type="material_call",
-                source_doc_id=call_req.id,
-                source_doc_code=call_req.code,
-                work_order_id=wo.id,
-                work_order_code=wo.code,
-                movement_type="staging_to_line",
-                from_warehouse_id=src_wh_id,
-                from_warehouse_name=src_wh_name or None,
-                to_warehouse_id=tgt_wh_id,
-                to_warehouse_name=tgt_wh_name or None,
-                operator_id=user.id,
-                operator_name=(user.full_name or user.username or "").strip() or None,
-                idempotency_key=f"material_call:{call_req.id}:inc:{it.id}",
-            )
+            for move_idx, (confirmed_raw, move_qty) in enumerate(moves):
+                qty = Decimal(str(move_qty or 0))
+                if qty <= 0:
+                    continue
+                confirmed = (confirmed_raw or "").strip()
+                inv_batch_no = confirmed if batch_managed else None
+                await InventoryService.decrease_stock(
+                    tenant_id=tenant_id,
+                    material_id=it.material_id,
+                    quantity=qty,
+                    warehouse_id=src_wh_id,
+                    batch_no=inv_batch_no,
+                    source_type="material_call",
+                    source_doc_id=call_req.id,
+                    source_doc_code=call_req.code,
+                    enforce_fifo=enforce_fifo,
+                    work_order_id=wo.id,
+                    work_order_code=wo.code,
+                    movement_type="staging_to_line",
+                    from_warehouse_id=src_wh_id,
+                    from_warehouse_name=src_wh_name or None,
+                    to_warehouse_id=tgt_wh_id,
+                    to_warehouse_name=tgt_wh_name or None,
+                    operator_id=user.id,
+                    operator_name=(user.full_name or user.username or "").strip() or None,
+                    idempotency_key=f"material_call:{call_req.id}:dec:{it.id}:{move_idx}:{inv_batch_no or 'DEFAULT'}",
+                )
+                await InventoryService.increase_stock(
+                    tenant_id=tenant_id,
+                    material_id=it.material_id,
+                    quantity=qty,
+                    warehouse_id=tgt_wh_id,
+                    batch_no=inv_batch_no,
+                    source_type="material_call",
+                    source_doc_id=call_req.id,
+                    source_doc_code=call_req.code,
+                    work_order_id=wo.id,
+                    work_order_code=wo.code,
+                    movement_type="staging_to_line",
+                    from_warehouse_id=src_wh_id,
+                    from_warehouse_name=src_wh_name or None,
+                    to_warehouse_id=tgt_wh_id,
+                    to_warehouse_name=tgt_wh_name or None,
+                    operator_id=user.id,
+                    operator_name=(user.full_name or user.username or "").strip() or None,
+                    idempotency_key=f"material_call:{call_req.id}:inc:{it.id}:{move_idx}:{inv_batch_no or 'DEFAULT'}",
+                )
 
         try:
             from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
@@ -778,7 +787,7 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
             becoming_completed = (
                 data.get("status") == "completed" and call_req.status != "completed"
             )
-            batch_by_item_id: Optional[Dict[int, str]] = None
+            batch_by_item_id: Optional[Dict[int, List[Tuple[str, Decimal]]]] = None
             if becoming_completed:
                 items = await MaterialCallRequestItem.filter(
                     tenant_id=tenant_id, request_id=call_id
@@ -787,15 +796,34 @@ class MaterialCallService(AppBaseService[MaterialCallRequest]):
                     cb = update_data.completion_batches
                     if not cb:
                         raise ValidationError("完成补料前请逐行确认批号")
-                    batch_by_item_id = {}
+                    from collections import defaultdict
+
+                    grouped: Dict[int, List[Tuple[str, Decimal]]] = defaultdict(list)
                     for row in cb:
                         bn = (row.batch_no or "").strip()
                         if not bn:
                             raise ValidationError("批号不能为空")
-                        batch_by_item_id[row.item_id] = bn
+                        qty = (
+                            Decimal(str(row.quantity))
+                            if getattr(row, "quantity", None) is not None
+                            else Decimal("0")
+                        )
+                        grouped[int(row.item_id)].append((bn, qty))
                     expected_ids = {i.id for i in items}
-                    if set(batch_by_item_id.keys()) != expected_ids:
+                    if set(grouped.keys()) != expected_ids:
                         raise ValidationError("批号确认须与全部明细行一一对应")
+                    for item in items:
+                        moves = grouped[int(item.id)]
+                        req_qty = item.requested_quantity or Decimal("0")
+                        if len(moves) == 1 and moves[0][1] <= 0:
+                            grouped[int(item.id)] = [(moves[0][0], req_qty)]
+                        else:
+                            move_sum = sum((q for _, q in moves), start=Decimal("0"))
+                            if abs(move_sum - req_qty) > Decimal("0.000001"):
+                                raise ValidationError(
+                                    f"物料 {item.material_code or item.material_name} 批号分摊数量须等于需求数量"
+                                )
+                    batch_by_item_id = dict(grouped)
                 for i in items:
                     i.delivered_quantity = i.requested_quantity or Decimal("0")
                     await i.save()

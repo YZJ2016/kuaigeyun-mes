@@ -146,4 +146,67 @@ export const packingBindingApi = {
       method: 'GET',
     });
   },
+
+  openSession: async (data: {
+    source_type: 'sales_delivery' | 'finished_goods_receipt';
+    source_id: number;
+    product_id: number;
+    source_line_id?: number;
+    box_no?: string;
+    packing_material_id?: number;
+  }) => {
+    return apiRequest('/apps/kuaizhizao/packing-bindings/session/open', { method: 'POST', data });
+  },
+
+  scanSession: async (
+    bindingId: number,
+    data: { serial_number: string; quantity?: number | string },
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/packing-bindings/${bindingId}/session/scan`, {
+      method: 'POST',
+      data,
+    });
+  },
+
+  unbindLine: async (lineId: number) => {
+    return apiRequest(`/apps/kuaizhizao/packing-bindings/lines/${lineId}/unbind`, { method: 'POST' });
+  },
+
+  nestPallet: async (data: { pallet_no: string; box_nos: string[] }) => {
+    return apiRequest('/apps/kuaizhizao/packing-bindings/pallets/nest', { method: 'POST', data });
+  },
+
+  resolveBox: async (boxNo: string) => {
+    return apiRequest(`/apps/kuaizhizao/packing-bindings/resolve-box/${encodeURIComponent(boxNo)}`, {
+      method: 'GET',
+    });
+  },
+
+  consume: async (data: {
+    source_type: 'sales_delivery' | 'finished_goods_receipt';
+    source_id: number;
+    box_nos?: string[];
+    serial_numbers?: string[];
+  }) => {
+    return apiRequest('/apps/kuaizhizao/packing-bindings/consume', { method: 'POST', data });
+  },
+
+  listProfiles: async () => {
+    return apiRequest('/apps/kuaizhizao/packing-profiles', { method: 'GET' });
+  },
+
+  updateProfile: async (profileId: number, data: Record<string, unknown>) => {
+    return apiRequest(`/apps/kuaizhizao/packing-profiles/${profileId}`, { method: 'PUT', data });
+  },
+
+  suggestCartonization: async (data: {
+    material_id?: number;
+    total_quantity: number | string;
+    line_count?: number;
+  }) => {
+    return apiRequest('/apps/kuaizhizao/packing-profiles/suggest-cartonization', {
+      method: 'POST',
+      data,
+    });
+  },
 };

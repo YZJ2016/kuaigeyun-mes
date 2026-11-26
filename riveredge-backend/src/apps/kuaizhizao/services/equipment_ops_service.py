@@ -78,6 +78,47 @@ from core.utils.timezone_utils import resolve_business_datetime
 T = TypeVar("T")
 
 
+def _parse_inspector_ids(
+    raw_ids: Any,
+    fallback_inspector_id: Optional[int] = None,
+) -> List[int]:
+    """解析点检人 ID 列表，去重并保持顺序。"""
+    out: List[int] = []
+    if isinstance(raw_ids, list):
+        for x in raw_ids:
+            try:
+                uid = int(x)
+            except (TypeError, ValueError):
+                continue
+            if uid > 0 and uid not in out:
+                out.append(uid)
+    if not out and fallback_inspector_id is not None:
+        try:
+            uid = int(fallback_inspector_id)
+        except (TypeError, ValueError):
+            uid = 0
+        if uid > 0:
+            out.append(uid)
+    return out
+
+
+def _normalize_spot_check_inspectors(
+    *,
+    inspector_ids: Any = None,
+    inspector_id: Optional[int] = None,
+    inspector_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """多人点检：ids 真源；id=首项；name 可已是顿号拼接文案。"""
+    ids = _parse_inspector_ids(inspector_ids, inspector_id)
+    primary_id = ids[0] if ids else None
+    name = (inspector_name or "").strip() or None
+    return {
+        "inspector_ids": ids,
+        "inspector_id": primary_id,
+        "inspector_name": name,
+    }
+
+
 def _now_doc_no(prefix: str) -> str:
     """无编码规则时的兜底单号：须在并发连建时仍唯一（秒级不够）。"""
     import secrets
@@ -323,6 +364,7 @@ async def _snapshot_maintenance_item(tenant_id: int, item_id: int) -> Dict[str, 
         "item_code": item.code,
         "item_name": item.name,
         "requirement": item.requirement,
+        "remark": item.remark,
         "standard_hours": item.standard_hours,
     }
 
@@ -750,6 +792,7 @@ class EquipmentMaintenanceSchemeService(_MasterCRUDMixin):
                 item_code=line.item_code or snap["item_code"],
                 item_name=line.item_name or snap["item_name"],
                 requirement=line.requirement or snap["requirement"],
+                remark=line.remark if line.remark is not None else snap.get("remark"),
                 standard_hours=line.standard_hours or snap["standard_hours"],
             )
 
@@ -1056,6 +1099,23 @@ class EquipmentSpotCheckService:
             raise ValidationError(f"点检方案不存在: {scheme_id}")
         capture_mode = _normalize_capture_mode(getattr(scheme, "capture_mode", None))
 
+        inspectors = _normalize_spot_check_inspectors(
+            inspector_ids=getattr(data, "inspector_ids", None),
+            inspector_id=data.inspector_id,
+            inspector_name=data.inspector_name,
+        )
+        if not inspectors["inspector_ids"]:
+            fallback_id = getattr(equipment, "spot_check_person_id", None) or operator_id
+            fallback_name = (
+                inspectors["inspector_name"]
+                or getattr(equipment, "spot_check_person_name", None)
+                or operator_name
+            )
+            inspectors = _normalize_spot_check_inspectors(
+                inspector_id=fallback_id,
+                inspector_name=fallback_name,
+            )
+
         async with in_transaction():
             document_no = await _generate_code(tenant_id, "equipment_spot_check_code", "SC")
             payload = dict(
@@ -1068,16 +1128,9 @@ class EquipmentSpotCheckService:
                 scheme_id=scheme.id,
                 capture_mode=capture_mode,
                 check_date=data.check_date or date.today(),
-                inspector_id=(
-                    data.inspector_id
-                    or getattr(equipment, "spot_check_person_id", None)
-                    or operator_id
-                ),
-                inspector_name=(
-                    data.inspector_name
-                    or getattr(equipment, "spot_check_person_name", None)
-                    or operator_name
-                ),
+                inspector_id=inspectors["inspector_id"],
+                inspector_name=inspectors["inspector_name"],
+                inspector_ids=inspectors["inspector_ids"],
                 reviewer_user_id=getattr(scheme, "reviewer_user_id", None),
                 reviewer_user_name=getattr(scheme, "reviewer_user_name", None),
                 attachments=data.attachments,
@@ -1358,6 +1411,33 @@ class EquipmentSpotCheckService:
             update_data = data.model_dump(exclude_unset=True, exclude={"lines"})
             if data.status is not None and data.status != "待审核":
                 raise ValidationError("请通过审核操作变更点检状态")
+            inspector_fields_set = data.model_fields_set & {
+                "inspector_ids",
+                "inspector_id",
+                "inspector_name",
+            }
+            if inspector_fields_set:
+                inspectors = _normalize_spot_check_inspectors(
+                    inspector_ids=(
+                        data.inspector_ids
+                        if "inspector_ids" in data.model_fields_set
+                        else getattr(header, "inspector_ids", None)
+                    ),
+                    inspector_id=(
+                        data.inspector_id
+                        if "inspector_id" in data.model_fields_set
+                        else header.inspector_id
+                    ),
+                    inspector_name=(
+                        data.inspector_name
+                        if "inspector_name" in data.model_fields_set
+                        else header.inspector_name
+                    ),
+                )
+                update_data.pop("inspector_ids", None)
+                update_data.pop("inspector_id", None)
+                update_data.pop("inspector_name", None)
+                update_data.update(inspectors)
             for k, v in update_data.items():
                 setattr(header, k, v)
             apply_update_audit(header, current_user)

@@ -23,6 +23,7 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import {
   buildDetailDrawerEditExtra,
   EquipmentMasterDetailDrawer,
+  FormModalLinesTableScroll,
   MasterDataLinesTable,
   renderEquipmentMasterRowActions,
   useEquipmentDetailDrawer,
@@ -803,7 +804,7 @@ const RoutePatrolsPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={submitting}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         formRef={formRef}
         initialValues={formInitialValues}
         grid={false}
@@ -840,15 +841,16 @@ const RoutePatrolsPage: React.FC = () => {
           </Col>
         </Row>
         {previewLines.length > 0 && (
-          <Table
-            size="small"
-            rowKey={(r) => `${r.step_no ?? ''}-${r.equipment_id ?? ''}-${r.item_id ?? ''}`}
-            columns={lineColumns}
-            dataSource={previewLines}
-            pagination={false}
-            style={{ marginTop: 16 }}
-            scroll={{ x: 1200 }}
-          />
+          <FormModalLinesTableScroll style={{ marginTop: 16 }}>
+            <Table
+              size="small"
+              rowKey={(r) => `${r.step_no ?? ''}-${r.equipment_id ?? ''}-${r.item_id ?? ''}`}
+              columns={lineColumns}
+              dataSource={previewLines}
+              pagination={false}
+              scroll={{ x: 'max-content' }}
+            />
+          </FormModalLinesTableScroll>
         )}
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col span={24}>

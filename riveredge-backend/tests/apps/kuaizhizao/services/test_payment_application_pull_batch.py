@@ -79,6 +79,9 @@ async def test_create_from_purchase_orders_merges_same_supplier():
         "apps.kuaizhizao.models.purchase_order.PurchaseOrder.get",
         new=AsyncMock(side_effect=[order, order_b, order]),
     ), patch(
+        "apps.kuaizhizao.services.payment_application_po_header.resolve_invoice_status_from_purchase_order",
+        new=AsyncMock(return_value="发票后补"),
+    ), patch(
         "apps.kuaizhizao.services.payment_application_line_materials.lines_from_purchase_order_items",
         new=AsyncMock(return_value=[line]),
     ), patch.object(

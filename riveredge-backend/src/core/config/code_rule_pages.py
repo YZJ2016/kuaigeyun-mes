@@ -81,6 +81,8 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-quality-finished-goods-inspection": "CPJY",  # 成品检验
     "kuaizhizao-quality-inspection-plan": "ZJFA",  # 质检方案
     "kuaizhizao-quality-oqc-inspection": "CHJY",  # 出货检验
+    "kuaizhizao-quality-outsource-inspection": "OSQC",  # 委外检验
+    "kuaizhizao-quality-quality-patrol": "PAT",  # 质量巡检
     "kuaizhizao-quality-eight-d-report": "BD",  # 8D报告
     "kuaizhizao-quality-complaint": "TS",  # 质量投诉（编码中心，禁止 RC 硬编码）
     "kuaizhizao-supplier-eval": "SE",  # 供应商评价（R-03）
@@ -88,6 +90,9 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-supplier-eval-plan": "SEP",  # 供应商评价计划
     "kuaizhizao-quality-system-document": "TXWJ",  # 体系文件
     "kuaizhizao-quality-internal-audit": "NS",  # 内部审核
+    "kuaizhizao-quality-corrective-action": "JZYF",  # 纠正预防
+    "kuaizhizao-quality-objective": "ZLMB",  # 质量目标
+    "kuaizhizao-quality-external-audit": "WS",  # 外审
     "kuaizhizao-quality-management-review": "GLPS",  # 管理评审
     "kuaizhizao-quality-fai-order": "FAI",  # FAI首件检验
     "kuaizhizao-quality-defect-record": "DF",  # 不合格品记录
@@ -96,6 +101,19 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-equipment-management-mold": "MJ",        # 模具（拼音 muju）
     "kuaizhizao-equipment-management-tool": "GZ",       # 工装（拼音 gongzhuang）
     "kuaizhizao-equipment-management-acceptance": "YS",  # 设备工装验收
+    "kuaizhizao-equipment-inspection-item": "DJX",  # 点检项
+    "kuaizhizao-equipment-inspection-scheme": "DJFA",  # 点检方案
+    "kuaizhizao-equipment-maintenance-item": "BYX",  # 保养项
+    "kuaizhizao-equipment-maintenance-scheme": "BYFA",  # 保养方案
+    "kuaizhizao-equipment-patrol-route": "XJLX",  # 巡检路线
+    "kuaizhizao-mold-maintenance-item": "MJBYX",  # 模具保养项
+    "kuaizhizao-mold-maintenance-scheme": "MJBYFA",  # 模具保养方案
+    "kuaizhizao-mold-repair-item": "MJWXX",  # 模具维修项
+    "kuaizhizao-mold-repair-scheme": "MJWXFA",  # 模具维修方案
+    "kuaizhizao-tool-maintenance-item": "GZBYX",  # 工装保养项
+    "kuaizhizao-tool-maintenance-scheme": "GZBYFA",  # 工装保养方案
+    "kuaizhizao-tool-repair-item": "GZWXX",  # 工装修修项
+    "kuaizhizao-tool-repair-scheme": "GZWXFA",  # 工装修修方案
     "kuaizhizao-equipment-spot-check": "DJ",  # 设备点检
     "kuaizhizao-equipment-route-patrol": "LX",  # 路线巡检
     "kuaizhizao-equipment-fault": "GZ",  # 设备故障报修
@@ -171,6 +189,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaiplm-bom-collab": "BOMX",                   # BOM协同
     "kuaiplm-project-proposal": "XMJY",             # 项目建议
     "kuaiplm-mold-sample": "KMTY",                  # 开模打样
+    "kuaiplm-prototype-build-sheet": "YJZZ",        # 样机制作书
 }
 
 # 页面配置数据结构
@@ -1195,6 +1214,30 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-quality-outsource-inspection",
+        "page_name": "委外检验",
+        "page_path": "/apps/kuaizhizao/quality-management/outsource-inspection",
+        "code_field": "inspection_code",
+        "code_field_label": "委外检验单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OUTSOURCE_INSPECTION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-quality-patrol",
+        "page_name": "质量巡检",
+        "page_path": "/apps/kuaizhizao/quality-management/quality-patrol",
+        "code_field": "inspection_code",
+        "code_field_label": "质量巡检单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QUALITY_PATROL_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-quality-eight-d-report",
         "page_name": "8D报告",
         "page_path": "/apps/kuaizhizao/quality-management/eight-d-reports",
@@ -1339,6 +1382,54 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-quality-corrective-action",
+        "page_name": "纠正预防",
+        "page_path": "/apps/kuaizhizao/quality-management/corrective-actions",
+        "code_field": "action_code",
+        "code_field_label": "纠正预防编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QMS_CORRECTIVE_ACTION_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-objective",
+        "page_name": "质量目标",
+        "page_path": "/apps/kuaizhizao/quality-management/quality-objectives",
+        "code_field": "objective_code",
+        "code_field_label": "质量目标编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QMS_QUALITY_OBJECTIVE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-external-audit",
+        "page_name": "外审",
+        "page_path": "/apps/kuaizhizao/quality-management/external-audits",
+        "code_field": "audit_code",
+        "code_field_label": "外审编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QMS_EXTERNAL_AUDIT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-nonconformity-report",
+        "page_name": "不符合报告",
+        "page_path": "/apps/kuaizhizao/quality-management/nonconformity-reports",
+        "code_field": "report_code",
+        "code_field_label": "不符合报告编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "QMS_NONCONFORMITY_REPORT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-quality-management-review",
         "page_name": "管理评审",
         "page_path": "/apps/kuaizhizao/quality-management/management-reviews",
@@ -1360,6 +1451,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "FAI_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-quality-drawing-balloon-sheet",
+        "page_name": "图纸气泡标注",
+        "page_path": "/apps/kuaizhizao/quality-management/drawing-balloon-sheets",
+        "code_field": "sheet_code",
+        "code_field_label": "标注单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "DRAWING_BALLOON_SHEET_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -1479,6 +1582,175 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "auto_generate": True,
         "rule_code": "EQUIPMENT_LINE_REBIND_CODE",
         "allow_manual_edit": False,
+    },
+    {
+        "page_code": "kuaizhizao-equipment-inspection-item",
+        "page_name": "点检项",
+        "page_path": "/apps/kuaizhizao/equipment-management/inspection-items",
+        "code_field": "code",
+        "code_field_label": "点检项编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "EQUIPMENT_INSPECTION_ITEM_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-equipment-inspection-scheme",
+        "page_name": "点检方案",
+        "page_path": "/apps/kuaizhizao/equipment-management/inspection-schemes",
+        "code_field": "code",
+        "code_field_label": "点检方案编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "EQUIPMENT_INSPECTION_SCHEME_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,  # 点检方案：DJFA+4位流水，不含日期
+    },
+    {
+        "page_code": "kuaizhizao-equipment-maintenance-item",
+        "page_name": "保养项",
+        "page_path": "/apps/kuaizhizao/equipment-management/maintenance-items",
+        "code_field": "code",
+        "code_field_label": "保养项编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "EQUIPMENT_MAINTENANCE_ITEM_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-equipment-maintenance-scheme",
+        "page_name": "保养方案",
+        "page_path": "/apps/kuaizhizao/equipment-management/maintenance-schemes",
+        "code_field": "code",
+        "code_field_label": "保养方案编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "EQUIPMENT_MAINTENANCE_SCHEME_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-equipment-patrol-route",
+        "page_name": "巡检路线",
+        "page_path": "/apps/kuaizhizao/equipment-management/patrol-routes",
+        "code_field": "code",
+        "code_field_label": "巡检路线编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "EQUIPMENT_PATROL_ROUTE_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-mold-maintenance-item",
+        "page_name": "模具保养项",
+        "page_path": "/apps/kuaizhizao/equipment-management/mold-maintenance-items",
+        "code_field": "code",
+        "code_field_label": "模具保养项编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MOLD_MAINTENANCE_ITEM_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-mold-maintenance-scheme",
+        "page_name": "模具保养方案",
+        "page_path": "/apps/kuaizhizao/equipment-management/mold-maintenance-schemes",
+        "code_field": "code",
+        "code_field_label": "模具保养方案编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MOLD_MAINTENANCE_SCHEME_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-mold-repair-item",
+        "page_name": "模具维修项",
+        "page_path": "/apps/kuaizhizao/equipment-management/mold-repair-items",
+        "code_field": "code",
+        "code_field_label": "模具维修项编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MOLD_REPAIR_ITEM_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-mold-repair-scheme",
+        "page_name": "模具维修方案",
+        "page_path": "/apps/kuaizhizao/equipment-management/mold-repair-schemes",
+        "code_field": "code",
+        "code_field_label": "模具维修方案编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "MOLD_REPAIR_SCHEME_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-tool-maintenance-item",
+        "page_name": "工装保养项",
+        "page_path": "/apps/kuaizhizao/equipment-management/tool-maintenance-items",
+        "code_field": "code",
+        "code_field_label": "工装保养项编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "TOOL_MAINTENANCE_ITEM_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-tool-maintenance-scheme",
+        "page_name": "工装保养方案",
+        "page_path": "/apps/kuaizhizao/equipment-management/tool-maintenance-schemes",
+        "code_field": "code",
+        "code_field_label": "工装保养方案编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "TOOL_MAINTENANCE_SCHEME_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-tool-repair-item",
+        "page_name": "工装修修项",
+        "page_path": "/apps/kuaizhizao/equipment-management/tool-repair-items",
+        "code_field": "code",
+        "code_field_label": "工装修修项编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "TOOL_REPAIR_ITEM_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
+    },
+    {
+        "page_code": "kuaizhizao-tool-repair-scheme",
+        "page_name": "工装修修方案",
+        "page_path": "/apps/kuaizhizao/equipment-management/tool-repair-schemes",
+        "code_field": "code",
+        "code_field_label": "工装修修方案编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "TOOL_REPAIR_SCHEME_CODE",
+        "allow_manual_edit": True,
+        "skip_date": True,
     },
     {
         "page_code": "kuaizhizao-equipment-spot-check",
@@ -2472,6 +2744,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "layers",
         "auto_generate": True,
         "rule_code": "KUAI_PLM_MOLD_SAMPLE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaiplm-prototype-build-sheet",
+        "page_name": "样机制作书",
+        "page_path": "/apps/kuaiplm/prototype-build-sheets",
+        "code_field": "sheet_code",
+        "code_field_label": "制作书单号",
+        "module": "快研发",
+        "module_icon": "layers",
+        "auto_generate": True,
+        "rule_code": "KUAI_PLM_PROTOTYPE_BUILD_SHEET_CODE",
         "allow_manual_edit": True,
     },
     {

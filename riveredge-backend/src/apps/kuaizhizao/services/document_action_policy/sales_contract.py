@@ -36,6 +36,10 @@ def _is_pending_review(status: Any) -> bool:
     return _norm_status(status) == "待审核"
 
 
+def _is_submitted(status: Any) -> bool:
+    return _norm_status(status) == "SUBMITTED"
+
+
 def _is_rejected(status: Any, review_status: Any) -> bool:
     st = _norm_status(status)
     rs = _normalize_review_status(review_status)
@@ -74,13 +78,16 @@ def derive_sales_contract_capabilities(
     st = _norm_status(status)
     today = today or date.today()
 
-    update_allowed = _is_draft(status) or _is_pending_review(status) or _is_rejected(status, review_status)
+    update_allowed = (
+        not _is_submitted(status)
+        and (_is_draft(status) or _is_pending_review(status) or _is_rejected(status, review_status))
+    )
     update_cap = _cap(
         update_allowed,
         "sales_contract.update.not_draft" if not update_allowed else None,
     )
 
-    delete_allowed = _is_draft(status) or _is_pending_review(status)
+    delete_allowed = (not _is_submitted(status)) and (_is_draft(status) or _is_pending_review(status))
     delete_cap = _cap(
         delete_allowed,
         "sales_contract.delete.not_draft" if not delete_allowed else None,
@@ -92,11 +99,12 @@ def derive_sales_contract_capabilities(
         "sales_contract.submit.not_draft" if not submit_allowed else None,
     )
 
+    withdraw_allowed = _is_submitted(status) or (
+        _is_pending_review(status) and _is_review_pending(review_status)
+    )
     withdraw_cap = _cap(
-        _is_pending_review(status) and _is_review_pending(review_status),
-        "sales_contract.withdraw_submit.not_pending" if not (
-            _is_pending_review(status) and _is_review_pending(review_status)
-        ) else None,
+        withdraw_allowed,
+        None if withdraw_allowed else "sales_contract.withdraw_submit.not_pending",
     )
 
     approve_cap = _cap(

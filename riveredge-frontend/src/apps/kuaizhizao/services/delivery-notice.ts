@@ -102,6 +102,8 @@ export const deliveryNoticeApi = {
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/delivery-notices/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/delivery-notices/${id}`, { method: 'GET' }),
   send: async (id: string) => apiRequest(`/apps/kuaizhizao/delivery-notices/${id}/send`, { method: 'POST' }),
+  sign: async (id: string, data?: { signed_at?: string; notes?: string }) =>
+    apiRequest(`/apps/kuaizhizao/delivery-notices/${id}/sign`, { method: 'POST', data: data || {} }),
   pushToFreightOrders: async (noticeIds: number[]): Promise<{
     success: boolean;
     message: string;

@@ -86,7 +86,7 @@ export async function enrichInboundFormItemsTracking(
       try {
         const list = await materialApi.list({ code, limit: 1 });
         const m = firstMaterialFromListResponse(list);
-        const fromPicker = readMaterialTrackingFromPicker(m as Record<string, unknown> | undefined);
+        const fromPicker = readMaterialTrackingFromPicker(m as unknown as Record<string, unknown> | undefined);
         if (!fromPicker) return;
         if (m?.uuid) {
           try {
@@ -134,60 +134,104 @@ export type ConfirmPreviewMaterialMeta = {
   batchManaged: boolean;
   serialManaged: boolean;
   materialUuid: string;
+  defaultBatchRuleId: number | null;
   defaultSerialRuleId: number | null;
 };
 
-/** 确认预览：按明细行加载物料批号/序列号管理属性 */
+function confirmPreviewMetaFromMaterial(m: Material): ConfirmPreviewMaterialMeta | null {
+  const uuid = String(m?.uuid ?? '').trim();
+  if (!uuid) return null;
+  const defaultBatchRuleId = (m.defaultBatchRuleId ??
+    (m as { default_batch_rule_id?: number | null }).default_batch_rule_id ??
+    null) as number | null;
+  const defaultSerialRuleId = (m.defaultSerialRuleId ?? (m as { default_serial_rule_id?: number | null }).default_serial_rule_id ?? null) as
+    | number
+    | null;
+  return {
+    batchManaged: !!(m.batchManaged ?? (m as { batch_managed?: boolean }).batch_managed),
+    serialManaged: !!(m.serialManaged ?? (m as { serial_managed?: boolean }).serial_managed),
+    materialUuid: uuid,
+    defaultBatchRuleId:
+      defaultBatchRuleId != null && Number(defaultBatchRuleId) > 0 ? Number(defaultBatchRuleId) : null,
+    defaultSerialRuleId:
+      defaultSerialRuleId != null && Number(defaultSerialRuleId) > 0 ? Number(defaultSerialRuleId) : null,
+  };
+}
+
+/** 确认预览：按明细行加载物料批号/序列号管理属性（列表/预取真源，禁止每行 GET 详情） */
 export async function loadConfirmPreviewMaterialMeta(
   items: { id?: number; material_code?: string; material_id?: number; serial_numbers?: string[] | null }[],
   materialById?: Map<string, Material>,
 ): Promise<Record<number, ConfirmPreviewMaterialMeta>> {
   const out: Record<number, ConfirmPreviewMaterialMeta> = {};
   const rows = items.filter((it) => it?.id != null);
+  const mergedByMaterialId = new Map<string, Material>();
+  if (materialById) {
+    for (const [key, m] of materialById) {
+      if (m.id != null) mergedByMaterialId.set(String(m.id), m);
+      if (m.uuid) mergedByMaterialId.set(String(m.uuid), m);
+      mergedByMaterialId.set(key, m);
+    }
+  }
+
+  const missingNumericIds: number[] = [];
+  const missingCodes: string[] = [];
+  for (const it of rows) {
+    const materialId = it.material_id;
+    if (materialId != null && Number(materialId) > 0 && !mergedByMaterialId.has(String(materialId))) {
+      missingNumericIds.push(Number(materialId));
+    }
+    const code = String(it.material_code || '').trim();
+    if (!code) continue;
+    const resolvedById =
+      materialId != null &&
+      Number(materialId) > 0 &&
+      mergedByMaterialId.has(String(materialId));
+    if (!resolvedById) {
+      missingCodes.push(code);
+    }
+  }
+
+  const uniqueMissingIds = [...new Set(missingNumericIds)];
+  if (uniqueMissingIds.length > 0) {
+    try {
+      const res = await materialApi.list({ ids: uniqueMissingIds, limit: uniqueMissingIds.length });
+      for (const m of res.items ?? []) {
+        if (m.id != null) mergedByMaterialId.set(String(m.id), m);
+        if (m.uuid) mergedByMaterialId.set(String(m.uuid), m);
+      }
+    } catch {
+      /* 主数据不可用时跳过自动批号/序列号 */
+    }
+  }
+
   await Promise.all(
-    rows.map(async (it) => {
-      const id = Number(it.id);
+    [...new Set(missingCodes)].map(async (code) => {
       try {
-        let m: Material | null = null;
-        const materialId = it.material_id;
-        if (materialId != null && materialById?.has(String(materialId))) {
-          m = materialById.get(String(materialId)) ?? null;
-        }
-        if (!m && materialId != null && Number(materialId) > 0) {
-          const res = await materialApi.list({ ids: [Number(materialId)], limit: 1 });
-          m = firstMaterialFromListResponse(res);
-        }
-        if (!m) {
-          const code = String(it.material_code || '').trim();
-          if (!code) return;
-          const res = await materialApi.list({ code, limit: 1 });
-          m = firstMaterialFromListResponse(res);
-        }
-        const uuid = String(m?.uuid ?? '').trim();
-        if (!uuid) return;
-        let batchManaged = !!(m?.batchManaged ?? (m as any)?.batch_managed);
-        let serialManaged = !!(m?.serialManaged ?? (m as any)?.serial_managed);
-        let defaultSerialRuleId =
-          (m?.defaultSerialRuleId ?? (m as any)?.default_serial_rule_id ?? null) as number | null;
-        try {
-          const full = await materialApi.get(uuid);
-          batchManaged = !!full.batchManaged;
-          serialManaged = !!full.serialManaged;
-          defaultSerialRuleId = full.defaultSerialRuleId ?? null;
-        } catch {
-          /* 使用列表/预取字段 */
-        }
-        out[id] = {
-          batchManaged,
-          serialManaged,
-          materialUuid: uuid,
-          defaultSerialRuleId:
-            defaultSerialRuleId != null && Number(defaultSerialRuleId) > 0 ? Number(defaultSerialRuleId) : null,
-        };
+        const res = await materialApi.list({ code, limit: 1 });
+        const m = firstMaterialFromListResponse(res);
+        if (m?.id != null) mergedByMaterialId.set(String(m.id), m);
       } catch {
         /* 跳过 */
       }
     }),
   );
+
+  for (const it of rows) {
+    const id = Number(it.id);
+    const materialId = it.material_id;
+    let m: Material | null = null;
+    if (materialId != null && mergedByMaterialId.has(String(materialId))) {
+      m = mergedByMaterialId.get(String(materialId)) ?? null;
+    }
+    if (!m) {
+      const code = String(it.material_code || '').trim();
+      if (!code) continue;
+      m = [...mergedByMaterialId.values()].find((row) => String((row as { main_code?: string }).main_code ?? row.code ?? '').trim() === code) ?? null;
+    }
+    const meta = m ? confirmPreviewMetaFromMaterial(m) : null;
+    if (meta) out[id] = meta;
+  }
+
   return out;
 }

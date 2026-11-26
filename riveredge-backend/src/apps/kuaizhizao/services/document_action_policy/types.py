@@ -470,6 +470,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "quotation.revision.not_allowed": "仅非草稿的最新系列版本可新建修订版",
     "quotation.print.not_allowed": "正式报价 PDF 须在审核通过、客户确认或已转单后生成",
     "document.print.unaudited_denied": "未审核单据不可打印（系统参数已关闭未审核打印）",
+    "sales_order.print.requires_audit": "已开启「打印须审核」，未审核通过的销售订单不可打印",
+    "quotation.print.requires_audit": "已开启「打印须审核」，未审核通过的报价单不可打印正式 PDF",
     "sales_order.update.not_allowed": "只能更新草稿或待审核的销售订单",
     "sales_order.update.locked": "销售订单已生效或执行中，禁止直接修改，请通过销售变更单变更",
     "sales_order.update_attachments.cancelled": "已取消的销售订单不可补充附件",

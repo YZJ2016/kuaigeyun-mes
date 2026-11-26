@@ -10,8 +10,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Popconfirm, Modal, Typography, Descriptions } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Tag, Button, Space, Modal, Typography, Descriptions } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -19,8 +19,8 @@ import { warehouseApi } from '../../../services/production';
 import {
   KUAIZHIZAO_DOC_HOST,
   loadCustomerFormReferenceList,
-  searchMaterialFormReferenceOptions,
 } from '../../../../../utils/documentFormReferenceLoad';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind } from '../../../../../components/uni-action';
@@ -111,6 +111,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
           barcode_pattern: detailData.barcode_pattern,
           barcode_type: detailData.barcode_type,
           material_id: detailData.material_id,
+          material_code: detailData.material_code,
+          material_name: detailData.material_name,
           is_enabled: detailData.is_enabled,
           priority: detailData.priority,
           remarks: detailData.remarks,
@@ -118,22 +120,6 @@ const BarcodeMappingRulesPage: React.FC = () => {
         });
       } catch (error) {
         messageApi.error(t('app.kuaizhizao.barcodeMapping.loadDetailFailed'));
-      }
-    }
-  };
-
-  /**
-   * 处理删除
-   */
-  const handleDelete = async (record: BarcodeMappingRule) => {
-    if (record.id) {
-      try {
-        await warehouseApi.barcodeMappingRule.delete(record.id.toString());
-        messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: 1 }));
-        invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
-      } catch (error) {
-        messageApi.error(t('common.deleteFailed'));
       }
     }
   };
@@ -271,14 +257,6 @@ const BarcodeMappingRulesPage: React.FC = () => {
         <Space>
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           <Button {...rowActionKind('update')} onClick={() => handleEdit(record)} />
-          <Popconfirm
-            title={t('app.kuaizhizao.barcodeMapping.deleteConfirm')}
-            onConfirm={() => handleDelete(record)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Button {...rowActionKind('delete')} />
-          </Popconfirm>
         </Space>
       ),
     },
@@ -366,7 +344,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         columns={alignProColumns(columns, WAREHOUSE_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules-width-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules-width-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.barcodeMappingRules')}
         showCreateButton={true}
@@ -374,6 +352,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         onCreate={handleCreate}
         enableRowSelection={true}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           try {
             for (const id of keys) {
@@ -485,24 +464,29 @@ const BarcodeMappingRulesPage: React.FC = () => {
           colProps={{ span: 24 }}
           extra={t('app.kuaizhizao.barcodeMapping.barcodePatternExtra')}
         />
-        <ProFormSelect
-          name="material_id"
-          label={t('app.kuaizhizao.barcodeMapping.mappedMaterial')}
-          placeholder={t('app.kuaizhizao.barcodeMapping.selectMappedMaterial')}
-          rules={[{ required: true, message: t('app.kuaizhizao.barcodeMapping.selectMappedMaterial') }]}
-          request={async (params) =>
-            searchMaterialFormReferenceOptions(
-              KUAIZHIZAO_DOC_HOST.barcodeMappingRules,
-              params.keyWords,
-              100,
-            )
-          }
-          fieldProps={{
-            showSearch: true,
-            filterOption: false,
-          }}
-          colProps={{ span: 24 }}
-        />
+        <ProForm.Item colProps={{ span: 24 }} style={{ marginBottom: 0 }}>
+          <UniMaterialSelect
+            name="material_id"
+            label={t('app.kuaizhizao.barcodeMapping.mappedMaterial')}
+            placeholder={t('app.kuaizhizao.barcodeMapping.selectMappedMaterial')}
+            required
+            hostResource={KUAIZHIZAO_DOC_HOST.barcodeMappingRules}
+            showQuickCreate={false}
+            showAdvancedSearch
+            fillMapping={{}}
+            fallbackOption={(() => {
+              const mid = Number(pendingFormValues?.material_id ?? 0);
+              if (!Number.isFinite(mid) || mid <= 0) return undefined;
+              const code = String(pendingFormValues?.material_code ?? '').trim();
+              const name = String(pendingFormValues?.material_name ?? '').trim();
+              const label = [code, name].filter(Boolean).join(' - ') || String(mid);
+              return { value: mid, label };
+            })()}
+            formItemProps={{
+              rules: [{ required: true, message: t('app.kuaizhizao.barcodeMapping.selectMappedMaterial') }],
+            }}
+          />
+        </ProForm.Item>
         <ProFormSwitch
           name="is_enabled"
           label={t('app.kuaizhizao.barcodeMapping.colEnabledStatus')}

@@ -15,7 +15,7 @@ import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormT
 import { App, Button, Col, DatePicker, Descriptions, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
@@ -26,19 +26,45 @@ import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import {   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { buildDocumentDetailTotalStockFormColumn } from '../../sales-management/shared/materialLineFormDetail';
 import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
-import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { useCustomFields } from '../../../../../hooks/useCustomFields';
-import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { materialApi } from '../../../../master-data/services/material';
+import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import {
-  CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
-} from '../../../../../components/custom-fields';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import { buildDocumentDetailSerialReadonlyColumn } from '../../../components/documentDetailSerialNumberColumn';
+import {
+  loadBatchOptionsByMaterialId,
+  loadInStockSerialOptions,
+  type InventoryPickOption,
+} from '../outbound/outboundConfirmInventoryOptions';
+import OutboundSerialPickerField from '../outbound/OutboundSerialPickerField';
+import OutboundBatchAllocationField from '../outbound/OutboundBatchAllocationField';
+import {
+  isValidOutboundBatchAllocations,
+  lineBatchAllocationsFromRow,
+  syncFormLineBatchFields,
+} from '../outbound/outboundBatchAllocation';
+import {
+  runOutboundHubConfirmFromRecord,
+  formatOutboundConfirmError,
+} from '../outbound/outboundHubRunConfirm';
+import OutboundHubEditModal from '../outbound/OutboundHubEditModal';
+import { isOutboundEditable, type OutboundHubOrder } from '../outbound/outboundHubTypes';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  buildDocumentLineAuxQuantityDetailColumn,
+  buildDocumentLineDualQuantityPairColumns,
+} from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -74,6 +100,16 @@ import {
   resolveWarehouseListExportHeaders,
 } from '../shared/warehouseDocListExport';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const MATERIAL_BORROW_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_material_borrows';
+
 interface MaterialBorrow {
   id?: number;
   uuid?: string;
@@ -112,13 +148,23 @@ interface MaterialBorrowItem {
   status?: string;
 }
 
-const MATERIAL_BORROW_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_material_borrows';
-
 const MATERIAL_BORROW_STATUS_I18N: Record<string, string> = {
   '待借出': 'app.kuaizhizao.materialBorrow.status.pending',
   '已借出': 'app.kuaizhizao.materialBorrow.status.borrowed',
   '已取消': 'app.kuaizhizao.materialBorrow.status.cancelled',
 };
+
+function borrowMaterialIdsKey(items: unknown): string {
+  if (!Array.isArray(items)) return '';
+  const ids = [
+    ...new Set(
+      items
+        .map((it) => Number((it as { material_id?: unknown })?.material_id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  ].sort((a, b) => a - b);
+  return ids.join(',');
+}
 
 function translateMaterialBorrowStatus(t: (key: string) => string, status?: string): string {
   if (!status) return '-';
@@ -138,7 +184,9 @@ const MaterialBorrowsPage: React.FC = () => {
   const borrowPerms = useResourcePermissions('kuaizhizao:material-borrow');
   const canConfirmBorrow = borrowPerms.canAction?.('execute') ?? false;
   const canRevokeBorrow = borrowPerms.canAction?.('revoke') ?? false;
+  const canUpdateBorrow = borrowPerms.canUpdate ?? false;
   const canDeleteBorrow = borrowPerms.canDelete ?? false;
+  const [editModalRecord, setEditModalRecord] = useState<OutboundHubOrder | null>(null);
 
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -179,14 +227,128 @@ const MaterialBorrowsPage: React.FC = () => {
     updateSelectedWarehouseId,
     resetSelectedWarehouseId,
   } = useWarehouseLocationOptions();
+  const trackingFlags = useWarehouseTrackingFlags();
+  const [batchOptionsByKey, setBatchOptionsByKey] = useState<Record<string, InventoryPickOption[]>>({});
+  const [batchOptionsLoadingKey, setBatchOptionsLoadingKey] = useState<string | null>(null);
+  const [serialOptionsByUuid, setSerialOptionsByUuid] = useState<Record<string, InventoryPickOption[]>>({});
+  const [serialOptionsLoadingUuid, setSerialOptionsLoadingUuid] = useState<string | null>(null);
+  const serialOptionsLoadingRef = useRef<Record<string, boolean>>({});
+  const [lineMaterialKey, setLineMaterialKey] = useState('');
   const defaultBorrowItem = {
     material_id: undefined,
+    material_uuid: undefined as string | undefined,
     material_code: '',
     material_name: '',
     material_unit: '',
     location_code: undefined,
+    batch_number: undefined as string | undefined,
+    batch_allocations: [] as { batchNo: string; quantity: number }[],
+    batch_managed: false,
+    serial_managed: false,
+    serial_numbers: undefined as string[] | undefined,
     borrow_quantity: 1,
   };
+
+  const syncLineMaterialKeyFromForm = useCallback(() => {
+    setLineMaterialKey(borrowMaterialIdsKey(formRef.current?.getFieldValue('items')));
+  }, []);
+
+  const batchOptionLabel = useCallback(
+    (batch: string, qty: number, warehouseName?: string) =>
+      warehouseName
+        ? t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailableWithWh', {
+            batch,
+            qty,
+            warehouse: warehouseName,
+          })
+        : t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch, qty }),
+    [t],
+  );
+
+  const ensureBatchOptions = useCallback(
+    async (materialId: number, warehouseId: number) => {
+      const mid = Number(materialId);
+      const whId = Number(warehouseId);
+      if (!(mid > 0) || !(whId > 0)) return;
+      const key = `${mid}:${whId}`;
+      setBatchOptionsLoadingKey(key);
+      try {
+        const map = await loadBatchOptionsByMaterialId([mid], whId, batchOptionLabel);
+        setBatchOptionsByKey((prev) => ({ ...prev, [key]: map[mid] ?? [] }));
+      } finally {
+        setBatchOptionsLoadingKey((cur) => (cur === key ? null : cur));
+      }
+    },
+    [batchOptionLabel],
+  );
+
+  const ensureSerialOptions = useCallback(async (materialUuid: string, selected?: string[]) => {
+    const uuid = String(materialUuid || '').trim();
+    if (!uuid || serialOptionsLoadingRef.current[uuid]) return;
+    if (serialOptionsByUuid[uuid]?.length) return;
+    serialOptionsLoadingRef.current[uuid] = true;
+    setSerialOptionsLoadingUuid(uuid);
+    try {
+      const opts = await loadInStockSerialOptions(uuid);
+      setSerialOptionsByUuid((prev) => ({ ...prev, [uuid]: opts }));
+    } catch {
+      setSerialOptionsByUuid((prev) => ({ ...prev, [uuid]: [] }));
+    } finally {
+      serialOptionsLoadingRef.current[uuid] = false;
+      setSerialOptionsLoadingUuid((cur) => (cur === uuid ? null : cur));
+    }
+  }, [serialOptionsByUuid]);
+
+  const applyMaterialBatchFlags = useCallback(
+    async (idx: number, material: Material | undefined) => {
+      if (!material) return;
+      const uuid = material.uuid;
+      let batchManaged = material.batchManaged ?? false;
+      let serialManaged = material.serialManaged ?? false;
+      if (uuid) {
+        try {
+          const full = await materialApi.get(uuid);
+          batchManaged = full.batchManaged ?? false;
+          serialManaged = full.serialManaged ?? false;
+        } catch {
+          /* 使用列表字段 */
+        }
+      }
+      formRef.current?.setFieldValue(
+        ['items', idx, 'batch_managed'],
+        isMaterialBatchEntryEnabled(trackingFlags, batchManaged),
+      );
+      formRef.current?.setFieldValue(['items', idx, 'material_uuid'], uuid);
+      formRef.current?.setFieldValue(
+        ['items', idx, 'serial_managed'],
+        isMaterialSerialEntryEnabled(trackingFlags, serialManaged),
+      );
+    },
+    [trackingFlags],
+  );
+
+  useEffect(() => {
+    if (!createModalVisible) {
+      setLineMaterialKey('');
+      setBatchOptionsByKey({});
+      setBatchOptionsLoadingKey(null);
+      return;
+    }
+    syncLineMaterialKeyFromForm();
+  }, [createModalVisible, syncLineMaterialKeyFromForm]);
+
+  useEffect(() => {
+    if (!createModalVisible) return;
+    const mids = lineMaterialKey
+      .split(',')
+      .map((s) => Number(s))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    const whId = Number(selectedWarehouseId) || 0;
+    if (!mids.length || !whId) return;
+    for (const mid of mids) {
+      void ensureBatchOptions(mid, whId);
+    }
+  }, [createModalVisible, selectedWarehouseId, lineMaterialKey, ensureBatchOptions]);
 
   useEffect(() => {
     const load = async () => {
@@ -380,9 +542,19 @@ const MaterialBorrowsPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
+        const hubRecord: OutboundHubOrder = { ...record, outbound_type: 'material_borrow' };
         return (
           <Space size="small" wrap>
             <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+            {canUpdateBorrow && isOutboundEditable(hubRecord) ? (
+              <Button
+                {...rowActionKind('update')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditModalRecord(hubRecord);
+                }}
+              />
+            ) : null}
             {record.status === '待借出' && canConfirmBorrow ? (
               <ActionConfirmPopconfirm title={t('app.kuaizhizao.materialBorrow.msg.confirmTitle')} description={t('app.kuaizhizao.materialBorrow.msg.confirmContent', { code: record.borrow_code })} onConfirm={() => executeConfirm(record)}>
               <Button
@@ -410,7 +582,7 @@ const MaterialBorrowsPage: React.FC = () => {
         );
       },
     },
-  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, materialBorrowStatusValueEnum, materialBorrowCustomFieldColumns]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, materialBorrowStatusValueEnum, canUpdateBorrow, canConfirmBorrow, canRevokeBorrow, canDeleteBorrow, materialBorrowCustomFieldColumns]);
 
   const handleDetail = useCallback(async (record: MaterialBorrow) => {
     if (record.id == null) return;
@@ -469,13 +641,21 @@ const MaterialBorrowsPage: React.FC = () => {
   }, [searchParams, handleDetail, messageApi, t]);
 
   const executeConfirm = async (record: MaterialBorrow) => {
+    if (record.id == null) return;
     try {
-      await warehouseApi.materialBorrow.confirm(record.id!.toString());
+      const confirmed = await runOutboundHubConfirmFromRecord({
+        t,
+        record: { id: record.id, outbound_type: 'material_borrow' },
+        trackingFlags,
+      });
       messageApi.success(t('app.kuaizhizao.materialBorrow.msg.confirmSuccess'));
+      if (confirmed.externalPushMessage) {
+        messageApi.warning(confirmed.externalPushMessage);
+      }
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.confirmFailed'));
+    } catch (error: unknown) {
+      messageApi.error(formatOutboundConfirmError(error, t));
     }
   };
 
@@ -571,17 +751,36 @@ const MaterialBorrowsPage: React.FC = () => {
   const appendBorrowItemsFromMaterials = useCallback(
     (selected: Material[]) => {
       const current = formRef.current?.getFieldValue('items') ?? [];
+      const startIdx = (Array.isArray(current) ? current.length : 0);
       const newRows = selected.map((m) => ({
         ...defaultBorrowItem,
         material_id: m.id,
         material_code: m.mainCode ?? m.code ?? '',
         material_name: m.name ?? '',
-        material_unit: m.baseUnit ?? '',
+        material_unit: resolveMaterialScenarioUnit(m, 'purchase') || m.baseUnit || '',
+        batch_managed: isMaterialBatchEntryEnabled(trackingFlags, m.batchManaged),
       }));
       formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      void (async () => {
+        for (let i = 0; i < selected.length; i += 1) {
+          await applyMaterialBatchFlags(startIdx + i, selected[i]);
+          const mid = Number(selected[i]?.id ?? 0);
+          const whId = Number(selectedWarehouseId ?? 0);
+          if (mid > 0 && whId > 0) void ensureBatchOptions(mid, whId);
+        }
+        syncLineMaterialKeyFromForm();
+      })();
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [
+      applyMaterialBatchFlags,
+      ensureBatchOptions,
+      messageApi,
+      selectedWarehouseId,
+      syncLineMaterialKeyFromForm,
+      t,
+      trackingFlags,
+    ],
   );
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
@@ -605,6 +804,55 @@ const MaterialBorrowsPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.materialBorrow.msg.needValidLines'));
         throw new Error(t('app.kuaizhizao.materialBorrow.msg.needValidLinesRule'));
       }
+      for (const it of validItems) {
+        const material = it.material_code || it.material_name || '-';
+        if (!String(it.location_code || '').trim()) {
+          const msg = t('app.kuaizhizao.warehouseOutbound.msg.selectLocationForMaterial', {
+            material,
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+        const qty = Number(it.borrow_quantity) || 0;
+        const allocs = lineBatchAllocationsFromRow(it as Record<string, unknown>, qty);
+        if (it.batch_managed) {
+          const materialId = Number(it.material_id) || 0;
+          const whId = Number(standardValues.warehouse_id) || 0;
+          const key = materialId > 0 && whId > 0 ? `${materialId}:${whId}` : '';
+          const opts = key ? batchOptionsByKey[key] ?? [] : [];
+          if (!isValidOutboundBatchAllocations(allocs, opts, qty)) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired', {
+              material,
+              qty,
+              batches: opts.map((o) => o.value).join('、') || '—',
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+        }
+        if (isMaterialSerialEntryEnabled(trackingFlags, !!it.serial_managed)) {
+          const serials = Array.isArray(it.serial_numbers)
+            ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+            : [];
+          const required = Math.round(qty);
+          if (serials.length !== required) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+              material,
+              required,
+              actual: serials.length,
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+          if (allocs.length > 1) {
+            const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported', {
+              material,
+            });
+            messageApi.error(msg);
+            throw new Error(msg);
+          }
+        }
+      }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === standardValues.warehouse_id);
       const warehouseName = standardValues.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
       const created = await warehouseApi.materialBorrow.create({
@@ -617,16 +865,40 @@ const MaterialBorrowsPage: React.FC = () => {
         expected_return_date: standardValues.expected_return_date ? formatDateTime(standardValues.expected_return_date, 'YYYY-MM-DD') : undefined,
         notes: standardValues.notes,
         attachments: normalizeDocumentAttachments(standardValues.attachments),
-        items: validItems.map((it: any) => ({
-          material_id: it.material_id,
-          material_code: it.material_code || '',
-          material_name: it.material_name || '',
-          material_unit: it.material_unit || '',
-          location_code: it.location_code || undefined,
-          borrow_quantity: Number(it.borrow_quantity) || 0,
-          warehouse_id: standardValues.warehouse_id,
-          warehouse_name: warehouseName,
-        })),
+        items: validItems.flatMap((it: any) => {
+          const qty = Number(it.borrow_quantity) || 0;
+          const allocs = lineBatchAllocationsFromRow(it as Record<string, unknown>, qty);
+          const serials =
+            isMaterialSerialEntryEnabled(trackingFlags, !!it.serial_managed) &&
+            Array.isArray(it.serial_numbers)
+              ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+              : undefined;
+          const base = {
+            material_id: it.material_id,
+            material_code: it.material_code || '',
+            material_name: it.material_name || '',
+            material_unit: it.material_unit || '',
+            ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
+            location_code: it.location_code || undefined,
+            warehouse_id: standardValues.warehouse_id,
+            warehouse_name: warehouseName,
+            ...(serials?.length ? { serial_numbers: serials } : {}),
+          };
+          if (allocs.length > 1) {
+            return allocs.map((a) => ({
+              ...base,
+              borrow_quantity: a.quantity,
+              batch_number: a.batchNo,
+            }));
+          }
+          return [
+            {
+              ...base,
+              borrow_quantity: qty,
+              batch_number: allocs[0]?.batchNo || it.batch_number?.trim() || undefined,
+            },
+          ];
+        }),
       });
       const recordId = Number((created as { id?: number })?.id ?? 0);
       if (recordId > 0) {
@@ -781,7 +1053,7 @@ const MaterialBorrowsPage: React.FC = () => {
           }}
           showSyncButton
           onSync={() => setSyncModalVisible(true)}
-          request={async (params, sort, _filter, searchFormValues, meta) => {
+          request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
               const listParams = resolveWarehouseDocListParams(searchFormValues, sort, {
                 docDateParamPrefix: 'borrow',
@@ -845,15 +1117,50 @@ const MaterialBorrowsPage: React.FC = () => {
                 className="warehouse-detail-table"
                 size="small"
                 rowKey="id"
-                columns={[
-                  { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
-                  { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
-                  { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
-                  { title: t('app.kuaizhizao.warehouseOutbound.col.location'), dataIndex: 'location_code', width: 120, render: (v) => v || '-' },
-                  { title: t('app.kuaizhizao.materialBorrow.col.borrowQty'), dataIndex: 'borrow_quantity', width: 100, align: 'right' },
-                  { title: t('app.kuaizhizao.materialBorrow.col.returnedQty'), dataIndex: 'returned_quantity', width: 100, align: 'right' },
-                  { title: t('common.status'), dataIndex: 'status', width: 80 },
-                ]}
+                columns={filterWarehouseTrackingColumns(
+                  [
+                    {
+                      title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'),
+                      dataIndex: 'material_code',
+                      width: 120,
+                    },
+                    {
+                      title: t('app.kuaizhizao.warehouseOutbound.col.materialName'),
+                      dataIndex: 'material_name',
+                      width: 150,
+                    },
+                    { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
+                    {
+                      title: t('app.kuaizhizao.warehouseOutbound.col.location'),
+                      dataIndex: 'location_code',
+                      width: 120,
+                      render: (v) => v || '-',
+                    },
+                    {
+                      title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+                      key: 'batch',
+                      dataIndex: 'batch_number',
+                      width: 100,
+                      render: (v) => (v ? String(v) : '-'),
+                    },
+                    buildDocumentDetailSerialReadonlyColumn(t),
+                    {
+                      title: t('app.kuaizhizao.materialBorrow.col.borrowQty'),
+                      dataIndex: 'borrow_quantity',
+                      width: 100,
+                      align: 'right',
+                    },
+                    buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
+                    {
+                      title: t('app.kuaizhizao.materialBorrow.col.returnedQty'),
+                      dataIndex: 'returned_quantity',
+                      width: 100,
+                      align: 'right',
+                    },
+                    { title: t('common.status'), dataIndex: 'status', width: 80 },
+                  ],
+                  trackingFlags,
+                )}
                 dataSource={borrowDetail.items}
                 pagination={false}
               />
@@ -905,8 +1212,11 @@ const MaterialBorrowsPage: React.FC = () => {
                     material_name: '',
                     material_unit: '',
                     location_code: undefined,
+                    batch_number: undefined,
+                    batch_managed: false,
                   })),
                 });
+                syncLineMaterialKeyFromForm();
               }}
             />
           </Col>
@@ -999,6 +1309,23 @@ const MaterialBorrowsPage: React.FC = () => {
                                   material_name: 'name',
                                   material_unit: 'baseUnit',
                                 }}
+                                onChange={async (_val, material) => {
+                                  formRef.current?.setFieldValue(['items', index, 'batch_number'], undefined);
+                                  formRef.current?.setFieldValue(['items', index, 'batch_allocations'], []);
+                                  if (material) {
+                                    formRef.current?.setFieldValue(
+                                      ['items', index, 'material_unit'],
+                                      resolveMaterialScenarioUnit(material, 'purchase') || material.baseUnit || '',
+                                    );
+                                    await applyMaterialBatchFlags(index, material);
+                                    const mid = Number(_val ?? material.id ?? 0);
+                                    const whId = Number(selectedWarehouseId ?? 0);
+                                    if (mid > 0 && whId > 0) {
+                                      void ensureBatchOptions(mid, whId);
+                                    }
+                                  }
+                                  syncLineMaterialKeyFromForm();
+                                }}
                                 fallbackOption={fallback}
                                 formItemProps={{ style: { margin: 0 } }}
                                 showQuickCreate
@@ -1010,38 +1337,22 @@ const MaterialBorrowsPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: t('common.unit'),
-                    dataIndex: 'material_unit',
-                    width: 80,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
-                        {({ getFieldValue }: any) => {
-                          const materialId = getFieldValue(['items', index, 'material_id']);
-                          if (!formRef.current) return null;
-                          return (
-                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                              <DocumentLineUnitSelect
-                                form={formRef.current}
-                                listName="items"
-                                rowIndex={index}
-                                fields={{ quantity: 'borrow_quantity', unit: 'material_unit' }}
-                                materialId={materialId}
-                                size="small"
-                                noStyle
-                              />
-                            </AntForm.Item>
-                          );
-                        }}
-                      </AntForm.Item>
-                    ),
-                  },
+                  buildDocumentDetailTotalStockFormColumn(t),
                   {
                     title: t('app.kuaizhizao.warehouseOutbound.col.location'),
                     dataIndex: 'location_code',
                     width: 180,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
+                      <AntForm.Item
+                        name={[index, 'location_code']}
+                        style={{ margin: 0 }}
+                        rules={[
+                          {
+                            required: true,
+                            message: t('app.kuaizhizao.warehouseOutbound.field.selectLocation'),
+                          },
+                        ]}
+                      >
                         <Select
                           options={locationOptions}
                           placeholder={selectedWarehouseId ? t('app.kuaizhizao.warehouseOutbound.field.selectLocation') : t('app.kuaizhizao.warehouseOutbound.field.selectWarehouseFirst')}
@@ -1049,23 +1360,135 @@ const MaterialBorrowsPage: React.FC = () => {
                           size="small"
                           showSearch
                           optionFilterProp="label"
-                          allowClear
                           disabled={!selectedWarehouseId}
                         />
                       </AntForm.Item>
                     ),
                   },
                   {
-                    title: t('common.quantity'),
-                    dataIndex: 'borrow_quantity',
-                    width: 100,
-                    align: 'right' as const,
+                    title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+                    key: 'batch',
+                    dataIndex: 'batch_allocations',
+                    width: 260,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'borrow_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev, curr) =>
+                          prev?.items?.[index] !== curr?.items?.[index] ||
+                          prev?.warehouse_id !== curr?.warehouse_id
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const row = getFieldValue('items')?.[index] as
+                            | Record<string, unknown>
+                            | undefined;
+                          if (!row?.batch_managed) return '—';
+                          const materialId = Number(row?.material_id ?? 0);
+                          const whId = Number(selectedWarehouseId ?? 0);
+                          const key = materialId > 0 && whId > 0 ? `${materialId}:${whId}` : '';
+                          const opts = key ? batchOptionsByKey[key] ?? [] : [];
+                          const loading = !!key && batchOptionsLoadingKey === key;
+                          const qty = Number(row?.borrow_quantity ?? 0);
+                          const allocs = lineBatchAllocationsFromRow(row, qty);
+                          const materialLabel = [row?.material_code, row?.material_name]
+                            .filter(Boolean)
+                            .join(' - ');
+                          const disabled = !(whId > 0) || !(materialId > 0);
+                          return (
+                            <span
+                              onClick={() => {
+                                if (
+                                  !disabled &&
+                                  materialId > 0 &&
+                                  whId > 0 &&
+                                  !batchOptionsByKey[key]?.length
+                                ) {
+                                  void ensureBatchOptions(materialId, whId);
+                                }
+                              }}
+                            >
+                              <AntForm.Item name={[index, 'batch_allocations']} hidden>
+                                <Input />
+                              </AntForm.Item>
+                              <AntForm.Item name={[index, 'batch_number']} hidden>
+                                <Input />
+                              </AntForm.Item>
+                              <OutboundBatchAllocationField
+                                value={allocs}
+                                onChange={(next) =>
+                                  syncFormLineBatchFields(
+                                    (name, value) => formRef.current?.setFieldValue(name, value),
+                                    index,
+                                    next,
+                                  )
+                                }
+                                options={opts}
+                                totalQuantity={qty}
+                                loading={loading}
+                                disabled={disabled}
+                                materialLabel={String(materialLabel)}
+                              />
+                            </span>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
+                  {
+                    title: t('app.kuaizhizao.warehouseOutbound.col.serialNo'),
+                    key: 'serial_numbers',
+                    dataIndex: 'serial_numbers',
+                    width: 160,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+                      >
+                        {({ getFieldValue }) => {
+                          const row = getFieldValue('items')?.[index];
+                          if (!isMaterialSerialEntryEnabled(trackingFlags, row?.serial_managed)) {
+                            return <span>—</span>;
+                          }
+                          const qty = Number(row?.borrow_quantity ?? 0);
+                          const sn = getFieldValue(['items', index, 'serial_numbers']);
+                          const uuid = String(row?.material_uuid ?? '').trim();
+                          const serials = Array.isArray(sn)
+                            ? sn.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+                            : [];
+                          return (
+                            <>
+                              <AntForm.Item name={[index, 'serial_numbers']} hidden>
+                                <Input />
+                              </AntForm.Item>
+                              <OutboundSerialPickerField
+                                value={serials}
+                                onChange={(next) =>
+                                  formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
+                                }
+                                options={uuid ? serialOptionsByUuid[uuid] ?? [] : []}
+                                maxCount={qty > 0 ? Math.round(qty) : undefined}
+                                loading={!!uuid && serialOptionsLoadingUuid === uuid}
+                                onOpenPicker={() => {
+                                  if (uuid) void ensureSerialOptions(uuid, serials);
+                                }}
+                                materialLabel={String(row?.material_code || row?.material_name || '')}
+                              />
+                            </>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  ...buildDocumentLineDualQuantityPairColumns({
+                    t,
+                    getForm: () => formRef.current,
+                    quantityField: 'borrow_quantity',
+                    unitField: 'material_unit',
+                    scenario: 'purchase',
+                    quantityPrecision: quantityDecimals,
+                    width: 168,
+                    columnSpread: { align: 'right' as const },
+                  }),
                   {
                     title: t('common.actions'),
                     width: 60,
@@ -1074,7 +1497,8 @@ const MaterialBorrowsPage: React.FC = () => {
                     ),
                   },
                 ];
-                const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
+                const visibleCols = filterWarehouseTrackingColumns(cols, trackingFlags);
+                const totalWidth = visibleCols.reduce((s, c) => s + (c.width as number || 0), 0);
                 return (
                   <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
                     <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
@@ -1085,7 +1509,7 @@ const MaterialBorrowsPage: React.FC = () => {
                         dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
                         rowKey="key"
                         pagination={false}
-                        columns={cols}
+                        columns={visibleCols}
                         scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                         style={{ width: '100%', margin: 0 }}
                         footer={() => (
@@ -1140,6 +1564,17 @@ const MaterialBorrowsPage: React.FC = () => {
         onConfirm={appendBorrowItemsFromMaterials}
         warehouseId={selectedWarehouseId}
       />
+      <OutboundHubEditModal
+        open={editModalRecord != null}
+        record={editModalRecord}
+        onClose={() => setEditModalRecord(null)}
+        onSuccess={() => {
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          setEditModalRecord(null);
+        }}
+      />
+
       {PrintModal}
     </>
   );

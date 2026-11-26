@@ -52,10 +52,15 @@ function renderProfileField(
 
 export interface ReworkOrderProfileExtensionFieldsProps {
   profile: ReworkOrderFormProfile | null;
+  hidePathSelect?: boolean;
+  /** 新建等行业场景：去掉分段小标题，字段连续两列排布 */
+  compactLayout?: boolean;
 }
 
 export const ReworkOrderProfileExtensionFields: React.FC<ReworkOrderProfileExtensionFieldsProps> = ({
   profile,
+  hidePathSelect = false,
+  compactLayout = false,
 }) => {
   const { t } = useTranslation();
   const pathOptions = useMemo(
@@ -73,23 +78,37 @@ export const ReworkOrderProfileExtensionFields: React.FC<ReworkOrderProfileExten
     return null;
   }
 
+  const pathSelect = pathOptions.length && !hidePathSelect ? (
+    <Col span={12}>
+      <ProFormSelect
+        name="rework_path_type"
+        label={t('app.kuaizhizao.reworkOrder.profilePathType')}
+        options={pathOptions}
+        rules={[{ required: true, message: t('common.required') }]}
+      />
+    </Col>
+  ) : null;
+
   return (
     <>
-      {pathOptions.length ? (
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="rework_path_type"
-              label={t('app.kuaizhizao.reworkOrder.profilePathType')}
-              options={pathOptions}
-              rules={[{ required: true, message: t('common.required') }]}
-            />
-          </Col>
-        </Row>
-      ) : null}
+      {pathSelect && !compactLayout ? <Row gutter={16}>{pathSelect}</Row> : null}
       <ProFormDependency name={['rework_path_type']}>
-        {({ rework_path_type }) =>
-          sectionsForPath(profile, rework_path_type).map((section) => {
+        {({ rework_path_type }) => {
+          const sections = sectionsForPath(profile, rework_path_type);
+          if (compactLayout) {
+            const fieldKeys = sections.flatMap((section) =>
+              section.fields.filter((key) => !REWORK_HEADER_STATIC_KEYS.has(key)),
+            );
+            const uniqueKeys = [...new Set(fieldKeys)];
+            if (!uniqueKeys.length && !pathSelect) return null;
+            return (
+              <Row gutter={16}>
+                {pathSelect}
+                {uniqueKeys.map((fieldKey) => renderProfileField(fieldKey, profile, t))}
+              </Row>
+            );
+          }
+          return sections.map((section) => {
             const fields = section.fields.filter((key) => !REWORK_HEADER_STATIC_KEYS.has(key));
             if (!fields.length) return null;
             return (
@@ -102,8 +121,8 @@ export const ReworkOrderProfileExtensionFields: React.FC<ReworkOrderProfileExten
                 </Row>
               </div>
             );
-          })
-        }
+          });
+        }}
       </ProFormDependency>
     </>
   );

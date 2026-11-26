@@ -3,7 +3,7 @@
  * 表单上传走 DocumentAttachmentsField；详情只读 / 列表「N 个附件」统一用本组件。
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { Button, Popover, Space, Typography } from 'antd';
+import { App, Button, Popover, Space, Typography } from 'antd';
 import { PaperClipOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import FilePreviewModal from '../../../components/file-preview';
@@ -47,6 +47,7 @@ export const DocumentAttachmentsReadonly: React.FC<DocumentAttachmentsReadonlyPr
   variant = 'list',
 }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const files = useMemo(() => mapAttachmentsToUploadList(attachments), [attachments]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTarget, setPreviewTarget] = useState<PreviewTarget | undefined>();
@@ -54,12 +55,15 @@ export const DocumentAttachmentsReadonly: React.FC<DocumentAttachmentsReadonlyPr
 
   const openPreview = useCallback((file: DocumentAttachmentFile) => {
     const uuid = resolveDocumentAttachmentFileUuid(file) || String(file.uid || '').trim();
-    if (!uuid) return;
+    if (!uuid || uuid.startsWith('rc-upload-') || uuid.startsWith('vc-upload-')) {
+      message.error(t('components.documentAttachments.openFailed'));
+      return;
+    }
     const name = String(file.name || t('components.documentAttachments.label')).trim();
     setPreviewTarget({ uuid, name });
     setPreviewOpen(true);
     setCountPopoverOpen(false);
-  }, [t]);
+  }, [message, t]);
 
   const previewModal = (
     <FilePreviewModal
@@ -70,7 +74,9 @@ export const DocumentAttachmentsReadonly: React.FC<DocumentAttachmentsReadonlyPr
       }}
       fileUuid={previewTarget?.uuid}
       fileName={previewTarget?.name}
-      fileExtension={previewTarget?.name ? getFileExt(previewTarget.name) : undefined}
+      fileExtension={
+        previewTarget?.name ? getFileExt({ fileName: previewTarget.name }) : undefined
+      }
       title={previewTarget?.name}
     />
   );
@@ -103,7 +109,15 @@ export const DocumentAttachmentsReadonly: React.FC<DocumentAttachmentsReadonlyPr
     if (files.length === 1) {
       return (
         <>
-          <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => openPreview(files[0])}>
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, height: 'auto' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              openPreview(files[0]);
+            }}
+          >
             {countLabel}
           </Button>
           {previewModal}

@@ -739,7 +739,7 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
             "has_blocking_issues": has_blocking,
             "blocking_reason": "存在不可下推的补货建议" if has_blocking else None,
             "summary": {"count": len(items)},
-            "tip": "将按供应商分组生成采购订单",
+            "tip": "所选补货建议合并为一张采购订单；供应商不一致时表头为待定供应商，可在新建页改选。",
         }
 
     async def _mark_suggestions_processed(
@@ -948,70 +948,92 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         materials = await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
         unit_by_material = {int(m.id): m.base_unit for m in materials}
 
-        by_supplier: Dict[int, List[ReplenishmentSuggestion]] = {}
-        for s in suggestions:
-            by_supplier.setdefault(int(s.supplier_id), []).append(s)
-
+        # 所选建议合并为一张采购订单（与销售订单/需求计算直推一致）。
+        # 建议上的供应商来自物料默认供应商，仅作表头预填；不一致时待定，禁止拆单导致多选只见一行。
         order_date = to_site_date(resolve_business_datetime())
-        plans: List[Dict[str, Any]] = []
-
-        for supplier_id, group in by_supplier.items():
+        supplier_ids = {int(s.supplier_id) for s in suggestions if s.supplier_id}
+        if len(supplier_ids) == 1:
+            supplier_id = next(iter(supplier_ids))
             supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
             supplier_name = (
                 supplier.name
                 if supplier
-                else (group[0].supplier_name or f"供应商({supplier_id})")
+                else (suggestions[0].supplier_name or f"供应商({supplier_id})")
             )
-            po_items = []
-            line_suggestion_ids: List[int] = []
-            for s in group:
-                _, _, _, price = await self._resolve_supplier_and_lead(
-                    tenant_id, int(s.material_id)
+        else:
+            supplier_id = 0
+            supplier_name = "待定供应商"
+
+        from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
+        from apps.kuaizhizao.utils.purchase_order_line_amounts import (
+            coalesce_purchase_tax_percent,
+            load_price_amount_places,
+            split_purchase_entered_line,
+        )
+
+        price_places, amount_places = await load_price_amount_places(tenant_id)
+        tax_pct = coalesce_purchase_tax_percent()
+        po_items = []
+        line_suggestion_ids: List[int] = []
+        for s in suggestions:
+            _, _, _, price = await self._resolve_supplier_and_lead(
+                tenant_id, int(s.material_id)
+            )
+            unit_price = price or Decimal(0)
+            qty = Decimal(str(s.suggested_quantity))
+            required = self._required_date_for_suggestion(s)
+            unit, excl, _tax, _incl = split_purchase_entered_line(
+                qty,
+                unit_price,
+                tax_pct,
+                DEFAULT_PURCHASE_PRICE_TYPE,
+                price_places=price_places,
+                amount_places=amount_places,
+            )
+            po_items.append(
+                PurchaseOrderItemCreate(
+                    material_id=int(s.material_id),
+                    material_code=s.material_code,
+                    material_name=s.material_name,
+                    ordered_quantity=qty,
+                    unit=unit_by_material.get(int(s.material_id)) or "件",
+                    unit_price=unit,
+                    display_unit_price=unit,
+                    total_price=excl,
+                    tax_rate=tax_pct,
+                    received_quantity=Decimal(0),
+                    outstanding_quantity=qty,
+                    required_date=required,
+                    source_type="replenishment_suggestion",
+                    source_id=int(s.id),
+                    notes=f"补货建议#{s.id}",
                 )
-                unit_price = price or Decimal(0)
-                qty = Decimal(str(s.suggested_quantity))
-                required = self._required_date_for_suggestion(s)
-                po_items.append(
-                    PurchaseOrderItemCreate(
-                        material_id=int(s.material_id),
-                        material_code=s.material_code,
-                        material_name=s.material_name,
-                        ordered_quantity=qty,
-                        unit=unit_by_material.get(int(s.material_id)) or "件",
-                        unit_price=unit_price,
-                        total_price=qty * unit_price,
-                        received_quantity=Decimal(0),
-                        outstanding_quantity=qty,
-                        required_date=required,
-                        source_type="replenishment_suggestion",
-                        source_id=int(s.id),
-                        notes=f"补货建议#{s.id}",
-                    )
-                )
-                line_suggestion_ids.append(int(s.id))
-            delivery_date = min(self._required_date_for_suggestion(s) for s in group)
-            po_create = PurchaseOrderCreate(
-                supplier_id=supplier_id,
-                supplier_name=supplier_name,
-                order_date=order_date,
-                delivery_date=delivery_date,
-                order_type="标准采购",
-                status=DocumentStatus.DRAFT.value,
-                source_type="ReplenishmentSuggestion",
-                source_id=int(group[0].id),
-                notes="由补货建议下推生成",
-                items=po_items,
             )
-            plans.append(
-                {
-                    "po_create": po_create,
-                    "supplier_id": supplier_id,
-                    "suggestion_ids": line_suggestion_ids,
-                }
-            )
-        if not plans:
+            line_suggestion_ids.append(int(s.id))
+        if not po_items:
             raise BusinessLogicError("所选补货建议无法生成采购订单")
-        return plans
+        delivery_date = min(self._required_date_for_suggestion(s) for s in suggestions)
+        po_create = PurchaseOrderCreate(
+            supplier_id=supplier_id if supplier_id > 0 else 0,
+            supplier_name=supplier_name,
+            order_date=order_date,
+            delivery_date=delivery_date,
+            order_type="标准采购",
+            status=DocumentStatus.DRAFT.value,
+            source_type="ReplenishmentSuggestion",
+            source_id=int(suggestions[0].id),
+            notes="由补货建议下推生成",
+            price_type=DEFAULT_PURCHASE_PRICE_TYPE,
+            tax_rate=tax_pct / Decimal("100"),
+            items=po_items,
+        )
+        return [
+            {
+                "po_create": po_create,
+                "supplier_id": supplier_id if supplier_id > 0 else 0,
+                "suggestion_ids": line_suggestion_ids,
+            }
+        ]
 
     async def draft_purchase_orders_from_replenishment_suggestions(
         self,

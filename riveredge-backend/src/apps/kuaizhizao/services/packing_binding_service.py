@@ -390,6 +390,10 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             primary_sn, serial_numbers = _normalize_serial_list(
                 binding_data.product_serial_no, binding_data.serial_numbers
             )
+            for sn in serial_numbers or []:
+                from apps.kuaizhizao.services.packing_hu_operations import assert_serial_available
+
+                await assert_serial_available(tenant_id, sn)
             box_no = await self._allocate_box_no(tenant_id, binding_data.box_no)
             user = await User.get_or_none(id=bound_by)
             method = (binding_data.binding_method or "manual").strip().lower()
@@ -427,6 +431,9 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             )
             apply_create_audit(create_payload, user)
             packing_binding = await PackingBinding.create(**create_payload)
+            await self._persist_binding_lines_from_serials(
+                tenant_id, packing_binding, serial_numbers, bound_at=create_payload["bound_at"]
+            )
             await self._create_document_relation(
                 tenant_id=tenant_id,
                 source_type="finished_goods_receipt",
@@ -436,6 +443,7 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 created_by=bound_by,
                 relation_desc="成品入库创建装箱绑定",
             )
+            packing_binding = await PackingBinding.get(id=packing_binding.id)
             return enrich_packing_binding_capabilities_on_response(
                 packing_binding,
                 PackingBindingResponse.model_validate(packing_binding),
@@ -489,6 +497,10 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             primary_sn, serial_numbers = _normalize_serial_list(
                 binding_data.product_serial_no, binding_data.serial_numbers
             )
+            for sn in serial_numbers or []:
+                from apps.kuaizhizao.services.packing_hu_operations import assert_serial_available
+
+                await assert_serial_available(tenant_id, sn)
             box_no = await self._allocate_box_no(tenant_id, binding_data.box_no)
             user = await User.get_or_none(id=bound_by)
             method = (binding_data.binding_method or "manual").strip().lower()
@@ -526,6 +538,9 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             )
             apply_create_audit(create_payload, user)
             packing_binding = await PackingBinding.create(**create_payload)
+            await self._persist_binding_lines_from_serials(
+                tenant_id, packing_binding, serial_numbers, bound_at=create_payload["bound_at"]
+            )
             await self._create_document_relation(
                 tenant_id=tenant_id,
                 source_type="sales_delivery",
@@ -535,9 +550,37 @@ class PackingBindingService(AppBaseService[PackingBinding]):
                 created_by=bound_by,
                 relation_desc="销售出库创建装箱绑定",
             )
+            packing_binding = await PackingBinding.get(id=packing_binding.id)
             return enrich_packing_binding_capabilities_on_response(
                 packing_binding,
                 PackingBindingResponse.model_validate(packing_binding),
+            )
+
+    async def _persist_binding_lines_from_serials(
+        self,
+        tenant_id: int,
+        binding: PackingBinding,
+        serial_numbers: Optional[List[str]],
+        *,
+        bound_at: Any,
+    ) -> None:
+        if not serial_numbers:
+            return
+        from apps.kuaizhizao.models.packing_binding_line import PackingBindingLine
+
+        for sn in serial_numbers:
+            sn = str(sn or "").strip()
+            if not sn:
+                continue
+            await PackingBindingLine.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                binding_id=binding.id,
+                product_id=int(binding.product_id),
+                product_serial_no=sn,
+                quantity=Decimal("1"),
+                line_status="active",
+                scanned_at=bound_at,
             )
 
     async def get_source_remaining(
@@ -671,12 +714,138 @@ class PackingBindingService(AppBaseService[PackingBinding]):
             if not binding:
                 raise NotFoundError(f"装箱绑定记录不存在: {binding_id}")
             assert_packing_binding_capability(binding, "seal")
+            if _dec(binding.packing_quantity) <= Decimal("0"):
+                raise BusinessLogicError("空箱不可封箱，请先扫入产品")
             binding.seal_status = "sealed"
             await binding.save()
             return enrich_packing_binding_capabilities_on_response(
                 binding,
                 PackingBindingResponse.model_validate(binding),
             )
+
+    async def open_packing_session(
+        self,
+        tenant_id: int,
+        *,
+        source_type: str,
+        source_id: int,
+        product_id: int,
+        source_line_id: Optional[int],
+        bound_by: int,
+        box_no: Optional[str] = None,
+        packing_material_id: Optional[int] = None,
+        packing_material_code: Optional[str] = None,
+        packing_material_name: Optional[str] = None,
+    ) -> PackingBindingResponse:
+        from apps.kuaizhizao.services.packing_hu_operations import open_packing_session_core
+
+        async with in_transaction():
+            binding = await open_packing_session_core(
+                self,
+                tenant_id,
+                source_type=source_type,
+                source_id=source_id,
+                product_id=product_id,
+                source_line_id=source_line_id,
+                bound_by=bound_by,
+                box_no=box_no,
+                packing_material_id=packing_material_id,
+                packing_material_code=packing_material_code,
+                packing_material_name=packing_material_name,
+            )
+        return enrich_packing_binding_capabilities_on_response(
+            binding,
+            PackingBindingResponse.model_validate(binding),
+        )
+
+    async def scan_into_packing_session(
+        self,
+        tenant_id: int,
+        binding_id: int,
+        *,
+        serial_number: str,
+        quantity: Decimal,
+        scanned_by: int,
+    ) -> PackingBindingResponse:
+        from apps.kuaizhizao.services.packing_hu_operations import scan_into_box_core
+
+        async with in_transaction():
+            binding, _line = await scan_into_box_core(
+                self,
+                tenant_id,
+                binding_id,
+                serial_number=serial_number,
+                quantity=quantity,
+                scanned_by=scanned_by,
+            )
+        return enrich_packing_binding_capabilities_on_response(
+            binding,
+            PackingBindingResponse.model_validate(binding),
+        )
+
+    async def unbind_packing_line(
+        self,
+        tenant_id: int,
+        line_id: int,
+        *,
+        operator_id: int,
+    ) -> PackingBindingResponse:
+        from apps.kuaizhizao.services.packing_hu_operations import unbind_line_core
+
+        async with in_transaction():
+            binding = await unbind_line_core(tenant_id, line_id, operator_id=operator_id)
+        return enrich_packing_binding_capabilities_on_response(
+            binding,
+            PackingBindingResponse.model_validate(binding),
+        )
+
+    async def nest_boxes_on_pallet(
+        self,
+        tenant_id: int,
+        *,
+        pallet_no: str,
+        box_nos: List[str],
+    ) -> List[PackingBindingListResponse]:
+        from apps.kuaizhizao.services.packing_hu_operations import nest_boxes_on_pallet_core
+
+        async with in_transaction():
+            bindings = await nest_boxes_on_pallet_core(
+                tenant_id, pallet_no=pallet_no, box_nos=box_nos
+            )
+        responses = [PackingBindingListResponse.model_validate(b) for b in bindings]
+        return enrich_packing_binding_list_capabilities(bindings, responses)
+
+    async def resolve_box(
+        self,
+        tenant_id: int,
+        box_no: str,
+    ) -> PackingBindingResponse:
+        from apps.kuaizhizao.services.packing_hu_operations import resolve_box_core
+
+        resolved = await resolve_box_core(tenant_id, box_no)
+        return await self._enrich_binding_with_lines(tenant_id, resolved["binding"])
+
+    async def consume_packing_hu(
+        self,
+        tenant_id: int,
+        *,
+        source_type: str,
+        source_id: int,
+        box_nos: Optional[List[str]] = None,
+        serial_numbers: Optional[List[str]] = None,
+        operator_id: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.packing_hu_operations import consume_boxes_core
+
+        return await consume_boxes_core(
+            self,
+            tenant_id,
+            source_type=source_type,
+            source_id=source_id,
+            box_nos=box_nos,
+            serial_numbers=serial_numbers,
+            operator_id=operator_id,
+        )
 
     def _build_packing_binding_list_query(
         self,
@@ -912,10 +1081,34 @@ class PackingBindingService(AppBaseService[PackingBinding]):
         )
         if not binding:
             raise NotFoundError(f"装箱绑定记录不存在: {binding_id}")
-        return enrich_packing_binding_capabilities_on_response(
+        return await self._enrich_binding_with_lines(tenant_id, binding)
+
+    async def _enrich_binding_with_lines(
+        self, tenant_id: int, binding: PackingBinding
+    ) -> PackingBindingResponse:
+        from apps.kuaizhizao.models.packing_binding_line import PackingBindingLine
+        from apps.kuaizhizao.schemas.packing_binding import PackingBindingLineBrief
+
+        lines = await PackingBindingLine.filter(
+            tenant_id=tenant_id,
+            binding_id=binding.id,
+            deleted_at__isnull=True,
+        ).order_by("id")
+        resp = enrich_packing_binding_capabilities_on_response(
             binding,
             PackingBindingResponse.model_validate(binding),
         )
+        resp.lines = [
+            PackingBindingLineBrief(
+                id=l.id,
+                product_serial_no=l.product_serial_no,
+                quantity=_dec(l.quantity),
+                line_status=l.line_status,
+            )
+            for l in lines
+            if l.line_status != "unbound"
+        ]
+        return resp
 
     async def update_packing_binding(
         self,

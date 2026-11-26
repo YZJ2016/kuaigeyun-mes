@@ -667,6 +667,9 @@ class SalesOrderSyncService:
         qty = self._optional_decimal(raw_item.get("required_quantity"))
         if qty is None or qty <= 0:
             raise ValidationError(f"明细 {material_code} 数量无效")
+        tax_rate = self._optional_decimal(raw_item.get("tax_rate"))
+        if tax_rate is None:
+            raise ValidationError(f"明细 {material_code} 税率必填")
         item_delivery = self._parse_date(
             raw_item.get("delivery_date") or default_delivery_date,
             "delivery_date",
@@ -680,7 +683,7 @@ class SalesOrderSyncService:
             required_quantity=qty,
             delivery_date=item_delivery,
             unit_price=self._optional_decimal(raw_item.get("unit_price")),
-            tax_rate=self._optional_decimal(raw_item.get("tax_rate")),
+            tax_rate=tax_rate,
             notes=self._optional_str(raw_item.get("notes")),
         )
 

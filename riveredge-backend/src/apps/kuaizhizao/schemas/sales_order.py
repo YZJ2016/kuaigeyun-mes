@@ -66,7 +66,7 @@ class SalesOrderItemBase(BaseSchema):
     required_quantity: Decimal = Field(..., gt=0, description="需求数量")
     delivery_date: date = Field(..., description="交货日期")
     unit_price: Optional[Decimal] = Field(None, ge=0, description="单价（不含税）")
-    tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（%）")
+    tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（%，必填）")
     item_amount: Optional[Decimal] = Field(None, ge=0, description="价税合计")
     is_gift: bool = Field(False, description="是否赠品")
     gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0, description="赠品参考单价")

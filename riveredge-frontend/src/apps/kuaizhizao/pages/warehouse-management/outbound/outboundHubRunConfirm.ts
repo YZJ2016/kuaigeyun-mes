@@ -149,8 +149,13 @@ export async function runOutboundHubConfirmFromRecord(options: {
   t: TFunction;
   record: OutboundHubOrder;
   trackingFlags: WarehouseTrackingFlags;
+  /**
+   * 销售出库：外层已弹 OQC 待检确认并放行时传 true，避免重复 ensure。
+   * 未跳过时若需检且不可出库，抛出 ensure.message（批量兜底；列表确认应走弹窗）。
+   */
+  skipOqcEnsure?: boolean;
 }): Promise<{ externalPushMessage?: string }> {
-  const { t, record, trackingFlags } = options;
+  const { t, record, trackingFlags, skipOqcEnsure = false } = options;
   const outboundType = record.outbound_type;
   if (!record.id || !outboundType) {
     throw new Error(t('app.kuaizhizao.warehouseOutbound.msg.noneConfirmable'));
@@ -171,13 +176,12 @@ export async function runOutboundHubConfirmFromRecord(options: {
     return { externalPushMessage: readExternalPushMessage(resp) };
   }
 
-  if (outboundType === 'sales_delivery') {
-    const ensure = (await warehouseApi.salesDelivery.ensureOqc(id)) as {
-      can_outbound?: boolean;
-      message?: string;
-    };
-    if (ensure && ensure.can_outbound === false && ensure.message) {
-      throw new Error(ensure.message);
+  if (outboundType === 'sales_delivery' && !skipOqcEnsure) {
+    const ensure = await warehouseApi.salesDelivery.ensureOqc(id);
+    if (ensure.requires_oqc && ensure.can_confirm_outbound === false) {
+      throw new Error(
+        ensure.message || t('app.kuaizhizao.warehouseOutbound.oqcReview.blockedHint'),
+      );
     }
   }
 

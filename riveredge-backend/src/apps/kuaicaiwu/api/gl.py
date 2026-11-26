@@ -605,10 +605,15 @@ async def book_trial_balance(
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),
     include_unposted: bool = False,
+    expand_hierarchy: bool = False,
     tenant_id: int = Depends(get_current_tenant), current_user: Any = Depends(get_current_user),
 ):
     return await balance_service.trial_balance(
-        tenant_id, year, month, include_unposted=include_unposted
+        tenant_id,
+        year,
+        month,
+        include_unposted=include_unposted,
+        expand_hierarchy=expand_hierarchy,
     )
 
 

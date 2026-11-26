@@ -10,7 +10,11 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import type { ColumnsType } from 'antd/es/table';
-import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
+import {
+  EquipmentPersonSelect,
+  resolveUserUuidById,
+  resolveUserUuidsByIds,
+} from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
 import { App, Button, Grid, Modal, Row, Col, Table, Switch, Input, Typography, Select } from 'antd';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -93,6 +97,7 @@ interface SpotCheck extends Record<string, unknown> {
   check_date?: string;
   inspector_id?: number;
   inspector_name?: string;
+  inspector_ids?: number[];
   reviewer_user_id?: number;
   reviewer_user_name?: string;
   reviewed_by_name?: string;
@@ -341,7 +346,13 @@ const SpotChecksPage: React.FC = () => {
     if (!record.id) return;
     try {
       const detail = await spotChecksApi.get(record.id);
-      const inspectorUuid = await resolveUserUuidById(detail.inspector_id);
+      const inspectorIds =
+        Array.isArray(detail.inspector_ids) && detail.inspector_ids.length
+          ? detail.inspector_ids
+          : detail.inspector_id != null
+            ? [detail.inspector_id]
+            : [];
+      const inspectorUuids = await resolveUserUuidsByIds(inspectorIds);
       setIsEdit(true);
       setCurrent(detail);
       setPreviewLines(detail.lines ?? []);
@@ -351,8 +362,9 @@ const SpotChecksPage: React.FC = () => {
         equipment_id: detail.equipment_id,
         scheme_id: detail.scheme_id,
         check_date: detail.check_date ? dayjs(detail.check_date) : dayjs(),
-        inspector_uuid: inspectorUuid,
-        inspector_id: detail.inspector_id,
+        inspector_uuid: inspectorUuids,
+        inspector_id: inspectorIds[0],
+        inspector_ids: inspectorIds,
         inspector_name: detail.inspector_name,
         remark: detail.remark,
       });
@@ -430,6 +442,11 @@ const SpotChecksPage: React.FC = () => {
       scheme_id: values.scheme_id,
       check_date: formatSpotCheckFormDate(values.check_date),
       inspector_id: values.inspector_id,
+      inspector_ids: Array.isArray(values.inspector_ids)
+        ? values.inspector_ids
+        : values.inspector_id != null
+          ? [values.inspector_id]
+          : [],
       inspector_name: values.inspector_name,
       remark: values.remark,
       attachments: mode === 'B' ? headerAttachments : undefined,
@@ -1026,12 +1043,16 @@ const SpotChecksPage: React.FC = () => {
                     if (!isEdit && val) {
                       const equipment = equipmentById[val];
                       if (equipment?.spot_check_person_id) {
+                        const personId = Number(equipment.spot_check_person_id);
                         formRef.current?.setFieldsValue({
-                          inspector_id: equipment.spot_check_person_id,
+                          inspector_id: personId,
+                          inspector_ids: [personId],
                           inspector_name: equipment.spot_check_person_name,
                         });
-                        void resolveUserUuidById(equipment.spot_check_person_id).then((uuid) => {
-                          formRef.current?.setFieldsValue({ inspector_uuid: uuid });
+                        void resolveUserUuidById(personId).then((uuid) => {
+                          formRef.current?.setFieldsValue({
+                            inspector_uuid: uuid ? [uuid] : [],
+                          });
                         });
                       }
                     }
@@ -1069,6 +1090,8 @@ const SpotChecksPage: React.FC = () => {
               uuidFieldName="inspector_uuid"
               idFieldName="inspector_id"
               nameFieldName="inspector_name"
+              idsFieldName="inspector_ids"
+              mode="multiple"
               label={t(`${P}.col.inspector`)}
               formRef={formRef}
             />

@@ -42,6 +42,10 @@ from core.services.system.data_backup_jobs import (
     run_tenant_id_replacement,
     try_acquire_backup_lock,
 )
+from core.services.system.tenant_restore_heal import (
+    heal_tenant_config_after_restore,
+    realign_id_sequences_after_restore,
+)
 from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import unscoped, with_tenant
@@ -501,6 +505,19 @@ async def _handle_database_restore_requested_body(ctx: TaskContext, step: TaskSt
             if upload_source_id != int(target_tenant_id):
                 await repair_tenant_scoped_file_paths(int(target_tenant_id), upload_source_id)
             await log_missing_upload_files_after_restore(int(target_tenant_id))
+            # COPY 显式 id 后对齐序列（含未 OWNED BY 的历史 nextval）
+            await step.run(
+                "realign_id_sequences_after_restore",
+                realign_id_sequences_after_restore,
+            )
+            # infra_tenants.settings 不在租户备份内：模板表已替换但消息规则 UUID 仍是旧值
+            await step.run(
+                "heal_tenant_config_after_restore",
+                lambda: heal_tenant_config_after_restore(
+                    int(target_tenant_id),
+                    realign_sequences=False,
+                ),
+            )
         else:
             await step.run("pg_restore", lambda: run_pg_restore(db_dump_path, backup_scope))
             await step.run(

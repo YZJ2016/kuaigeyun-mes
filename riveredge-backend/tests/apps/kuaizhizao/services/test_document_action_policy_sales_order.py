@@ -81,6 +81,18 @@ def test_approve_pending_review():
     assert caps.approve.allowed
 
 
+def test_update_attachments_allowed_after_audit():
+    caps = derive_sales_order_capabilities(_o(status="已审核", review_status="审核通过"))
+    assert caps.update_attachments.allowed
+    assert not caps.update.allowed
+
+
+def test_update_attachments_denied_when_cancelled():
+    caps = derive_sales_order_capabilities(_o(status="已取消", review_status="审核通过"))
+    assert not caps.update_attachments.allowed
+    assert caps.update_attachments.reason == "sales_order.update_attachments.cancelled"
+
+
 def test_revoke_approval_strictly_audited():
     caps = derive_sales_order_capabilities(_o(status="已审核", review_status="审核通过"))
     assert caps.revoke_approval.allowed
@@ -209,7 +221,28 @@ def test_assert_raises_on_delete_audited():
         assert_sales_order_capability(_o(status="已审核", review_status="审核通过"), "delete")
 
 
+def test_print_unaudited_gate_blocks_when_disabled():
+    from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+        apply_print_unaudited_gate_to_capabilities,
+        PRINT_UNAUDITED_DENIED_REASON,
+    )
+
+    order = _o(status="草稿", review_status="待审核")
+    caps = derive_sales_order_capabilities(order)
+    caps = apply_print_unaudited_gate_to_capabilities(
+        caps, order, allow_print_unaudited=False
+    )
+    assert not caps.print.allowed
+    assert caps.print.reason == PRINT_UNAUDITED_DENIED_REASON
+
+
+def test_derive_print_default_allows_before_gate():
+    caps = derive_sales_order_capabilities(_o(status="草稿", review_status="待审核"))
+    assert caps.print.allowed
+
+
 def test_require_audit_before_print_blocks_unapproved():
+    # 本地兼容参数：旧调用方仍可按需开启「须审核后才可打印」门禁
     caps = derive_sales_order_capabilities(
         _o(status="草稿", review_status="待审核"),
         require_audit_before_print=True,
@@ -222,8 +255,3 @@ def test_require_audit_before_print_blocks_unapproved():
         require_audit_before_print=True,
     )
     assert caps_ok.print.allowed
-
-
-def test_require_audit_before_print_default_allows():
-    caps = derive_sales_order_capabilities(_o(status="草稿", review_status="待审核"))
-    assert caps.print.allowed

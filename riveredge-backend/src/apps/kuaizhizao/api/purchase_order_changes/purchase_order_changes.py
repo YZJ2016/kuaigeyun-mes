@@ -73,6 +73,7 @@ async def list_change_orders(
     end_date: Optional[date] = Query(None, description="创建日期止"),
     order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-applied_at"),
     include_items: bool = Query(False, description="是否附带明细预览（列表物料名）"),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
@@ -97,6 +98,7 @@ async def list_change_orders(
         end_date=end_date,
         order_by=safe_order_by,
         include_items=include_items,
+        viewer_id=current_user.id,
     )
     return PurchaseOrderChangePagedListResponse(items=items, total=total)
 
@@ -146,7 +148,7 @@ async def submit_change_order(
     tenant_id: int = Depends(get_current_tenant),
     _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
-    return await service.submit(tenant_id, change_id, current_user.id)
+    return await service.commit(tenant_id, change_id, current_user.id)
 
 
 @router.post("/{change_id}/approve", response_model=PurchaseOrderChangeWithItemsResponse)

@@ -491,7 +491,21 @@ class DocumentPushPullService:
                     if not material_spec:
                         material_spec = str(getattr(material, "specification", "") or "").strip()
                     if not material_unit:
-                        material_unit = str(getattr(material, "base_unit", "") or "").strip()
+                        from apps.master_data.services.sync_association_service import (
+                            material_snapshot_unit_name,
+                        )
+
+                        material_unit = await material_snapshot_unit_name(
+                            tenant_id, material, default=""
+                        )
+                if material_unit:
+                    from apps.master_data.services.sync_association_service import (
+                        canonicalize_business_unit_name,
+                    )
+
+                    material_unit = await canonicalize_business_unit_name(
+                        tenant_id, material_unit, default="件"
+                    )
 
                 line_required_date = (
                     date_override_by_material.get(mid)

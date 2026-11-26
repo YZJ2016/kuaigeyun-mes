@@ -71,6 +71,14 @@ const PARAM_CARD_DESC_STYLE: React.CSSProperties = {
   margin: 0,
 };
 
+/** 组内紧凑开关：名称+开关并排，无单项说明时使用 */
+const PARAM_GROUP_COMPACT_GRID_STYLE: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+  gap: '8px 16px',
+  alignItems: 'center',
+};
+
 export const PARAM_GUIDANCE_I18N_KEY_MAP: Record<string, string> = {
   'work_order.material_shortage_block_level': 'pages.system.configCenter.param.work_order_material_shortage_block_level_guide',
   'purchase.tolerance_percentage': 'pages.system.configCenter.param.purchase_tolerance_percentage_guide',
@@ -94,6 +102,7 @@ export function isQualityParamDisabled(paramKey: string, values: Record<string, 
   if (
     paramKey === 'quality.require_incoming_inspection_for_receipt'
     || paramKey === 'quality.auto_create_iqc_on_purchase_receipt'
+    || paramKey === 'quality.auto_push_purchase_receipt_after_iqc_pass'
     || paramKey === 'quality.require_incoming_inspection_for_customer_material'
   ) {
     return !(incoming && iqcStage);
@@ -201,7 +210,7 @@ function groupParamsForRender(params: ParamMeta[]): ParamRenderBlock[] {
       blocks.push({
         kind: 'group',
         groupKey: gk,
-        groupNameKey: param.groupNameKey || gk,
+        groupNameKey: param.groupNameKey || '',
         groupDescriptionKey: param.groupDescriptionKey,
         params: bucket,
       });
@@ -214,7 +223,7 @@ function groupParamsForRender(params: ParamMeta[]): ParamRenderBlock[] {
     const first = block.params[0];
     return {
       ...block,
-      groupNameKey: first?.groupNameKey || block.groupNameKey,
+      groupNameKey: first?.groupNameKey || '',
       groupDescriptionKey: first?.groupDescriptionKey || block.groupDescriptionKey,
     };
   });
@@ -234,8 +243,9 @@ const ConfigCenterPage: React.FC = () => {
     () => ['parameters', 'audit', 'automation', 'notification', 'scheduledTasks'],
     [],
   );
-  // 兼容历史链接：tab=flow 归并到 parameters
-  const normalizedInitialTab = tabFromUrl === 'flow' ? 'parameters' : tabFromUrl;
+  // 兼容历史链接：tab=flow 归并到 parameters；已下线的 tab=graph（业务蓝图）归并到审核设置
+  const normalizedInitialTab =
+    tabFromUrl === 'flow' ? 'parameters' : tabFromUrl === 'graph' ? 'audit' : tabFromUrl;
   const initialTab = validTabs.includes(normalizedInitialTab || '') ? normalizedInitialTab! : 'parameters';
   const [activeMainTab, setActiveMainTab] = useState<string>(initialTab);
 
@@ -489,14 +499,6 @@ const ConfigCenterPage: React.FC = () => {
       }
 
       const bizParams = toBusinessParams(values, bizKeys);
-      const rawOrder = bizParams.supply_chain?.partner_price_resolution_order;
-      if (typeof rawOrder === 'string' && rawOrder.trim()) {
-        if (!bizParams.supply_chain) bizParams.supply_chain = {};
-        bizParams.supply_chain.partner_price_resolution_order = rawOrder
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean);
-      }
       if (Object.keys(bizParams).length > 0) {
         await batchUpdateProcessParameters({ parameters: bizParams });
       }
@@ -526,7 +528,12 @@ const ConfigCenterPage: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: DETAIL_DRAWER_FEATURES_QUERY_KEY });
       await queryClient.invalidateQueries({ queryKey: NUMERIC_PRECISION_QUERY_KEY });
     } catch (error: any) {
-      if (!error?.errorFields) messageApi.error(error.message || t('common.saveFailed'));
+      if (error?.errorFields?.length) {
+        const first = error.errorFields[0]?.errors?.[0];
+        messageApi.error(first || t('common.saveFailed'));
+      } else {
+        messageApi.error(error?.message || t('common.saveFailed'));
+      }
     } finally {
       setSaving(false);
     }
@@ -620,30 +627,48 @@ const ConfigCenterPage: React.FC = () => {
 
                         if (block.kind === 'group') {
                           const { groupKey, groupNameKey, groupDescriptionKey, params } = block;
-                          // 外层占满一行（不与其他卡并排）；内层同列宽网格，卡片宽度与单卡一致
+                          const hasGroupTitle = Boolean(groupNameKey?.trim());
+                          const hasGroupDesc = Boolean(groupDescriptionKey?.trim());
+                          const compactBooleans =
+                            params.length > 0
+                            && params.every(
+                              (p) => p.type === 'boolean' && !String(p.descriptionKey || '').trim(),
+                            );
+                          // 外层占满一行；紧凑布尔组用细列并排，其余保持纵向
                           return (
-                            <div
-                              key={groupKey}
-                              style={{ gridColumn: '1 / -1', ...PARAM_CARD_GRID_STYLE }}
-                            >
+                            <div key={groupKey} style={{ gridColumn: '1 / -1' }}>
                               <Card
                                 size="small"
                                 title={
-                                  <div>
-                                    <Text strong>{renderText(groupNameKey, groupKey)}</Text>
-                                    {groupDescriptionKey ? (
-                                      <Paragraph type="secondary" style={{ fontSize: 12, margin: '4px 0 0' }}>
-                                        {renderText(groupDescriptionKey, '')}
-                                      </Paragraph>
-                                    ) : null}
-                                  </div>
+                                  hasGroupTitle || hasGroupDesc ? (
+                                    <div>
+                                      {hasGroupTitle ? (
+                                        <Text strong>{renderText(groupNameKey, groupKey)}</Text>
+                                      ) : null}
+                                      {hasGroupDesc ? (
+                                        <Paragraph
+                                          type="secondary"
+                                          style={{
+                                            fontSize: 12,
+                                            margin: hasGroupTitle ? '4px 0 0' : 0,
+                                          }}
+                                        >
+                                          {renderText(groupDescriptionKey!, '')}
+                                        </Paragraph>
+                                      ) : null}
+                                    </div>
+                                  ) : undefined
                                 }
                               >
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <div
+                                  style={
+                                    compactBooleans
+                                      ? PARAM_GROUP_COMPACT_GRID_STYLE
+                                      : { display: 'flex', flexDirection: 'column', gap: 12 }
+                                  }
+                                >
                                   {params.map((param) => (
-                                    <div key={param.key}>
-                                      {renderParamBody(param)}
-                                    </div>
+                                    <div key={param.key}>{renderParamBody(param)}</div>
                                   ))}
                                 </div>
                               </Card>

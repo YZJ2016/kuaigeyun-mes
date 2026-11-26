@@ -435,9 +435,19 @@
             "permission": "kuaizhizao:purchase-return:read"
           },
           {
+            "title": "app.kuaizhizao.menu.purchase-management.outbound",
+            "path": "/apps/kuaizhizao/purchase-management/outbound",
+            "sort_order": 9,
+            "meta": {
+              "module": "purchase",
+              "node": "purchase_return"
+            },
+            "permission": "kuaizhizao:purchase-return:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.purchase-management.reports",
             "icon": "fileText",
-            "sort_order": 9,
+            "sort_order": 10,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.purchase-requisition-tracking",

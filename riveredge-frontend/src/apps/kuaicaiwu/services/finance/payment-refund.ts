@@ -87,6 +87,23 @@ export const paymentRefundService = {
       source_ids: number[];
       source_codes?: string[];
     }>(`${API}/resolve-from-purchase-return/${purchaseReturnId}`, { method: 'GET' }),
+
+  commit: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment_refund/${id}/submit`, { method: 'POST' }),
+
+  submitForReview: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment_refund/${id}/submit_review`, {
+      method: 'POST',
+    }),
+
+  withdraw: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment_refund/${id}/withdraw`, { method: 'POST' }),
+
+  approve: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment_refund/${id}/approve`, { method: 'POST' }),
+
+  revoke: (id: number) =>
+    apiRequest<PaymentVoucher>(`/core/uni-audit/payment_refund/${id}/revoke`, { method: 'POST' }),
 };
 
 export const PAYMENT_REFUND_RESOURCE = 'kuaicaiwu:payment-refund';

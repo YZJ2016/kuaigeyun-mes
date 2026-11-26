@@ -5,9 +5,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { App, Button, Card, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Table, Typography } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
-import { type Dayjs } from 'dayjs';
+import { App, Button, Card, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Table, Tooltip, Typography } from 'antd';
+import { ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import { prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import {
@@ -17,9 +17,13 @@ import {
   PAGE_SPACING,
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
+import { DOCUMENT_DETAIL_CONTROL_SIZE } from '../../../components/document-detail-table/documentDetailTable';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
-import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { materialSerialApi, MATERIAL_SERIAL_GENERATE_MAX_COUNT } from '../../../../master-data/services/material';
+import {
+  materialBatchApi,
+  materialSerialApi,
+  MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+} from '../../../../master-data/services/material';
 import {
   getPurchaseOrder,
   pushPurchaseOrderToReceiptPreview,
@@ -39,7 +43,6 @@ import {
 } from '../shared/warehouseTrackingFlags';
 import {
   enrichPurchaseOrderItemsMaterial,
-  fetchStorageLocationsForWarehouse,
   getOutstandingPoItems,
   getPoItemReceivableMax,
   normalizePurchaseOrderDetail,
@@ -56,7 +59,6 @@ import {
   InboundEntryReceiverField,
   InboundEntryRemarksSection,
   ReadOnlyFormValue,
-  mapWarehouseSelectOptions,
   useInboundReceiverSelect,
 } from './inboundEntryShared';
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
@@ -64,17 +66,30 @@ import {
   INBOUND_LIST_PATH,
   PURCHASE_INBOUND_LIST_PATH,
   inboundPoEntryPath,
+  purchaseReceiptCreatePath,
 } from './inboundPaths';
 import type { PurchaseReceiptPoComposePayload } from './inboundPullEntryTypes';
 import {
-  draftDayjs,
   draftOptionalNumber,
   mergeRecordMaps,
+  sanitizePullEntryLineQuantities,
   usePullEntryFormDraft,
 } from '../shared/pullEntryFormDraft';
 import { navigateLeavingPullEntry, pullEntryTabKey } from '../shared/pullEntryCloseTab';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+import { coerceFormDate, toApiBusinessDocumentDateTime } from '../../../../../utils/formDate';
+
+const MIN_INBOUND_RECEIPT_YEAR = 2000;
+
+function resolveInboundReceiptDate(draftValue: unknown): Dayjs {
+  if (draftValue != null && draftValue !== '') {
+    const parsed = coerceFormDate(draftValue);
+    if (parsed?.isValid() && parsed.year() >= MIN_INBOUND_RECEIPT_YEAR) {
+      return parsed.startOf('day');
+    }
+  }
+  return dayjs().startOf('day');
+}
 
 const InboundPoPullEntryPage: React.FC = () => {
   const { poId: poIdParam } = useParams<{ poId: string }>();
@@ -92,20 +107,20 @@ const InboundPoPullEntryPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [order, setOrder] = useState<PurchaseOrder | null>(null);
-  const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [batchNumbers, setBatchNumbers] = useState<Record<number, string>>({});
   const [lineWh, setLineWh] = useState<Record<number, number>>({});
+  const [lineWhName, setLineWhName] = useState<Record<number, string>>({});
   const [lineLoc, setLineLoc] = useState<Record<number, number | undefined>>({});
   const [lineLocCode, setLineLocCode] = useState<Record<number, string>>({});
-  const [locOptionsByWh, setLocOptionsByWh] = useState<
-    Record<number, { value: number; label: string; code: string }[]>
-  >({});
+  const [warehouseNameByWhId, setWarehouseNameByWhId] = useState<Record<number, string>>({});
   const [materialMeta, setMaterialMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
   const [serials, setSerials] = useState<Record<number, string[]>>({});
   const [generatingSerialId, setGeneratingSerialId] = useState<number | null>(null);
+  const [generatingBatchId, setGeneratingBatchId] = useState<number | null>(null);
   const [batchWhModalOpen, setBatchWhModalOpen] = useState(false);
   const [batchWhSelectedId, setBatchWhSelectedId] = useState<number | undefined>();
+  const [batchWhSelectedName, setBatchWhSelectedName] = useState<string | undefined>();
   const [batchWhApplying, setBatchWhApplying] = useState(false);
   const [receiptTime, setReceiptTime] = useState<Dayjs | null>(null);
   const [deliveryNote, setDeliveryNote] = useState('');
@@ -141,7 +156,7 @@ const InboundPoPullEntryPage: React.FC = () => {
 
   useEffect(() => {
     bindSnapshot(() => ({
-      quantities,
+      quantities: sanitizePullEntryLineQuantities(quantities),
       batchNumbers,
       lineWh,
       lineLoc,
@@ -172,35 +187,46 @@ const InboundPoPullEntryPage: React.FC = () => {
     persistNow,
   ]);
 
-  const applyLineWarehouse = useCallback(async (lineIds: number[], warehouseId: number) => {
-    if (!lineIds.length) return;
-    setLineWh((prev) => {
-      const next = { ...prev };
-      lineIds.forEach((id) => {
-        next[id] = warehouseId;
+  const applyLineWarehouse = useCallback(
+    (lineIds: number[], warehouseId: number, warehouseName?: string) => {
+      if (!lineIds.length) return;
+      setLineWh((prev) => {
+        const next = { ...prev };
+        lineIds.forEach((id) => {
+          next[id] = warehouseId;
+        });
+        return next;
       });
-      return next;
-    });
-    setLineLoc((prev) => {
-      const next = { ...prev };
-      lineIds.forEach((id) => {
-        delete next[id];
+      if (warehouseName) {
+        setWarehouseNameByWhId((prev) => ({ ...prev, [warehouseId]: warehouseName }));
+        setLineWhName((prev) => {
+          const next = { ...prev };
+          lineIds.forEach((id) => {
+            next[id] = warehouseName;
+          });
+          return next;
+        });
+      }
+      setLineLoc((prev) => {
+        const next = { ...prev };
+        lineIds.forEach((id) => {
+          delete next[id];
+        });
+        return next;
       });
-      return next;
-    });
-    setLineLocCode((prev) => {
-      const next = { ...prev };
-      lineIds.forEach((id) => {
-        delete next[id];
+      setLineLocCode((prev) => {
+        const next = { ...prev };
+        lineIds.forEach((id) => {
+          delete next[id];
+        });
+        return next;
       });
-      return next;
-    });
-    const opts = await fetchStorageLocationsForWarehouse(warehouseId);
-    setLocOptionsByWh((prev) => ({ ...prev, [warehouseId]: opts }));
-  }, []);
+    },
+    [],
+  );
 
   const handleBatchApplyWarehouse = useCallback(
-    async (warehouseId: number) => {
+    (warehouseId: number, warehouseName?: string) => {
       const lineIds = outstandingItems
         .filter((it) => it.id != null)
         .map((it) => it.id!);
@@ -208,7 +234,7 @@ const InboundPoPullEntryPage: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noLinesToSetWarehouse'));
         return;
       }
-      await applyLineWarehouse(lineIds, warehouseId);
+      applyLineWarehouse(lineIds, warehouseId, warehouseName);
       setDefaultWarehouseId(warehouseId);
       messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.batchWarehouseApplied', { count: lineIds.length }));
     },
@@ -222,9 +248,10 @@ const InboundPoPullEntryPage: React.FC = () => {
     }
     setBatchWhApplying(true);
     try {
-      await handleBatchApplyWarehouse(batchWhSelectedId);
+      handleBatchApplyWarehouse(batchWhSelectedId, batchWhSelectedName);
       setBatchWhModalOpen(false);
       setBatchWhSelectedId(undefined);
+      setBatchWhSelectedName(undefined);
     } finally {
       setBatchWhApplying(false);
     }
@@ -255,12 +282,8 @@ const InboundPoPullEntryPage: React.FC = () => {
     void (async () => {
       setLoading(true);
       try {
-        const [detailRaw, whRes] = await Promise.all([
-          getPurchaseOrder(poId),
-          masterWarehouseApi.list({ is_active: true, limit: 500 }),
-        ]);
+        const detailRaw = await getPurchaseOrder(poId);
         let detail = normalizePurchaseOrderDetail(detailRaw);
-        setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         const items = getOutstandingPoItems(detail);
         if (!items.length) {
           messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.purchase.allReceived'));
@@ -298,12 +321,26 @@ const InboundPoPullEntryPage: React.FC = () => {
           if (rowWh != null) whMap[it.id] = rowWh;
         });
         setOrder(detail);
-        setQuantities(qtyMap);
+        let mergedQuantities = sanitizePullEntryLineQuantities(qtyMap);
         setLineWh(whMap);
         const whValues = [...new Set(Object.values(whMap))];
+        if (whValues.length) {
+          const refOpts = await loadPullWarehouseReferenceOptions(PURCHASE_INBOUND_WH_HOST);
+          const nameByWhId: Record<number, string> = {};
+          refOpts.forEach((w) => {
+            nameByWhId[w.value] = w.label;
+          });
+          setWarehouseNameByWhId(nameByWhId);
+          const lineNames: Record<number, string> = {};
+          enrichedOutstanding.forEach((it) => {
+            if (it.id == null || whMap[it.id] == null) return;
+            const label = nameByWhId[whMap[it.id]];
+            if (label) lineNames[it.id] = label;
+          });
+          setLineWhName(lineNames);
+        }
         if (whValues.length === 1) setDefaultWarehouseId(whValues[0]);
         setPreviewLoading(true);
-        const uniqueWh = [...new Set(Object.values(whMap))];
         void pushPurchaseOrderToReceiptPreview(poId, qtyMap)
           .then((preview) => {
             const batchMap: Record<number, string> = {};
@@ -317,22 +354,18 @@ const InboundPoPullEntryPage: React.FC = () => {
           })
           .finally(() => setPreviewLoading(false));
         try {
-          const [meta, ...locOptsList] = await Promise.all([
-            loadConfirmPreviewMaterialMeta(enrichedOutstanding),
-            ...uniqueWh.map(async (wid) => ({ wid, opts: await fetchStorageLocationsForWarehouse(wid) })),
-          ]);
+          const meta = await loadConfirmPreviewMaterialMeta(enrichedOutstanding);
           setMaterialMeta(meta);
-          const locByWh: Record<number, { value: number; label: string; code: string }[]> = {};
-          locOptsList.forEach((entry) => {
-            locByWh[entry.wid] = entry.opts;
-          });
-          setLocOptionsByWh(locByWh);
         } catch {
-          /* 物料属性或库位加载失败不阻断录入 */
+          /* 物料属性加载失败不阻断录入 */
         }
+        let receiptFromDraft: Dayjs | undefined;
         applyDraftOnce((draft) => {
           if (draft.quantities) {
-            setQuantities((prev) => mergeRecordMaps(prev, draft.quantities as Record<number, number>));
+            mergedQuantities = mergeRecordMaps(
+              mergedQuantities,
+              sanitizePullEntryLineQuantities(draft.quantities as Record<string, unknown>),
+            );
           }
           if (draft.batchNumbers) {
             setBatchNumbers((prev) => mergeRecordMaps(prev, draft.batchNumbers as Record<number, string>));
@@ -351,9 +384,11 @@ const InboundPoPullEntryPage: React.FC = () => {
           }
           const whId = draftOptionalNumber(draft.defaultWarehouseId);
           if (whId != null) setDefaultWarehouseId(whId);
-          if (draft.receiptTime) {
-            const parsed = draftDayjs(draft.receiptTime);
-            setReceiptTime(parsed?.isValid() ? parsed.startOf('day') : null);
+          if (draft.receiptTime != null && draft.receiptTime !== '') {
+            const parsed = coerceFormDate(draft.receiptTime);
+            if (parsed?.isValid() && parsed.year() >= MIN_INBOUND_RECEIPT_YEAR) {
+              receiptFromDraft = parsed.startOf('day');
+            }
           }
           if (typeof draft.deliveryNote === 'string') setDeliveryNote(draft.deliveryNote);
           if (typeof draft.receiptNotes === 'string') setReceiptNotes(draft.receiptNotes);
@@ -362,6 +397,8 @@ const InboundPoPullEntryPage: React.FC = () => {
             name: typeof draft.receiverName === 'string' ? draft.receiverName : undefined,
           });
         });
+        setQuantities(sanitizePullEntryLineQuantities(mergedQuantities));
+        setReceiptTime(receiptFromDraft ?? resolveInboundReceiptDate(undefined));
       } catch (e: unknown) {
         messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.purchase.loadFailed'));
         leavePage();
@@ -370,6 +407,31 @@ const InboundPoPullEntryPage: React.FC = () => {
       }
     })();
   }, [poId, leavePage, messageApi, applyDraftOnce, receiverHook.restoreReceiver]);
+
+  const handleGenerateBatch = useCallback(
+    async (poItemId: number) => {
+      const meta = materialMeta[poItemId];
+      if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged) || !meta?.materialUuid) {
+        messageApi.warning(t('app.kuaizhizao.warehouseOtherInbound.msg.selectMaterialFirst'));
+        return;
+      }
+      setGeneratingBatchId(poItemId);
+      try {
+        const res = await materialBatchApi.generate(meta.materialUuid, {
+          ruleId: meta.defaultBatchRuleId ?? undefined,
+        });
+        setBatchNumbers((prev) => ({ ...prev, [poItemId]: res.batch_no }));
+        messageApi.success(t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerated'));
+      } catch (e: unknown) {
+        messageApi.error(
+          (e as Error)?.message || t('app.kuaizhizao.warehouseOtherInbound.msg.batchGenerateFailed'),
+        );
+      } finally {
+        setGeneratingBatchId(null);
+      }
+    },
+    [materialMeta, messageApi, t, trackingFlags],
+  );
 
   const handleGenerateSerial = async (poItemId: number, qty: number) => {
     const meta = materialMeta[poItemId];
@@ -499,7 +561,7 @@ const InboundPoPullEntryPage: React.FC = () => {
       clearDraft();
       navigateLeavingPullEntry(
         navigate,
-        PURCHASE_INBOUND_LIST_PATH,
+        purchaseReceiptCreatePath(PURCHASE_INBOUND_LIST_PATH),
         pullEntryTabKey(location.pathname, location.search),
         { purchaseReceiptPoCompose: buildPoComposePayload() },
       );
@@ -508,10 +570,10 @@ const InboundPoPullEntryPage: React.FC = () => {
     }
   };
 
-  const handleDefaultWarehouseChange = (warehouseId: number) => {
+  const handleDefaultWarehouseChange = (warehouseId: number, warehouseName?: string) => {
     setDefaultWarehouseId(warehouseId);
     const lineIds = outstandingItems.filter((it) => it.id != null).map((it) => it.id!);
-    void applyLineWarehouse(lineIds, warehouseId);
+    applyLineWarehouse(lineIds, warehouseId, warehouseName);
   };
 
   const entryColumns = useMemo(
@@ -560,20 +622,22 @@ const InboundPoPullEntryPage: React.FC = () => {
           </span>
         ),
         width: 150,
-        render: (_: unknown, record: PurchaseOrderItem) =>
-          record.id != null ? (
-            <Select
-              style={{ width: '100%', minWidth: 118 }}
+        render: (_: unknown, record: PurchaseOrderItem) => {
+          if (record.id == null) return null;
+          const rid = record.id;
+          const materialId = Number(record.material_id ?? 0);
+          return (
+            <PurchaseInboundLineWarehouseCell
+              materialId={materialId > 0 ? materialId : undefined}
+              warehouseId={lineWh[rid]}
               placeholder={t('app.kuaizhizao.warehouseInbound.field.select')}
-              showSearch
-              optionFilterProp="label"
-              value={lineWh[record.id]}
-              options={warehouseOptions}
-              onChange={(nv) => {
-                void applyLineWarehouse([record.id!], nv);
+              onChange={(nv, wh) => {
+                if (nv == null) return;
+                applyLineWarehouse([rid], nv, wh?.name);
               }}
             />
-          ) : null,
+          );
+        },
       },
       {
         title: t('app.kuaizhizao.warehouseInbound.col.location'),
@@ -582,34 +646,23 @@ const InboundPoPullEntryPage: React.FC = () => {
           if (record.id == null) return null;
           const rid = record.id;
           const wh = lineWh[rid];
-          const locOpts = wh != null ? locOptionsByWh[wh] ?? [] : [];
+          const materialId = Number(record.material_id ?? 0);
           return (
-            <Select
-              style={{ width: '100%', minWidth: 118 }}
-              placeholder={wh != null ? t('app.kuaizhizao.warehouseInbound.field.optional') : t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst')}
-              showSearch
-              allowClear
-              optionFilterProp="label"
-              value={lineLoc[rid]}
-              options={locOpts}
-              onOpenChange={(open) => {
-                if (open && wh != null && !locOptionsByWh[wh]?.length) {
-                  void fetchStorageLocationsForWarehouse(wh).then((opts) =>
-                    setLocOptionsByWh((p) => ({ ...p, [wh]: opts })),
-                  );
-                }
-              }}
-              onChange={(v) => {
+            <PurchaseInboundLineLocationCell
+              materialId={materialId > 0 ? materialId : undefined}
+              warehouseId={wh}
+              locationId={lineLoc[rid]}
+              selectWarehouseFirstPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst')}
+              selectLocationPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectLocation')}
+              onChange={(v, loc) => {
                 setLineLoc((prev) => ({ ...prev, [rid]: v ?? undefined }));
-                const o = locOpts.find((x) => x.value === v);
                 setLineLocCode((prev) => {
                   const next = { ...prev };
                   if (v == null) delete next[rid];
-                  else next[rid] = o?.code ?? '';
+                  else next[rid] = loc?.code ?? '';
                   return next;
                 });
               }}
-              disabled={wh == null}
             />
           );
         },
@@ -617,18 +670,35 @@ const InboundPoPullEntryPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
         key: 'batch_number',
-        width: 130,
+        width: 188,
         render: (_: unknown, record: PurchaseOrderItem) => {
           if (record.id == null) return '—';
           const rid = record.id;
+          const meta = materialMeta[rid];
+          if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
           if (previewLoading && !batchNumbers[rid]) return t('app.kuaizhizao.warehouseInbound.field.loading');
           return (
-            <Input
-              placeholder={t('app.kuaizhizao.warehouseInbound.field.optional')}
-              value={batchNumbers[rid] ?? ''}
-              onChange={(e) => setBatchNumbers((prev) => ({ ...prev, [rid]: e.target.value }))}
-              size="small"
-            />
+            <Space size={4} align="center">
+              <Input
+                placeholder={t('app.kuaizhizao.warehouseInbound.field.optional')}
+                value={batchNumbers[rid] ?? ''}
+                onChange={(e) => setBatchNumbers((prev) => ({ ...prev, [rid]: e.target.value }))}
+                size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                allowClear
+                style={{ width: 128 }}
+              />
+              <Tooltip title={t('app.kuaizhizao.warehouseInbound.action.generateBatchNo')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  loading={generatingBatchId === rid}
+                  aria-label={t('app.kuaizhizao.warehouseInbound.action.generateBatchNo')}
+                  onClick={() => void handleGenerateBatch(rid)}
+                  style={{ padding: 0, height: 'auto', color: 'var(--ant-color-text-tertiary)' }}
+                />
+              </Tooltip>
+            </Space>
           );
         },
       },
@@ -660,17 +730,21 @@ const InboundPoPullEntryPage: React.FC = () => {
         title: t('app.kuaizhizao.warehouseInbound.col.thisReceipt'),
         width: 130,
         align: 'right' as const,
-        render: (_: unknown, record: PurchaseOrderItem) =>
-          record.id != null ? (
+        render: (_: unknown, record: PurchaseOrderItem) => {
+          if (record.id == null) return null;
+          const rid = record.id;
+          const lineQty = sanitizePullEntryLineQuantities({ [rid]: quantities[rid] })[rid] ?? 0;
+          return (
             <InputNumber
               min={0}
               max={getPoItemReceivableMax(record)}
               precision={4}
-              value={quantities[record.id] ?? 0}
-              onChange={(v) => setQuantities((prev) => ({ ...prev, [record.id!]: Number(v) || 0 }))}
+              value={lineQty}
+              onChange={(v) => setQuantities((prev) => ({ ...prev, [rid]: Number(v) || 0 }))}
               style={{ width: 110 }}
             />
-          ) : null,
+          );
+        },
       },
         ],
         trackingFlags,
@@ -680,16 +754,16 @@ const InboundPoPullEntryPage: React.FC = () => {
       trackingFlags,
       applyLineWarehouse,
       batchNumbers,
+      generatingBatchId,
       generatingSerialId,
+      handleGenerateBatch,
       lineLoc,
       lineLocCode,
       lineWh,
-      locOptionsByWh,
       materialMeta,
       previewLoading,
       quantities,
       serials,
-      warehouseOptions,
     ],
   );
 
@@ -768,8 +842,10 @@ const InboundPoPullEntryPage: React.FC = () => {
                     <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.receiptDate')}>
                       <DatePicker
                         style={{ width: '100%' }}
-                        value={receiptTime}
-                        onChange={(v) => setReceiptTime(v ? v.startOf('day') : null)}
+                        value={receiptTime?.isValid() ? receiptTime : null}
+                        onChange={(v) =>
+                          setReceiptTime(v?.isValid() ? v.startOf('day') : dayjs().startOf('day'))
+                        }
                       />
                     </Form.Item>
                   </Col>
@@ -778,16 +854,11 @@ const InboundPoPullEntryPage: React.FC = () => {
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
                     <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.defaultWarehouse')}>
-                      <Select
-                        style={{ width: '100%' }}
+                      <PurchaseInboundLineWarehouseCell
+                        warehouseId={defaultWarehouseId}
                         placeholder={t('app.kuaizhizao.warehouseInbound.field.applyToAllLines')}
-                        showSearch
-                        allowClear
-                        optionFilterProp="label"
-                        value={defaultWarehouseId}
-                        options={warehouseOptions}
-                        onChange={(v) => {
-                          if (v != null) handleDefaultWarehouseChange(v);
+                        onChange={(v, wh) => {
+                          if (v != null) handleDefaultWarehouseChange(v, wh?.name);
                           else setDefaultWarehouseId(undefined);
                         }}
                       />
@@ -876,14 +947,13 @@ const InboundPoPullEntryPage: React.FC = () => {
         width={MODAL_CONFIG.SMALL_WIDTH}
         destroyOnHidden
       >
-        <Select
-          style={{ width: '100%' }}
+        <PurchaseInboundLineWarehouseCell
+          warehouseId={batchWhSelectedId}
           placeholder={t('app.kuaizhizao.warehouseInbound.field.selectWarehouse')}
-          showSearch
-          optionFilterProp="label"
-          value={batchWhSelectedId}
-          options={warehouseOptions}
-          onChange={setBatchWhSelectedId}
+          onChange={(v, wh) => {
+            setBatchWhSelectedId(v);
+            setBatchWhSelectedName(wh?.name);
+          }}
         />
       </Modal>
     </DocumentFormPageLayout>

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
+from apps.kuaizhizao.constants import is_submitted_status
 
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
@@ -54,17 +55,6 @@ def _is_cancelled(status: Any) -> bool:
     return _norm_status(status) in _CANCELLED_STATUSES
 
 
-def _is_review_draft(review_status: Any) -> bool:
-    raw = _norm_status(review_status)
-    return raw in _REVIEW_DRAFT or _norm_review(review_status) in _REVIEW_DRAFT
-
-
-def _is_review_pending(review_status: Any) -> bool:
-    raw = _norm_status(review_status)
-    lowered = _norm_review(review_status)
-    return raw in _REVIEW_PENDING or lowered in _REVIEW_PENDING
-
-
 def _is_review_approved(review_status: Any) -> bool:
     raw = _norm_status(review_status)
     lowered = _norm_review(review_status)
@@ -90,23 +80,30 @@ def derive_sales_return_capabilities(
 ) -> SalesReturnCapabilities:
     status = getattr(return_doc, "status", None)
     review_status = getattr(return_doc, "review_status", None)
+    review_committed = is_submitted_status(review_status)
 
     review_blocks_edit = audit_required and (
         is_effective_review_pending(review_status, review_submitted=review_submitted)
         or _is_review_approved(review_status)
     )
-    update_allowed = _is_editable_business_status(status) and not review_blocks_edit
-    if _is_review_rejected(review_status):
+    update_allowed = (
+        _is_editable_business_status(status) and not review_blocks_edit and not review_committed
+    )
+    if _is_review_rejected(review_status) and not review_committed:
         update_allowed = _is_editable_business_status(status)
     update_cap = _cap(
         update_allowed,
         "sales_return.update.not_editable" if not update_allowed else None,
     )
 
-    delete_allowed = _is_pending(status) and (
-        not audit_required
-        or is_effective_review_draft(review_status, review_submitted=review_submitted)
-        or _is_review_rejected(review_status)
+    delete_allowed = (
+        not review_committed
+        and _is_pending(status)
+        and (
+            not audit_required
+            or is_effective_review_draft(review_status, review_submitted=review_submitted)
+            or _is_review_rejected(review_status)
+        )
     )
     delete_cap = _cap(
         delete_allowed,
@@ -142,6 +139,8 @@ def derive_sales_return_capabilities(
         submit_reason = "sales_return.submit.not_draft"
     elif not has_items:
         submit_reason = "sales_return.submit.no_items"
+    elif review_committed:
+        submit_reason = "sales_return.submit.not_draft"
     elif is_effective_review_pending(review_status, review_submitted=review_submitted) or _is_review_approved(
         review_status
     ):
@@ -156,7 +155,6 @@ def derive_sales_return_capabilities(
             submit_reason = "sales_return.submit.not_draft"
     submit_cap = _cap(submit_allowed, submit_reason)
 
-    review_committed = bool(review_submitted) or _is_review_pending(review_status)
     submit_review_allowed = (
         _is_editable_business_status(status) and has_items and review_committed
     )
@@ -171,15 +169,13 @@ def derive_sales_return_capabilities(
         ),
     )
 
+    review_can_withdraw = review_committed or is_effective_review_pending(
+        review_status, review_submitted=review_submitted
+    )
+    withdraw_submit_allowed = _is_editable_business_status(status) and review_can_withdraw
     withdraw_submit_cap = _cap(
-        _is_editable_business_status(status)
-        and is_effective_review_pending(review_status, review_submitted=review_submitted),
-        "sales_return.withdraw_submit.not_pending"
-        if not (
-            _is_editable_business_status(status)
-            and is_effective_review_pending(review_status, review_submitted=review_submitted)
-        )
-        else None,
+        withdraw_submit_allowed,
+        "sales_return.withdraw_submit.not_pending" if not withdraw_submit_allowed else None,
     )
 
     approve_cap = _cap(

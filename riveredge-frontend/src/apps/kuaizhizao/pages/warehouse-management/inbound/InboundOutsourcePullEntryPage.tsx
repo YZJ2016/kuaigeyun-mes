@@ -5,8 +5,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { App, Button, Card, Col, DatePicker, Form, Input, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Typography,
+} from 'antd';
+import { ArrowLeftOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { lineLocationSelectionRequired } from '../../../../../components/uni-wh-dropdown';
 import { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
@@ -52,6 +68,17 @@ import {
   applyOutsourceReceiptQuantityChange,
   isOutsourceReceiptQuantityBalanced,
 } from '../../../utils/outsourceReceiptLineQuantities';
+import { PurchaseInboundLineLocationCell } from './PurchaseInboundLineWhCells';
+import {
+  filterWarehouseTrackingColumns,
+  isMaterialBatchEntryEnabled,
+  useWarehouseTrackingFlags,
+} from '../shared/warehouseTrackingFlags';
+import {
+  loadConfirmPreviewMaterialMeta,
+  type ConfirmPreviewMaterialMeta,
+} from './inboundItemTracking';
+import { materialBatchApi } from '../../../../master-data/services/material';
 
 const PULL_TYPE_TO_RECEIPT_TYPE: Record<InboundOutsourcePullType, InboundReceiptType> = {
   outsource_receipt: 'outsource_receipt',
@@ -63,12 +90,21 @@ type PreviewLine = {
   key: string;
   issue_id?: number;
   receipt_id?: number;
+  receipt_code?: string;
   material_id?: number;
   material_code?: string;
   material_name?: string;
+  product_id?: number;
+  product_code?: string;
+  product_name?: string;
+  warehouse_id?: number;
+  warehouse_name?: string;
   unit?: string;
   returnable_quantity: number;
   return_quantity: number;
+  location_id?: number;
+  location_code?: string;
+  batch_number?: string;
 };
 
 function parsePullType(value: string | null): InboundOutsourcePullType {
@@ -89,7 +125,12 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const pullFromOutsourceWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_outsource_work_order');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
+  const trackingFlags = useWarehouseTrackingFlags();
   const initRef = useRef(false);
+  const [receiptMaterialMeta, setReceiptMaterialMeta] = useState<ConfirmPreviewMaterialMeta | null>(null);
+  const [materialReturnMeta, setMaterialReturnMeta] = useState<Record<number, ConfirmPreviewMaterialMeta>>({});
+  const [productReturnMeta, setProductReturnMeta] = useState<ConfirmPreviewMaterialMeta | null>(null);
+  const [generatingReceiptBatch, setGeneratingReceiptBatch] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [submittingAction, setSubmittingAction] = useState<'draft' | 'confirm' | null>(null);
@@ -248,21 +289,31 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             leavePage();
             return;
           }
-          setPreviewLines(
-            lines.map((line, idx) => {
-              const issueId = Number(line.issue_id ?? line.issueId ?? 0);
-              const qty = Number(line.returnable_quantity ?? line.returnableQuantity ?? 0);
-              return {
-                key: `issue-${issueId || idx}`,
-                issue_id: issueId || undefined,
-                material_id: line.material_id != null ? Number(line.material_id) : undefined,
-                material_code: String(line.material_code ?? line.materialCode ?? ''),
-                material_name: String(line.material_name ?? line.materialName ?? ''),
-                unit: String(line.unit ?? '个'),
-                returnable_quantity: qty,
-                return_quantity: 0,
-              };
-            }),
+          const mappedReturnLines = lines.map((line, idx) => {
+            const issueId = Number(line.issue_id ?? line.issueId ?? 0);
+            const qty = Number(line.returnable_quantity ?? line.returnableQuantity ?? 0);
+            return {
+              key: `issue-${issueId || idx}`,
+              issue_id: issueId || undefined,
+              material_id: line.material_id != null ? Number(line.material_id) : undefined,
+              material_code: String(line.material_code ?? line.materialCode ?? ''),
+              material_name: String(line.material_name ?? line.materialName ?? ''),
+              unit: String(line.unit ?? '个'),
+              returnable_quantity: qty,
+              return_quantity: 0,
+            };
+          });
+          setPreviewLines(mappedReturnLines);
+          setMaterialReturnMeta(
+            await loadConfirmPreviewMaterialMeta(
+              mappedReturnLines
+                .filter((row) => row.material_id != null && row.material_id > 0)
+                .map((row) => ({
+                  id: row.material_id!,
+                  material_id: row.material_id,
+                  material_code: row.material_code,
+                })),
+            ),
           );
           setReceiptLine(null);
         } else {
@@ -277,20 +328,50 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             leavePage();
             return;
           }
-          setPreviewLines(
-            lines.map((line, idx) => {
-              const receiptId = Number(line.receipt_id ?? line.receiptId ?? 0);
-              const qty = Number(line.returnable_quantity ?? line.returnableQuantity ?? 0);
-              return {
-                key: `receipt-${receiptId || idx}`,
-                receipt_id: receiptId || undefined,
-                unit: String(line.unit ?? wo.unit ?? '件'),
-                returnable_quantity: qty,
-                return_quantity: 0,
-              };
-            }),
-          );
+          const mappedProductLines = lines.map((line, idx) => {
+            const receiptId = Number(line.receipt_id ?? line.receiptId ?? 0);
+            const qty = Number(line.returnable_quantity ?? line.returnableQuantity ?? 0);
+            const whId = line.warehouse_id != null ? Number(line.warehouse_id) : undefined;
+            const locId = line.location_id != null ? Number(line.location_id) : undefined;
+            const locName = String(line.location_name ?? line.locationName ?? '').trim();
+            const productId =
+              line.product_id != null
+                ? Number(line.product_id)
+                : wo.product_id != null
+                  ? Number(wo.product_id)
+                  : undefined;
+            return {
+              key: `receipt-${receiptId || idx}`,
+              receipt_id: receiptId || undefined,
+              receipt_code: String(line.receipt_code ?? line.receiptCode ?? ''),
+              product_id: productId,
+              product_code: String(line.product_code ?? line.productCode ?? wo.product_code ?? ''),
+              product_name: String(line.product_name ?? line.productName ?? wo.product_name ?? ''),
+              warehouse_id: whId != null && whId > 0 ? whId : undefined,
+              warehouse_name: String(line.warehouse_name ?? line.warehouseName ?? '').trim() || undefined,
+              location_id: locId != null && locId > 0 ? locId : undefined,
+              location_code: locName || undefined,
+              batch_number: String(line.batch_number ?? line.batchNumber ?? '').trim() || undefined,
+              unit: String(line.unit ?? wo.unit ?? '件'),
+              returnable_quantity: qty,
+              return_quantity: 0,
+            };
+          });
+          setPreviewLines(mappedProductLines);
           setReceiptLine(null);
+          const pid = mappedProductLines.find((row) => row.product_id != null && row.product_id > 0)?.product_id;
+          if (pid != null && pid > 0) {
+            const metaMap = await loadConfirmPreviewMaterialMeta([
+              {
+                id: pid,
+                material_id: pid,
+                material_code: mappedProductLines[0]?.product_code,
+              },
+            ]);
+            setProductReturnMeta(metaMap[pid] ?? null);
+          } else {
+            setProductReturnMeta(null);
+          }
         }
         applyDraftOnce((draft) => {
           const whId = draftOptionalNumber(draft.warehouseId);
@@ -321,10 +402,29 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
     })();
   }, [woId, pullType, leavePage, messageApi, t, applyDraftOnce, receiverHook.restoreReceiver]);
 
+  useEffect(() => {
+    if (!receiptLine?.productId) {
+      setReceiptMaterialMeta(null);
+      return;
+    }
+    void (async () => {
+      const metaMap = await loadConfirmPreviewMaterialMeta([
+        {
+          id: receiptLine.key,
+          material_id: receiptLine.productId,
+          material_code: receiptLine.productCode,
+        },
+      ]);
+      setReceiptMaterialMeta(metaMap[receiptLine.key] ?? null);
+    })();
+  }, [receiptLine?.key, receiptLine?.productId, receiptLine?.productCode]);
+
   const receiptTableData = useMemo(() => (receiptLine ? [receiptLine] : []), [receiptLine]);
 
   const receiptColumns = useMemo(
-    () => [
+    () =>
+      filterWarehouseTrackingColumns(
+        [
       { title: t('app.kuaizhizao.warehouseInbound.col.productCode'), dataIndex: 'productCode', width: 120, ellipsis: true },
       { title: t('app.kuaizhizao.warehouseInbound.col.productName'), dataIndex: 'productName', width: 160, ellipsis: true },
       { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
@@ -396,6 +496,81 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         ),
       },
       {
+        title: t('app.kuaizhizao.warehouseInbound.col.location'),
+        key: 'location',
+        width: 150,
+        render: (_: unknown, record: OutsourceReceiptLine) => {
+          if (!(warehouseId != null && warehouseId > 0)) {
+            return t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst');
+          }
+          return (
+            <PurchaseInboundLineLocationCell
+              materialId={record.productId}
+              warehouseId={warehouseId}
+              locationId={record.location_id}
+              selectWarehouseFirstPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst')}
+              selectLocationPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectLocation')}
+              onChange={(v, loc) => {
+                setReceiptLine((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        location_id: v ?? undefined,
+                        location_code: loc?.code ?? '',
+                      }
+                    : prev,
+                );
+              }}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
+        key: 'batch',
+        width: 130,
+        render: (_: unknown, record: OutsourceReceiptLine) => {
+          if (!isMaterialBatchEntryEnabled(trackingFlags, receiptMaterialMeta?.batchManaged)) return '—';
+          return (
+            <Space size={2}>
+              <Input
+                size="small"
+                style={{ width: 96 }}
+                value={record.batch_number ?? ''}
+                onChange={(e) => {
+                  const batch = e.target.value;
+                  setReceiptLine((prev) => (prev ? { ...prev, batch_number: batch } : prev));
+                }}
+              />
+              <Button
+                type="link"
+                size="small"
+                icon={<ThunderboltOutlined />}
+                loading={generatingReceiptBatch}
+                style={{ padding: 0 }}
+                onClick={() => {
+                  const uuid = receiptMaterialMeta?.materialUuid;
+                  if (!uuid) return;
+                  setGeneratingReceiptBatch(true);
+                  void materialBatchApi
+                    .generate(uuid, {})
+                    .then((res) => {
+                      setReceiptLine((prev) => (prev ? { ...prev, batch_number: res.batch_no } : prev));
+                    })
+                    .finally(() => setGeneratingReceiptBatch(false));
+                }}
+              />
+            </Space>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+        key: 'serial_numbers',
+        width: 100,
+        render: () => '—',
+      },
+      {
         title: t('app.kuaizhizao.warehouseInbound.col.processWaste'),
         width: 100,
         align: 'right' as const,
@@ -439,71 +614,212 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           />
         ),
       },
+        ],
+        trackingFlags,
+      ),
+    [
+      t,
+      quantityDecimals,
+      warehouseId,
+      trackingFlags,
+      receiptMaterialMeta,
+      generatingReceiptBatch,
     ],
-    [t, quantityDecimals],
   );
 
   const materialReturnColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
-      { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
-      { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'returnable_quantity', width: 100, align: 'right' as const },
-      {
-        title: t('app.kuaizhizao.warehouseInbound.col.thisReturn'),
-        width: 130,
-        align: 'right' as const,
-        render: (_: unknown, record: PreviewLine) => (
-          <InputNumber
-            min={0}
-            max={record.returnable_quantity}
-            precision={quantityDecimals}
-            value={record.return_quantity}
-            onChange={(v) => {
-              const qty = Number(v) || 0;
-              setPreviewLines((prev) =>
-                prev.map((row) =>
-                  row.key === record.key ? { ...row, return_quantity: qty } : row,
-                ),
+    () =>
+      filterWarehouseTrackingColumns(
+        [
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.materialCode'),
+            dataIndex: 'material_code',
+            width: 120,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.materialName'),
+            dataIndex: 'material_name',
+            width: 150,
+            ellipsis: true,
+          },
+          { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'),
+            dataIndex: 'returnable_quantity',
+            width: 100,
+            align: 'right' as const,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.thisReturn'),
+            width: 130,
+            align: 'right' as const,
+            render: (_: unknown, record: PreviewLine) => (
+              <InputNumber
+                min={0}
+                max={record.returnable_quantity}
+                precision={quantityDecimals}
+                value={record.return_quantity}
+                onChange={(v) => {
+                  const qty = Number(v) || 0;
+                  setPreviewLines((prev) =>
+                    prev.map((row) =>
+                      row.key === record.key ? { ...row, return_quantity: qty } : row,
+                    ),
+                  );
+                }}
+                style={{ width: 110 }}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.location'),
+            key: 'location',
+            width: 150,
+            render: (_: unknown, record: PreviewLine) => {
+              if (!(warehouseId != null && warehouseId > 0)) {
+                return t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst');
+              }
+              return (
+                <PurchaseInboundLineLocationCell
+                  materialId={record.material_id}
+                  warehouseId={warehouseId}
+                  locationId={record.location_id}
+                  selectWarehouseFirstPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst')}
+                  selectLocationPlaceholder={t('app.kuaizhizao.warehouseInbound.field.selectLocation')}
+                  onChange={(v, loc) => {
+                    setPreviewLines((prev) =>
+                      prev.map((row) =>
+                        row.key === record.key
+                          ? { ...row, location_id: v ?? undefined, location_code: loc?.code ?? '' }
+                          : row,
+                      ),
+                    );
+                  }}
+                />
               );
-            }}
-            style={{ width: 110 }}
-          />
-        ),
-      },
-    ],
-    [t, quantityDecimals],
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
+            key: 'batch',
+            width: 130,
+            render: (_: unknown, record: PreviewLine) => {
+              const meta =
+                record.material_id != null && record.material_id > 0
+                  ? materialReturnMeta[record.material_id]
+                  : undefined;
+              if (!isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) return '—';
+              return (
+                <Input
+                  size="small"
+                  style={{ width: 110 }}
+                  value={record.batch_number ?? ''}
+                  onChange={(e) => {
+                    const batch = e.target.value;
+                    setPreviewLines((prev) =>
+                      prev.map((row) =>
+                        row.key === record.key ? { ...row, batch_number: batch } : row,
+                      ),
+                    );
+                  }}
+                />
+              );
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+            key: 'serial_numbers',
+            width: 100,
+            render: () => '—',
+          },
+        ],
+        trackingFlags,
+      ),
+    [t, quantityDecimals, warehouseId, trackingFlags, previewLines, materialReturnMeta],
   );
 
   const productReturnColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseInbound.col.receiptDoc'), dataIndex: 'receipt_id', width: 100 },
-      { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
-      { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'returnable_quantity', width: 100, align: 'right' as const },
-      {
-        title: t('app.kuaizhizao.warehouseInbound.col.thisSalesReturn'),
-        width: 130,
-        align: 'right' as const,
-        render: (_: unknown, record: PreviewLine) => (
-          <InputNumber
-            min={0}
-            max={record.returnable_quantity}
-            precision={quantityDecimals}
-            value={record.return_quantity}
-            onChange={(v) => {
-              const qty = Number(v) || 0;
-              setPreviewLines((prev) =>
-                prev.map((row) =>
-                  row.key === record.key ? { ...row, return_quantity: qty } : row,
-                ),
-              );
-            }}
-            style={{ width: 110 }}
-          />
-        ),
-      },
-    ],
-    [t, quantityDecimals],
+    () =>
+      filterWarehouseTrackingColumns(
+        [
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.receiptDoc'),
+            dataIndex: 'receipt_code',
+            width: 120,
+            ellipsis: true,
+            render: (_: unknown, record: PreviewLine) => record.receipt_code || record.receipt_id || '—',
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.productCode'),
+            dataIndex: 'product_code',
+            width: 110,
+            ellipsis: true,
+          },
+          { title: t('common.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'),
+            dataIndex: 'returnable_quantity',
+            width: 100,
+            align: 'right' as const,
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.thisSalesReturn'),
+            width: 130,
+            align: 'right' as const,
+            render: (_: unknown, record: PreviewLine) => (
+              <InputNumber
+                min={0}
+                max={record.returnable_quantity}
+                precision={quantityDecimals}
+                value={record.return_quantity}
+                onChange={(v) => {
+                  const qty = Number(v) || 0;
+                  setPreviewLines((prev) =>
+                    prev.map((row) =>
+                      row.key === record.key ? { ...row, return_quantity: qty } : row,
+                    ),
+                  );
+                }}
+                style={{ width: 110 }}
+              />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
+            key: 'warehouse',
+            width: 120,
+            ellipsis: true,
+            render: (_: unknown, record: PreviewLine) =>
+              record.warehouse_name || (record.warehouse_id != null ? String(record.warehouse_id) : '—'),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.location'),
+            key: 'location',
+            width: 100,
+            ellipsis: true,
+            render: (_: unknown, record: PreviewLine) => record.location_code || '—',
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
+            key: 'batch',
+            width: 110,
+            ellipsis: true,
+            render: (_: unknown, record: PreviewLine) => {
+              if (!isMaterialBatchEntryEnabled(trackingFlags, productReturnMeta?.batchManaged)) return '—';
+              return record.batch_number || '—';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+            key: 'serial_numbers',
+            width: 100,
+            render: () => '—',
+          },
+        ],
+        trackingFlags,
+      ),
+    [t, quantityDecimals, trackingFlags, productReturnMeta],
   );
 
   const submit = async (mode: 'draft' | 'confirm') => {
@@ -533,6 +849,96 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
     }
 
     const whOpt = warehouseOptions.find((w) => w.value === warehouseId);
+
+    if (pullType === 'outsource_receipt' && receiptLine) {
+      const needLoc = await lineLocationSelectionRequired(
+        warehouseId,
+        receiptLine.location_id,
+        receiptLine.location_code,
+      );
+      if (needLoc) {
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', { material: receiptLine.productName || receiptLine.productCode }));
+        return;
+      }
+      if (isMaterialBatchEntryEnabled(trackingFlags, receiptMaterialMeta?.batchManaged)) {
+        if (!String(receiptLine.batch_number ?? '').trim()) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+              material: receiptLine.productName || receiptLine.productCode,
+              batches: '—',
+            }),
+          );
+          return;
+        }
+      }
+    }
+
+    if (pullType === 'outsource_material_return') {
+      for (const line of previewLines) {
+        if (!line.issue_id || line.return_quantity <= 0) continue;
+        const materialLabel = line.material_code || line.material_name || '-';
+        const needLoc = await lineLocationSelectionRequired(
+          warehouseId,
+          line.location_id,
+          line.location_code,
+        );
+        if (needLoc) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', { material: materialLabel }),
+          );
+          return;
+        }
+        const meta = line.material_id != null ? materialReturnMeta[line.material_id] : undefined;
+        if (isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) {
+          if (!String(line.batch_number ?? '').trim()) {
+            messageApi.error(
+              t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+                material: materialLabel,
+                batches: '—',
+              }),
+            );
+            return;
+          }
+        }
+      }
+    }
+
+    if (pullType === 'outsource_product_return') {
+      for (const line of previewLines) {
+        if (!line.receipt_id || line.return_quantity <= 0) continue;
+        const materialLabel =
+          line.product_name || line.product_code || line.receipt_code || String(line.receipt_id);
+        const whId = line.warehouse_id;
+        if (whId == null || !(whId > 0)) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', { material: materialLabel }),
+          );
+          return;
+        }
+        const needLoc = await lineLocationSelectionRequired(
+          whId,
+          line.location_id,
+          line.location_code,
+        );
+        if (needLoc) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', { material: materialLabel }),
+          );
+          return;
+        }
+        if (isMaterialBatchEntryEnabled(trackingFlags, productReturnMeta?.batchManaged)) {
+          if (!String(line.batch_number ?? '').trim()) {
+            messageApi.error(
+              t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+                material: materialLabel,
+                batches: '—',
+              }),
+            );
+            return;
+          }
+        }
+      }
+    }
 
     setSubmittingAction(mode);
     try {
@@ -566,6 +972,9 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           unit: receiptLine.unit || '件',
           warehouse_id: warehouseId,
           warehouse_name: whOpt?.name,
+          location_id: receiptLine?.location_id,
+          location_name: receiptLine?.location_code?.trim() || undefined,
+          batch_number: receiptLine?.batch_number?.trim() || undefined,
           received_at: receiptTime?.isValid()
             ? toApiBusinessDocumentDateTime(receiptTime)
             : undefined,
@@ -606,12 +1015,14 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             unit: line.unit || '个',
             warehouse_id: warehouseId,
             warehouse_name: whOpt?.name,
+            location_id: line.location_id,
+            batch_number: line.batch_number?.trim() || undefined,
             returned_at: receiptTime?.isValid()
               ? toApiBusinessDocumentDateTime(receiptTime)
               : undefined,
             returned_by: receiverHook.receiverId,
             returned_by_name: receiverHook.receiverName.trim() || undefined,
-            notes: notes.trim() || undefined,
+            remarks: notes.trim() || undefined,
           })) as { id?: number };
           if (created?.id != null) createdIds.push(Number(created.id));
         }
@@ -640,7 +1051,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
               : undefined,
             returned_by: receiverHook.receiverId,
             returned_by_name: receiverHook.receiverName.trim() || undefined,
-            notes: notes.trim() || undefined,
+            remarks: notes.trim() || undefined,
           })) as { id?: number };
           if (created?.id != null) createdIds.push(Number(created.id));
         }
@@ -658,6 +1069,20 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       if (mode === 'confirm') {
         if (pullType === 'outsource_receipt') {
           messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
+          leavePage();
+        } else if (pullType === 'outsource_material_return') {
+          messageApi.success(
+            t('app.kuaizhizao.warehouseInbound.msg.outsourceMaterialReturnConfirmed', {
+              count: createdIds.length,
+            }),
+          );
+          leavePage();
+        } else if (pullType === 'outsource_product_return') {
+          messageApi.success(
+            t('app.kuaizhizao.warehouseInbound.msg.outsourceProductReturnConfirmed', {
+              count: createdIds.length,
+            }),
+          );
           leavePage();
         } else if (createdIds.length === 1) {
           navigateLeavingPullEntry(
@@ -807,7 +1232,21 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                           optionFilterProp="label"
                           value={warehouseId}
                           options={warehouseOptions}
-                          onChange={(v) => setWarehouseId(v ?? undefined)}
+                          onChange={(v) => {
+                            setWarehouseId(v ?? undefined);
+                            if (pullType === 'outsource_receipt') {
+                              setReceiptLine((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      location_id: undefined,
+                                      location_code: undefined,
+                                      batch_number: undefined,
+                                    }
+                                  : prev,
+                              );
+                            }
+                          }}
                         />
                       </Form.Item>
                     </Col>
@@ -867,7 +1306,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                       size="small"
                       rowKey="key"
                       pagination={false}
-                      scroll={{ x: 700 }}
+                      scroll={{ x: 980 }}
                       dataSource={previewLines}
                       columns={productReturnColumns}
                     />

@@ -9,7 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionOpenWorkbench } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +26,16 @@ import {
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { UniPullLoadButton } from '../../../../../components/uni-pull';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import {
   UniPullQueryModal,
@@ -94,6 +103,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 const REWORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_rework_orders';
+const REWORK_ORDER_RESOURCE = 'kuaizhizao:rework-order';
 
 interface ReworkOrder {
   id?: number;
@@ -109,6 +119,7 @@ interface ReworkOrder {
   rework_reason?: string;
   rework_type?: string;
   status?: string;
+  review_status?: string;
   routing_mode?: string;
   verification_required?: boolean;
   source_inspection_id?: number;
@@ -123,6 +134,8 @@ interface ReworkOrder {
   workshop_name?: string;
   work_center_id?: number;
   work_center_name?: string;
+  operator_id?: number;
+  operator_name?: string;
   completed_quantity?: number;
   qualified_quantity?: number;
   unqualified_quantity?: number;
@@ -207,9 +220,12 @@ const ReworkOrdersPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const tableRowsRef = useRef<ReworkOrder[]>([]);
+  const reworkPerms = useResourcePermissions(REWORK_ORDER_RESOURCE);
   const currentUser = useCurrentUser();
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+
   const [reworkTypeOptions, setReworkTypeOptions] = useState<Array<{ label: string; value: string }>>(() => REWORK_TYPE_FALLBACK(t));
   const [reworkTypeLoading, setReworkTypeLoading] = useState(false);
 
@@ -294,7 +310,138 @@ const ReworkOrdersPage: React.FC = () => {
   const [oqcNotifySubmitting, setOqcNotifySubmitting] = useState(false);
   const [oqcNotifyForm] = Form.useForm<{ recipient_uuids?: string[]; remarks?: string }>();
   const oqcNotifyRecipientsRef = useRef<Array<{ user_id: number; user_name: string }>>([]);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<ReworkOrder | null>(null);
+  const [assignSubmitting, setAssignSubmitting] = useState(false);
+  const [assignForm] = Form.useForm<{ assignee_uuids?: string[] }>();
+  const assignWorkersRef = useRef<Array<{ user_id: number; user_name: string }>>([]);
+  const createFromWoAssigneesRef = useRef<Array<{ user_id: number; user_name: string }>>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const selectedReworkOrdersForBatch = useMemo(
+    () =>
+      selectedRowKeys
+        .map((key) => tableRowsRef.current.find((row) => String(row.id) === String(key)))
+        .filter((row): row is ReworkOrder => row != null),
+    [selectedRowKeys],
+  );
+
+  const reworkToolbarAuditMenus = useMemo(() => {
+    const rows = selectedReworkOrdersForBatch;
+    const reload = () => {
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    };
+    const reviewOf = (row: ReworkOrder) => String(row.review_status || '').trim();
+    const statusOf = (row: ReworkOrder) => String(row.status || '').trim();
+    const isDraft = (row: ReworkOrder) => ['draft', '草稿', 'DRAFT'].includes(statusOf(row));
+    const isSignoff = (row: ReworkOrder) =>
+      ['multi_signoff', 'inventory_verify'].includes(String(row.business_type || ''));
+    const allowed = (row: ReworkOrder, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      keys: React.Key[],
+      records: ReworkOrder[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys,
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: reload,
+        message: messageApi,
+        t,
+      });
+    const submitRows = rows.filter((row) => isSignoff(row) && isDraft(row) && allowed(row, 'submit'));
+    const committedRows = rows.filter(
+      (row) => isDraft(row) && reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+    );
+    const pendingRows = rows.filter((row) => {
+      const review = reviewOf(row);
+      return isDraft(row) && review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit');
+    });
+    const reviewRows = rows.filter((row) => isDraft(row) && allowed(row, 'submit_review'));
+    const approveRows = rows.filter((row) => {
+      const review = reviewOf(row);
+      return isDraft(row) && review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'approve');
+    });
+    const revokeRows = rows.filter((row) => isDraft(row) && allowed(row, 'revoke_approval'));
+    const canSubmit = reworkPerms.canAction?.('submit') ?? false;
+    const canApprove = reworkPerms.canAction?.('approve') ?? false;
+    const canRevoke = reworkPerms.canAction?.('revoke') ?? false;
+    const hasSelection = rows.length > 0;
+    const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: (keys) => run(keys, submitRows, 'submit', canSubmit, (id) => reworkOrderApi.commit(id)),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t('app.kuaizhizao.reworkOrder.toolbar.withdrawSubmit'),
+          disabled: hasSelection && committedRows.length === 0,
+          onClick: (keys) =>
+            run(keys, committedRows, 'withdraw_submit', canSubmit, (id) => reworkOrderApi.withdrawSubmit(id)),
+        },
+        {
+          key: 'submit-review',
+          label: t('app.kuaizhizao.reworkOrder.toolbar.submitReview'),
+          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+          onClick: (keys) =>
+            run(
+              keys,
+              reviewRows,
+              'submit_review',
+              canSubmit,
+              (id) => reworkOrderApi.submitForReview(id),
+              t('app.kuaizhizao.reworkOrder.toolbar.submitReviewNotAllowed'),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: (id) => reworkOrderApi.commit(id),
+        submitReview: (id) => reworkOrderApi.submitForReview(id),
+        onSuccess: reload,
+      },
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('common.audit'),
+        disabled: hasSelection && !(canApprove && approveRows.length > 0),
+        onClick: (keys) =>
+          run(keys, approveRows, 'approve', canApprove, (id) => reworkOrderApi.approveViaAudit(id)),
+      },
+      {
+        key: 'withdraw-review',
+        label: t('app.kuaizhizao.reworkOrder.toolbar.withdrawReview'),
+        disabled: hasSelection && pendingRows.length === 0,
+        onClick: (keys) =>
+          run(keys, pendingRows, 'withdraw_submit', canApprove, (id) => reworkOrderApi.withdrawSubmit(id)),
+      },
+      {
+        key: 'revoke',
+        label: t('app.kuaizhizao.reworkOrder.toolbar.revoke'),
+        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+        onClick: (keys) =>
+          run(keys, revokeRows, 'revoke_approval', canRevoke, (id) => reworkOrderApi.revokeApproval(id)),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [invalidateMenuBadgeCounts, messageApi, reworkPerms, selectedReworkOrdersForBatch, t]);
 
   const [pullPreviewOpen, setPullPreviewOpen] = useState(false);
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
@@ -442,6 +589,11 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.reworkOrder.colWorkCenter'),
       dataIndex: 'work_center_name',
+    },
+    {
+      title: t('app.kuaizhizao.reworkOrder.colAssignees'),
+      dataIndex: 'operator_name',
+      render: (text) => String(text || '').trim() || '-',
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colPlannedStart'),
@@ -664,6 +816,17 @@ const ReworkOrdersPage: React.FC = () => {
       hideInSearch: false,
     },
     {
+      title: t('app.kuaizhizao.reworkOrder.colAssignees'),
+      dataIndex: 'operator_name',
+      width: 120,
+      minWidth: 120,
+      uniTableKeepWidth: true,
+      resizable: false,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record) => String(record.operator_name || '').trim() || '-',
+    },
+    {
       title: t('app.kuaizhizao.reworkOrder.colQuantity'),
       dataIndex: 'quantity',
       width: 100,
@@ -786,6 +949,19 @@ const ReworkOrdersPage: React.FC = () => {
             {t('app.kuaizhizao.reworkOrder.actionSubmit')}
           </Button>
         ) : null,
+        ['multi_signoff', 'inventory_verify'].includes(String(record.business_type || '')) &&
+        !['draft', '草稿', 'DRAFT'].includes(String(record.status || '')) ? (
+          <Button
+            key="workbench"
+            {...rowActionOpenWorkbench()}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (record.id != null) {
+                navigate(`/apps/kuaizhizao/production-execution/rework-orders/${record.id}/workbench`);
+              }
+            }}
+          />
+        ) : null,
         reworkCapabilityAllowed(record, 'release') ? (
           <Button
             key="release"
@@ -793,6 +969,15 @@ const ReworkOrdersPage: React.FC = () => {
             onClick={() => void handleReleaseRework(record)}
           >
             {t('app.kuaizhizao.reworkOrder.actionRelease')}
+          </Button>
+        ) : null,
+        reworkCapabilityAllowed(record, 'assign') ? (
+          <Button
+            key="assign"
+            {...rowActionKind('update')}
+            onClick={() => openAssignModal(record)}
+          >
+            {t('app.kuaizhizao.reworkOrder.actionAssign')}
           </Button>
         ) : null,
         reworkCapabilityAllowed(record, 'execute') ? (
@@ -1117,6 +1302,39 @@ const ReworkOrdersPage: React.FC = () => {
     }
   };
 
+  const openAssignModal = (record: ReworkOrder) => {
+    setAssignTarget(record);
+    assignWorkersRef.current = [];
+    assignForm.resetFields();
+    setAssignOpen(true);
+  };
+
+  const handleAssignSubmit = async () => {
+    if (!assignTarget?.id) return;
+    try {
+      await assignForm.validateFields();
+      const ids = assignWorkersRef.current.map((x) => x.user_id).filter((id) => id > 0);
+      if (ids.length < 1) {
+        messageApi.warning(t('app.kuaizhizao.reworkOrder.assignWorkersRequired'));
+        return;
+      }
+      setAssignSubmitting(true);
+      await reworkOrderApi.assign(String(assignTarget.id), {
+        assigned_worker_ids: ids,
+      });
+      messageApi.success(t('app.kuaizhizao.reworkOrder.assignSuccess'));
+      setAssignOpen(false);
+      setAssignTarget(null);
+      actionRef.current?.reload();
+      if (reworkOrderDetail?.id === assignTarget.id) await refreshReworkDetail(assignTarget.id);
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      messageApi.error(error.message || t('common.operationFailed'));
+    } finally {
+      setAssignSubmitting(false);
+    }
+  };
+
   const openOqcNotify = (record: ReworkOrder) => {
     setOqcNotifyTarget(record);
     oqcNotifyRecipientsRef.current = [];
@@ -1334,6 +1552,7 @@ const ReworkOrdersPage: React.FC = () => {
     setPullWorkOrderOperations([]);
     setPullWorkOrderReworkableQty(0);
     setPullWorkOrderDefaultStartOpId(undefined);
+    createFromWoAssigneesRef.current = [];
   };
 
   const refreshPullWorkOrderReworkPreview = useCallback(
@@ -1381,6 +1600,9 @@ const ReworkOrdersPage: React.FC = () => {
     }
     setCreateFromWorkOrderSubmitLoading(true);
     try {
+      const assigneeIds = createFromWoAssigneesRef.current
+        .map((x) => x.user_id)
+        .filter((id) => id > 0);
       const payload = {
         rework_reason: values.rework_reason,
         rework_type: values.rework_type,
@@ -1394,6 +1616,9 @@ const ReworkOrdersPage: React.FC = () => {
         planned_start_date: toApiDateTimeString(values.planned_start_date),
         planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks || undefined,
+        assigned_worker_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
+        operator_id: assigneeIds[0],
+        operator_name: createFromWoAssigneesRef.current[0]?.user_name,
       };
       const created = await reworkOrderApi.createFromWorkOrder(String(pullWorkOrderDetail.id), payload);
       messageApi.success(
@@ -1658,7 +1883,7 @@ const ReworkOrdersPage: React.FC = () => {
 
   const pullFromFinishedGoodsQuery = useUniPullQuery<PullFinishedGoodsInspectionCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullDocumentScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullFinishedGoodsInspectionSelectable(record),
@@ -1685,7 +1910,8 @@ const ReworkOrdersPage: React.FC = () => {
       }
     },
     onConfirm: async (keys) => {
-      const selectedId = Number(keys[0]);
+      const selectedIds = keys.map((k) => Number(k)).filter((id) => id > 0);
+      const selectedId = selectedIds[0];
       if (!selectedId) {
         messageApi.warning(
           t('app.kuaizhizao.shipmentNotice.selectSource', {
@@ -1696,12 +1922,15 @@ const ReworkOrdersPage: React.FC = () => {
       }
       // 先关掉选单弹窗，再打开预览，避免同标题双层 Modal
       pullFromFinishedGoodsQuery.closeModal();
+      if (selectedIds.length > 1) {
+        messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+      }
       await openPullPreview(selectedId);
     },
   });
   const pullFromWorkOrderQuery = useUniPullQuery<PullReworkWorkOrderCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullDocumentScopeOptions,
     defaultScope: 'pullable',
     isRowDisabled: (record) => !isPullReworkWorkOrderSelectable(record),
@@ -1726,7 +1955,8 @@ const ReworkOrdersPage: React.FC = () => {
       }
     },
     onConfirm: async (keys) => {
-      const selectedId = Number(keys[0]);
+      const selectedIds = keys.map((k) => Number(k)).filter((id) => id > 0);
+      const selectedId = selectedIds[0];
       if (!selectedId) {
         messageApi.warning(
           t('app.kuaizhizao.shipmentNotice.selectSource', {
@@ -1737,6 +1967,9 @@ const ReworkOrdersPage: React.FC = () => {
       }
       // 先关掉选单弹窗，再打开创建表单，避免同标题双层 Modal 叠在一起
       pullFromWorkOrderQuery.closeModal();
+      if (selectedIds.length > 1) {
+        messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+      }
       await openCreateFromWorkOrderModal(selectedId);
     },
   });
@@ -1772,34 +2005,66 @@ const ReworkOrdersPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={false}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={handleDeleteFromSelection}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.reworkOrder.deleteSelectedConfirm', { count })}
         showAdvancedSearch={true}
         skipFuzzyPinyinClientFilter
         pinnedTabsField="status"
         pinnedTabsValueEnum={reworkOrderLifecycleValueEnum}
-        toolBarActionsAfterCreate={[
-          <UniPullLoadButton
-            key="rework-order-pull-from-inspection"
-            compactKey="rework-order-pull-from-inspection"
-            label={t('app.kuaizhizao.reworkOrder.createButton')}
-            type="primary"
-            variant="solid"
-            icon={<PlusOutlined />}
-            menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
+        toolBarRender={() => [
+          <UniPullCreateToolbar
+            key="create-rework-with-pull"
+            compactKey="create-rework-with-pull"
+            createIcon={<PlusOutlined />}
+            createLabel={t('app.kuaizhizao.reworkOrder.createButton')}
+            onCreate={() => pullFromFinishedGoodsQuery.openModal()}
+            menuItems={[
+              ...buildKuaizhizaoPullCreateMenuItems(t, [
+                {
+                  actionKey: 'rework_order.pull_from_work_order',
+                  onClick: () => {
+                    pullFromWorkOrderQuery.openModal();
+                  },
+                },
+                {
+                  actionKey: 'rework_order.pull_from_finished_goods_inspection',
+                  onClick: () => {
+                    pullFromFinishedGoodsQuery.openModal();
+                  },
+                },
+              ]),
+              { type: 'divider', key: 'copy-selected-divider' },
               {
-                actionKey: 'rework_order.pull_from_work_order',
+                key: 'copy-selected',
+                label: t('app.kuaizhizao.reworkOrder.copySelectedCreate'),
+                disabled: selectedReworkOrdersForBatch.length !== 1,
                 onClick: () => {
-                  pullFromWorkOrderQuery.openModal();
+                  const row = selectedReworkOrdersForBatch[0];
+                  const woId = Number(row?.original_work_order_id);
+                  if (!Number.isFinite(woId) || woId <= 0) {
+                    messageApi.warning(t('app.kuaizhizao.reworkOrder.copyNeedsWorkOrder'));
+                    return;
+                  }
+                  void openCreateFromWorkOrderModal(woId);
                 },
               },
-              {
-                actionKey: 'rework_order.pull_from_finished_goods_inspection',
-                onClick: () => {
-                  pullFromFinishedGoodsQuery.openModal();
-                },
-              },
-            ])}
+            ]}
+          />,
+          <UniBatchMenuButton
+            key="rework-submit"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={reworkToolbarAuditMenus.submitItems}
+            buttonText={t('common.submit')}
+          />,
+          <UniBatchMenuButton
+            key="rework-audit"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={reworkToolbarAuditMenus.auditItems}
+            buttonText={t('components.uniAction.audit')}
           />,
         ]}
       />
@@ -1893,6 +2158,9 @@ const ReworkOrdersPage: React.FC = () => {
         onStartOperationChange={(startOpId) => {
           if (!pullWorkOrderDetail?.id) return;
           void refreshPullWorkOrderReworkPreview(Number(pullWorkOrderDetail.id), startOpId);
+        }}
+        onAssigneesChange={(workers) => {
+          createFromWoAssigneesRef.current = workers;
         }}
         onFinish={handleSubmitFromWorkOrder}
       />
@@ -2163,8 +2431,29 @@ const ReworkOrdersPage: React.FC = () => {
             )}
           </Col>
         </Row>
+        {industryProfileActive && !isEdit && (reworkFormProfile?.rework_path_types?.length ?? 0) > 0 ? (
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="rework_path_type"
+                label={t('app.kuaizhizao.reworkOrder.profilePathType')}
+                rules={[{ required: true, message: t('common.required') }]}
+                options={[...(reworkFormProfile?.rework_path_types || [])]
+                  .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+                  .map((item) => ({
+                    value: String(item.code),
+                    label: String(item.label || item.code),
+                  }))}
+              />
+            </Col>
+          </Row>
+        ) : null}
         {industryProfileActive ? (
-          <ReworkOrderProfileExtensionFields profile={reworkFormProfile} />
+          <ReworkOrderProfileExtensionFields
+            profile={reworkFormProfile}
+            compactLayout={!isEdit}
+            hidePathSelect={!isEdit}
+          />
         ) : null}
         <ProFormDependency name={['business_type']}>
           {({ business_type }) =>
@@ -2318,56 +2607,60 @@ const ReworkOrdersPage: React.FC = () => {
             ) : null
           }
         </ProFormDependency>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="planned_start_date"
-              label={t('app.kuaizhizao.reworkOrder.formPlannedStart')}
-              placeholder={t('app.kuaizhizao.reworkOrder.formPlannedStartPlaceholder')}
-              fieldProps={{ showTime: true, style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="planned_end_date"
-              label={t('app.kuaizhizao.reworkOrder.formPlannedEnd')}
-              placeholder={t('app.kuaizhizao.reworkOrder.formPlannedEndPlaceholder')}
-              fieldProps={{ showTime: true, style: { width: '100%' } }}
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={8}>
-            <ProFormDigit
-              name="completed_quantity"
-              label={t('app.kuaizhizao.reworkOrder.formCompletedQty')}
-              placeholder={t('app.kuaizhizao.reworkOrder.formCompletedQty')}
-              initialValue={0}
-              min={0}
-              fieldProps={{ precision: 2 }}
-            />
-          </Col>
-          <Col span={8}>
-            <ProFormDigit
-              name="qualified_quantity"
-              label={t('app.kuaizhizao.reworkOrder.formQualifiedQty')}
-              placeholder={t('app.kuaizhizao.reworkOrder.formQualifiedQty')}
-              initialValue={0}
-              min={0}
-              fieldProps={{ precision: 2 }}
-            />
-          </Col>
-          <Col span={8}>
-            <ProFormDigit
-              name="unqualified_quantity"
-              label={t('app.kuaizhizao.reworkOrder.formUnqualifiedQty')}
-              placeholder={t('app.kuaizhizao.reworkOrder.formUnqualifiedQty')}
-              initialValue={0}
-              min={0}
-              fieldProps={{ precision: 2 }}
-            />
-          </Col>
-        </Row>
+        {!(industryProfileActive && !isEdit) ? (
+          <>
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="planned_start_date"
+                  label={t('app.kuaizhizao.reworkOrder.formPlannedStart')}
+                  placeholder={t('app.kuaizhizao.reworkOrder.formPlannedStartPlaceholder')}
+                  fieldProps={{ showTime: true, style: { width: '100%' } }}
+                />
+              </Col>
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="planned_end_date"
+                  label={t('app.kuaizhizao.reworkOrder.formPlannedEnd')}
+                  placeholder={t('app.kuaizhizao.reworkOrder.formPlannedEndPlaceholder')}
+                  fieldProps={{ showTime: true, style: { width: '100%' } }}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={8}>
+                <ProFormDigit
+                  name="completed_quantity"
+                  label={t('app.kuaizhizao.reworkOrder.formCompletedQty')}
+                  placeholder={t('app.kuaizhizao.reworkOrder.formCompletedQty')}
+                  initialValue={0}
+                  min={0}
+                  fieldProps={{ precision: 2 }}
+                />
+              </Col>
+              <Col span={8}>
+                <ProFormDigit
+                  name="qualified_quantity"
+                  label={t('app.kuaizhizao.reworkOrder.formQualifiedQty')}
+                  placeholder={t('app.kuaizhizao.reworkOrder.formQualifiedQty')}
+                  initialValue={0}
+                  min={0}
+                  fieldProps={{ precision: 2 }}
+                />
+              </Col>
+              <Col span={8}>
+                <ProFormDigit
+                  name="unqualified_quantity"
+                  label={t('app.kuaizhizao.reworkOrder.formUnqualifiedQty')}
+                  placeholder={t('app.kuaizhizao.reworkOrder.formUnqualifiedQty')}
+                  initialValue={0}
+                  min={0}
+                  fieldProps={{ precision: 2 }}
+                />
+              </Col>
+            </Row>
+          </>
+        ) : null}
         <ProFormTextArea
           name="rework_reason"
           label={t('app.kuaizhizao.reworkOrder.formReworkReason')}
@@ -2478,6 +2771,15 @@ const ReworkOrdersPage: React.FC = () => {
                     render: () => (
                       <Button onClick={() => void handleReleaseRework(detail)}>
                         {t('app.kuaizhizao.reworkOrder.actionRelease')}
+                      </Button>
+                    ),
+                  },
+                  {
+                    key: 'assign',
+                    visible: reworkCapabilityAllowed(detail, 'assign'),
+                    render: () => (
+                      <Button onClick={() => openAssignModal(detail)}>
+                        {t('app.kuaizhizao.reworkOrder.actionAssign')}
                       </Button>
                     ),
                   },
@@ -2766,6 +3068,41 @@ const ReworkOrdersPage: React.FC = () => {
           ) : undefined
         }
       />
+
+      <Modal
+        title={t('app.kuaizhizao.reworkOrder.assignModalTitle')}
+        open={assignOpen}
+        confirmLoading={assignSubmitting}
+        onOk={() => void handleAssignSubmit()}
+        onCancel={() => {
+          setAssignOpen(false);
+          setAssignTarget(null);
+          assignForm.resetFields();
+        }}
+        destroyOnHidden
+      >
+        <Form form={assignForm} layout="vertical">
+          <UniUserSelect
+            name="assignee_uuids"
+            label={t('app.kuaizhizao.reworkOrder.formAssignees')}
+            mode="multiple"
+            required
+            onChange={(_uuids, users) => {
+              const list = (Array.isArray(users) ? users : users ? [users] : []) as Array<{
+                id?: number;
+                full_name?: string;
+                username?: string;
+              }>;
+              assignWorkersRef.current = list
+                .filter((u) => u?.id)
+                .map((u) => ({
+                  user_id: Number(u.id),
+                  user_name: u.full_name || u.username || '',
+                }));
+            }}
+          />
+        </Form>
+      </Modal>
 
       <Modal
         title={t('app.kuaizhizao.reworkOrder.oqcNotifyTitle')}

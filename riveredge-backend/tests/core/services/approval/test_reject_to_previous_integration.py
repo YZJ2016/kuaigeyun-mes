@@ -35,9 +35,11 @@ async def test_reject_previous_keeps_instance_pending_and_moves_to_n1():
         id=900,
         status="pending",
         current_node="n2",
+        current_approver_id=None,
         completed_at=None,
         process=process,
         data={},
+        refresh_from_db=AsyncMock(),
     )
     task = SimpleNamespace(
         uuid="task-uuid-1",
@@ -107,8 +109,10 @@ async def test_reject_submitter_calls_advance_rejected():
         id=901,
         status="pending",
         current_node="n2",
+        current_approver_id=None,
         process=process,
         data={},
+        refresh_from_db=AsyncMock(),
     )
     task = SimpleNamespace(
         uuid="task-uuid-2",

@@ -237,13 +237,12 @@ async def _ensure_file_uuids(tenant_id: int, uuids: List[str], label: str) -> No
 
 
 async def _file_brief(tenant_id: int, file_uuid: str) -> Optional[FileBriefResponse]:
+    """列表/详情共用：只读 core_files 元数据，禁止在列表路径探测对象存储（exists 挂起会拖死整页）。"""
     if not file_uuid:
         return None
     try:
         f = await FileService.get_file_by_uuid(tenant_id, file_uuid)
     except NotFoundError:
-        return None
-    if not await FileService.file_content_available(tenant_id, f):
         return None
     preview_url = None
     try:
@@ -815,10 +814,11 @@ class DrawingService:
         released_by: Optional[int] = None,
         current_user: Optional[User] = None,
     ) -> EngineeringDrawingResponse:
-        drawing = await DrawingService._get_active_or_404(tenant_id, drawing_uuid)
-        if (drawing.status or "") != "Pending":
-            raise ValidationError("仅待审图纸可发布，请先提交签审")
-        return await DrawingService._publish_pending(tenant_id, drawing, released_by, current_user)
+        """与审核通过同一路径，禁止旁路 PLM 人工审核门控。"""
+        _ = released_by
+        if current_user is None:
+            raise ValidationError("发布图纸须登录用户")
+        return await DrawingService.approve_drawing(tenant_id, drawing_uuid, current_user)
 
     @staticmethod
     async def checkout_drawing(
@@ -894,29 +894,33 @@ class DrawingService:
             raise ValidationError("提交前须上传主文件")
         await DrawingService._require_change_summary_if_revision(tenant_id, drawing)
 
+        # 未开启审核节点：与体系文件一致，提交即发布（移动端/工位只认 Released）
+        if not await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
+            return await DrawingService._publish_pending(
+                tenant_id, drawing, int(current_user.id), current_user
+            )
+
         drawing.status = "Pending"
         drawing.submitted_at = resolve_business_datetime()
         apply_update_audit(drawing, current_user)
         await drawing.save()
 
-        approval_instance = None
-        if await AuditBindingService.is_audit_enabled(tenant_id, AUDIT_NODE):
-            approval_instance = await ApprovalInstanceService.start_approval_for_node(
-                tenant_id=tenant_id,
-                user_id=current_user.id,
-                node_key=AUDIT_NODE,
-                entity_type=ENTITY_TYPE,
-                entity_id=drawing.id,
-                entity_uuid=str(drawing.uuid),
-                title=f"工程图纸审核 {drawing.code}-{drawing.revision}",
-                content=drawing.name,
-                business_type=drawing.drawing_type or "",
-                send_notification=True,
+        approval_instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            node_key=AUDIT_NODE,
+            entity_type=ENTITY_TYPE,
+            entity_id=drawing.id,
+            entity_uuid=str(drawing.uuid),
+            title=f"工程图纸审核 {drawing.code}-{drawing.revision}",
+            content=drawing.name,
+            business_type=drawing.drawing_type or "",
+            send_notification=True,
+        )
+        if approval_instance is None:
+            raise ValidationError(
+                f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
             )
-            if approval_instance is None:
-                raise ValidationError(
-                    f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
-                )
 
         from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
         from apps.kuaiplm.services.plm_pending_approval_reminder_service import (

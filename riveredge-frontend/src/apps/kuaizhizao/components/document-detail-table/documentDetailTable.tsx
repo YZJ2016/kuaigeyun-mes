@@ -233,9 +233,19 @@ export function TaxRatePercentInput({
 }
 
 export function TaxRateDetailCell({ index }: { index: number }) {
+  const { t } = useTranslation();
   return (
     <div className="quotation-tax-rate-cell">
-      <Form.Item name={[index, 'tax_rate']} style={{ margin: 0 }}>
+      <Form.Item
+        name={[index, 'tax_rate']}
+        style={{ margin: 0 }}
+        rules={[
+          {
+            required: true,
+            message: t('app.kuaicaiwu.purchaseInvoice.form.taxRateRequired'),
+          },
+        ]}
+      >
         <TaxRatePercentInput />
       </Form.Item>
     </div>

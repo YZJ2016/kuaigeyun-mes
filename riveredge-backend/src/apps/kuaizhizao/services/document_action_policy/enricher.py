@@ -207,7 +207,7 @@ async def batch_document_item_material_previews(
     material_name_field: str = "material_name",
 ) -> Dict[int, List[Dict[str, Any]]]:
     """
-    批量拉取列表明细物料名预览（仅 material_name，供前端「明细」列 MarkerTag）。
+    批量拉取列表明细物料预览（material_name + 可选 material_spec，供「明细」「规格型号」列）。
     按 parent_id、id 升序；前端只展示前 2 条 + 等 N 项。
 
     快照 material_name 为空时：先走 `_hydrate_item_material_snapshot` 写回主数据编码/名称，
@@ -223,9 +223,18 @@ async def batch_document_item_material_previews(
     if hasattr(item_model, "deleted_at"):
         filter_kwargs["deleted_at__isnull"] = True
 
+    has_material_spec = hasattr(item_model, "material_spec")
+    has_material_code = hasattr(item_model, "material_code")
+    has_material_model = hasattr(item_model, "material_model")
     value_fields = [parent_field, material_name_field, "id"]
     if hasattr(item_model, "material_id"):
         value_fields.append("material_id")
+    if has_material_code:
+        value_fields.append("material_code")
+    if has_material_spec:
+        value_fields.append("material_spec")
+    if has_material_model:
+        value_fields.append("material_model")
 
     rows = await (
         item_model.filter(**filter_kwargs)
@@ -263,7 +272,20 @@ async def batch_document_item_material_previews(
         name = str(row.get(material_name_field) or "").strip()
         if not name:
             continue
-        out.setdefault(pid, []).append({"material_name": name})
+        preview: Dict[str, Any] = {"material_name": name}
+        if has_material_code:
+            code = str(row.get("material_code") or "").strip()
+            if code:
+                preview["material_code"] = code
+        if has_material_spec:
+            spec = str(row.get("material_spec") or "").strip()
+            if spec:
+                preview["material_spec"] = spec
+        if has_material_model:
+            model = str(row.get("material_model") or "").strip()
+            if model:
+                preview["material_model"] = model
+        out.setdefault(pid, []).append(preview)
     return out
 
 
@@ -345,6 +367,7 @@ def enrich_inbound_hub_list_capabilities(
             receipt_type=receipt_type,
             payable_request_open=payable_open,
             purchase_return_open=return_open,
+            has_items=(item_counts.get(rid, 0) > 0) if item_counts is not None else True,
         )
         update: Dict[str, Any] = {"capabilities": caps}
         if item_counts is not None:
@@ -366,8 +389,8 @@ async def _quotation_audit_required(tenant_id: int) -> bool:
     return await BusinessConfigService().check_audit_required(tenant_id, "quotation")
 
 
-async def _sales_require_audit_before_print(tenant_id: int) -> bool:
-    return await BusinessConfigService().get_sales_require_audit_before_print(tenant_id)
+async def _allow_print_unaudited(tenant_id: int) -> bool:
+    return await BusinessConfigService().get_allow_print_unaudited(tenant_id)
 
 
 async def enrich_quotation_capabilities_on_model(
@@ -379,18 +402,19 @@ async def enrich_quotation_capabilities_on_model(
     contract_downstream_missing: bool = False,
     sales_review_downstream_missing: bool = False,
 ) -> T:
+    await _allow_print_unaudited(tenant_id)
     audit_required = await _quotation_audit_required(tenant_id)
-    require_audit_before_print = await _sales_require_audit_before_print(tenant_id)
     caps = derive_quotation_capabilities(
         quotation_model,
         audit_required=audit_required,
-        require_audit_before_print=require_audit_before_print,
         conversion_downstream_missing=conversion_downstream_missing,
         contract_downstream_missing=contract_downstream_missing,
         sales_review_downstream_missing=sales_review_downstream_missing,
     )
     if hasattr(response, "model_copy"):
-        return _attach_capabilities_to_response(response, caps)
+        return _attach_capabilities_to_response(
+            response, caps, print_gate_record=quotation_model
+        )
     return response
 
 
@@ -403,8 +427,8 @@ async def enrich_quotation_list_capabilities(
     contract_downstream_missing_by_id: Optional[dict[int, bool]] = None,
     sales_review_downstream_missing_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
+    await _allow_print_unaudited(tenant_id)
     audit_required = await _quotation_audit_required(tenant_id)
-    require_audit_before_print = await _sales_require_audit_before_print(tenant_id)
     missing_map = conversion_downstream_missing_by_id or {}
     contract_missing_map = contract_downstream_missing_by_id or {}
     review_missing_map = sales_review_downstream_missing_by_id or {}
@@ -414,13 +438,16 @@ async def enrich_quotation_list_capabilities(
         caps = derive_quotation_capabilities(
             q_model,
             audit_required=audit_required,
-            require_audit_before_print=require_audit_before_print,
             conversion_downstream_missing=missing_map.get(qid, False),
             contract_downstream_missing=contract_missing_map.get(qid, False),
             sales_review_downstream_missing=review_missing_map.get(qid, False),
         )
         if hasattr(resp, "model_copy"):
-            out.append(_attach_capabilities_to_response(resp, caps))
+            out.append(
+                _attach_capabilities_to_response(
+                    resp, caps, print_gate_record=q_model
+                )
+            )
         else:
             out.append(resp)
     return out
@@ -430,7 +457,6 @@ def get_quotation_capabilities_from_record(
     quotation: Any,
     *,
     audit_required: bool,
-    require_audit_before_print: bool = False,
     conversion_downstream_missing: bool = False,
     contract_downstream_missing: bool = False,
     sales_review_downstream_missing: bool = False,
@@ -438,7 +464,6 @@ def get_quotation_capabilities_from_record(
     return derive_quotation_capabilities(
         quotation,
         audit_required=audit_required,
-        require_audit_before_print=require_audit_before_print,
         conversion_downstream_missing=conversion_downstream_missing,
         contract_downstream_missing=contract_downstream_missing,
         sales_review_downstream_missing=sales_review_downstream_missing,
@@ -463,12 +488,13 @@ def enrich_sales_order_capabilities_on_response(
     has_purchasable_remaining: bool = False,
     require_purchase_requisition: bool = False,
     require_shipment_notice_before_delivery: bool = False,
-    require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
     procurement_fulfillment_mode: Optional[str] = None,
+    require_audit_before_print: bool = False,
 ) -> T:
     caps = derive_sales_order_capabilities(
         order_model,
+        require_audit_before_print=require_audit_before_print,
         review_submitted=review_submitted,
         pushed_to_computation=pushed_to_computation,
         has_items=has_items,
@@ -483,12 +509,13 @@ def enrich_sales_order_capabilities_on_response(
         has_purchasable_remaining=has_purchasable_remaining,
         require_purchase_requisition=require_purchase_requisition,
         require_shipment_notice_before_delivery=require_shipment_notice_before_delivery,
-        require_audit_before_print=require_audit_before_print,
         has_prepayment_receipt=has_prepayment_receipt,
         procurement_fulfillment_mode=procurement_fulfillment_mode,
     )
     if hasattr(response, "model_copy"):
-        return _attach_capabilities_to_response(response, caps)
+        return _attach_capabilities_to_response(
+            response, caps, print_gate_record=order_model
+        )
     return response
 
 
@@ -507,7 +534,6 @@ def enrich_sales_order_list_capabilities(
     has_downstream_documents_by_id: Optional[dict[int, bool]] = None,
     has_remaining_invoice_amount_by_id: Optional[dict[int, bool]] = None,
     has_prepayment_receipt_by_id: Optional[dict[int, bool]] = None,
-    require_audit_before_print: bool = False,
     review_submitted_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     pushed_map = pushed_to_computation_by_id or {}
@@ -539,10 +565,13 @@ def enrich_sales_order_list_capabilities(
             has_downstream_documents=downstream_map.get(oid, False),
             has_remaining_invoice_amount=invoice_remainder_map.get(oid, True),
             has_prepayment_receipt=prepay_map.get(oid, False),
-            require_audit_before_print=require_audit_before_print,
         )
         if hasattr(resp, "model_copy"):
-            out.append(_attach_capabilities_to_response(resp, caps))
+            out.append(
+                _attach_capabilities_to_response(
+                    resp, caps, print_gate_record=order_model
+                )
+            )
         else:
             out.append(resp)
     return out
@@ -561,7 +590,6 @@ def get_sales_order_capabilities_from_record(
     has_existing_delivery_project: bool = False,
     has_downstream_documents: bool = False,
     has_remaining_invoice_amount: bool = True,
-    require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
 ) -> SalesOrderCapabilities:
     return derive_sales_order_capabilities(
@@ -576,7 +604,6 @@ def get_sales_order_capabilities_from_record(
         has_existing_delivery_project=has_existing_delivery_project,
         has_downstream_documents=has_downstream_documents,
         has_remaining_invoice_amount=has_remaining_invoice_amount,
-        require_audit_before_print=require_audit_before_print,
         has_prepayment_receipt=has_prepayment_receipt,
     )
 
@@ -972,14 +999,17 @@ async def purchase_requisition_linked_po_by_ids(
         else:
             unchecked_item_ids.append(iid)
     if unchecked_item_ids:
-        linked_sources = await PurchaseOrderItem.filter(
+        from apps.kuaizhizao.utils.document_source_types import is_purchase_requisition_source_type
+
+        candidate_pois = await PurchaseOrderItem.filter(
             tenant_id=tenant_id,
-            source_type="PurchaseRequisition",
             source_id__in=unchecked_item_ids,
             deleted_at__isnull=True,
-        ).values_list("source_id", flat=True)
-        for source_id in linked_sources:
-            rid = item_to_req.get(int(source_id))
+        ).all()
+        for poi in candidate_pois:
+            if not is_purchase_requisition_source_type(getattr(poi, "source_type", None)):
+                continue
+            rid = item_to_req.get(int(poi.source_id or 0))
             if rid is not None:
                 linked[rid] = True
     return linked
@@ -1006,7 +1036,9 @@ def enrich_purchase_requisition_capabilities_on_response(
         review_submitted=review_submitted,
     )
     if hasattr(response, "model_copy"):
-        return _attach_capabilities_to_response(response, caps)
+        return _attach_capabilities_to_response(
+            response, caps, print_gate_record=req
+        )
     return response
 
 
@@ -1015,6 +1047,7 @@ async def enrich_purchase_requisition_detail_capabilities(
     req: Any,
     response: T,
 ) -> T:
+    await _allow_print_unaudited(tenant_id)
     has_linked = await purchase_requisition_has_linked_purchase_order(
         tenant_id, int(req.id)
     )
@@ -1034,6 +1067,7 @@ async def enrich_purchase_requisition_list_capabilities(
     reqs: List[Any],
     responses: List[T],
 ) -> List[T]:
+    await _allow_print_unaudited(tenant_id)
     req_ids = [int(getattr(r, "id", 0) or 0) for r in reqs]
     linked_map = await purchase_requisition_linked_po_by_ids(tenant_id, req_ids)
     review_submitted_map = await batch_review_submitted_for_documents(
@@ -1048,7 +1082,11 @@ async def enrich_purchase_requisition_list_capabilities(
             review_submitted=review_submitted_map.get(rid),
         )
         if hasattr(resp, "model_copy"):
-            out.append(_attach_capabilities_to_response(resp, caps))
+            out.append(
+                _attach_capabilities_to_response(
+                    resp, caps, print_gate_record=req_model
+                )
+            )
         else:
             out.append(resp)
     return out
@@ -1180,6 +1218,7 @@ async def _purchase_order_invoice_by_ids(tenant_id: int, order_ids: List[int]) -
 
     if not order_ids:
         return {}
+    # 财务管理 ORM 未注册：视为不可再下推发票（阻断），避免未绑定模型查库 500
     if not finance_orm_ready():
         return {oid: True for oid in order_ids}
     result: dict[int, bool] = {oid: True for oid in order_ids}
@@ -1438,7 +1477,9 @@ def enrich_purchase_order_capabilities_on_response(
         prepayment_application_remaining=prepayment_application_remaining,
     )
     if hasattr(response, "model_copy"):
-        return _attach_capabilities_to_response(response, caps)
+        return _attach_capabilities_to_response(
+            response, caps, print_gate_record=order
+        )
     return response
 
 
@@ -1449,6 +1490,7 @@ async def enrich_purchase_order_detail_capabilities(
     *,
     has_items: bool = True,
 ) -> T:
+    await _allow_print_unaudited(tenant_id)
     from apps.kuaizhizao.services.payment_application_pull_service import (
         PaymentApplicationPullService,
         compute_prepayment_application_remaining,
@@ -1577,6 +1619,7 @@ async def enrich_purchase_order_list_capabilities(
     *,
     has_items_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
+    await _allow_print_unaudited(tenant_id)
     from apps.kuaizhizao.services.payment_application_pull_service import (
         PaymentApplicationPullService,
         compute_prepayment_application_remaining,
@@ -1645,7 +1688,11 @@ async def enrich_purchase_order_list_capabilities(
             prepayment_application_remaining=prepay_remaining,
         )
         if hasattr(resp, "model_copy"):
-            out.append(_attach_capabilities_to_response(resp, caps))
+            out.append(
+                _attach_capabilities_to_response(
+                    resp, caps, print_gate_record=order_model
+                )
+            )
         else:
             out.append(resp)
     return out
@@ -1760,12 +1807,14 @@ def enrich_work_order_capabilities_on_response(
     has_returnable_picking: bool | None = None,
     has_downstream_documents: bool | None = None,
     audit_required: bool | None = None,
+    review_submitted: bool | None = None,
 ) -> T:
     caps = derive_work_order_capabilities(
         wo,
         has_returnable_picking=has_returnable_picking,
         has_downstream_documents=has_downstream_documents,
         audit_required=audit_required,
+        review_submitted=review_submitted,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1779,10 +1828,12 @@ def enrich_work_order_list_capabilities(
     has_returnable_picking_by_id: dict[int, bool] | None = None,
     has_downstream_documents_by_id: dict[int, bool] | None = None,
     audit_required: bool | None = None,
+    review_submitted_by_id: dict[int, bool] | None = None,
 ) -> List[T]:
     out: List[T] = []
     lookup = has_returnable_picking_by_id or {}
     downstream_lookup = has_downstream_documents_by_id or {}
+    submitted_lookup = review_submitted_by_id or {}
     for wo, resp in zip(work_orders, responses):
         wo_id = getattr(wo, "id", None)
         has_returnable = lookup.get(int(wo_id)) if wo_id is not None else None
@@ -1792,6 +1843,7 @@ def enrich_work_order_list_capabilities(
             has_returnable_picking=has_returnable,
             has_downstream_documents=has_downstream,
             audit_required=audit_required,
+            review_submitted=submitted_lookup.get(int(wo_id)) if wo_id is not None else None,
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
@@ -2204,6 +2256,7 @@ async def enrich_nonconforming_ledger_list_capabilities(
     records: List[Any],
     responses: List[T],
 ) -> List[T]:
+    await _allow_print_unaudited(tenant_id)
     defect_ids = [int(getattr(r, "id", 0) or 0) for r in records]
     linked_map = await _linked_8d_report_by_defect_ids(tenant_id, defect_ids)
     out: List[T] = []

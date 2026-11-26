@@ -15,10 +15,13 @@ from datetime import datetime, date
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
+from tortoise.functions import Count
+
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
+from apps.kuaizhizao.constants.tool_status import OUTSTANDING_BORROW_STATUS
 from apps.kuaizhizao.models.tool import Tool
-from apps.kuaizhizao.models.tool_ops import ToolMaintenanceScheme, ToolSchemeBinding
-from apps.kuaizhizao.schemas.tool import ToolCreate, ToolUpdate
+from apps.kuaizhizao.models.tool_ops import ToolBorrow, ToolMaintenanceScheme, ToolSchemeBinding
+from apps.kuaizhizao.schemas.tool import ToolCreate, ToolResponse, ToolUpdate
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -114,6 +117,41 @@ class ToolService:
         )
         items = await query.offset(skip).limit(limit).order_by(order_clause)
         return items, total
+
+    @staticmethod
+    async def count_outstanding_borrows(tenant_id: int, tool_ids: List[int]) -> dict[int, int]:
+        """未归还领用单数（领用数量），按工装 id 聚合。"""
+        if not tool_ids:
+            return {}
+        rows = (
+            await ToolBorrow.filter(
+                tenant_id=tenant_id,
+                tool_id__in=tool_ids,
+                status=OUTSTANDING_BORROW_STATUS,
+                deleted_at__isnull=True,
+            )
+            .annotate(cnt=Count("id"))
+            .group_by("tool_id")
+            .values("tool_id", "cnt")
+        )
+        return {int(r["tool_id"]): int(r["cnt"] or 0) for r in rows}
+
+    @staticmethod
+    async def serialize_tools(tenant_id: int, tools: List[Tool]) -> List[ToolResponse]:
+        counts = await ToolService.count_outstanding_borrows(
+            tenant_id, [tool.id for tool in tools]
+        )
+        return [
+            ToolResponse.model_validate(tool).model_copy(
+                update={"borrowed_quantity": counts.get(tool.id, 0)}
+            )
+            for tool in tools
+        ]
+
+    @staticmethod
+    async def serialize_tool(tenant_id: int, tool: Tool) -> ToolResponse:
+        responses = await ToolService.serialize_tools(tenant_id, [tool])
+        return responses[0]
 
     @staticmethod
     async def update_tool(

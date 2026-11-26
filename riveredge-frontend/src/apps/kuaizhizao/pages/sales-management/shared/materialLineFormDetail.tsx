@@ -1,5 +1,6 @@
 /**
  * 有物料明细的单据 Form 行：选料回填映射、规格/型号列（规格在前、空占位 —）
+ * 规格/型号一律从物料资料带入，明细行不可改。
  */
 import React from 'react';
 import { Form } from 'antd';
@@ -7,10 +8,11 @@ import type { TFunction } from 'i18next';
 import {
   DOCUMENT_DETAIL_COL_WIDTH,
   DOCUMENT_DETAIL_CONTROL_SIZE,
+  DOCUMENT_DETAIL_NUM_COL,
   DOCUMENT_DETAIL_TEXT_COL,
   DocumentDetailLineReadonlyTextInput,
-  DocumentDetailLineTextInput,
 } from '../../../components/document-detail-table/documentDetailTable';
+import { DocumentLineTotalStockCell } from '../../../components/DocumentLineTotalStock';
 import type { PartnerMaterialLineKind } from './materialLineColumns';
 
 /** UniMaterialSelect fillMapping：编码/名称/规格/型号 */
@@ -28,21 +30,43 @@ export function withMaterialLineFillMapping(extra?: Record<string, string>): Rec
 export type DocumentDetailSpecModelFormColumnOptions = {
   width?: number;
   textCol?: Record<string, unknown>;
+  /** @deprecated 规格一律只读；保留字段以免旧调用方报错 */
   specEditable?: boolean;
-  inputSize?: React.ComponentProps<typeof DocumentDetailLineTextInput>['size'];
+  inputSize?: React.ComponentProps<typeof DocumentDetailLineReadonlyTextInput>['size'];
 };
 
-/** 明细表：规格 → 型号（Form.List 行内） */
+/** 明细表：总库存（租户全仓汇总，hover 分仓） */
+export function buildDocumentDetailTotalStockFormColumn(t: TFunction) {
+  return {
+    title: t('app.kuaizhizao.documentDetail.totalStock', '总库存'),
+    dataIndex: '_line_total_stock',
+    width: 112,
+    ...DOCUMENT_DETAIL_NUM_COL,
+    render: (_: unknown, __: unknown, index: number) => (
+      <Form.Item
+        noStyle
+        shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}
+      >
+        {({ getFieldValue }) => {
+          const materialId = getFieldValue(['items', index, 'material_id']);
+          return <DocumentLineTotalStockCell materialId={materialId} />;
+        }}
+      </Form.Item>
+    ),
+  };
+}
+
+/** 明细表：规格 → 型号（Form.List 行内；均只读，选料时由物料资料回填） */
 export function buildDocumentDetailSpecModelFormColumns(
   t: TFunction,
   options?: DocumentDetailSpecModelFormColumnOptions,
 ) {
   const width = options?.width ?? DOCUMENT_DETAIL_COL_WIDTH.spec;
   const textCol = options?.textCol ?? DOCUMENT_DETAIL_TEXT_COL;
-  const specEditable = options?.specEditable ?? true;
   const inputSize = options?.inputSize ?? DOCUMENT_DETAIL_CONTROL_SIZE;
 
   return [
+    buildDocumentDetailTotalStockFormColumn(t),
     {
       title: t('app.kuaizhizao.salesOrder.spec', '规格'),
       dataIndex: 'material_spec',
@@ -50,11 +74,7 @@ export function buildDocumentDetailSpecModelFormColumns(
       ...textCol,
       render: (_: unknown, __: unknown, index: number) => (
         <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-          {specEditable ? (
-            <DocumentDetailLineTextInput size={inputSize} />
-          ) : (
-            <DocumentDetailLineReadonlyTextInput size={inputSize} />
-          )}
+          <DocumentDetailLineReadonlyTextInput size={inputSize} />
         </Form.Item>
       ),
     },

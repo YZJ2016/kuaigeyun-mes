@@ -21,6 +21,21 @@ def _d(v: Any) -> Decimal:
     return Decimal(str(v or 0))
 
 
+def recompute_opening_fields(row: Dict[str, Any]) -> None:
+    """汇总后的期初借/贷轧差到单边（与期末余额列口径一致）。
+
+    本期/本年发生额保持借贷双边毛额，不做轧差。
+    """
+    debit = _d(row.get("opening_debit"))
+    credit = _d(row.get("opening_credit"))
+    if debit >= credit:
+        row["opening_debit"] = float(debit - credit)
+        row["opening_credit"] = 0.0
+    else:
+        row["opening_credit"] = float(credit - debit)
+        row["opening_debit"] = 0.0
+
+
 def recompute_ending_fields(row: Dict[str, Any]) -> None:
     """期初 + 本期发生额轧差到期末借/贷。"""
     debit = _d(row.get("opening_debit")) + _d(row.get("period_debit"))
@@ -31,6 +46,12 @@ def recompute_ending_fields(row: Dict[str, Any]) -> None:
     else:
         row["ending_credit"] = float(credit - debit)
         row["ending_debit"] = 0.0
+
+
+def normalize_rolled_balance_fields(row: Dict[str, Any]) -> None:
+    """合并/轧卷后的展示口径：期初与期末均单边轧差；发生额列保持毛额。"""
+    recompute_opening_fields(row)
+    recompute_ending_fields(row)
 
 
 def aggregate_balances_by_account(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -54,7 +75,7 @@ def aggregate_balances_by_account(rows: List[Dict[str, Any]]) -> List[Dict[str, 
             item[field] = float(_d(item[field]) + _d(row.get(field)))
     result = list(by_account.values())
     for item in result:
-        recompute_ending_fields(item)
+        normalize_rolled_balance_fields(item)
     result.sort(key=lambda x: str(x.get("account_code") or ""))
     return result
 
@@ -80,6 +101,7 @@ def rollup_balances_to_ancestors(
     """
     将下级科目余额逐层累加到上级科目（科目余额表/总账展示口径）。
     输入须已按 account_id 合并辅助核算。
+    汇总后对期初、期末做单边轧差；本期/本年发生额保持借贷毛额。
     """
     if not rows:
         return []
@@ -124,6 +146,6 @@ def rollup_balances_to_ancestors(
 
     result = [row for row in buckets.values() if _row_has_activity(row)]
     for row in result:
-        recompute_ending_fields(row)
+        normalize_rolled_balance_fields(row)
     result.sort(key=lambda x: str(x.get("account_code") or ""))
     return result

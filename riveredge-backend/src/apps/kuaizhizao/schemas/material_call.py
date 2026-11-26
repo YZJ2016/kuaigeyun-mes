@@ -61,10 +61,13 @@ class MaterialCallRequestCreate(BaseModel):
 
 
 class MaterialCallCompletionBatch(BaseModel):
-    """完成叫料时单行批号确认（与明细主键对应）"""
+    """完成叫料时批号确认（同一明细可多条，按批分摊数量）"""
 
     item_id: int = Field(..., description="叫料明细行 ID（material_call_request_items.id）")
     batch_no: str = Field(..., min_length=1, max_length=50, description="确认的出库批号")
+    quantity: Optional[Decimal] = Field(
+        None, description="本批分摊数量；同一明细多条时必填且合计应对齐送达量"
+    )
 
 
 class MaterialCallRequestUpdate(BaseModel):

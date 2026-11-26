@@ -64,8 +64,25 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/equipment", tags=["App - Kuaige Zhizao - Equipment"])
 
+_EQUIPMENT_READ = Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:read"))
+_EQUIPMENT_CREATE = Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:create"))
+_EQUIPMENT_UPDATE = Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:update"))
+_EQUIPMENT_DELETE = Depends(require_permission_codes("kuaizhizao:equipment-management-equipment:delete"))
+_CALIBRATION_CREATE = Depends(
+    require_permission_codes(
+        "kuaizhizao:equipment-calibration:create",
+        "kuaizhizao:measuring-instrument-calibration:create",
+        "kuaizhizao:equipment-management-equipment:update",
+    )
+)
 
-@router.post("", response_model=EquipmentResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "",
+    response_model=EquipmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[_EQUIPMENT_CREATE],
+)
 async def create_equipment(
     data: EquipmentCreate,
     current_user: User = Depends(soil_get_current_user),
@@ -93,7 +110,7 @@ async def create_equipment(
             data=data,
             created_by=current_user.id
         )
-        return EquipmentResponse.model_validate(equipment)
+        return await EquipmentService.serialize_equipment(tenant_id, equipment)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -101,7 +118,7 @@ async def create_equipment(
         )
 
 
-@router.get("", response_model=EquipmentListResponse)
+@router.get("", response_model=EquipmentListResponse, dependencies=[_EQUIPMENT_READ])
 async def list_equipment(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(100, ge=1, le=1000, description="限制数量"),
@@ -176,7 +193,7 @@ async def list_equipment(
         updated_end_date=updated_end_date,
     )
     
-    items = [EquipmentResponse.model_validate(eq) for eq in equipment_list]
+    items = await EquipmentService.serialize_equipment_list(tenant_id, equipment_list)
     
     return EquipmentListResponse(
         items=items,
@@ -659,7 +676,7 @@ async def resolve_equipment_by_scan(
     """解析系统 EQ 码、设备编码或手工绑定码。"""
     try:
         equipment = await EquipmentService.resolve_by_scan(tenant_id, q)
-        return EquipmentResponse.model_validate(equipment)
+        return await EquipmentService.serialize_equipment(tenant_id, equipment)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValidationError as e:
@@ -690,7 +707,7 @@ async def get_equipment_dispatch_snapshots(
         ) from e
 
 
-@router.get("/{uuid}", response_model=EquipmentResponse)
+@router.get("/{uuid}", response_model=EquipmentResponse, dependencies=[_EQUIPMENT_READ])
 async def get_equipment(
     uuid: str,
     current_user: User = Depends(soil_get_current_user),
@@ -714,7 +731,7 @@ async def get_equipment(
     """
     try:
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, uuid)
-        return EquipmentResponse.model_validate(equipment)
+        return await EquipmentService.serialize_equipment(tenant_id, equipment)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -722,7 +739,7 @@ async def get_equipment(
         )
 
 
-@router.put("/{uuid}", response_model=EquipmentResponse)
+@router.put("/{uuid}", response_model=EquipmentResponse, dependencies=[_EQUIPMENT_UPDATE])
 async def update_equipment(
     uuid: str,
     data: EquipmentUpdate,
@@ -752,7 +769,7 @@ async def update_equipment(
             uuid=uuid,
             data=data
         )
-        return EquipmentResponse.model_validate(equipment)
+        return await EquipmentService.serialize_equipment(tenant_id, equipment)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -765,7 +782,7 @@ async def update_equipment(
         )
 
 
-@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[_EQUIPMENT_DELETE])
 async def delete_equipment(
     uuid: str,
     current_user: User = Depends(soil_get_current_user),
@@ -828,7 +845,12 @@ async def get_equipment_trace(
         )
 
 
-@router.post("/{uuid}/calibrations", response_model=EquipmentCalibrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{uuid}/calibrations",
+    response_model=EquipmentCalibrationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[_CALIBRATION_CREATE],
+)
 async def create_equipment_calibration(
     uuid: str,
     data: EquipmentCalibrationCreate,

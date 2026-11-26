@@ -21,6 +21,7 @@ class ScopeResolveContext:
         "profile",
         "scope_payload",
         "department_uuid",
+        "department_uuids",
         "department_user_ids",
     )
 
@@ -34,13 +35,18 @@ class ScopeResolveContext:
         scope_payload: dict | None,
         department_uuid: str | None,
         department_user_ids: list[int],
+        department_uuids: list[str] | None = None,
     ) -> None:
         self.tenant_id = tenant_id
         self.user_id = user_id
         self.resource = resource
         self.profile = profile
         self.scope_payload = scope_payload or {}
-        self.department_uuid = department_uuid
+        uuids = [str(x).strip() for x in (department_uuids or []) if str(x).strip()]
+        if not uuids and department_uuid:
+            uuids = [str(department_uuid).strip()]
+        self.department_uuids = uuids
+        self.department_uuid = uuids[0] if uuids else department_uuid
         self.department_user_ids = department_user_ids
 
 

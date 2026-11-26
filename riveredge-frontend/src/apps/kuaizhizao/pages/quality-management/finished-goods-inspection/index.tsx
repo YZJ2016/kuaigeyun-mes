@@ -39,9 +39,14 @@ import {
   theme as AntdTheme,
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { lineLocationSelectionRequired } from '../../../../../components/uni-wh-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined, PrinterOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable, type UniTableRequestMeta} from '../../../../../components/uni-table';
+import {
+  PurchaseInboundLineLocationCell,
+  PurchaseInboundLineWarehouseCell,
+} from '../../warehouse-management/inbound/PurchaseInboundLineWhCells';
 import {
   UniPullQueryModal,
   filterByPullScope,
@@ -285,7 +290,16 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const [pushInboundPreviewData, setPushInboundPreviewData] = useState<PushPreviewResponse | null>(null);
   const [pushInboundPreviewSourceId, setPushInboundPreviewSourceId] = useState<number | null>(null);
   const [pushInboundPreviewQuantity, setPushInboundPreviewQuantity] = useState<number>(0);
+  const [pushInboundWarehouseId, setPushInboundWarehouseId] = useState<number | undefined>(undefined);
+  const [pushInboundLocationId, setPushInboundLocationId] = useState<number | undefined>(undefined);
+  const [pushInboundLocationCode, setPushInboundLocationCode] = useState<string>('');
   const pullFromWorkOrderCloseRef = useRef<(() => void) | null>(null);
+  const [pullFromWoPreviewOpen, setPullFromWoPreviewOpen] = useState(false);
+  const [pullFromWoPreviewLoading, setPullFromWoPreviewLoading] = useState(false);
+  const [pullFromWoPreviewConfirming, setPullFromWoPreviewConfirming] = useState(false);
+  const [pullFromWoPreviewData, setPullFromWoPreviewData] = useState<PushPreviewResponse | null>(null);
+  const [pullFromWoPreviewWorkOrderId, setPullFromWoPreviewWorkOrderId] = useState<number | null>(null);
+  const [pullFromWoPreviewQuantity, setPullFromWoPreviewQuantity] = useState(0);
   const createButtonLabel = useMemo(
     () => withSingleNewShortcutHint(pullFromWorkOrderAction.label),
     [pullFromWorkOrderAction.label],
@@ -602,7 +616,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
 
   const pullFromWorkOrderQuery = useUniPullQuery<FinishedGoodsPullWorkOrderCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullQueryScopeOptions,
     defaultScope: 'pullable',
     loadData: async ({ keyword, page, pageSize, scope }) => {
@@ -622,26 +636,85 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     },
     isRowDisabled: (row) => !isPullFinishedGoodsInspectionSelectable(row),
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
+      const selectedRows = rows.filter((x) => keys.some((k) => String(k) === String(x.id)));
+      const selected = selectedRows[0];
       if (!selected?.id) {
         messageApi.warning(t('app.kuaizhizao.quality.finished.form.selectWorkOrder'));
         return;
       }
       pullFromWorkOrderCloseRef.current?.();
+      if (selectedRows.length > 1) {
+        messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+      }
+      setPullFromWoPreviewOpen(true);
+      setPullFromWoPreviewLoading(true);
+      setPullFromWoPreviewConfirming(false);
+      setPullFromWoPreviewWorkOrderId(Number(selected.id));
+      setPullFromWoPreviewData(null);
+      setPullFromWoPreviewQuantity(0);
       try {
-        await qualityApi.finishedGoodsInspection.createFromWorkOrder(String(selected.id));
-        messageApi.success(t('app.kuaizhizao.quality.finished.messages.createSuccess'));
-        invalidateStats();
-    actionRef.current?.reload();
+        const data = await qualityApi.finishedGoodsInspection.previewPullFromWorkOrder(String(selected.id));
+        setPullFromWoPreviewData(data as PushPreviewResponse);
+        const line = (data as PushPreviewResponse).items?.[0];
+        const defaultQty = Number(line?.max_push_quantity ?? 0);
+        setPullFromWoPreviewQuantity(Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0);
       } catch (error: any) {
-        messageApi.error(
-          qualityInspectionCapabilityReasonMessage(error?.message, t) ||
-            error?.message ||
-            t('app.kuaizhizao.quality.finished.messages.createFailed'),
-        );
+        messageApi.error(error?.message || t('app.kuaizhizao.purchaseReturn.pull.previewFailed'));
+        setPullFromWoPreviewOpen(false);
+        setPullFromWoPreviewWorkOrderId(null);
+      } finally {
+        setPullFromWoPreviewLoading(false);
       }
     },
   });
+
+  const resetPullFromWoPreview = () => {
+    setPullFromWoPreviewOpen(false);
+    setPullFromWoPreviewWorkOrderId(null);
+    setPullFromWoPreviewData(null);
+    setPullFromWoPreviewQuantity(0);
+  };
+
+  const handlePullFromWoPreviewConfirm = async () => {
+    if (!pullFromWoPreviewWorkOrderId || !pullFromWoPreviewData || pullFromWoPreviewData.has_blocking_issues) return;
+    const line = pullFromWoPreviewData.items?.[0];
+    const maxQty = Number(line?.max_push_quantity ?? 0);
+    const qty = Number(pullFromWoPreviewQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyInvalid', {
+          code: line?.material_code || pullFromWoPreviewWorkOrderId,
+        }),
+      );
+      return;
+    }
+    if (qty > maxQty) {
+      messageApi.warning(
+        t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', {
+          code: line?.material_code || pullFromWoPreviewWorkOrderId,
+        }),
+      );
+      return;
+    }
+    setPullFromWoPreviewConfirming(true);
+    try {
+      await qualityApi.finishedGoodsInspection.createFromWorkOrder(String(pullFromWoPreviewWorkOrderId), {
+        inspection_quantity: qty,
+      });
+      messageApi.success(t('app.kuaizhizao.quality.finished.messages.createSuccess'));
+      resetPullFromWoPreview();
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(
+        qualityInspectionCapabilityReasonMessage(error?.message, t) ||
+          error?.message ||
+          t('app.kuaizhizao.quality.finished.messages.createFailed'),
+      );
+    } finally {
+      setPullFromWoPreviewConfirming(false);
+    }
+  };
   pullFromWorkOrderCloseRef.current = pullFromWorkOrderQuery.closeModal;
   useNewShortcut(fqcCreateEnabled ? pullFromWorkOrderQuery.openModal : () => undefined);
 
@@ -722,6 +795,9 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     setPushInboundPreviewSourceId(null);
     setPushInboundPreviewData(null);
     setPushInboundPreviewQuantity(0);
+    setPushInboundWarehouseId(undefined);
+    setPushInboundLocationId(undefined);
+    setPushInboundLocationCode('');
   };
 
   const openPushInboundPreview = async (record: FinishedGoodsInspection) => {
@@ -732,12 +808,17 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     setPushInboundPreviewSourceId(record.id);
     setPushInboundPreviewData(null);
     setPushInboundPreviewQuantity(0);
+    setPushInboundWarehouseId(undefined);
+    setPushInboundLocationId(undefined);
+    setPushInboundLocationCode('');
     try {
       const data = await qualityApi.finishedGoodsInspection.previewPushToInbound(String(record.id));
       setPushInboundPreviewData(data);
       const line = data.items?.[0];
       const defaultQty = Number(line?.max_push_quantity ?? 0);
       setPushInboundPreviewQuantity(Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0);
+      const whId = Number(data.warehouse_id ?? line?.warehouse_id ?? 0);
+      setPushInboundWarehouseId(Number.isFinite(whId) && whId > 0 ? whId : undefined);
     } catch (error: any) {
       messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.pushInboundFailed'));
       resetPushInboundPreview();
@@ -748,22 +829,44 @@ const FinishedGoodsInspectionPage: React.FC = () => {
 
   const handlePushInboundPreviewConfirm = async () => {
     if (!pushInboundPreviewSourceId || !pushInboundPreviewData || pushInboundPreviewData.has_blocking_issues) return;
-    const maxQty = Number(pushInboundPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const line = pushInboundPreviewData.items?.[0];
+    const maxQty = Number(line?.max_push_quantity ?? 0);
     const qty = Number(pushInboundPreviewQuantity);
     if (!Number.isFinite(qty) || qty <= 0) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: pushInboundPreviewData.items?.[0]?.material_code || pushInboundPreviewSourceId }));
+      messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyInvalid', { code: line?.material_code || pushInboundPreviewSourceId }));
       return;
     }
     if (qty > maxQty) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: pushInboundPreviewData.items?.[0]?.material_code || pushInboundPreviewSourceId }));
+      messageApi.warning(t('app.kuaizhizao.salesOrder.pushQtyExceedsRemaining', { code: line?.material_code || pushInboundPreviewSourceId }));
+      return;
+    }
+    const warehouseId = pushInboundWarehouseId ?? Number(pushInboundPreviewData.warehouse_id ?? line?.warehouse_id ?? 0);
+    if (!(Number.isFinite(warehouseId) && warehouseId > 0)) {
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', {
+        material: line?.material_name || line?.material_code || '-',
+      }));
+      return;
+    }
+    const needLoc = await lineLocationSelectionRequired(
+      warehouseId,
+      pushInboundLocationId,
+      pushInboundLocationCode,
+    );
+    if (needLoc) {
+      messageApi.error(
+        t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', {
+          material: line?.material_name || line?.material_code || '-',
+        }),
+      );
       return;
     }
     setPushInboundPreviewConfirming(true);
     try {
-      const warehouseId = pushInboundPreviewData.warehouse_id ?? pushInboundPreviewData.items?.[0]?.warehouse_id;
       const result = await qualityApi.finishedGoodsInspection.pushToInbound(String(pushInboundPreviewSourceId), {
         quantity: qty,
-        warehouse_id: warehouseId != null ? Number(warehouseId) : undefined,
+        warehouse_id: warehouseId,
+        location_id: pushInboundLocationId != null && pushInboundLocationId > 0 ? pushInboundLocationId : undefined,
+        location_code: pushInboundLocationCode.trim() || undefined,
       });
       const receiptCode = (result as { receipt_code?: string })?.receipt_code;
       messageApi.success(
@@ -1314,6 +1417,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={async () => {
           try {
             const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
@@ -1350,6 +1454,10 @@ const FinishedGoodsInspectionPage: React.FC = () => {
             auditEnabled={finishedAuditEnabled}
             permGates={finishedPerms}
             handlers={finishedAuditBatchHandlers}
+            auditEntity={{
+              entityType: 'finished_goods_inspection',
+              entityName: t('app.kuaizhizao.menu.quality-management.finished-goods-inspection'),
+            }}
             onSuccess={() => {
               setSelectedRowKeys([]);
               invalidateStats();
@@ -1459,6 +1567,86 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         scope={pullFromWorkOrderQuery.scope}
         onScopeChange={pullFromWorkOrderQuery.handleScopeChange}
       />
+
+      <Modal
+        title={pullFromWorkOrderAction.label}
+        open={pullFromWoPreviewOpen}
+        destroyOnHidden
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        onCancel={resetPullFromWoPreview}
+        okText={t('app.kuaizhizao.workOrder.push.fqcConfirmCreate')}
+        cancelText={t('common.cancel')}
+        confirmLoading={pullFromWoPreviewConfirming}
+        onOk={() => void handlePullFromWoPreviewConfirm()}
+        okButtonProps={{
+          disabled:
+            pullFromWoPreviewLoading ||
+            !pullFromWoPreviewData ||
+            !!pullFromWoPreviewData?.has_blocking_issues ||
+            !(pullFromWoPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0) ||
+            !(Number(pullFromWoPreviewQuantity) > 0),
+        }}
+      >
+        {pullFromWoPreviewLoading ? (
+          <div style={{ minHeight: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Spin />
+            <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.salesOrder.loadingPreview')}</div>
+          </div>
+        ) : pullFromWoPreviewData ? (
+          <div>
+            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullFromWoPreviewData.summary}</p>
+            {pullFromWoPreviewData.has_blocking_issues && pullFromWoPreviewData.blocking_reason ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                title={qualityInspectionCapabilityReasonMessage(pullFromWoPreviewData.blocking_reason, t)}
+              />
+            ) : null}
+            {pullFromWoPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pullFromWoPreviewData.items}
+                rowKey={(row) => String(row.item_id)}
+                pagination={false}
+                scroll={{ x: 920 }}
+                columns={[
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                  { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
+                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                    width: 130,
+                    render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                      const maxQty = Number(row.max_push_quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          disabled={!(maxQty > 0)}
+                          value={pullFromWoPreviewQuantity}
+                          onChange={(val) => setPullFromWoPreviewQuantity(Number(val ?? 0))}
+                        />
+                      );
+                    },
+                  },
+                ]}
+              />
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workOrder.soPullPreviewNoLines')} />
+            )}
+            {pullFromWoPreviewData.tip ? (
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+                {pullFromWoPreviewData.tip}
+              </Typography.Paragraph>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
 
       {/* 成品检验详情 Drawer */}
       <QualityInspectionDetailDrawer
@@ -1681,11 +1869,6 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         ) : pushInboundPreviewData ? (
           <div>
             <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushInboundPreviewData.summary}</p>
-            {pushInboundPreviewData.warehouse_name ? (
-              <p style={{ marginBottom: 12 }}>
-                {t('app.kuaizhizao.workOrder.colWarehouse')}: {pushInboundPreviewData.warehouse_name}
-              </p>
-            ) : null}
             {pushInboundPreviewData.has_blocking_issues && pushInboundPreviewData.blocking_reason ? (
               <Alert
                 type="warning"
@@ -1703,7 +1886,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                 dataSource={pushInboundPreviewData.items}
                 rowKey={(row) => String(row.item_id)}
                 pagination={false}
-                scroll={{ x: 920 }}
+                scroll={{ x: 1280 }}
                 columns={[
                   { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 130, ellipsis: true },
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
@@ -1724,6 +1907,57 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                           disabled={!(maxQty > 0)}
                           value={pushInboundPreviewQuantity}
                           onChange={(val) => setPushInboundPreviewQuantity(Number(val ?? 0))}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: t('app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouse'),
+                    key: 'warehouse_id',
+                    width: 180,
+                    render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                      const materialId = Number(row?.material_id ?? 0);
+                      return (
+                        <PurchaseInboundLineWarehouseCell
+                          materialId={materialId > 0 ? materialId : undefined}
+                          warehouseId={pushInboundWarehouseId}
+                          placeholder={t('app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouse')}
+                          onChange={(nv) => {
+                            if (nv == null) return;
+                            setPushInboundWarehouseId(nv);
+                            setPushInboundLocationId(undefined);
+                            setPushInboundLocationCode('');
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: (
+                      <>
+                        {t('app.kuaizhizao.purchaseOrder.pushReceiptSelectLocation')}
+                        <Typography.Text type="danger"> *</Typography.Text>
+                      </>
+                    ),
+                    key: 'location_id',
+                    width: 160,
+                    render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                      const materialId = Number(row?.material_id ?? 0);
+                      return (
+                        <PurchaseInboundLineLocationCell
+                          materialId={materialId > 0 ? materialId : undefined}
+                          warehouseId={pushInboundWarehouseId}
+                          locationId={pushInboundLocationId}
+                          selectWarehouseFirstPlaceholder={t(
+                            'app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst',
+                          )}
+                          selectLocationPlaceholder={t(
+                            'app.kuaizhizao.purchaseOrder.pushReceiptSelectLocation',
+                          )}
+                          onChange={(v, loc) => {
+                            setPushInboundLocationId(v ?? undefined);
+                            setPushInboundLocationCode(v == null ? '' : loc?.code ?? '');
+                          }}
                         />
                       );
                     },

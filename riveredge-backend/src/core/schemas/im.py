@@ -14,6 +14,8 @@ class ImConversationResponse(BaseModel):
     is_pinned: bool = False
     # 私聊对方用户 id；群聊为空
     peer_user_id: Optional[int] = None
+    # 创建人；解散群主判定与成员 role=owner 对齐时使用
+    created_by_id: Optional[int] = None
     module_codes: list[str] = Field(default_factory=list)
     member_count: int = 0
     last_message_at: Optional[datetime] = None

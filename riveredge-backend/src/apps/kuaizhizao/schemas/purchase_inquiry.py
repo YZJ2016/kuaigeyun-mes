@@ -140,7 +140,7 @@ class PurchaseInquiryCreate(BaseModel):
     currency: Optional[str] = "CNY"
     exchange_rate: Optional[Decimal] = Decimal("1")
     invoice_type: Optional[str] = None
-    tax_rate: Optional[Decimal] = Decimal("0")
+    tax_rate: Decimal = Field(..., ge=0, le=1, description="税率（小数，必填）")
     payment_method: Optional[str] = None
     payment_terms: Optional[str] = None
     trade_mode: Optional[str] = None

@@ -56,7 +56,20 @@ class PartnerMaterialPriceResolver:
         alias_code: Optional[str] = None
         alias_name: Optional[str] = None
 
-        def attach_alias(res: PartnerMaterialPriceResult) -> PartnerMaterialPriceResult:
+        async def ensure_alias() -> None:
+            """最近价/物料默认价提前返回时也须带上编号映射，否则新建单据明细客户料号空白。"""
+            nonlocal alias_code, alias_name
+            if alias_code or alias_name:
+                return
+            alias = await PartnerPriceBookService._get_partner_alias(
+                tenant_id, partner_type, partner_id, material_id
+            )
+            if alias:
+                alias_code = alias.code
+                alias_name = alias.name
+
+        async def attach_alias(res: PartnerMaterialPriceResult) -> PartnerMaterialPriceResult:
+            await ensure_alias()
             ac = res.partner_material_code or alias_code
             an = res.partner_material_name or alias_name
             if ac == res.partner_material_code and an == res.partner_material_name:
@@ -69,14 +82,15 @@ class PartnerMaterialPriceResolver:
 
         for step in order:
             if step == "recent":
-                recent = await cls._resolve_recent(
+                recent, recent_tax = await cls._resolve_recent(
                     tenant_id, side, partner_id, material_id
                 )
                 if recent is not None and recent > 0:
-                    return attach_alias(
+                    return await attach_alias(
                         PartnerMaterialPriceResult(
                             found=True,
                             unit_price=recent,
+                            tax_rate=recent_tax,
                             price_source="recent",
                         )
                     )
@@ -107,7 +121,7 @@ class PartnerMaterialPriceResolver:
                 if book.partner_material_name:
                     alias_name = book.partner_material_name
                 if book.found and book.unit_price is not None and book.unit_price > 0:
-                    return attach_alias(
+                    return await attach_alias(
                         PartnerMaterialPriceResult(
                             found=True,
                             unit_price=book.unit_price,
@@ -125,7 +139,7 @@ class PartnerMaterialPriceResolver:
         if material:
             mat_price = resolve_material_default_unit_price(material.defaults, side, qty)
             if mat_price is not None and mat_price > 0:
-                return attach_alias(
+                return await attach_alias(
                     PartnerMaterialPriceResult(
                         found=True,
                         unit_price=mat_price,
@@ -134,15 +148,7 @@ class PartnerMaterialPriceResolver:
                     )
                 )
 
-        if not alias_code and not alias_name:
-            alias = await PartnerPriceBookService._get_partner_alias(
-                tenant_id, partner_type, partner_id, material_id
-            )
-            if alias:
-                alias_code = alias.code
-                alias_name = alias.name
-
-        return attach_alias(
+        return await attach_alias(
             PartnerMaterialPriceResult(found=False, unit_price=Decimal("0"))
         )
 
@@ -153,11 +159,13 @@ class PartnerMaterialPriceResolver:
         side: Side,
         partner_id: int,
         material_id: int,
-    ) -> Optional[Decimal]:
+    ) -> tuple[Optional[Decimal], Optional[Decimal]]:
+        """返回 (未税单价, 税率%)。采购订单行单价已是未税。"""
         if side == "sales":
-            return await cls._trend.get_latest_sales_unit_price(
+            return await cls._trend.get_latest_sales_exclusive_unit_price(
                 tenant_id, material_id, partner_id
             )
-        return await cls._trend.get_latest_purchase_unit_price(
+        price = await cls._trend.get_latest_purchase_unit_price(
             tenant_id, material_id, partner_id
         )
+        return price, None

@@ -23,6 +23,7 @@ def test_material_defaults_purchase_tier():
 def test_material_defaults_sales_tier():
     defaults = {
         "salePriceMethod": "tier",
+        "defaultSalePriceType": "tax_exclusive",
         "sales": {"tierPrices": [{"minQuantity": 1, "unitPrice": "12.5"}]},
     }
     assert resolve_material_default_unit_price(defaults, "sales", Decimal("3")) == Decimal("12.5")

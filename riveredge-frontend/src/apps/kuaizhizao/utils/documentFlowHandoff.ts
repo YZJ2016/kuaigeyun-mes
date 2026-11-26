@@ -333,6 +333,38 @@ function openSinglePoHandoffDraft(
   });
 }
 
+/** 多草稿 UniTab/FormModal handoff：显式 search（含 sourceId）写入队列，禁止循环 navigate 冲掉前一张。 */
+function startUniTabHandoffDraftQueue(
+  navigate: NavigateFunction,
+  config: DocumentFlowHandoffConfig,
+  drafts: Array<{
+    search: string;
+    createPayload: Record<string, unknown>;
+    documentFlow: Record<string, unknown>;
+  }>,
+  sourceType: string,
+): void {
+  if (!drafts.length) return;
+  const [first, ...rest] = drafts;
+  stashPoHandoffDraftQueue(
+    rest.map((entry) => ({
+      actionKey: config.actionKey,
+      createPath: config.createPath,
+      search: entry.search,
+      createPayload: entry.createPayload,
+      documentFlow: entry.documentFlow,
+    })),
+  );
+  openSinglePoHandoffDraft(
+    navigate,
+    config,
+    first.search,
+    first.createPayload,
+    first.documentFlow,
+    sourceType,
+  );
+}
+
 function startPoHandoffDraftQueue(
   navigate: NavigateFunction,
   config: DocumentFlowHandoffConfig,
@@ -342,22 +374,14 @@ function startPoHandoffDraftQueue(
 ): void {
   if (!drafts.length) return;
   const batch = Date.now();
-  const [first, ...rest] = drafts;
-  const firstSearch = `?flow=${flow}&batch=${batch}&seq=1`;
-  const queue: PoHandoffQueuedDraft[] = rest.map((entry, index) => ({
-    actionKey: config.actionKey,
-    createPath: config.createPath,
-    search: `?flow=${flow}&batch=${batch}&seq=${index + 2}`,
-    createPayload: entry.create_payload,
-    documentFlow: entry.document_flow,
-  }));
-  stashPoHandoffDraftQueue(queue);
-  openSinglePoHandoffDraft(
+  startUniTabHandoffDraftQueue(
     navigate,
     config,
-    firstSearch,
-    first.create_payload,
-    first.document_flow,
+    drafts.map((entry, index) => ({
+      search: `?flow=${flow}&batch=${batch}&seq=${index + 1}`,
+      createPayload: entry.create_payload,
+      documentFlow: entry.document_flow,
+    })),
     sourceType,
   );
 }
@@ -650,7 +674,13 @@ export function continuePoHandoffQueueIfAny(navigate: NavigateFunction): boolean
           ? 'replenishment_suggestion'
           : flow === 'sales_order'
             ? 'sales_order'
-            : 'purchase_requisition';
+            : flow === 'quotation'
+              ? 'quotation'
+              : flow === 'sales_contract'
+                ? 'sales_contract'
+                : flow === 'sales_review'
+                  ? 'sales_review'
+                  : 'purchase_requisition';
   openSinglePoHandoffDraft(
     navigate,
     config,
@@ -705,21 +735,37 @@ export async function handoffQuotationToSalesReviewCreate(
   quotationId: number,
   options?: { selectedItemIds?: number[] },
 ): Promise<void> {
+  await handoffQuotationsToSalesReviewCreate(navigate, [
+    { quotationId, selectedItemIds: options?.selectedItemIds },
+  ]);
+}
+
+/** 跨多张报价单取行建评审：先汇总 draft 再开队列。 */
+export async function handoffQuotationsToSalesReviewCreate(
+  navigate: NavigateFunction,
+  selections: Array<{ quotationId: number; selectedItemIds?: number[] }>,
+): Promise<void> {
   const config = resolveDocumentFlowHandoff('sales_review.pull_from_quotation');
-  if (!config) return;
-  const draftRes: QuotationToSalesReviewDraftResponse = await draftSalesReviewFromQuotation(
-    quotationId,
-    options?.selectedItemIds,
-  );
-  const search = `?flow=quotation&sourceId=${quotationId}`;
-  writeDocumentFlowCreateDraft(config, config.createPath, search, {
-    createPayload: draftRes.create_payload,
-    documentFlow: draftRes.document_flow,
-    sourceType: draftRes.source_type,
-    sourceId: draftRes.source_id,
-    sourceCode: draftRes.source_code,
-  });
-  navigate(`${config.createPath}${search}`);
+  if (!config || !selections.length) return;
+  const drafts: Array<{
+    search: string;
+    createPayload: Record<string, unknown>;
+    documentFlow: Record<string, unknown>;
+  }> = [];
+  let sourceType = 'quotation';
+  for (const sel of selections) {
+    const draftRes: QuotationToSalesReviewDraftResponse = await draftSalesReviewFromQuotation(
+      sel.quotationId,
+      sel.selectedItemIds,
+    );
+    sourceType = draftRes.source_type || sourceType;
+    drafts.push({
+      search: `?flow=quotation&sourceId=${sel.quotationId}`,
+      createPayload: draftRes.create_payload,
+      documentFlow: draftRes.document_flow,
+    });
+  }
+  startUniTabHandoffDraftQueue(navigate, config, drafts, sourceType);
 }
 
 const DC_TO_WO_HANDOFF_KEY = 'kuaizhizao:dc-to-wo-handoff';

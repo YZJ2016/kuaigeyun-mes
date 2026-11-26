@@ -4,9 +4,10 @@
  * 提供库位的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, List, Modal, Popconfirm, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
@@ -16,7 +17,15 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { MasterDataDetailDrawer } from '../../shared/masterDataDetailDrawer';
-import { storageLocationApi, storageAreaApi } from '../../../services/warehouse';
+import {
+  storageLocationApi,
+  storageAreaApi,
+  getStorageLocationSyncBinding,
+} from '../../../services/warehouse';
+import { usePagePermissionResource } from '../../../../../hooks/usePagePermissionResource';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import { StorageLocationSyncFromSourceModal } from '../../../components/StorageLocationSyncFromSourceModal';
 import {
   buildMasterCrudActiveValueEnum,
   buildMasterCrudActiveStatusColumn,
@@ -57,6 +66,9 @@ import { buildListPageHelpViewConfig } from '../../../../../components/page-help
 const StorageLocationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  const pagePermissionResource = usePagePermissionResource(location.pathname);
+  const { canCreate } = useResourcePermissions(pagePermissionResource);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
@@ -73,6 +85,9 @@ const StorageLocationsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const [batchCreateModalVisible, setBatchCreateModalVisible] = useState(false);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncFreshnessKey, setSyncFreshnessKey] = useState(0);
+  const loadStorageLocationSyncBinding = useCallback(() => getStorageLocationSyncBinding(), []);
   
   // 库区列表（用于导入等）
   const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
@@ -136,6 +151,11 @@ const StorageLocationsPage: React.FC = () => {
       ),
     [t, i18n.language, storageAreas],
   );
+
+  const handleSyncComplete = useCallback(() => {
+    setSyncFreshnessKey((key) => key + 1);
+    actionRef.current?.reload();
+  }, []);
 
   const handleCreate = () => {
     setEditUuid(null);
@@ -205,15 +225,6 @@ const StorageLocationsPage: React.FC = () => {
   const handleImport = async (data: any[][]) => {
     if (!data || data.length === 0) {
       messageApi.warning(t('app.master-data.importEmpty'));
-      return;
-    }
-
-    // 如果库区列表为空，提示用户先创建库区
-    if (storageAreas.length === 0) {
-      getAntdModal().warning({
-        title: t('app.master-data.importDisabled'),
-        content: t('app.master-data.importNoStorageArea'),
-      });
       return;
     }
 
@@ -308,24 +319,24 @@ const StorageLocationsPage: React.FC = () => {
           return;
         }
 
-        // 处理所属库区（仅支持通过库区编号查找 storageAreaId）
+        // 所属库区可选（对齐苍穹独立仓位）；填写时按库区编号解析
         const storageAreaCodeValue = storageAreaCode ? String(storageAreaCode).trim().toUpperCase() : '';
-        if (!storageAreaCodeValue) {
-          errors.push({
-            row: actualRowIndex,
-            message: t('app.master-data.storageLocations.storageAreaRequired'),
-            kind: 'storageArea',
-          });
-          return;
-        }
-        const foundStorageArea = storageAreas.find(s => s.code.toUpperCase() === storageAreaCodeValue);
-        if (!foundStorageArea) {
-          errors.push({
-            row: actualRowIndex,
-            message: t('app.master-data.storageLocations.storageAreaCodeNotExist', { value: storageAreaCodeValue }),
-            kind: 'storageArea',
-          });
-          return;
+        let resolvedStorageAreaId: number | undefined;
+        if (storageAreaCodeValue) {
+          const foundStorageArea = storageAreas.find(
+            (s) => s.code.toUpperCase() === storageAreaCodeValue,
+          );
+          if (!foundStorageArea) {
+            errors.push({
+              row: actualRowIndex,
+              message: t('app.master-data.storageLocations.storageAreaCodeNotExist', {
+                value: storageAreaCodeValue,
+              }),
+              kind: 'storageArea',
+            });
+            return;
+          }
+          resolvedStorageAreaId = foundStorageArea.id;
         }
 
         // 构建导入数据
@@ -337,7 +348,7 @@ const StorageLocationsPage: React.FC = () => {
         const storageLocationData: StorageLocationCreate = {
           code: codeValue.toUpperCase(),
           name: nameValue,
-          storageAreaId: foundStorageArea.id,
+          storageAreaId: resolvedStorageAreaId,
           description: description ? String(description).trim() : undefined,
           isActive,
         };
@@ -558,9 +569,14 @@ const StorageLocationsPage: React.FC = () => {
   /**
    * 获取库区名称
    */
-  const getStorageAreaName = (storageAreaId: number): string => {
-    const storageArea = storageAreas.find(s => s.id === storageAreaId);
-    return storageArea ? `${storageArea.code} - ${storageArea.name}` : `${t('app.master-data.storageLocations.storageAreaIdPrefix')}: ${storageAreaId}`;
+  const getStorageAreaName = (storageAreaId?: number | null): string => {
+    if (storageAreaId == null || !Number.isFinite(Number(storageAreaId))) {
+      return '';
+    }
+    const storageArea = storageAreas.find((s) => s.id === storageAreaId);
+    return storageArea
+      ? `${storageArea.code} - ${storageArea.name}`
+      : `${t('app.master-data.storageLocations.storageAreaIdPrefix')}: ${storageAreaId}`;
   };
 
   const formatStorageAreaDisplay = (record: StorageLocation): string => {
@@ -610,6 +626,24 @@ const StorageLocationsPage: React.FC = () => {
       ellipsis: true,
       sorter: true,
       hideInSearch: true,
+    },
+    {
+      title: t('app.master-data.storageLocations.warehouse'),
+      key: 'master_ref_warehouse',
+      dataIndex: 'warehouseId',
+      width: 180,
+      minWidth: 180,
+      uniTableKeepWidth: true,
+      resizable: false,
+      order: 14,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record) => {
+        const code = record.warehouseCode ?? (record as { warehouse_code?: string }).warehouse_code;
+        const name = record.warehouseName ?? (record as { warehouse_name?: string }).warehouse_name;
+        if (code || name) return [code, name].filter(Boolean).join(' - ');
+        return '—';
+      },
     },
     {
       title: t('app.master-data.storageLocations.storageArea'),
@@ -726,7 +760,7 @@ const StorageLocationsPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<StorageLocation>
-        columnPersistenceId="apps.master-data.pages.warehouse.storage-locations.list-v3"
+        columnPersistenceId="apps.master-data.pages.warehouse.storage-locations.list-v4"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
@@ -771,6 +805,20 @@ const StorageLocationsPage: React.FC = () => {
         defaultViewType="table"
         showImportButton={true}
         onImport={handleImport}
+        showSyncButton={canCreate}
+        onSync={() => setSyncModalVisible(true)}
+        syncToolbarExtra={
+          canCreate
+            ? (syncButton) => (
+                <SyncFreshnessBadge
+                  getBinding={loadStorageLocationSyncBinding}
+                  refreshKey={syncFreshnessKey}
+                >
+                  {syncButton}
+                </SyncFreshnessBadge>
+              )
+            : undefined
+        }
         importHeaders={storageLocationImportTemplate.importHeaders}
         importExampleRow={storageLocationImportTemplate.importExampleRow}
         importColumnOptions={storageLocationImportTemplate.importColumnOptions}
@@ -863,6 +911,12 @@ const StorageLocationsPage: React.FC = () => {
         open={batchCreateModalVisible}
         onClose={() => setBatchCreateModalVisible(false)}
         onSuccess={() => handleModalSuccess()}
+      />
+
+      <StorageLocationSyncFromSourceModal
+        open={syncModalVisible}
+        onClose={() => setSyncModalVisible(false)}
+        onComplete={handleSyncComplete}
       />
     </>
   );

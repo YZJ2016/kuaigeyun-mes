@@ -44,6 +44,11 @@ class FinanceNote(BaseModel):
     receivable_id = fields.IntField(null=True, description="关联应收单")
     payable_id = fields.IntField(null=True, description="关联应付单")
     status = fields.CharField(max_length=30, description="状态")
+    review_status = fields.CharField(
+        max_length=20,
+        default="草稿",
+        description="审核状态：草稿/SUBMITTED/待审核/已审核/已驳回",
+    )
     endorse_to_name = fields.CharField(max_length=200, null=True, description="被背书人")
     discount_bank = fields.CharField(max_length=200, null=True, description="贴现银行")
     discount_date = fields.DateField(null=True, description="贴现日期")

@@ -10,13 +10,13 @@ import dayjs from '../config/dayjs';
 import { getCachedNumericPrecisionPlaces } from '../hooks/useNumericPrecision';
 import { useConfigStore } from '../stores/configStore';
 
+/** 空值占位。界面一律用长横线，禁止再用短横线 - 表示空。 */
+export const EMPTY_VALUE_PLACEHOLDER = '—';
+
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATETIME_NO_TZ_PATTERN =
   /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?$/;
 const TZ_SUFFIX_PATTERN = /(Z|[+-]\d{2}:?\d{2})$/i;
-
-/** 空值展示占位（全站统一长横线） */
-export const EMPTY_VALUE_PLACEHOLDER = '—';
 
 /** 从 configStore 获取日期格式 */
 function getDateFormatFromSiteSetting(): string {
@@ -49,7 +49,7 @@ function getDatetimeFormatFromSiteSetting(): string {
  * - 对不带时区的日期/时间字符串，按站点时区解释（避免被浏览器本机时区二次偏移）
  * - 对带时区/UTC 的值，转换到站点时区展示
  */
-function parseBySiteTimezone(
+export function parseBySiteTimezone(
   value: string | Date | number | Dayjs,
   timezone: string
 ): Dayjs {
@@ -77,7 +77,7 @@ function parseBySiteTimezone(
  */
 export function formatBusinessDateOnly(
   date: string | Date | number | Dayjs | null | undefined,
-  fallback: string = '-'
+  fallback: string = EMPTY_VALUE_PLACEHOLDER
 ): string {
   if (date == null || date === '') return fallback;
   if (dayjs.isDayjs(date)) {
@@ -112,12 +112,12 @@ export function formatBusinessDateOnly(
  * 用于单据、表格等业务展示场景
  *
  * @param date - 日期（字符串、Date 对象、Dayjs 或时间戳）
- * @param fallback - 空值时的占位（默认 '-'）
+ * @param fallback - 空值时的占位（默认长横线）
  * @returns 格式化后的日期字符串
  */
 export function formatDateBySiteSetting(
   date: string | Date | number | Dayjs | null | undefined,
-  fallback: string = '-'
+  fallback: string = EMPTY_VALUE_PLACEHOLDER
 ): string {
   if (date == null || date === '') return fallback;
   const tz = getTimezoneFromSiteSetting();
@@ -130,12 +130,12 @@ export function formatDateBySiteSetting(
  * 格式化日期时间（使用站点设置中的日期格式 + 时间 + 时区）
  *
  * @param date - 日期时间
- * @param fallback - 空值时的占位（默认 '-'）
+ * @param fallback - 空值时的占位（默认长横线）
  * @returns 格式化后的日期时间字符串
  */
 export function formatDateTimeBySiteSetting(
   date: string | Date | number | Dayjs | null | undefined,
-  fallback: string = '-'
+  fallback: string = EMPTY_VALUE_PLACEHOLDER
 ): string {
   if (date == null || date === '') return fallback;
   const tz = getTimezoneFromSiteSetting();
@@ -165,7 +165,7 @@ export function formatDateTime(
   date: string | Date | number | Dayjs | null | undefined,
   format?: string
 ): string {
-  if (!date) return '-';
+  if (!date) return EMPTY_VALUE_PLACEHOLDER;
   const tz = getTimezoneFromSiteSetting();
   return parseBySiteTimezone(date, tz).format(format ?? getDatetimeFormatFromSiteSetting());
 }
@@ -181,7 +181,7 @@ export function formatDate(
   date: string | Date | number | Dayjs | null | undefined,
   format?: string
 ): string {
-  if (!date) return '-';
+  if (!date) return EMPTY_VALUE_PLACEHOLDER;
   const tz = getTimezoneFromSiteSetting();
   return parseBySiteTimezone(date, tz).format(format ?? getDateFormatFromSiteSetting());
 }
@@ -198,11 +198,11 @@ export function formatNumber(
   decimals: number = 2
 ): string {
   if (num === null || num === undefined || num === '') {
-    return '-';
+    return EMPTY_VALUE_PLACEHOLDER;
   }
   const n = Number(num);
   if (!Number.isFinite(n)) {
-    return '-';
+    return EMPTY_VALUE_PLACEHOLDER;
   }
   return n.toLocaleString('zh-CN', {
     minimumFractionDigits: decimals,
@@ -227,7 +227,7 @@ export function resolveAmountDisplayDecimals(fieldName?: string, explicitDecimal
 }
 
 /** 格式化单价（固定位小数，跟随 common.price_decimal_places） */
-export function formatPrice(num: unknown, fallback = '-'): string {
+export function formatPrice(num: unknown, fallback = EMPTY_VALUE_PLACEHOLDER): string {
   if (num === null || num === undefined || num === '') return fallback;
   const n = Number(num);
   if (!Number.isFinite(n)) return fallback;
@@ -235,7 +235,7 @@ export function formatPrice(num: unknown, fallback = '-'): string {
 }
 
 /** 格式化金额（固定位小数，跟随 common.amount_decimal_places） */
-export function formatAmount(num: unknown, fallback = '-'): string {
+export function formatAmount(num: unknown, fallback = EMPTY_VALUE_PLACEHOLDER): string {
   if (num === null || num === undefined || num === '') return fallback;
   const n = Number(num);
   if (!Number.isFinite(n)) return fallback;
@@ -243,16 +243,16 @@ export function formatAmount(num: unknown, fallback = '-'): string {
 }
 
 /** ¥ + formatAmount */
-export function formatCurrencyAmount(num: unknown, fallback = '—'): string {
-  const body = formatAmount(num, '-');
-  if (body === '-') return fallback;
+export function formatCurrencyAmount(num: unknown, fallback = EMPTY_VALUE_PLACEHOLDER): string {
+  const body = formatAmount(num, EMPTY_VALUE_PLACEHOLDER);
+  if (body === EMPTY_VALUE_PLACEHOLDER) return fallback;
   return `¥${body}`;
 }
 
 /** ¥ + formatPrice */
-export function formatCurrencyPrice(num: unknown, fallback = '—'): string {
-  const body = formatPrice(num, '-');
-  if (body === '-') return fallback;
+export function formatCurrencyPrice(num: unknown, fallback = EMPTY_VALUE_PLACEHOLDER): string {
+  const body = formatPrice(num, EMPTY_VALUE_PLACEHOLDER);
+  if (body === EMPTY_VALUE_PLACEHOLDER) return fallback;
   return `¥${body}`;
 }
 
@@ -272,11 +272,11 @@ export function renderAmount(value: unknown): string {
  */
 export function formatQuantity(num: unknown): string {
   if (num === null || num === undefined || num === '') {
-    return '—';
+    return EMPTY_VALUE_PLACEHOLDER;
   }
   const n = Number(num);
   if (!Number.isFinite(n)) {
-    return '—';
+    return EMPTY_VALUE_PLACEHOLDER;
   }
   const decimals = getCachedNumericPrecisionPlaces('quantity');
   return n.toLocaleString('zh-CN', {

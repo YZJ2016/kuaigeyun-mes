@@ -13,6 +13,7 @@ from apps.kuaizhizao.constants import (
     ReviewStatus,
     is_draft_status,
     is_pending_review_status,
+    is_submitted_status,
     normalize_status,
 )
 from apps.kuaizhizao.services.document_action_policy.types import (
@@ -89,25 +90,37 @@ def derive_sales_forecast_capabilities(
         allows_approve_submitted_pending,
     )
 
+    submitted = is_submitted_status(str(status or ""))
     update_allowed = (
-        is_draft_status(status or "")
-        or is_pending_review_status(status or "")
+        (is_draft_status(status or "") and not submitted)
         or _is_rejected_status(status)
     )
     update_cap = _cap(
         update_allowed,
-        "sales_forecast.update.not_allowed" if not update_allowed else None,
+        (
+            "sales_forecast.update.submitted"
+            if submitted or is_pending_review_status(status or "")
+            else "sales_forecast.update.not_allowed"
+        )
+        if not update_allowed
+        else None,
     )
 
-    delete_allowed = allows_delete_unsubmitted(
+    delete_allowed = (not submitted) and allows_delete_unsubmitted(
         status, review_status, review_submitted=review_submitted
     )
     delete_cap = _cap(
         delete_allowed,
-        "sales_forecast.delete.not_allowed" if not delete_allowed else None,
+        (
+            "sales_forecast.delete.submitted"
+            if submitted
+            else "sales_forecast.delete.not_allowed"
+        )
+        if not delete_allowed
+        else None,
     )
 
-    submit_allowed = allows_submit_unsubmitted(
+    submit_allowed = (not submitted) and allows_submit_unsubmitted(
         status, review_status, review_submitted=review_submitted
     )
     submit_cap = _cap(
@@ -115,7 +128,7 @@ def derive_sales_forecast_capabilities(
         "sales_forecast.submit.not_draft" if not submit_allowed else None,
     )
 
-    withdraw_allowed = allows_approve_submitted_pending(
+    withdraw_allowed = submitted or allows_approve_submitted_pending(
         status, review_status, review_submitted=review_submitted
     )
     withdraw_cap = _cap(
@@ -188,14 +201,12 @@ def assert_sales_forecast_capability(
     pushed_to_computation: bool = False,
     has_downstream: bool = False,
     has_items: bool = True,
-    review_submitted: Optional[bool] = None,
 ) -> None:
     caps = derive_sales_forecast_capabilities(
         forecast,
         pushed_to_computation=pushed_to_computation,
         has_downstream=has_downstream,
         has_items=has_items,
-        review_submitted=review_submitted,
     )
     cap_map = {
         "update": caps.update,

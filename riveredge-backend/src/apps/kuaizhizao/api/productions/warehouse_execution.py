@@ -21,6 +21,7 @@ from core.api.deps.access import require_permission_codes, require_read_or_displ
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
 from tortoise.exceptions import IntegrityError
+from pydantic import ValidationError as PydanticValidationError
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
 from apps.kuaizhizao.services.warehouse_service import (
@@ -42,6 +43,7 @@ from apps.kuaizhizao.services.semi_finished_goods_receipt_service import SemiFin
 from apps.kuaizhizao.services.inventory_analysis_service import InventoryAnalysisService
 from apps.kuaizhizao.services.inventory_alert_service import InventoryAlertRuleService, InventoryAlertService
 from apps.kuaizhizao.services.packing_binding_service import PackingBindingService, PACKING_BINDING_SORTABLE_FIELDS
+from apps.kuaizhizao.services.packing_profile_service import PackingProfileService
 from apps.kuaizhizao.services.customer_material_registration_service import (
     BarcodeMappingRuleService,
     CustomerMaterialRegistrationService,
@@ -69,6 +71,7 @@ from apps.kuaizhizao.services.sales_delivery_sync_service import sales_delivery_
 batching_order_service = BatchingOrderService()
 batching_center_service = BatchingCenterService()
 packing_binding_service = PackingBindingService()
+packing_profile_service = PackingProfileService()
 inventory_alert_rule_service = InventoryAlertRuleService()
 inventory_alert_service = InventoryAlertService()
 inventory_analysis_service = InventoryAnalysisService()
@@ -90,9 +93,11 @@ from apps.kuaizhizao.schemas.warehouse import (
     ProductionReturnItemCreate,
     ProductionReturnItemUpdate,
     FinishedGoodsReceiptCreate,
+    FinishedGoodsReceiptUpdate,
     FinishedGoodsReceiptResponse,
     FinishedGoodsReceiptWithItemsResponse,
     SemiFinishedGoodsReceiptCreate,
+    SemiFinishedGoodsReceiptUpdate,
     SemiFinishedGoodsReceiptResponse,
     SemiFinishedGoodsReceiptWithItemsResponse,
     SalesDeliveryCreate,
@@ -141,7 +146,6 @@ from apps.kuaizhizao.schemas.warehouse import (
     MaterialPrepReminderResponse,
     InboundConfirmationRequest,
     OutboundConfirmationRequest,
-    OutboundConfirmationItem,
 )
 from apps.kuaizhizao.schemas.purchase_receipt_sync import (
     PurchaseReceiptPushBindingOut,
@@ -196,6 +200,15 @@ from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingStatisticsResponse,
     PackingBindingTaskPoolResponse,
     PackingSourceRemainingResponse,
+    PackingSessionOpenRequest,
+    PackingSessionScanRequest,
+    PackingNestPalletRequest,
+    PackingConsumeRequest,
+    PackingConsumeResponse,
+    PackingProfileResponse,
+    PackingProfileUpdate,
+    PackingCartonizationSuggestRequest,
+    PackingCartonizationSuggestResponse,
 )
 from apps.kuaizhizao.schemas.customer_material_registration import (
     BarcodeMappingRuleCreate,
@@ -2139,6 +2152,31 @@ async def preview_work_order_inbound(
     )
 
 
+@router.post(
+    "/finished-goods-receipts/preview-blank-from-work-orders",
+    summary="Preview finished goods blank receipt lines from work orders",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:read"))],
+)
+async def preview_blank_finished_goods_from_work_orders(
+    body: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.schemas.warehouse import FinishedGoodsBlankFromWorkOrdersRequest
+
+    try:
+        req = FinishedGoodsBlankFromWorkOrdersRequest.model_validate(body)
+    except PydanticValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    try:
+        return await FinishedGoodsReceiptService().preview_blank_finished_goods_from_work_orders(
+            tenant_id=tenant_id,
+            work_order_ids=req.work_order_ids,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get(
     "/finished-goods-receipts/work-order-pull-lines",
     summary="Open work order product lines for finished goods receipt pull",
@@ -2370,6 +2408,26 @@ async def get_finished_goods_receipt(
     )
 
 
+@router.put(
+    "/finished-goods-receipts/{receipt_id}",
+    response_model=FinishedGoodsReceiptWithItemsResponse,
+    summary="Update finished goods receipt",
+)
+async def update_finished_goods_receipt(
+    receipt_id: int,
+    receipt: FinishedGoodsReceiptUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> FinishedGoodsReceiptWithItemsResponse:
+    """更新成品入库单（草稿/待入库可改表头与明细）。"""
+    return await FinishedGoodsReceiptService().update_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        receipt_data=receipt,
+        updated_by=current_user.id,
+    )
+
+
 @router.post("/finished-goods-receipts/{receipt_id}/confirm", response_model=FinishedGoodsReceiptResponse, summary="Confirm finished goods receipt")
 async def confirm_finished_goods_receipt(
     receipt_id: int,
@@ -2507,6 +2565,26 @@ async def get_semi_finished_goods_receipt(
     return await SemiFinishedGoodsReceiptService().get_semi_finished_goods_receipt_by_id(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
+    )
+
+
+@router.put(
+    "/semi-finished-goods-receipts/{receipt_id}",
+    response_model=SemiFinishedGoodsReceiptResponse,
+    summary="Update semi-finished goods receipt",
+)
+async def update_semi_finished_goods_receipt(
+    receipt_id: int,
+    receipt: SemiFinishedGoodsReceiptUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SemiFinishedGoodsReceiptResponse:
+    """更新半成品入库单（草稿/待入库可改表头与明细）。"""
+    return await SemiFinishedGoodsReceiptService().update_semi_finished_goods_receipt(
+        tenant_id=tenant_id,
+        receipt_id=receipt_id,
+        receipt_data=receipt,
+        updated_by=current_user.id,
     )
 
 
@@ -2866,6 +2944,169 @@ async def seal_packing_binding(
         tenant_id=tenant_id,
         binding_id=binding_id,
     )
+
+
+@router.post(
+    "/packing-bindings/session/open",
+    response_model=PackingBindingResponse,
+    summary="Open packing session (allocate box HU)",
+)
+async def open_packing_session(
+    body: PackingSessionOpenRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    return await packing_binding_service.open_packing_session(
+        tenant_id=tenant_id,
+        source_type=body.source_type,
+        source_id=body.source_id,
+        product_id=body.product_id,
+        source_line_id=body.source_line_id,
+        bound_by=current_user.id,
+        box_no=body.box_no,
+        packing_material_id=body.packing_material_id,
+        packing_material_code=body.packing_material_code,
+        packing_material_name=body.packing_material_name,
+    )
+
+
+@router.post(
+    "/packing-bindings/{binding_id}/session/scan",
+    response_model=PackingBindingResponse,
+    summary="Scan serial into open packing box",
+)
+async def scan_packing_session(
+    binding_id: int,
+    body: PackingSessionScanRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    return await packing_binding_service.scan_into_packing_session(
+        tenant_id=tenant_id,
+        binding_id=binding_id,
+        serial_number=body.serial_number,
+        quantity=body.quantity,
+        scanned_by=current_user.id,
+    )
+
+
+@router.post(
+    "/packing-bindings/lines/{line_id}/unbind",
+    response_model=PackingBindingResponse,
+    summary="Unbind packing line (audit trail)",
+)
+async def unbind_packing_line(
+    line_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    return await packing_binding_service.unbind_packing_line(
+        tenant_id=tenant_id,
+        line_id=line_id,
+        operator_id=current_user.id,
+    )
+
+
+@router.post(
+    "/packing-bindings/pallets/nest",
+    response_model=List[PackingBindingListResponse],
+    summary="Nest sealed cartons on pallet",
+)
+async def nest_packing_pallet(
+    body: PackingNestPalletRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingBindingListResponse]:
+    return await packing_binding_service.nest_boxes_on_pallet(
+        tenant_id=tenant_id,
+        pallet_no=body.pallet_no,
+        box_nos=body.box_nos,
+    )
+
+
+@router.get(
+    "/packing-bindings/resolve-box/{box_no}",
+    response_model=PackingBindingResponse,
+    summary="Resolve box HU by box number",
+)
+async def resolve_packing_box(
+    box_no: str,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    return await packing_binding_service.resolve_box(tenant_id=tenant_id, box_no=box_no)
+
+
+@router.post(
+    "/packing-bindings/consume",
+    response_model=PackingConsumeResponse,
+    summary="Consume sealed box or serial for source document",
+)
+async def consume_packing_hu(
+    body: PackingConsumeRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingConsumeResponse:
+    result = await packing_binding_service.consume_packing_hu(
+        tenant_id=tenant_id,
+        source_type=body.source_type,
+        source_id=body.source_id,
+        box_nos=body.box_nos,
+        serial_numbers=body.serial_numbers,
+        operator_id=current_user.id,
+    )
+    return PackingConsumeResponse.model_validate(result)
+
+
+@router.get(
+    "/packing-profiles",
+    response_model=List[PackingProfileResponse],
+    summary="List packing profiles",
+)
+async def list_packing_profiles(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[PackingProfileResponse]:
+    await packing_profile_service.ensure_tenant_default_profile(tenant_id)
+    rows = await packing_profile_service.list_profiles(tenant_id)
+    return [PackingProfileResponse.model_validate(r) for r in rows]
+
+
+@router.put(
+    "/packing-profiles/{profile_id}",
+    response_model=PackingProfileResponse,
+    summary="Update packing profile",
+)
+async def update_packing_profile(
+    profile_id: int,
+    body: PackingProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingProfileResponse:
+    data = body.model_dump(exclude_unset=True)
+    row = await packing_profile_service.update_profile(tenant_id, profile_id, data)
+    return PackingProfileResponse.model_validate(row)
+
+
+@router.post(
+    "/packing-profiles/suggest-cartonization",
+    response_model=PackingCartonizationSuggestResponse,
+    summary="Suggest box count from profile capacity",
+)
+async def suggest_packing_cartonization(
+    body: PackingCartonizationSuggestRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingCartonizationSuggestResponse:
+    profile = await packing_profile_service.get_effective_profile(
+        tenant_id, material_id=body.material_id
+    )
+    result = packing_profile_service.suggest_cartonization(
+        profile,
+        line_count=body.line_count,
+        total_quantity=body.total_quantity,
+    )
+    return PackingCartonizationSuggestResponse.model_validate(result)
 
 
 @router.get("/packing-bindings/{binding_id}", response_model=PackingBindingResponse, summary="Get packing binding")

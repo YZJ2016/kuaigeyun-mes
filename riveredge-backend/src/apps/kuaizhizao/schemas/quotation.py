@@ -36,7 +36,7 @@ class QuotationItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     material_unit: str = Field(..., max_length=20, description="物料单位")
     quote_quantity: Decimal = Field(..., gt=0, description="报价数量")
     unit_price: Decimal = Field(..., ge=0, description="单价")
-    tax_rate: Decimal = Field(Decimal("0"), ge=0, le=100, description="税率（%）")
+    tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（%，必填）")
     total_amount: Optional[Decimal] = Field(None, ge=0, description="金额")
     is_gift: bool = Field(False, description="是否赠品")
     gift_ref_unit_price: Optional[Decimal] = Field(None, ge=0, description="赠品参考单价")

@@ -38,6 +38,7 @@ const baseResolver = createLifecycleResolver({
   statusToKey: {
     草稿: 'pending_apply',
     DRAFT: 'pending_apply',
+    SUBMITTED: 'pending_apply',
     待审核: 'pending_apply',
     PENDING_REVIEW: 'pending_apply',
     已审核: 'pending_apply',
@@ -118,6 +119,7 @@ export function isOrderChangePendingReview(record: { status?: string } | null | 
 const ORDER_CHANGE_STATUS_TO_STAGE_KEY: Record<string, string> = {
   草稿: 'pending_apply',
   DRAFT: 'pending_apply',
+  SUBMITTED: 'pending_apply',
   待审核: 'pending_apply',
   PENDING_REVIEW: 'pending_apply',
   已审核: 'pending_apply',

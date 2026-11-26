@@ -729,14 +729,26 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
                         name="defaultInspectionPlanIds"
                         label={t('field.operation.defaultInspectionPlan')}
                         colProps={{ span: 24 }}
-                        formItemProps={{ preserve: true }}
+                        formItemProps={{
+                          preserve: true,
+                          rules: [
+                            {
+                              required: true,
+                              type: 'array',
+                              min: 1,
+                              message: t('app.master-data.materialForm.inspectionPlanRequiredWhenPlanMode', {
+                                stage: t('app.master-data.operationForm.inspectionStageIpqc'),
+                              }),
+                            },
+                          ],
+                        }}
                         renderFormItem={(p: any) => (
                           <UniDropdown
                             {...p.fieldProps}
                             mode="multiple"
                             placeholder={t('field.operation.defaultInspectionPlanOrderedPlaceholder')}
                             options={inspectionPlanOptions}
-                            allowClear
+                            allowClear={false}
                             style={{ width: '100%' }}
                             maxTagCount={2}
                             maxTagPlaceholder={(omitted: unknown[]) => `+${omitted.length}`}

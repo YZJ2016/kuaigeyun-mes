@@ -14,12 +14,17 @@ from loguru import logger
 
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor, EquipmentStatusHistory
+from apps.kuaizhizao.schemas.equipment import EQUIPMENT_STATUS_PROTECTED
 from apps.kuaizhizao.schemas.equipment_status_monitor import (
     EquipmentStatusMonitorCreate,
     EquipmentStatusMonitorUpdate,
     EquipmentStatusUpdateRequest,
 )
 from apps.kuaizhizao.services.equipment_service import EquipmentService
+from apps.kuaizhizao.services.equipment_status_guard import (
+    equipment_status_writeback_blocked,
+    resolve_status_for_monitor_writeback,
+)
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -59,21 +64,26 @@ class EquipmentStatusMonitorService:
         # 验证设备是否存在
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, data.equipment_uuid)
 
-        monitor = await self._save_status_monitor(tenant_id, equipment, data)
+        blocked = await equipment_status_writeback_blocked(tenant_id, equipment.id)
+        effective_status = resolve_status_for_monitor_writeback(
+            equipment.status, data.status, blocked=blocked
+        )
+        monitor_data = data.model_copy(update={"status": effective_status})
+        monitor = await self._save_status_monitor(tenant_id, equipment, monitor_data)
 
-        # SCADA/传感器等自动采集：仅状态变化时写历史并回写台账
-        if equipment.status != data.status:
+        # SCADA/传感器等自动采集：仅状态变化且未被护栏拦截时回写台账
+        if equipment.status != effective_status:
             await self._create_status_history(
                 tenant_id=tenant_id,
                 equipment_id=equipment.id,
                 equipment_uuid=equipment.uuid,
                 from_status=equipment.status,
-                to_status=data.status,
+                to_status=effective_status,
                 changed_by=created_by,
                 reason="状态监控更新",
                 attachments=data.attachments,
             )
-            equipment.status = data.status
+            equipment.status = effective_status
             await equipment.save()
 
         return monitor
@@ -248,6 +258,14 @@ class EquipmentStatusMonitorService:
         equipment = await EquipmentService.get_equipment_by_uuid(tenant_id, data.equipment_uuid)
 
         from_status = equipment.status
+        if str(from_status or "") in EQUIPMENT_STATUS_PROTECTED and data.status != from_status:
+            raise ValidationError(
+                f"设备当前为「{from_status}」，请通过报废/状态变更单据处理，不可在状态监控中直接改状态"
+            )
+        if await equipment_status_writeback_blocked(tenant_id, equipment.id) and data.status != from_status:
+            raise ValidationError(
+                "存在未闭环故障或进行中维修，请先完修或关闭故障后再在状态监控中变更状态"
+            )
 
         user_name = None
         if updated_by:

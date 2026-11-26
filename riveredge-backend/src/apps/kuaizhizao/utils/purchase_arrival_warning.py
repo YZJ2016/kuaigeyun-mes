@@ -115,6 +115,10 @@ def resolve_arrival_processing_status(
         return "change_pending"
     if st == OrderChangeApplyStatus.APPLIED.value:
         return "changed"
+    if st == DocumentStatus.SUBMITTED.value:
+        return "submitted"
+    if st == DocumentStatus.DRAFT.value:
+        return "reported"
     if st in (DocumentStatus.PENDING_REVIEW.value,) or rs in (
         ReviewStatus.PENDING.value,
         "PENDING_REVIEW",

@@ -5,8 +5,14 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Descriptions, Space } from 'antd';
+import {
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormSelect,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, Button, Space } from 'antd';
 import { DeleteOutlined, EyeOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -27,15 +33,17 @@ import {
   buildQualityInspectionPartnerStackedColumn,
 } from '../components/qualityTableColumns';
 import {
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
-  FormModalTemplate,
-  ListPageTemplate,
-  MODAL_CONFIG,
-} from '../../../../../components/layout-templates';
+  buildQualityInspectionDetailCodeColumn,
+  buildQualityInspectionDetailMaterialColumns,
+  buildQualityInspectionDetailNotesColumn,
+  buildQualityInspectionDetailPeopleColumns,
+  buildQualityInspectionDetailQuantityStatusColumns,
+} from '../components/qualityDetailColumns';
+import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityApi } from '../../../services/quality-execution';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { InspectionConductInfoCard } from '../components/InspectionConductInfoCard';
+import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
   buildConductStepResultDefaults,
   getInspectionTemplateSource,
@@ -55,6 +63,8 @@ import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcu
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import {
   filterDeletableQualityInspectionRecords,
   filterRevokeConductQualityInspectionRecords,
@@ -69,9 +79,11 @@ import {
 import {
   getQualityInspectionResultValueEnum,
   getQualityQualityStatusValueEnum,
+  qualityInspectionUniAuditProps,
   renderQualityDocStatusTag,
   renderQualityQualityStatusTag,
 } from '../components/qualityMeta';
+import { renderQualityInspectionPlanSummary } from '../components/QualityInspectionDetailSupplement';
 import type { QualityPullCandidateBase } from '../components/qualityPullQueryColumns';
 
 type OutsourceInspectionRow = Record<string, any>;
@@ -103,7 +115,7 @@ const OutsourceInspectionPage: React.FC = () => {
   const [conductSubmitting, setConductSubmitting] = useState(false);
 
   const osqcPerms = useResourcePermissions(RESOURCE);
-  const { canRead, canCreate, canDelete, canExecute, canApprove } = osqcPerms;
+  const { canRead, canCreate, canDelete, canUpdate } = osqcPerms;
   const { enabled: stageEnabled } = useQualityStageCreateEnabled('osqc');
   const osqcAuditEnabled = useAuditRequired('outsource_inspection', false);
   const selectedRecordsForBatch = useMemo(
@@ -142,6 +154,23 @@ const OutsourceInspectionPage: React.FC = () => {
     }
   }, [message, reload, selectedRecordsForBatch, t]);
 
+  const executeRevokeConduct = useCallback(
+    async (row: OutsourceInspectionRow) => {
+      try {
+        await qualityApi.outsourceInspection.revokeConduct(row.id);
+        message.success(t('app.kuaizhizao.quality.common.messages.revokeConductSuccess'));
+        if (detailRow?.id != null && String(detailRow.id) === String(row.id)) {
+          const detail = await qualityApi.outsourceInspection.get(row.id);
+          setDetailRow(detail as OutsourceInspectionRow);
+        }
+        reload();
+      } catch (e: any) {
+        message.error(e?.message || t('app.kuaizhizao.quality.common.messages.revokeConductFailed'));
+      }
+    },
+    [detailRow?.id, message, reload, t],
+  );
+
   const openDetail = useCallback(
     async (row: OutsourceInspectionRow) => {
       setDetailOpen(true);
@@ -158,6 +187,16 @@ const OutsourceInspectionPage: React.FC = () => {
     },
     [message, t],
   );
+
+  const refreshDetailIfOpen = useCallback(async () => {
+    if (detailRow?.id == null) return;
+    try {
+      const detail = await qualityApi.outsourceInspection.get(detailRow.id);
+      setDetailRow(detail as OutsourceInspectionRow);
+    } catch {
+      /* keep current */
+    }
+  }, [detailRow?.id]);
 
   const isPullSelectable = useCallback((row: ReceiptPullCandidate) => row.can_pull !== false, []);
 
@@ -249,6 +288,30 @@ const OutsourceInspectionPage: React.FC = () => {
     [t],
   );
 
+  const detailBaseColumns: ProDescriptionsItemProps<OutsourceInspectionRow>[] = useMemo(
+    () => [
+      buildQualityInspectionDetailCodeColumn<OutsourceInspectionRow>(t),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionKind'),
+        key: 'inspection_plan_summary',
+        render: (_, row) => renderQualityInspectionPlanSummary(row as Record<string, unknown>, t),
+      },
+      {
+        title: t('app.kuaizhizao.quality.pullQuery.receiptCode', { defaultValue: '收货单号' }),
+        dataIndex: 'outsource_receipt_code',
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.supplier', { defaultValue: '供应商' }),
+        dataIndex: 'supplier_name',
+      },
+      ...buildQualityInspectionDetailMaterialColumns<OutsourceInspectionRow>(t),
+      ...buildQualityInspectionDetailQuantityStatusColumns<OutsourceInspectionRow>(t),
+      ...buildQualityInspectionDetailPeopleColumns<OutsourceInspectionRow>(t),
+      buildQualityInspectionDetailNotesColumn<OutsourceInspectionRow>(t),
+    ],
+    [t],
+  );
+
   const columns = useMemo(() => {
     const cols: ProColumns<OutsourceInspectionRow>[] = [
       buildQualityInspectionListCodeColumn(t),
@@ -287,10 +350,11 @@ const OutsourceInspectionPage: React.FC = () => {
         key: 'option',
         fixed: 'right',
         render: (_, row) => {
-          const caps = row.capabilities || {};
+          const gates = qualityInspectionRowGates(row, osqcPerms, osqcPerms, t);
           const actions: React.ReactNode[] = [
             <Button
               key="view"
+              {...rowActionKind('read')}
               type="link"
               size="small"
               icon={<EyeOutlined />}
@@ -299,13 +363,15 @@ const OutsourceInspectionPage: React.FC = () => {
               {t('common.detail')}
             </Button>,
           ];
-          if (canExecute && caps.conduct?.allowed !== false) {
+          if (gates.conduct.allowed) {
             actions.push(
               <Button
                 key="conduct"
                 {...rowActionKind('execute')}
                 type="link"
                 size="small"
+                disabled={gates.conduct.disabled}
+                title={gates.conduct.title}
                 onClick={() => {
                   setConductRow(row);
                   setConductOpen(true);
@@ -315,26 +381,49 @@ const OutsourceInspectionPage: React.FC = () => {
               </Button>,
             );
           }
-          if (canApprove && caps.approve?.allowed) {
+          actions.push(
+            <UniWorkflowActions
+              {...rowActionKind('skip')}
+              key="wf"
+              record={row}
+              {...qualityInspectionUniAuditProps({
+                entityType: 'outsource_inspection',
+                resourcePrefix: RESOURCE,
+                entityName: t('app.kuaizhizao.quality.common.entity.outsourceInspection', {
+                  defaultValue: '委外检验单',
+                }),
+                onSuccess: () => {
+                  reload();
+                  void refreshDetailIfOpen();
+                },
+              })}
+            />,
+          );
+          if (gates.revokeConduct.allowed) {
             actions.push(
               <ActionConfirmPopconfirm
-                key="approve"
-                title={t('app.kuaizhizao.quality.common.approveConfirm', {
-                  defaultValue: '确认审核通过？',
+                key="revoke-conduct"
+                title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')}
+                description={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmContent', {
+                  code: row.inspection_code || row.id,
                 })}
-                onConfirm={async () => {
-                  await qualityApi.outsourceInspection.approve(row.id, { approve: true });
-                  message.success(t('common.success'));
-                  reload();
-                }}
+                onConfirm={() => executeRevokeConduct(row)}
               >
-                <Button type="link" size="small">
-                  {t('common.approve', { defaultValue: '审核' })}
+                <Button
+                  {...rowActionKind('update')}
+                  type="link"
+                  size="small"
+                  icon={<RollbackOutlined />}
+                  disabled={gates.revokeConduct.disabled}
+                  title={gates.revokeConduct.title}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
                 </Button>
               </ActionConfirmPopconfirm>,
             );
           }
-          if (canDelete && caps.delete?.allowed !== false) {
+          if (gates.delete.allowed) {
             actions.push(
               <ActionConfirmPopconfirm
                 key="delete"
@@ -345,7 +434,15 @@ const OutsourceInspectionPage: React.FC = () => {
                   reload();
                 }}
               >
-                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={gates.delete.disabled}
+                  title={gates.delete.title}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   {t('common.delete')}
                 </Button>
               </ActionConfirmPopconfirm>,
@@ -356,7 +453,16 @@ const OutsourceInspectionPage: React.FC = () => {
       },
     ];
     return alignProColumns(cols, SALES_DOC_LIST_FIELD_RANK);
-  }, [t, auditCol, openDetail, canExecute, canApprove, canDelete, message, reload]);
+  }, [
+    t,
+    auditCol,
+    openDetail,
+    osqcPerms,
+    executeRevokeConduct,
+    message,
+    reload,
+    refreshDetailIfOpen,
+  ]);
 
   const handleConductSubmit = async (values: Record<string, any>) => {
     if (!conductRow?.id) return;
@@ -429,6 +535,7 @@ const OutsourceInspectionPage: React.FC = () => {
             : []
         }
         showDeleteButton={!!canDelete}
+        deleteButtonText={t('common.delete')}
         onDelete={async () => {
           try {
             const deletable = filterDeletableQualityInspectionRecords(selectedRecordsForBatch);
@@ -456,18 +563,23 @@ const OutsourceInspectionPage: React.FC = () => {
           t('app.kuaizhizao.quality.outsource.messages.deleteConfirm', { count })
         }
         toolBarActionsAfterDelete={[
-          <ActionConfirmPopconfirm
-            key="revoke-conduct-batch"
-            title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')}
-            description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', {
-              count: filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch).length,
-            })}
-            onConfirm={() => executeBatchRevokeConduct()}
-          >
-            <Button icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
-              {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
-            </Button>
-          </ActionConfirmPopconfirm>,
+          ...(canUpdate
+            ? [
+                <ActionConfirmPopconfirm
+                  key="revoke-conduct-batch"
+                  title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')}
+                  description={t('app.kuaizhizao.quality.common.messages.revokeConductBatchConfirm', {
+                    count: filterRevokeConductQualityInspectionRecords(selectedRecordsForBatch)
+                      .length,
+                  })}
+                  onConfirm={() => executeBatchRevokeConduct()}
+                >
+                  <Button icon={<RollbackOutlined />} onClick={(e) => e.stopPropagation()}>
+                    {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+                  </Button>
+                </ActionConfirmPopconfirm>,
+              ]
+            : []),
           <UniAuditBatchMenuButton
             key="outsource-inspection-batch-menu"
             selectedRowKeys={selectedRowKeys}
@@ -475,6 +587,10 @@ const OutsourceInspectionPage: React.FC = () => {
             auditEnabled={osqcAuditEnabled}
             permGates={osqcPerms}
             handlers={osqcAuditBatchHandlers}
+            auditEntity={{
+              entityType: 'outsource_inspection',
+              entityName: t('app.kuaizhizao.menu.quality-management.outsource-inspection'),
+            }}
             onSuccess={() => {
               setSelectedRowKeys([]);
               reload();
@@ -523,7 +639,7 @@ const OutsourceInspectionPage: React.FC = () => {
         onScopeChange={pullFromReceiptQuery.handleScopeChange}
       />
 
-      <DetailDrawerTemplate
+      <QualityInspectionDetailDrawer
         title={t('app.kuaizhizao.quality.outsource.modal.detailTitle', {
           code: detailRow?.inspection_code || '',
         })}
@@ -532,58 +648,73 @@ const OutsourceInspectionPage: React.FC = () => {
           setDetailOpen(false);
           setDetailRow(null);
         }}
-        size={DRAWER_CONFIG.HALF_WIDTH}
+        inspection={detailRow}
+        documentType="outsource_inspection"
         loading={detailLoading && !detailRow}
-        basic={
+        extra={
           detailRow ? (
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label={t('app.kuaizhizao.quality.common.columns.inspectionCode')}>
-                {detailRow.inspection_code}
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t('app.kuaizhizao.quality.pullQuery.receiptCode', { defaultValue: '收货单号' })}
-              >
-                {detailRow.outsource_receipt_code || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t('app.kuaizhizao.quality.common.supplier', { defaultValue: '供应商' })}
-              >
-                {detailRow.supplier_name || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t('app.kuaizhizao.quality.common.material', { defaultValue: '物料' })}
-              >
-                {`${detailRow.material_code || ''} ${detailRow.material_name || ''}`.trim()}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.kuaizhizao.quality.common.columns.materialSpec')}>
-                {detailRow.material_spec?.trim() ? detailRow.material_spec : '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('app.master-data.materials.model', '型号')}>
-                {(detailRow as { material_model?: string }).material_model?.trim()
-                  ? (detailRow as { material_model?: string }).material_model
-                  : '—'}
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t('app.kuaizhizao.quality.common.quantity', { defaultValue: '检验数量' })}
-              >
-                {detailRow.inspection_quantity}
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t('app.kuaizhizao.quality.common.qualityStatus', { defaultValue: '质量状态' })}
-              >
-                {detailRow.quality_status || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item
-                label={t('app.kuaizhizao.quality.common.docStatus', { defaultValue: '单据状态' })}
-              >
-                {detailRow.status || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('common.remark')} span={2}>
-                {detailRow.notes || '-'}
-              </Descriptions.Item>
-            </Descriptions>
+            <Space wrap size="small">
+              {(() => {
+                const gates = qualityInspectionRowGates(detailRow, osqcPerms, osqcPerms, t);
+                return (
+                  <>
+                    {gates.conduct.allowed ? (
+                      <Button
+                        {...rowActionKind('execute')}
+                        type="primary"
+                        size="small"
+                        disabled={gates.conduct.disabled}
+                        title={gates.conduct.title}
+                        onClick={() => {
+                          setConductRow(detailRow);
+                          setConductOpen(true);
+                        }}
+                      >
+                        {t('app.kuaizhizao.quality.common.conduct', { defaultValue: '检验' })}
+                      </Button>
+                    ) : null}
+                    <UniWorkflowActions
+                      {...rowActionKind('skip')}
+                      record={detailRow}
+                      {...qualityInspectionUniAuditProps({
+                        entityType: 'outsource_inspection',
+                        resourcePrefix: RESOURCE,
+                        entityName: t('app.kuaizhizao.quality.common.entity.outsourceInspection', {
+                          defaultValue: '委外检验单',
+                        }),
+                        onSuccess: () => {
+                          reload();
+                          void refreshDetailIfOpen();
+                        },
+                      })}
+                    />
+                    {gates.revokeConduct.allowed ? (
+                      <ActionConfirmPopconfirm
+                        title={t('app.kuaizhizao.quality.common.actions.revokeConductConfirmTitle')}
+                        description={t(
+                          'app.kuaizhizao.quality.common.actions.revokeConductConfirmContent',
+                          { code: detailRow.inspection_code || detailRow.id },
+                        )}
+                        onConfirm={() => executeRevokeConduct(detailRow)}
+                      >
+                        <Button
+                          {...rowActionKind('update')}
+                          size="small"
+                          icon={<RollbackOutlined />}
+                          disabled={gates.revokeConduct.disabled}
+                          title={gates.revokeConduct.title}
+                        >
+                          {t('app.kuaizhizao.quality.common.actions.revokeConduct')}
+                        </Button>
+                      </ActionConfirmPopconfirm>
+                    ) : null}
+                  </>
+                );
+              })()}
+            </Space>
           ) : null
         }
+        basicColumns={detailBaseColumns}
       />
 
       <FormModalTemplate

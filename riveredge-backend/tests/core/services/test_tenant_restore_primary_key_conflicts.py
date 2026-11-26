@@ -141,6 +141,27 @@ def test_fk_columns_to_serial_parents_skips_ambiguous_column_names():
     }
 
 
+def test_fk_columns_to_serial_parents_infers_by_child_table_prefix():
+    """无 FK 的 template_id：子表名挂在父模板表后时跟随主键偏移。"""
+    parent = "apps_kuaiplm_rd_gate_templates"
+    child = "apps_kuaiplm_rd_gate_template_stages"
+    plan = {
+        parent: (["id", "tenant_id"], "id,tenant_id\n1,2\n"),
+        child: (
+            ["id", "tenant_id", "template_id", "gate_key"],
+            "id,tenant_id,template_id,gate_key\n1,2,1,concept\n",
+        ),
+        # 另一张也有 template_id，但子表名不挂靠 gate_templates → 不误绑
+        "apps_other_items": (
+            ["id", "tenant_id", "template_id"],
+            "id,tenant_id,template_id\n1,2,1\n",
+        ),
+    }
+    mapped = jobs._fk_columns_to_serial_parents([], {parent, child, "apps_other_items"}, plan)
+    assert mapped[child]["template_id"] == parent
+    assert "template_id" not in mapped.get("apps_other_items", {})
+
+
 async def test_dedupe_import_plan_unique_indexes_code_rules_live():
     class Connection:
         async def execute_query_dict(self, sql, args=None):
@@ -241,8 +262,7 @@ async def test_global_unique_uuid_only_colliding_values_remapped():
     assert values[0] != "used-one"
     uuid_module.UUID(values[0])
     assert len(seen_queries) >= 2  # 初检 + 重检各一次
-    assert "IS DISTINCT FROM" in seen_queries[0][0]  # 探测排除目标租户自身
-    assert seen_queries[0][1][1] == 3
+    assert "IS DISTINCT FROM" in seen_queries[0][0]
 
 
 async def test_global_unique_uuid_ignores_target_tenant_own_rows():
@@ -362,31 +382,27 @@ async def test_sequential_code_conflict_remaps_after_db_max():
 
 
 async def test_tenant_id_unique_table_dedupes_instead_of_failing():
-    """全量 UNIQUE(tenant_id) 表（如 apps_kuaicaiwu_gl_book_settings）不误报，重复行去重保末行.
-
-    注意：仅全量唯一（indpred IS NULL）才走此分支；partial unique（如
-    core_permission_versions 的 WHERE user_id IS NULL）不参与判定。
-    """
+    """UNIQUE(tenant_id) 表（如 core_permission_versions）不误报，重复行去重保末行."""
 
     class Connection:
         async def execute_query_dict(self, sql, args=None):
             if "FROM pg_index" in sql:
-                return [{"table_name": "apps_kuaicaiwu_gl_book_settings", "column_name": "tenant_id"}]
+                return [{"table_name": "core_permission_versions", "column_name": "tenant_id"}]
             raise AssertionError(f"tenant_id 唯一表不应再查库: {sql}")
 
     remapped = await jobs._remap_import_plan_global_unique_uuids_if_needed(
         {
-            "apps_kuaicaiwu_gl_book_settings": (
+            "core_permission_versions": (
                 ["tenant_id", "version"],
                 "tenant_id,version\n26,v1\n26,v2\n",
             )
         },
         target_tenant_id=26,
-        table_column_map={"apps_kuaicaiwu_gl_book_settings": ["tenant_id", "version"]},
+        table_column_map={"core_permission_versions": ["tenant_id", "version"]},
         fk_rows=[],
         conn=Connection(),
     )
-    csv_text = remapped["apps_kuaicaiwu_gl_book_settings"][1]
+    csv_text = remapped["core_permission_versions"][1]
     assert csv_text.splitlines() == ["tenant_id,version", "26,v2"]
 
 

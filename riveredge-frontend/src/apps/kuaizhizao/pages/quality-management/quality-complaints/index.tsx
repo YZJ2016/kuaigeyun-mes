@@ -1,9 +1,9 @@
 /**
  * 质量投诉列表（R-11 WP-11B 单头壳）
  */
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import {
   ProFormDigit,
   ProFormSelect,
@@ -11,10 +11,12 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
-import { App, Button, Col, Descriptions, Input, Modal, Result, Row, Typography } from 'antd';
+import { App, Button, Col, Descriptions, Form, Input, Modal, Result, Row, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
@@ -24,6 +26,8 @@ import {
   detailDrawerBasicColumn,
   useDetailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
+import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
@@ -52,8 +56,11 @@ import {
   type QualityComplaintBusinessType,
   type QualityComplaintStatus,
 } from '../../../services/quality-complaint';
+import { qualityImprovementApi } from '../../../services/quality-improvement';
+import { qualityQmsApi } from '../../../services/quality-qms';
 
 const RESOURCE = 'kuaizhizao:quality-complaint';
+const CA_RESOURCE = 'kuaizhizao:quality-management-corrective-actions';
 
 const BUSINESS_TYPES: QualityComplaintBusinessType[] = [
   'iqc_incoming',
@@ -95,7 +102,9 @@ const QualityComplaintsPage: React.FC = () => {
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const { canCreate: canCreateCa } = useResourcePermissions(CA_RESOURCE);
   const actionRef = useRef<ActionType>();
+  const formRef = useRef<ProFormInstance>();
   const tableRowsRef = useRef<QualityComplaint[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -107,6 +116,39 @@ const QualityComplaintsPage: React.FC = () => {
   const [revokeOpen, setRevokeOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<QualityComplaint | null>(null);
   const [revokeReason, setRevokeReason] = useState('');
+  const [eightDOptions, setEightDOptions] = useState<Array<{ value: number; label: string }>>([]);
+
+  const loadEightDOptions = useCallback(async (keyword?: string) => {
+    const res = await qualityImprovementApi.eightD.list({
+      keyword: keyword?.trim() || undefined,
+      limit: 50,
+      skip: 0,
+    });
+    const items = Array.isArray(res?.data) ? res.data : Array.isArray((res as any)?.items) ? (res as any).items : [];
+    setEightDOptions(
+      items
+        .filter((row: { id?: number }) => row?.id != null)
+        .map((row: { id: number; report_code?: string; code?: string; title?: string }) => ({
+          value: Number(row.id),
+          label: `${row.report_code || row.code || row.id}${row.title ? ` ${row.title}` : ''}`,
+        })),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    void loadEightDOptions().catch(() => setEightDOptions([]));
+  }, [modalOpen, loadEightDOptions]);
+
+  useEffect(() => {
+    if (!modalOpen || !editing?.eight_d_report_id) return;
+    const id = Number(editing.eight_d_report_id);
+    if (!Number.isFinite(id) || id <= 0) return;
+    setEightDOptions((prev) => {
+      if (prev.some((o) => o.value === id)) return prev;
+      return [{ value: id, label: String(id) }, ...prev];
+    });
+  }, [modalOpen, editing?.eight_d_report_id]);
 
   const statusEnum = useMemo(
     () =>
@@ -299,6 +341,30 @@ const QualityComplaintsPage: React.FC = () => {
                   {t('app.kuaizhizao.qualityComplaint.actionSubmit')}
                 </Button>
               ) : null,
+              canCreateCa &&
+              record.status !== 'closed' &&
+              record.status !== 'revoked' ? (
+                <Button
+                  key="gen-ca"
+                  type="link"
+                  size="small"
+                  onClick={async () => {
+                    try {
+                      await qualityQmsApi.correctiveActions.fromSource({
+                        source_type: 'quality_complaint',
+                        source_id: Number(record.id),
+                        problem_summary: record.title || record.description || undefined,
+                      });
+                      messageApi.success(t('app.kuaizhizao.quality.qms.messages.caCreatedFromSource'));
+                      actionRef.current?.reload();
+                    } catch (e) {
+                      messageApi.error(getApiErrorMessage(e));
+                    }
+                  }}
+                >
+                  {t('app.kuaizhizao.quality.qms.actions.generateCa')}
+                </Button>
+              ) : null,
               record.status === 'processing' ? (
                 <Button
                   key="close"
@@ -336,7 +402,7 @@ const QualityComplaintsPage: React.FC = () => {
         ],
         GLOBAL_DOC_LIST_FIELD_RANK,
       ),
-    [t, typeOptions, defectOptions, statusEnum, perms, messageApi],
+    [t, typeOptions, defectOptions, statusEnum, perms, canCreateCa, messageApi],
   );
 
   const detailColumns: ProDescriptionsItemProps<QualityComplaint>[] = useMemo(
@@ -367,6 +433,11 @@ const QualityComplaintsPage: React.FC = () => {
           { title: t('app.kuaizhizao.qualityComplaint.colMaterialCode'), dataIndex: 'material_code' },
           { title: t('app.kuaizhizao.qualityComplaint.colMaterialName'), dataIndex: 'material_name' },
           { title: t('app.kuaizhizao.qualityComplaint.colBatchNo'), dataIndex: 'batch_no' },
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
+            dataIndex: 'serial_no',
+            render: (v: unknown) => (v != null && String(v).trim() ? String(v) : '—'),
+          },
           { title: t('app.kuaizhizao.qualityComplaint.colSupplier'), dataIndex: 'supplier_name' },
           { title: t('app.kuaizhizao.qualityComplaint.colCustomer'), dataIndex: 'customer_name' },
           {
@@ -548,6 +619,7 @@ const QualityComplaintsPage: React.FC = () => {
         open={modalOpen}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         grid={false}
+        formRef={formRef}
         initialValues={
           editing
             ? flattenComplaintForForm(editing)
@@ -614,31 +686,38 @@ const QualityComplaintsPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormDigit
-              name="eight_d_report_id"
-              label={t('app.kuaizhizao.qualityComplaint.colEightD')}
-              min={1}
-              fieldProps={{ precision: 0 }}
-            />
+            <Form.Item name="eight_d_report_id" label={t('app.kuaizhizao.qualityComplaint.colEightD')}>
+              <UniDropdown
+                allowClear
+                showSearch
+                filterOption={false}
+                style={{ width: '100%' }}
+                options={eightDOptions}
+                placeholder={t('app.kuaizhizao.qualityComplaint.colEightD')}
+                onSearch={(kw) => {
+                  void loadEightDOptions(kw).catch(() => setEightDOptions([]));
+                }}
+              />
+            </Form.Item>
           </Col>
         </Row>
         <Row gutter={16}>
           <Col span={8}>
-            <ProFormText name="material_code" label={t('app.kuaizhizao.qualityComplaint.colMaterialCode')} />
-          </Col>
-          <Col span={8}>
-            <ProFormText name="material_name" label={t('app.kuaizhizao.qualityComplaint.colMaterialName')} />
+            <UniMaterialSelect
+              name="material_id"
+              label={t('app.kuaizhizao.qualityComplaint.colMaterialCode')}
+              fillMapping={{
+                material_code: 'mainCode',
+                material_name: 'name',
+              }}
+              showQuickCreate
+              showAdvancedSearch
+            />
+            <Form.Item name="material_code" hidden />
+            <Form.Item name="material_name" hidden />
           </Col>
           <Col span={8}>
             <ProFormText name="batch_no" label={t('app.kuaizhizao.qualityComplaint.colBatchNo')} />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={8}>
-            <ProFormText name="supplier_name" label={t('app.kuaizhizao.qualityComplaint.colSupplier')} />
-          </Col>
-          <Col span={8}>
-            <ProFormText name="customer_name" label={t('app.kuaizhizao.qualityComplaint.colCustomer')} />
           </Col>
           <Col span={8}>
             <ProFormDigit
@@ -647,6 +726,40 @@ const QualityComplaintsPage: React.FC = () => {
               min={1}
               max={365}
             />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="supplier_id" label={t('app.kuaizhizao.qualityComplaint.colSupplier')}>
+              <SupplierSelectDropdown
+                hostResource={RESOURCE}
+                style={{ width: '100%' }}
+                onSupplierPick={(supplier) => {
+                  formRef.current?.setFieldsValue({
+                    supplier_name: supplier?.name ?? null,
+                    supplier_code: (supplier as { code?: string } | null)?.code ?? null,
+                  });
+                }}
+              />
+            </Form.Item>
+            <Form.Item name="supplier_name" hidden />
+            <Form.Item name="supplier_code" hidden />
+          </Col>
+          <Col span={12}>
+            <Form.Item name="customer_id" label={t('app.kuaizhizao.qualityComplaint.colCustomer')}>
+              <CustomerSelectDropdown
+                hostResource={RESOURCE}
+                style={{ width: '100%' }}
+                onCustomerPick={(customer) => {
+                  formRef.current?.setFieldsValue({
+                    customer_name: customer?.name ?? null,
+                    customer_code: (customer as { code?: string } | null)?.code ?? null,
+                  });
+                }}
+              />
+            </Form.Item>
+            <Form.Item name="customer_name" hidden />
+            <Form.Item name="customer_code" hidden />
           </Col>
         </Row>
         <ProFormTextArea name="description" label={t('app.kuaizhizao.qualityComplaint.colDescription')} />

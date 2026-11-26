@@ -97,19 +97,28 @@ export interface WeComDeploymentGuide {
   origin: string;
   tenant_domain: string;
   oauth_callback_url: string;
+  /** 手机 H5 OAuth 回跳（固定 /mobile/） */
+  mobile_oauth_redirect_url?: string;
+  /** 企微应用主页：手机 H5 `/mobile/?tenant_id=` */
   workbench_home_url: string;
+  /** PC 组织入口（可选对照） */
+  pc_tenant_entry_url?: string;
   login_with_agent_url: string;
   trusted_domain: string;
+  /** 企微「接收消息」URL（可更新审批模板卡） */
+  receive_message_url?: string;
 }
 
 export async function getWecomDeploymentGuide(params?: {
   corp_id?: string;
   agent_id?: number;
+  base_url?: string;
 }): Promise<WeComDeploymentGuide> {
   return apiRequest<WeComDeploymentGuide>('/core/application-connections/wecom/deployment-guide', {
     params: {
       corp_id: params?.corp_id,
       agent_id: params?.agent_id,
+      base_url: params?.base_url,
     },
   });
 }

@@ -23,6 +23,11 @@ import {
   listDemands,
   getDemand,
   createDemand,
+  commitDemand,
+  submitDemandForReview,
+  withdrawDemandSubmit,
+  approveDemandAudit,
+  revokeDemandApproval,
   updateDemand,
   deleteDemand,
   pushDemandToComputation,
@@ -36,6 +41,8 @@ import {
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { demandPushCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { buildDocumentLineDualQuantityFormColumns } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
@@ -50,6 +57,7 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
@@ -81,7 +89,14 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
-import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { isPendingReviewStatus } from '../../../constants/documentStatus';
 import { buildDemandBusinessModeValueEnum, translateDemandBusinessMode, renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, translateDemandType } from '../../../utils/demandType';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
@@ -269,6 +284,7 @@ const DemandManagementPage: React.FC = () => {
         material_code: it.material_code || '',
         material_name: it.material_name || '',
         material_unit: it.material_unit || 'PCS',
+        ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
         required_quantity: Number(it.required_quantity) || 0,
         delivery_date: it.delivery_date ? formatDateTimeValue(it.delivery_date, 'YYYY-MM-DD') : undefined,
       })).filter((it: any) => it.material_id && it.required_quantity > 0);
@@ -289,7 +305,7 @@ const DemandManagementPage: React.FC = () => {
         total_quantity: 0,
         total_amount: 0,
         status: DemandStatus.DRAFT,
-        review_status: ReviewStatus.PENDING,
+        review_status: ReviewStatus.DRAFT,
         priority: standardValues.priority ?? 5,
         notes: standardValues.notes,
         items,
@@ -299,6 +315,7 @@ const DemandManagementPage: React.FC = () => {
       }
       messageApi.success(t('app.kuaizhizao.demandManagement.planCreated'));
       setCreatePlanModalVisible(false);
+      setCreatePlanSeed(undefined);
       createPlanFormRef.current?.resetFields();
       resetDemandFormFieldValues();
       invalidateStatistics();
@@ -308,6 +325,42 @@ const DemandManagementPage: React.FC = () => {
     } finally {
       setCreatePlanLoading(false);
     }
+  };
+
+  const handleCopySelectedDemandPlan = async () => {
+    const source = selectedDemandsForBatch.length === 1 ? selectedDemandsForBatch[0] : null;
+    if (source?.id == null) {
+      messageApi.warning(t('app.kuaizhizao.demandManagement.selectToCopy'));
+      return;
+    }
+    try {
+      const data = await getDemand(Number(source.id), true, false);
+      setCreatePlanSeed({
+        demand_name: data.demand_name,
+        business_mode: data.business_mode || 'MTS',
+        priority: data.priority ?? 5,
+        start_date: dayjs(),
+        end_date: data.end_date ? dayjs(data.end_date) : undefined,
+        notes: data.notes,
+        items: (data.items || []).map((it) => ({
+          material_id: it.material_id,
+          material_code: it.material_code,
+          material_name: it.material_name,
+          material_unit: it.material_unit || 'PCS',
+          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
+          required_quantity: Number(it.required_quantity) || 0,
+          delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
+        })),
+      });
+      setCreatePlanModalVisible(true);
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.demandManagement.detailFailed')));
+    }
+  };
+
+  const openCreateDemandPlan = () => {
+    setCreatePlanSeed(undefined);
+    setCreatePlanModalVisible(true);
   };
 
   const handleEdit = async (keys: React.Key[]) => {
@@ -552,15 +605,122 @@ const DemandManagementPage: React.FC = () => {
   );
   const demandAuditEnabled = useAuditRequired('demand', false);
   const demandPerms = useResourcePermissions(DEMAND_RESOURCE);
-  const demandAuditBatchHandlers = useMemo(
-    () => createUniAuditBatchHandlers('demand'),
-    [],
-  );
   const handleDemandAuditBatchSuccess = useCallback(() => {
     setSelectedRowKeys([]);
     invalidateStatistics();
     actionRef.current?.reload();
   }, [invalidateStatistics]);
+  const demandToolbarAuditMenus = useMemo(() => {
+    const reload = () => handleDemandAuditBatchSuccess();
+    const statusOf = (row: Demand) => String(row.status || '').trim();
+    const allowed = (row: Demand, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      keys: React.Key[],
+      records: Demand[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys,
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: reload,
+        message: messageApi,
+        t,
+      });
+    const submitRows = selectedDemandsForBatch.filter((row) => allowed(row, 'submit'));
+    const committedRows = selectedDemandsForBatch.filter(
+      (row) => statusOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+    );
+    const pendingRows = selectedDemandsForBatch.filter(
+      (row) => isPendingReviewStatus(row.status) && allowed(row, 'withdraw_submit'),
+    );
+    const reviewRows = selectedDemandsForBatch.filter((row) => allowed(row, 'submit_review'));
+    const approveRows = selectedDemandsForBatch.filter(
+      (row) => isPendingReviewStatus(row.status) && allowed(row, 'approve'),
+    );
+    const revokeRows = selectedDemandsForBatch.filter((row) => allowed(row, 'revoke_approval'));
+    const canSubmit = demandPerms.canAction?.('submit') ?? false;
+    const canApprove = demandPerms.canAction?.('approve') ?? false;
+    const canRevoke = demandPerms.canAction?.('revoke') ?? false;
+    const hasSelection = selectedDemandsForBatch.length > 0;
+    const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: (keys) => run(keys, submitRows, 'submit', canSubmit, (id) => commitDemand(id)),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t('app.kuaizhizao.demandManagement.toolbar.withdrawSubmit'),
+          disabled: hasSelection && committedRows.length === 0,
+          onClick: (keys) =>
+            run(keys, committedRows, 'withdraw_submit', canSubmit, (id) => withdrawDemandSubmit(id)),
+        },
+        {
+          key: 'submit-review',
+          label: t('app.kuaizhizao.demandManagement.toolbar.submitReview'),
+          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+          onClick: (keys) =>
+            run(
+              keys,
+              reviewRows,
+              'submit_review',
+              canSubmit,
+              (id) => submitDemandForReview(id),
+              t('app.kuaizhizao.demandManagement.toolbar.submitReviewNotAllowed'),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: (id) => commitDemand(id),
+        submitReview: (id) => submitDemandForReview(id),
+        onSuccess: reload,
+      },
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('common.audit'),
+        disabled: hasSelection && !(canApprove && approveRows.length > 0),
+        onClick: (keys) => run(keys, approveRows, 'approve', canApprove, (id) => approveDemandAudit(id)),
+      },
+      {
+        key: 'withdraw-review',
+        label: t('app.kuaizhizao.demandManagement.toolbar.withdrawReview'),
+        disabled: hasSelection && pendingRows.length === 0,
+        onClick: (keys) =>
+          run(keys, pendingRows, 'withdraw_submit', canApprove, (id) => withdrawDemandSubmit(id)),
+      },
+      {
+        key: 'revoke',
+        label: t('app.kuaizhizao.demandManagement.toolbar.revoke'),
+        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+        onClick: (keys) =>
+          run(keys, revokeRows, 'revoke_approval', canRevoke, (id) => revokeDemandApproval(id)),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [
+    demandPerms,
+    handleDemandAuditBatchSuccess,
+    messageApi,
+    selectedDemandsForBatch,
+    t,
+  ]);
   const demandAuditColumn = useMemo(
     () => createListAuditPhaseColumn<Demand>({ t, auditEnabled: demandAuditEnabled }),
     [t, demandAuditEnabled],
@@ -932,30 +1092,20 @@ const DemandManagementPage: React.FC = () => {
             <AntForm.Item name={[index, 'material_name']} hidden>
               <Input />
             </AntForm.Item>
-            <AntForm.Item name={[index, 'material_unit']} hidden>
-              <Input />
-            </AntForm.Item>
           </>
         ),
       },
-      {
-        title: t('common.quantity'),
-        dataIndex: 'required_quantity',
-        width: 110,
-        align: 'right' as const,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            name={[index, 'required_quantity']}
-            rules={[
-              { required: true, message: t('common.required') },
-              { type: 'number', min: 0.0001, message: t('app.kuaizhizao.salesOrder.quantityMinHint') },
-            ]}
-            style={{ margin: 0 }}
-          >
-            <InputNumber placeholder={t('common.quantity')} min={0} precision={4} style={{ width: '100%' }} size="small" />
-          </AntForm.Item>
-        ),
-      },
+      ...buildDocumentLineDualQuantityFormColumns({
+        t,
+        getForm: () => createPlanFormRef.current,
+        quantityField: 'required_quantity',
+        unitField: 'material_unit',
+        scenario: 'sale',
+        quantityDecimals: 4,
+        unitWidth: 88,
+        quantityWidth: 180,
+        controlSize: 'small',
+      }),
       {
         title: t('app.kuaizhizao.planReports.colRequirementDate'),
         dataIndex: 'delivery_date',
@@ -1059,14 +1209,21 @@ const DemandManagementPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           showCreateButton={false}
           toolBarRender={() => [
-            <Button
+            <UniPullCreateToolbar
               key="create-demand-plan"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setCreatePlanModalVisible(true)}
-            >
-              {createPlanButtonLabel}
-            </Button>,
+              compactKey="create-demand-plan"
+              createIcon={<PlusOutlined />}
+              createLabel={createPlanButtonLabel}
+              onCreate={openCreateDemandPlan}
+              menuItems={[
+                {
+                  key: 'copy-selected',
+                  label: t('app.kuaizhizao.demandManagement.copySelectedCreate'),
+                  disabled: selectedDemandsForBatch.length !== 1,
+                  onClick: () => void handleCopySelectedDemandPlan(),
+                },
+              ]}
+            />,
             <UniPushToolbarButton
               key={`demand-toolbar-push-${selectedDemandForPush?.id ?? 'none'}`}
               menuItems={demandToolbarPushMenuItems}
@@ -1079,22 +1236,24 @@ const DemandManagementPage: React.FC = () => {
               }
               pushTargets={{ 'push-to-computation': 'demand_computation' }}
             />,
+            <UniBatchMenuButton
+              key="demand-submit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={demandToolbarAuditMenus.submitItems}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="demand-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={demandToolbarAuditMenus.auditItems}
+              buttonText={t('components.uniAction.audit')}
+            />,
           ]}
           showEditButton={false}
           showDeleteButton={true}
+          deleteButtonText={t('common.delete')}
           onDelete={handleDelete}
-          toolBarActionsAfterDelete={[
-            <UniAuditBatchMenuButton
-              key="demand-batch-menu"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedDemandsForBatch}
-              auditEnabled={demandAuditEnabled}
-              permGates={demandPerms}
-              handlers={demandAuditBatchHandlers}
-              onSuccess={handleDemandAuditBatchSuccess}
-              toolBarButtonSize="medium"
-            />,
-          ]}
+          toolBarActionsAfterDelete={[]}
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {
@@ -1128,10 +1287,12 @@ const DemandManagementPage: React.FC = () => {
 
       {/* 新建计划：FormModalTemplate + 两栏表头 + 销售订单式明细 Table */}
       <FormModalTemplate
+        key={createPlanSeed ? 'create-demand-plan-copy' : 'create-demand-plan'}
         title={t('app.kuaizhizao.demandManagement.createPlanTitle')}
         open={createPlanModalVisible}
         onClose={() => {
           setCreatePlanModalVisible(false);
+          setCreatePlanSeed(undefined);
           createPlanFormRef.current?.resetFields();
           resetDemandFormFieldValues();
         }}
@@ -1141,7 +1302,9 @@ const DemandManagementPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         loading={createPlanLoading}
         grid={false}
-        initialValues={{ business_mode: 'MTS', priority: 5, items: [] }}
+        initialValues={
+          createPlanSeed || { business_mode: 'MTS', priority: 5, items: [] }
+        }
       >
         <Row gutter={16}>
           <Col span={24}>

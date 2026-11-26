@@ -1,4 +1,5 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -19,7 +20,7 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { toolApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/toolOps';
@@ -42,6 +43,10 @@ import {
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import {
+  clearOpsOpenCreateParams,
+  openCreateQuerySignature,
+} from '../shared/opsDocumentOpenCreate';
 
 
 const P = 'app.kuaizhizao.toolOps.borrow';
@@ -114,8 +119,12 @@ interface ToolBorrow {
 
 const ToolBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openCreateHandledRef = useRef<string | null>(null);
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const returnPerms = useResourcePermissions('kuaizhizao:tool-return');
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -139,14 +148,39 @@ const ToolBorrowsPage: React.FC = () => {
     );
   };
 
-  const handleCreate = () => {
+  const beginCreate = (prefillToolId?: number) => {
     setIsEdit(false);
     setCurrent(null);
-    setFormInitialValues({ borrow_date: dayjs() });
+    setFormInitialValues({
+      borrow_date: dayjs(),
+      ...(prefillToolId != null ? { tool_id: prefillToolId } : {}),
+    });
     setModalVisible(true);
     void loadToolOptions();
   };
+
+  const handleCreate = () => {
+    beginCreate();
+  };
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    const sig = openCreateQuerySignature(searchParams);
+    if (!sig || !perms.canCreate) return;
+    if (openCreateHandledRef.current === sig) return;
+    void (async () => {
+      let toolId = Number(searchParams.get('tool_id'));
+      const toolUuid = searchParams.get('tool_uuid');
+      if (!Number.isFinite(toolId) && toolUuid) {
+        const tool = await toolApi.get(toolUuid);
+        toolId = Number(tool.id);
+      }
+      if (!Number.isFinite(toolId)) return;
+      openCreateHandledRef.current = sig;
+      setSearchParams(clearOpsOpenCreateParams(searchParams), { replace: true });
+      beginCreate(toolId);
+    })();
+  }, [searchParams, perms.canCreate, setSearchParams]);
 
   const handleDetail = (record: ToolBorrow) => {
     if (!record.id) return;
@@ -185,6 +219,13 @@ const ToolBorrowsPage: React.FC = () => {
         }
     messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
     actionRef.current?.reload();
+  };
+
+  const handlePushReturn = (record: ToolBorrow) => {
+    if (!record.id) return;
+    navigate(
+      `/apps/kuaizhizao/equipment-management/tool-returns?borrow_id=${record.id}`,
+    );
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
@@ -407,11 +448,25 @@ const ToolBorrowsPage: React.FC = () => {
               </Button>
             </ActionConfirmPopconfirm>
           )}
+            {returnPerms.canCreate && record.status === '领用中' && (
+              <Button
+                {...rowActionKind('create')}
+                {...rowActionLabelKeep()}
+                type="link"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePushReturn(record);
+                }}
+              >
+                {t(`${P}.action.pushReturn`)}
+              </Button>
+            )}
           </>
         ),
       },
     ], SALES_DOC_LIST_FIELD_RANK),
-    [t, perms, borrowStatusValueEnum],
+    [t, perms, returnPerms, borrowStatusValueEnum],
   );
 
   return (
@@ -447,6 +502,7 @@ const ToolBorrowsPage: React.FC = () => {
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
           
@@ -462,15 +518,32 @@ const ToolBorrowsPage: React.FC = () => {
         title={`${t('common.detail')}${detail?.document_no ?? detail?.borrow_no ? ` - ${detail.document_no ?? detail.borrow_no}` : ''}`}
         onClose={closeDetail}
         basicColumns={detailColumns}
-        extra={buildDetailDrawerEditExtra(
-          t,
-          Boolean(detail && perms.canUpdate && detail.status === '领用中'),
-          () => {
-            if (!detail) return;
-            closeDetail();
-            void handleEdit(detail);
-          },
-        )}
+        extra={
+          detail ? (
+            <>
+              {buildDetailDrawerEditExtra(
+                t,
+                Boolean(perms.canUpdate && detail.status === '领用中'),
+                () => {
+                  closeDetail();
+                  void handleEdit(detail);
+                },
+              )}
+              {returnPerms.canCreate && detail.status === '领用中' && detail.id ? (
+                <Button
+                  type="primary"
+                  style={{ marginLeft: 8 }}
+                  onClick={() => {
+                    closeDetail();
+                    handlePushReturn(detail);
+                  }}
+                >
+                  {t(`${P}.action.pushReturn`)}
+                </Button>
+              ) : null}
+            </>
+          ) : undefined
+        }
       />
 
       <FormModalTemplate

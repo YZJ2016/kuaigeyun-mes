@@ -101,5 +101,11 @@ async def test_assert_capability_non_update_action_resolves_context(monkeypatch)
         SimpleNamespace(get_sales_require_audit_before_print=AsyncMock(return_value=False)),
     )
 
-    order = SimpleNamespace(id=1, status="草稿", review_status=None, planning_pushed_to_computation=False)
+    order = SimpleNamespace(
+        id=1,
+        status="草稿",
+        review_status=None,
+        planning_pushed_to_computation=False,
+        procurement_fulfillment_mode="purchase_order",
+    )
     await obj._assert_sales_order_capability_for_order(1, order, "delete", items=[])

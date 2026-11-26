@@ -4,7 +4,13 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ProFormInstance, ProFormSelect, ProFormSwitch, ProFormText } from '@ant-design/pro-components';
+import {
+  ProFormDependency,
+  ProFormInstance,
+  ProFormSelect,
+  ProFormSwitch,
+  ProFormText,
+} from '@ant-design/pro-components';
 import { App, Form, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -36,6 +42,8 @@ import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import { DepartmentFormModal } from '../../departments/components/DepartmentFormModal';
 import { PositionFormModal } from '../../positions/components/PositionFormModal';
 import { RoleFormModal } from '../../roles/components/RoleFormModal';
+import { UniUserSelect } from '../../../../components/uni-user-select';
+import { DictionarySelect } from '../../../../components/dictionary-select';
 
 /** 账户用户名：2-50 字符，支持中文、字母、数字、下划线、连字符 */
 const USERNAME_PATTERN = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/;
@@ -253,8 +261,11 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           if (cancelled) return;
           applyCoreReferenceOptions(core);
           const defaults = {
+            gender: 'other',
             is_active: true,
             is_tenant_admin: false,
+            has_secondary_departments: false,
+            secondary_department_uuids: [],
             supplier_scope_codes: [],
             customer_scope_codes: [],
             manufacturer_scope_codes: [],
@@ -279,6 +290,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           email: detail.email,
           full_name: detail.full_name,
           phone: detail.phone,
+          employee_number: detail.employee_number,
+          gender: detail.gender ?? 'other',
+          supervisor_uuid: detail.supervisor_uuid,
+          person_category: detail.person_category,
+          employment_status: detail.employment_status,
+          secondary_department_uuids: detail.secondary_departments?.map((d) => d.uuid) ?? [],
+          has_secondary_departments: (detail.secondary_departments?.length ?? 0) > 0,
           department_uuid: detail.department_uuid,
           position_uuid: detail.position_uuid,
           role_uuids: editRoleUuids,
@@ -456,6 +474,10 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       delete submitData.supplier_scope_codes;
       delete submitData.customer_scope_codes;
       delete submitData.manufacturer_scope_codes;
+      delete submitData.has_secondary_departments;
+      if (!values.has_secondary_departments) {
+        submitData.secondary_department_uuids = isEdit ? [] : [];
+      }
       if (!submitData.password) {
         delete submitData.password;
       }
@@ -464,6 +486,18 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       if (isEdit) {
         submitData.department_uuid = submitData.department_uuid || null;
         submitData.position_uuid = submitData.position_uuid || null;
+        submitData.supervisor_uuid = submitData.supervisor_uuid || null;
+        submitData.employee_number = String(submitData.employee_number ?? '').trim() || null;
+        submitData.gender = submitData.gender || null;
+        submitData.person_category = submitData.person_category || null;
+        submitData.employment_status = submitData.employment_status || null;
+        submitData.secondary_department_uuids = Array.isArray(submitData.secondary_department_uuids)
+          ? submitData.secondary_department_uuids.map(String).filter(Boolean)
+          : [];
+      } else {
+        const emp = String(submitData.employee_number ?? '').trim();
+        if (emp) submitData.employee_number = emp;
+        else delete submitData.employee_number;
       }
 
       const latestRoleValue = formRef.current?.getFieldValue?.('role_uuids');
@@ -580,6 +614,13 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         colProps={{ span: 12 }}
       />
       <ProFormText
+        name="employee_number"
+        label={t('field.user.employeeNumber')}
+        placeholder={t('field.user.employeeNumberPlaceholder')}
+        rules={[{ max: 64, message: t('field.user.employeeNumberMax') }]}
+        colProps={{ span: 12 }}
+      />
+      <ProFormText
         name="full_name"
         label={t('field.user.fullName')}
         rules={[
@@ -602,6 +643,18 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           },
         ]}
         placeholder={t('field.user.fullNamePlaceholder')}
+        colProps={{ span: 12 }}
+      />
+      <ProFormSelect
+        name="gender"
+        label={t('field.user.gender')}
+        placeholder={t('field.user.genderPlaceholder')}
+        allowClear
+        options={[
+          { label: t('field.user.genderMale'), value: 'male' },
+          { label: t('field.user.genderFemale'), value: 'female' },
+          { label: t('field.user.genderOther'), value: 'other' },
+        ]}
         colProps={{ span: 12 }}
       />
       <ProFormText
@@ -699,6 +752,14 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         }}
         colProps={{ span: 8 }}
       />
+      <UniUserSelect
+        name="supervisor_uuid"
+        label={t('field.user.supervisor')}
+        placeholder={t('field.user.supervisorPlaceholder')}
+        showDepartmentInLabel
+        modalZIndex={nestedModalZIndex}
+        colProps={{ span: 8 }}
+      />
       {selectedExternalPartnerTypes.has('supplier') && (
         <ProFormSelect
           name="supplier_scope_codes"
@@ -744,14 +805,77 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           colProps={{ span: 24 }}
         />
       )}
-      <ProFormSwitch
-        name="is_active"
-        label={t('common.enabled')}
-        colProps={{ span: 12 }}
+      <DictionarySelect
+        name="person_category"
+        label={t('field.user.personCategory')}
+        dictionaryCode="USER_PERSON_CATEGORY"
+        placeholder={t('field.user.personCategoryPlaceholder')}
+        colProps={{ span: 8 }}
       />
+      <DictionarySelect
+        name="employment_status"
+        label={t('field.user.employmentStatus')}
+        dictionaryCode="USER_EMPLOYMENT_STATUS"
+        placeholder={t('field.user.employmentStatusPlaceholder')}
+        colProps={{ span: 8 }}
+      />
+      <ProFormDependency name={['has_secondary_departments', 'department_uuid']}>
+        {({ has_secondary_departments, department_uuid }) => {
+          const primary = String(department_uuid || '').trim();
+          const secondaryOptions = primary
+            ? departmentOptions.filter((opt) => String(opt.value) !== primary)
+            : departmentOptions;
+          const partTimeOn = Boolean(has_secondary_departments);
+          return (
+            <>
+              <ProFormSwitch
+                name="has_secondary_departments"
+                label={t('field.user.hasSecondaryDepartments')}
+                colProps={{ span: partTimeOn ? 8 : 24 }}
+                fieldProps={{
+                  onChange: (checked: boolean) => {
+                    if (!checked) {
+                      formRef.current?.setFieldsValue({ secondary_department_uuids: [] });
+                    }
+                  },
+                }}
+              />
+              {partTimeOn ? (
+                <ProFormSelect
+                  name="secondary_department_uuids"
+                  label={t('field.user.secondaryDepartments')}
+                  placeholder={t('field.user.secondaryDepartmentsPlaceholder')}
+                  allowClear
+                  options={secondaryOptions}
+                  rules={[
+                    {
+                      validator: async (_, value) => {
+                        const ids = Array.isArray(value) ? value.filter(Boolean) : [];
+                        if (ids.length === 0) {
+                          throw new Error(t('field.user.secondaryDepartmentsRequired'));
+                        }
+                      },
+                    },
+                  ]}
+                  fieldProps={{
+                    mode: 'multiple',
+                    showSearch: true,
+                  }}
+                  colProps={{ span: 16 }}
+                />
+              ) : null}
+            </>
+          );
+        }}
+      </ProFormDependency>
       <ProFormSwitch
         name="is_tenant_admin"
         label={t('field.user.isTenantAdminLabel')}
+        colProps={{ span: 12 }}
+      />
+      <ProFormSwitch
+        name="is_active"
+        label={t('common.enabled')}
         colProps={{ span: 12 }}
       />
       </FormModalTemplate>

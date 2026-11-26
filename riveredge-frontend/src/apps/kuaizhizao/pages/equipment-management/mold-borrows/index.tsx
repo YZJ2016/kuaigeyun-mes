@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -23,7 +23,7 @@ import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleS
 import { moldApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/moldOps';
 import { workOrderApi } from '../../../services/work-order';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formDateRangeFormItemProps, formDateFormItemProps, toApiDateString } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -41,6 +41,10 @@ import {
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
+import {
+  clearOpsOpenCreateParams,
+  openCreateQuerySignature,
+} from '../shared/opsDocumentOpenCreate';
 
 
 const P = 'app.kuaizhizao.moldOps.borrow';
@@ -106,6 +110,8 @@ const MoldBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openCreateHandledRef = useRef<string | null>(null);
   const perms = useResourcePermissions(RESOURCE);
   const returnPerms = useResourcePermissions('kuaizhizao:mold-return');
   const actionRef = useRef<ActionType>(null);
@@ -136,14 +142,39 @@ const MoldBorrowsPage: React.FC = () => {
     );
   };
 
-  const handleCreate = () => {
+  const beginCreate = (prefillMoldId?: number) => {
     setIsEdit(false);
     setCurrent(null);
-    setFormInitialValues({ borrow_date: dayjs() });
+    setFormInitialValues({
+      borrow_date: dayjs(),
+      ...(prefillMoldId != null ? { mold_id: prefillMoldId } : {}),
+    });
     setModalVisible(true);
     void loadMoldOptions();
   };
+
+  const handleCreate = () => {
+    beginCreate();
+  };
   useNewShortcut(handleCreate);
+
+  useEffect(() => {
+    const sig = openCreateQuerySignature(searchParams);
+    if (!sig || !perms.canCreate) return;
+    if (openCreateHandledRef.current === sig) return;
+    void (async () => {
+      let moldId = Number(searchParams.get('mold_id'));
+      const moldUuid = searchParams.get('mold_uuid');
+      if (!Number.isFinite(moldId) && moldUuid) {
+        const mold = await moldApi.get(moldUuid);
+        moldId = Number(mold.id);
+      }
+      if (!Number.isFinite(moldId)) return;
+      openCreateHandledRef.current = sig;
+      setSearchParams(clearOpsOpenCreateParams(searchParams), { replace: true });
+      beginCreate(moldId);
+    })();
+  }, [searchParams, perms.canCreate, setSearchParams]);
 
   const handleEdit = async (record: MoldBorrow) => {
     if (!record.id) return;
@@ -468,6 +499,7 @@ const MoldBorrowsPage: React.FC = () => {
           createButtonText={withSingleNewShortcutHint(t(`${P}.create`))}
           onCreate={handleCreate}
           showDeleteButton={perms.canDelete}
+          deleteButtonText={t('common.delete')}
           deleteConfirmTitle={t('common.batchDeleteTitle')}
           deleteConfirmDescription={(count) => t('common.batchDeleteContent', { count: count })}
           

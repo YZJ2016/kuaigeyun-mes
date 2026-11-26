@@ -151,7 +151,9 @@ const GlBooksPage: React.FC = () => {
         const res = await glService.generalLedger(params);
         data = asList<Row>(res);
       } else if (activeTab === 'trial') {
-        const res = (await glService.trialBalance(params)) as Row & { rows?: Row[] };
+        const res = (await glService.trialBalance({ ...params, expand_hierarchy: true })) as Row & {
+          rows?: Row[];
+        };
         setTrialSummary(res);
         data = asList<Row>(res?.rows ?? res);
       } else if (activeTab === 'aux') {

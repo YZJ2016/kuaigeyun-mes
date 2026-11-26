@@ -12,6 +12,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import { DatePicker } from 'antd'
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -29,14 +30,13 @@ import {
   ProFormRadio,
   ProFormSwitch,
   ProForm,
-  ProFormGroup,
   ProFormDependency,
   ProFormItem,
+  ProFormField,
 } from '@ant-design/pro-components'
 import {
   App,
   Button,
-  ConfigProvider,
   Tag,
   Space,
   Modal,
@@ -45,7 +45,6 @@ import {
   Col,
   Table,
   InputNumber,
-  Popconfirm,
   Select,
   Progress,
   Spin,
@@ -57,9 +56,9 @@ import {
   Dropdown,
   List,
   Switch,
-  Statistic,
   Alert,
   Tooltip,
+  Tabs,
 } from 'antd'
 import type { GlobalToken } from 'antd/es/theme/interface'
 import {
@@ -86,6 +85,7 @@ import {
   UnlockOutlined,
   MoreOutlined,
   QuestionCircleOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons'
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table'
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki'
@@ -120,6 +120,10 @@ import {
   WORK_ORDER_GROUP_ROW_KIND,
 } from './workOrderListGroupTree'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
+import {
+  FORM_FIELD_TITLE_SEGMENTED_CLASS,
+  FormFieldTitleSegmentedRow,
+} from '../../../../../components/form-field-title-segmented'
 const SyncFreshnessBadge = lazy(() =>
   import('../../../../../components/sync-from-source-modal/SyncFreshnessBadge'),
 )
@@ -136,17 +140,86 @@ import {
   MODAL_CONFIG,
   TOUCH_SCREEN_CONFIG,
   type StatCard,
+  DocumentFormPageLayout,
+  DocumentFormPageHeaderActions,
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DetailDrawerSection,
 } from '../../../../../components/layout-templates'
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab'
+
+/** React.Children.toArray 不会拆开 Fragment，标记要先摊平才能按明细/附件切开 */
+function flattenWorkOrderFormNodes(nodes: React.ReactNode): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  React.Children.forEach(nodes, (node) => {
+    if (React.isValidElement(node) && node.type === React.Fragment) {
+      out.push(...flattenWorkOrderFormNodes((node.props as { children?: React.ReactNode }).children))
+      return
+    }
+    out.push(node)
+  })
+  return out
+}
+
+function WorkOrderTabGroups({
+  enabled,
+  children,
+}: {
+  enabled: boolean
+  children: React.ReactNode
+}) {
+  const { t } = useTranslation()
+  if (!enabled) {
+    return <>{children}</>
+  }
+  const items = flattenWorkOrderFormNodes(children)
+  const markerIndex = (name: string) =>
+    items.findIndex(
+      (node) =>
+        React.isValidElement(node) &&
+        (node.props as { 'data-wo-section'?: string })['data-wo-section'] === name,
+    )
+  const linesAt = markerIndex('lines')
+  const attachmentsAt = markerIndex('attachments')
+  const basic = linesAt >= 0 ? items.slice(0, linesAt) : items
+  const lines =
+    linesAt >= 0 ? items.slice(linesAt + 1, attachmentsAt >= 0 ? attachmentsAt : undefined) : null
+  const attachments = attachmentsAt >= 0 ? items.slice(attachmentsAt + 1) : null
+  return (
+    <>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group wo-tab-basic">{basic}</div>
+        </div>
+      </DetailDrawerSection>
+      {lines != null ? (
+        <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
+          {lines}
+        </DetailDrawerSection>
+      ) : null}
+      {attachments != null ? (
+        <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+          {attachments}
+        </DetailDrawerSection>
+      ) : null}
+    </>
+  )
+}
+
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import {
   UniPullQueryModal,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   filterByPullScope,
+  isPullableScope,
+  isPullOpenLineSelectable,
+  pagePullCandidates,
   paginatePullRows,
   renderPullCapabilityTag,
   renderPullQueryDocStatus,
-  renderPullQueryReviewStatus,
+  toUniPullQueryHttpParams,
   useUniPullQuery,
+  buildPullQueryMaterialIdentityColumn,
+  buildPullQueryPartnerDocumentColumn,
 } from '../../../../../components/uni-pull-query'
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push'
 import { useCustomFields } from '../../../../../hooks/useCustomFields'
@@ -157,6 +230,7 @@ import {
   qualityInspectionCapabilityReasonMessage,
   salesOrderCapabilityReasonMessage,
   workOrderBatchCancelAllowed,
+  workOrderBatchDeleteAllowed,
   workOrderBatchFreezeAllowed,
   workOrderBatchPrintAllowed,
   workOrderBatchReleaseAllowed,
@@ -168,8 +242,6 @@ import {
 const WORK_ORDER_RESOURCE = 'kuaizhizao:work-order'
 import {
   CustomFieldsFormSection,
-  CustomFieldsDetailSection,
-  hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields'
 
 const WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_work_orders'
@@ -187,20 +259,18 @@ import { UniDropdown } from '../../../../../components/uni-dropdown'
 import { listSalesOrders } from '../../../services/sales'
 import {
   getSalesOrder,
-  listSalesOrders as listSalesOrdersForPull,
+  listSalesOrderWorkOrderPullLines,
   previewPushSalesOrderToWorkOrder,
   pushSalesOrderToWorkOrder,
-  type SalesOrder as PullSalesOrder,
+  type SalesOrderWorkOrderPullLine,
 } from '../../../services/sales-order'
 import { listSalesForecasts } from '../../../services/sales-forecast'
-import { listDemands } from '../../../services/demand'
 import {
-  pickSalesOrderDeliveryDate,
-  toWorkOrderRequiredDateDayjs,
-} from './workOrderRequiredDateFromSalesOrder'
+  listDemandPlanWorkOrderPullLines,
+  type DemandPlanWorkOrderPullLine,
+} from '../../../services/demand'
 import {
-  listDemandComputations,
-  getPushOptions,
+  listWorkOrderPullComputations,
   getPushPreview,
   generateOrdersFromComputation,
   type PushPreview,
@@ -227,6 +297,10 @@ import {
 } from '../../../../master-data/services/factory'
 import type { Workshop, WorkCenter } from '../../../../master-data/types/factory'
 import { WorkCenterSelectDropdown } from '../../../../master-data/components/WorkCenterSelectDropdown'
+import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown'
+import { bomApi } from '../../../../master-data/services/material'
+import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select'
+import { getDepartmentTree } from '../../../../../services/department'
 import { warehouseApi } from '../../../services/warehouse-execution'
 import {
   KUAIZHIZAO_DOC_HOST,
@@ -246,7 +320,6 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import {
   completeDeliveryNodeDocumentLinkIfPending,
   isDeliveryCreateQuery,
-  stripDeliveryCreateQuery,
 } from '../../delivery-project/shared/deliveryNodeDocumentLink'
 import { inboundProductionReturnEntryPath, inboundWorkOrderEntryPath } from '../../warehouse-management/inbound/inboundPaths'
 import { outboundWorkOrderEntryPath } from '../../warehouse-management/outbound/outboundPaths'
@@ -275,17 +348,32 @@ const LazyStatTrendArea = lazy(() =>
   import('../../../../../components/common/StatCardTrendArea').then((m) => ({ default: m.StatCardTrendArea }))
 )
 const LazyCreateWorkOrderOperationsList = lazy(() => import('./components/WorkOrderCreateDndList'))
+const LazyWorkOrderBomLinesDetail = lazy(() => import('./components/WorkOrderBomLinesDetail'))
+import {
+  bomFormRowsToPreviewPayload,
+  mapApiBomLineToFormRow,
+  type WorkOrderBomLineRow,
+} from './components/WorkOrderBomLinesDetail'
+const LazyWorkOrderOperationsEditTable = lazy(() => import('./components/WorkOrderOperationsEditTable'))
 const LazyWorkOrderPeerGroupCreateDetail = lazy(
   () => import('./components/WorkOrderPeerGroupCreateDetail')
 )
 import { EMPTY_PEER_GROUP_ITEM } from './components/WorkOrderPeerGroupCreateDetail'
-import { buildOperationsForCreatePayload } from './workOrderCreateOperations'
+import {
+  buildOperationsForCreatePayload,
+  mergeMissingAssignmentFromProductProcess,
+  workOrderOperationAssignmentPayload,
+} from './workOrderCreateOperations'
 import {
   parseWorkOrderOperationsFromRouteSequence,
   workOrderOperationRowFromProductProcessLine,
   workOrderOperationRowFromOperationMaster,
   type WorkOrderOpListContext,
 } from './workOrderOperationFromSources'
+import {
+  pickSalesOrderDeliveryDate,
+  toWorkOrderRequiredDateDayjs,
+} from './workOrderRequiredDateFromSalesOrder'
 const LazyWorkOrderReadinessModal = lazy(() =>
   import('./components/WorkOrderReadinessPopover').then((m) => ({ default: m.WorkOrderReadinessModal })),
 )
@@ -322,6 +410,7 @@ import {
   reloadWorkOrderListPreservingScroll,
 } from './workOrderListScrollPreserve'
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
+import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle'
 import { getOutsourceOrderLifecycle } from '../../../utils/outsourceOrderLifecycle'
@@ -356,7 +445,10 @@ import ReportingInboundWarehouseField from '../../../components/ReportingInbound
 import { resolveProxyWorkerFromForm } from '../../../utils/reportingProducerResolve'
 import { ReportingProducerField } from '../../../components/ReportingProducerField'
 import { ReportingWorkTimeFields } from '../../../components/ReportingWorkTimeFields'
-import { resolveReportingWorkTimeForSubmit } from '../../../utils/reportingWorkTime'
+import {
+  buildDefaultReportingWorkTime,
+  resolveReportingWorkTimeForSubmit,
+} from '../../../utils/reportingWorkTime'
 import {
   buildLastInboundHintOptions,
   isInboundWarehouseRequiredForLastOperation,
@@ -371,7 +463,6 @@ import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { Ungroup } from 'lucide-react';
-import { useGlobalStore } from '../../../../../stores'
 
 const dissolveWorkOrderGroupIcon = <Ungroup size={14} strokeWidth={2} aria-hidden />
 
@@ -393,7 +484,13 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate'
 import { IMPORT_YES_NO_OPTIONS } from '../../../../../utils/loadImportDictionaryValues'
-import { formatDateTime, formatDateTimeBySiteSetting, formatQuantity, todaySiteDateString } from '../../../../../utils/format'
+import {
+  formatBusinessDateOnly,
+  formatDateTime,
+  formatDateTimeBySiteSetting,
+  formatQuantity,
+  todaySiteDateString,
+} from '../../../../../utils/format'
 import {
   convertBaseQtyToProductionDisplay,
   convertProductionInputToBaseQty,
@@ -413,6 +510,7 @@ import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
 import { isManualAuditEnabled } from '../../../../../utils/auditMode'
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle'
 const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
   for (const candidate of candidates) {
     if (typeof candidate === 'string') {
@@ -641,16 +739,26 @@ type PullDemandComputationCandidate = {
 }
 
 
-type PullSalesOrderCandidate = {
-  id: number
-  order_code?: string
-  customer_name?: string
-  status?: string
-  review_status?: string
-  delivery_date?: string
-  updated_at?: string
-  remaining_push_quantity?: number
-  capabilities?: PullSalesOrder['capabilities']
+type PullSalesOrderCandidate = SalesOrderWorkOrderPullLine
+
+type PullDemandPlanWorkOrderLine = DemandPlanWorkOrderPullLine
+
+type PullSalesForecastWorkOrderLine = {
+  id: string
+  forecast_id: number
+  forecast_code?: string
+  forecast_name?: string
+  material_id: number
+  material_code?: string
+  material_name?: string
+  material_spec?: string
+  forecast_quantity: number
+  forecast_date?: string
+  variant_attributes?: Record<string, unknown>
+}
+
+function isPullWorkOrderSalesForecastSelectable(record: PullSalesForecastWorkOrderLine): boolean {
+  return Number(record.material_id) > 0 && Number(record.forecast_quantity) > 0
 }
 
 /** 报工数量框：失焦时若为空则视为未填写，需恢复打开弹窗时的默认值 */
@@ -1527,6 +1635,18 @@ const WorkOrderPlannedRangeCell = React.memo(function WorkOrderPlannedRangeCell(
   )
 })
 
+const WORK_ORDER_FORECAST_PULL_KEY = 'kuaizhizao:work-order-sales-forecast-pull'
+/** 列表「复制选中创建」→ UniTab 新建页 handoff（与销售预测取单同走 sessionStorage） */
+const WORK_ORDER_COPY_KEY = 'kuaizhizao:work-order-copy-create'
+
+type WorkOrderCopyHandoffPayload = {
+  type: 'copy'
+  detail: Record<string, unknown>
+  operations: Array<Record<string, unknown>>
+  bom_lines?: Array<Record<string, unknown>>
+  materials?: Material[]
+}
+
 const WorkOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation()
   const quantityDecimals = useNumericPrecisionPlaces('quantity')
@@ -1536,6 +1656,13 @@ const WorkOrdersPage: React.FC = () => {
   const toolbarSyncPush = useToolbarSyncPushFlags('work_order')
   const outboundPerms = useResourcePermissions('kuaizhizao:outbound')
   const workOrderAuditEnabled = useAuditRequired('work_order', false)
+  const { runAfterPersist: runWorkOrderSaveAndAudit, initiatorModal: workOrderInitiatorModal } =
+    useDocumentFormCommitAndSubmitReview({
+      entityType: 'work_order',
+      entityLabel: t('app.kuaizhizao.workOrder.entityName'),
+      commit: (id) => workOrderApi.commit(id),
+      submitReview: (id) => workOrderApi.submitForReview(id),
+    })
   const workOrderAuditColumn = useMemo(
     () => createListAuditPhaseColumn<WorkOrder>({ t, auditEnabled: workOrderAuditEnabled }),
     [t, workOrderAuditEnabled],
@@ -1632,6 +1759,8 @@ const WorkOrdersPage: React.FC = () => {
   )
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_computation')
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_order')
+  const pullFromSalesForecastAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_forecast')
+  const pullFromDemandPlanAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_plan')
   const [searchParams, setSearchParams] = useSearchParams()
   const soPullFromSalesOrderDeepLinkRef = useRef<string | null>(null)
   const dcPullFromComputationDeepLinkRef = useRef<string | null>(null)
@@ -1656,6 +1785,39 @@ const WorkOrdersPage: React.FC = () => {
   )
   const location = useLocation()
   const navigate = useNavigate()
+  const WORK_ORDER_LIST_PATH = '/apps/kuaizhizao/production-execution/work-orders'
+  const isCreatePage = location.pathname.endsWith('/work-orders/new')
+  const editRouteMatch = location.pathname.match(/\/work-orders\/(\d+)\/edit$/)
+  const editRouteId = editRouteMatch ? Number(editRouteMatch[1]) : null
+  const isEditPage =
+    editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0
+  const isFormPage = isCreatePage || isEditPage
+  const leaveWorkOrderFormPage = useLeaveFormTab(WORK_ORDER_LIST_PATH)
+  const formPageInitRef = useRef(false)
+
+  useEffect(() => {
+    if (!isFormPage) return undefined
+    const title = t(
+      isCreatePage
+        ? 'app.kuaizhizao.menu.production-execution.work-orders.new'
+        : 'app.kuaizhizao.menu.production-execution.work-orders.edit',
+    )
+    const sp = new URLSearchParams(location.search || '')
+    sp.delete('_refresh')
+    const cleanSearch = sp.toString()
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '')
+    setCustomPageTitle(location.pathname, title)
+    setCustomPageTitle(tabKey, title)
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title },
+      }),
+    )
+    return () => {
+      removeCustomPageTitle(location.pathname)
+      removeCustomPageTitle(tabKey)
+    }
+  }, [isFormPage, isCreatePage, location.pathname, location.search, t])
   const actionRef = useRef<ActionType>(null)
   const tableSearchFormRef = useRef<any>(null)
   const tableSearchParamsRef = useRef<Record<string, any> | undefined>(undefined)
@@ -1712,6 +1874,7 @@ const WorkOrdersPage: React.FC = () => {
   const [soPullBomParams, setSoPullBomParams] = useState<DirectPushBomParams>({})
   const [soPullBomMaterials, setSoPullBomMaterials] = useState<DirectPushBomMaterialRow[]>([])
   const [soPullBomMaterialsLoading, setSoPullBomMaterialsLoading] = useState(false)
+  const [soPullBomExpand, setSoPullBomExpand] = useState<Record<number, boolean>>({})
 
   const [notifyInboundPreviewOpen, setNotifyInboundPreviewOpen] = useState(false)
   const [notifyInboundPreviewLoading, setNotifyInboundPreviewLoading] = useState(false)
@@ -1902,6 +2065,143 @@ const WorkOrdersPage: React.FC = () => {
     [selectedRowKeys, workOrderListRowIndexVersion],
   )
 
+  const canToolbarBatchDelete = useMemo(
+    () => workOrderBatchDeleteAllowed(selectedWorkOrdersForBatch, workOrderPerms.canDelete),
+    [selectedWorkOrdersForBatch, workOrderPerms.canDelete],
+  )
+
+  const workOrderToolbarAuditMenus = useMemo(() => {
+    const reload = () => {
+      setSelectedRowKeys([])
+      invalidateStatistics()
+      actionRef.current?.reload()
+    }
+    const reviewOf = (row: WorkOrder) => String(row.review_status || '').trim()
+    const statusOf = (row: WorkOrder) => String(row.status || '').trim()
+    const isDraft = (row: WorkOrder) => ['draft', '草稿', 'DRAFT'].includes(statusOf(row))
+    const allowed = (row: WorkOrder, key: string) => pickCapability(row, key)?.allowed === true
+    const run = (
+      keys: React.Key[],
+      records: WorkOrder[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys,
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        resolveId: (key) =>
+          resolveWorkOrderIdsFromListRowKeys([key], workOrderRowByKeyRef.current)[0] ?? null,
+        onRun,
+        onSuccess: reload,
+        message: messageApi,
+        t,
+      })
+    const submitRows = selectedWorkOrdersForBatch.filter(
+      (row) => isDraft(row) && allowed(row, 'submit'),
+    )
+    const committedRows = selectedWorkOrdersForBatch.filter(
+      (row) => isDraft(row) && reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+    )
+    const pendingRows = selectedWorkOrdersForBatch.filter((row) => {
+      const review = reviewOf(row)
+      return isDraft(row) && review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit')
+    })
+    const reviewRows = selectedWorkOrdersForBatch.filter(
+      (row) => isDraft(row) && allowed(row, 'submit_review'),
+    )
+    const approveRows = selectedWorkOrdersForBatch.filter((row) => {
+      const review = reviewOf(row)
+      return isDraft(row) && review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'approve')
+    })
+    const revokeRows = selectedWorkOrdersForBatch.filter(
+      (row) => isDraft(row) && allowed(row, 'revoke_approval'),
+    )
+    const canSubmit = workOrderPerms.canAction?.('submit') ?? false
+    const canApprove = workOrderPerms.canAction?.('approve') ?? false
+    const canRevoke = workOrderPerms.canAction?.('revoke') ?? false
+    const hasSelection = selectedRowKeys.length > 0
+    const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0)
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: (keys) => run(keys, submitRows, 'submit', canSubmit, (id) => workOrderApi.commit(id)),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t('app.kuaizhizao.workOrder.toolbar.withdrawSubmit'),
+          disabled: hasSelection && committedRows.length === 0,
+          onClick: (keys) =>
+            run(keys, committedRows, 'withdraw_submit', canSubmit, (id) => workOrderApi.withdrawSubmit(id)),
+        },
+        {
+          key: 'submit-review',
+          label: t('app.kuaizhizao.workOrder.toolbar.submitReview'),
+          disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+          onClick: (keys) =>
+            run(
+              keys,
+              reviewRows,
+              'submit_review',
+              canSubmit,
+              (id) => workOrderApi.submitForReview(id),
+              t('app.kuaizhizao.workOrder.toolbar.submitReviewNotAllowed'),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: (id) => workOrderApi.commit(id),
+        submitReview: (id) => workOrderApi.submitForReview(id),
+        resolveId: (key) =>
+          resolveWorkOrderIdsFromListRowKeys([key], workOrderRowByKeyRef.current)[0] ?? null,
+        onSuccess: reload,
+      },
+    )
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('common.audit'),
+        disabled: hasSelection && !(canApprove && approveRows.length > 0),
+        onClick: (keys) => run(keys, approveRows, 'approve', canApprove, (id) => workOrderApi.approve(id)),
+      },
+      {
+        key: 'withdraw-review',
+        label: t('app.kuaizhizao.workOrder.toolbar.withdrawReview'),
+        disabled: hasSelection && pendingRows.length === 0,
+        onClick: (keys) =>
+          run(keys, pendingRows, 'withdraw_submit', canSubmit, (id) => workOrderApi.withdrawSubmit(id)),
+      },
+      {
+        key: 'revoke',
+        label: t('app.kuaizhizao.workOrder.toolbar.revoke'),
+        disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+        onClick: (keys) =>
+          run(keys, revokeRows, 'revoke_approval', canRevoke, (id) => workOrderApi.revokeApproval(id)),
+      },
+    ]
+    return { submitItems, auditItems }
+  }, [
+    actionRef,
+    invalidateStatistics,
+    messageApi,
+    selectedRowKeys,
+    selectedWorkOrdersForBatch,
+    t,
+    workOrderPerms,
+  ])
+
   const {
     customFields: workOrderListCustomFields,
     generateCustomFieldColumns: generateWorkOrderCustomFieldColumns,
@@ -2014,6 +2314,7 @@ const WorkOrdersPage: React.FC = () => {
   const [createProcessRouteId, setCreateProcessRouteId] = useState<number | undefined>()
   const [createAddOperationsModalVisible, setCreateAddOperationsModalVisible] = useState(false)
   const [createAddOperationUuids, setCreateAddOperationUuids] = useState<string[]>([])
+  const [createAddBomMaterialModalVisible, setCreateAddBomMaterialModalVisible] = useState(false)
   // 当前选中产品的物料来源信息
   const [selectedMaterialSourceInfo, setSelectedMaterialSourceInfo] = useState<{
     sourceType?: string
@@ -2022,6 +2323,12 @@ const WorkOrdersPage: React.FC = () => {
     canCreateWorkOrder?: boolean
   } | null>(null)
   const [formProductMaterial, setFormProductMaterial] = useState<Material | null>(null)
+  const [productBomVersionOptions, setProductBomVersionOptions] = useState<
+    Array<{ label: string; value: string }>
+  >([])
+  const [manufacturingDepartmentOptions, setManufacturingDepartmentOptions] = useState<
+    Array<{ label: string; value: number }>
+  >([])
   // 与物料档案基础单位下拉同一套：展示单位名称，不把单位编码原样拼进标题
   const [completeTrackingModalOpen, setCompleteTrackingModalOpen] = useState(false)
   const [completeTrackingLoading, setCompleteTrackingLoading] = useState(false)
@@ -2065,7 +2372,8 @@ const WorkOrdersPage: React.FC = () => {
             })
             return {
               ...row,
-              allow_jump: ppAllowJump && !Boolean(row.is_node_operation),
+              allow_jump: ppAllowJump,
+              is_node_operation: false,
             }
           })
           .filter(Boolean)
@@ -2158,132 +2466,273 @@ const WorkOrdersPage: React.FC = () => {
     }[]
     /** 从销售订单加载时写入，提交时带出 MTO 与销售订单快照 */
     salesOrderRef?: { id: number; code?: string; name?: string }
+    demandItemId?: number
   } | null>(null)
-  // 选择文档弹窗
-  const [productSourceModalVisible, setProductSourceModalVisible] = useState(false)
-  const [productSourceModalType, setProductSourceModalType] = useState<
-    'sales_order' | 'sales_forecast' | 'demand' | null
-  >(null)
-  
   // 紧急插单模拟状态
   const [urgentSimulationVisible, setUrgentSimulationVisible] = useState(false);
   const [simulationLoading, setSimulationLoading] = useState(false);
   const [simulationResult, setSimulationResult] = useState<any>(null);
   const [simulationParams, setSimulationParams] = useState<any>(null);
 
-  const [productSourceDocList, setProductSourceDocList] = useState<any[]>([])
-  const [productSourceDocLoading, setProductSourceDocLoading] = useState(false)
-  const [productSourceKeyword, setProductSourceKeyword] = useState('')
-  // 加载产品来源文档列表（销售订单/销售预测/需求）- 直接拉平为明细行
-  useEffect(() => {
-    if (!productSourceModalVisible || !productSourceModalType) {
-      setProductSourceDocList([])
-      return
-    }
-    const load = async () => {
-      setProductSourceDocLoading(true)
-      try {
-        const keyword = productSourceKeyword.trim()
-        if (productSourceModalType === 'sales_order') {
-          const res = await listSalesOrdersForPull({
-            limit: 50,
-            include_items: true,
-            view: 'options',
-            ...(keyword ? { keyword } : {}),
-          })
-          const orders = Array.isArray(res) ? res : (res?.data ?? [])
-          const flat: any[] = []
-          orders.forEach((ord: any) => {
-            ;(ord?.items ?? []).forEach((it: any, idx: number) => {
-              flat.push({
-                ...it,
-                order_quantity: it.order_quantity ?? it.required_quantity,
-                _doc_id: ord.id,
-                _order_code: ord.order_code,
-                _customer_name: ord.customer_name,
-                _row_key: `${ord.id}-${it.id ?? it.material_id ?? idx}`,
-              })
-            })
-          })
-          setProductSourceDocList(flat)
-        } else if (productSourceModalType === 'sales_forecast') {
-          const res: any = await listSalesForecasts({
-            limit: 50,
-            include_items: true,
-            ...(keyword ? { keyword } : {}),
-          })
-          const forecasts = res?.data ?? []
-          const flat: any[] = []
-          for (const f of forecasts) {
-            const items = f.items ?? []
-            items.forEach((it: any, idx: number) => {
-              flat.push({
-                ...it,
-                _doc_id: f.id,
-                _forecast_code: f.forecast_code,
-                _forecast_name: f.forecast_name,
-                _row_key: `${f.id}-${it.id ?? it.material_id ?? idx}`,
-              })
-            })
-          }
-          setProductSourceDocList(flat)
-        } else if (productSourceModalType === 'demand') {
-          const res = await listDemands({ limit: 50, include_items: true })
-          const demands = res?.data ?? []
-          const flat: any[] = []
-          demands.forEach((d: any) => {
-            ;(d?.items ?? []).forEach((it: any, idx: number) => {
-              flat.push({
-                ...it,
-                _doc_id: d.id,
-                _demand_code: d.demand_code,
-                _demand_name: d.demand_name,
-                _row_key: `${d.id}-${it.id ?? it.material_id ?? idx}`,
-              })
-            })
-          })
-          if (!keyword) {
-            setProductSourceDocList(flat)
-          } else {
-            const lowered = keyword.toLowerCase()
-            setProductSourceDocList(
-              flat.filter((row: any) =>
-                [
-                  row?._demand_code,
-                  row?._demand_name,
-                  row?.material_code,
-                  row?.material_name,
-                  row?.material_spec,
-                ]
-                  .filter(Boolean)
-                  .some((v) => String(v).toLowerCase().includes(lowered))
-              )
-            )
-          }
-        }
-      } catch (e) {
-        console.error('加载文档列表失败:', e)
-        setProductSourceDocList([])
-      } finally {
-        setProductSourceDocLoading(false)
-      }
-    }
-    load()
-  }, [productSourceModalVisible, productSourceModalType, productSourceKeyword])
-
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false)
+  const [bomFormLines, setBomFormLines] = useState<WorkOrderBomLineRow[]>([])
+  const bomFormLinesRef = useRef(bomFormLines)
+  const bomPreviewSeqRef = useRef(0)
   const deliveryCreatePrefillRef = useRef<{ salesOrderId?: number } | null>(null)
   const [createWorkOrderMode, setCreateWorkOrderMode] = useState<'normal' | 'peer_group'>('normal')
   const [isEdit, setIsEdit] = useState(false)
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null)
   const formRef = useRef<any>(null)
+  const productBomVersionLoadSeqRef = useRef(0)
+  const commitAfterSaveRef = useRef(false)
+  const saveAndAuditAfterSaveRef = useRef(false)
   /** 编辑工单打开时的工艺路线 ID，用于识别换路线后须全量替换工序行 */
   const editInitialProcessRouteIdRef = useRef<number | null>(null)
   const workOrderPlannedDatesLocked = useMemo(
     () => isEdit && isWorkOrderPlannedDatesLocked(currentWorkOrder?.status),
     [isEdit, currentWorkOrder?.status],
   )
+  const workOrderBomFormReadOnly = useMemo(
+    () => isEdit && ['completed', 'cancelled', 'split'].includes(String(currentWorkOrder?.status || '')),
+    [currentWorkOrder?.status, isEdit],
+  )
+  useEffect(() => {
+    bomFormLinesRef.current = bomFormLines
+  }, [bomFormLines])
+  const scheduleWorkOrderBomPreview = useCallback(
+    async (
+      reason: 'product' | 'quantity' | 'bom_version',
+      overrides?: {
+        product_id?: number
+        quantity?: number
+        product_bom_version?: string | null
+      },
+    ) => {
+      if (!(isFormPage || modalVisible) || createWorkOrderMode !== 'normal' || workOrderBomFormReadOnly) return
+      const productId =
+        overrides?.product_id != null
+          ? Number(overrides.product_id)
+          : Number(formRef.current?.getFieldValue('product_id'))
+      const rawQuantity =
+        overrides?.quantity != null
+          ? Number(overrides.quantity)
+          : Number(formRef.current?.getFieldValue('quantity'))
+      const quantity = Number.isFinite(rawQuantity) && rawQuantity > 0 ? rawQuantity : 1
+      if (!Number.isFinite(productId) || productId <= 0) return
+      const variantRaw = formRef.current?.getFieldValue('variant_attributes')
+      let variant_attributes: Record<string, unknown> | undefined
+      if (variantRaw) {
+        try {
+          variant_attributes =
+            typeof variantRaw === 'string'
+              ? (JSON.parse(variantRaw) as Record<string, unknown>)
+              : (variantRaw as Record<string, unknown>)
+        } catch {
+          variant_attributes = undefined
+        }
+      }
+      const productBomVersion =
+        overrides?.product_bom_version !== undefined
+          ? overrides.product_bom_version || undefined
+          : formRef.current?.getFieldValue('product_bom_version') || undefined
+      const seq = bomPreviewSeqRef.current + 1
+      bomPreviewSeqRef.current = seq
+      const currentLines = bomFormLinesRef.current
+      const existingForPreview = reason === 'product' ? [] : bomFormRowsToPreviewPayload(currentLines)
+      try {
+        const preview = await workOrderApi.previewBomLines({
+          product_id: productId,
+          quantity,
+          product_bom_version: productBomVersion,
+          variant_attributes,
+          lines: existingForPreview.length ? existingForPreview : undefined,
+        })
+        if (seq !== bomPreviewSeqRef.current) return
+        if (!preview?.length) {
+          if (reason === 'product') setBomFormLines([])
+          return
+        }
+        const bomRows = (preview as Array<Record<string, unknown>>).map((line, idx) =>
+          mapApiBomLineToFormRow(line, idx),
+        )
+        const bomMaterialIds = new Set(bomRows.map((row) => Number(row.material_id)))
+        const extraKeep =
+          reason === 'product'
+            ? []
+            : currentLines.filter(
+                (row) => Number(row.material_id) > 0 && !bomMaterialIds.has(Number(row.material_id)),
+              )
+        setBomFormLines([...bomRows, ...extraKeep])
+      } catch (error: unknown) {
+        if (seq !== bomPreviewSeqRef.current) return
+        if (reason === 'product') setBomFormLines([])
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.workOrder.formBomPreviewFailed')))
+      }
+    },
+    [createWorkOrderMode, isFormPage, messageApi, modalVisible, t, workOrderBomFormReadOnly],
+  )
+  useEffect(() => {
+    if (isEdit || workOrderBomFormReadOnly) return
+    if (!(isFormPage || modalVisible) || createWorkOrderMode !== 'normal') return
+    const materialId = Number(formProductMaterial?.id)
+    if (!Number.isFinite(materialId) || materialId <= 0) return
+    const formProductId = Number(formRef.current?.getFieldValue('product_id'))
+    if (!Number.isFinite(formProductId) || formProductId !== materialId) return
+    void scheduleWorkOrderBomPreview('product', { product_id: materialId })
+  }, [
+    createWorkOrderMode,
+    formProductMaterial?.id,
+    isEdit,
+    isFormPage,
+    modalVisible,
+    scheduleWorkOrderBomPreview,
+    workOrderBomFormReadOnly,
+  ])
+  const openBomLineAddModal = useCallback(() => {
+    setCreateAddBomMaterialModalVisible(true)
+  }, [])
+  const handleAppendBomMaterials = useCallback((selected: Material[]) => {
+    if (!selected.length) {
+      setCreateAddBomMaterialModalVisible(false)
+      return
+    }
+    const current = bomFormLinesRef.current
+    const existingIds = new Set(
+      current
+        .map((row) => Number(row.material_id))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    )
+    const productBomVersion = formRef.current?.getFieldValue('product_bom_version')
+    const stamp = Date.now()
+    const nextRows: WorkOrderBomLineRow[] = []
+    let duplicateCount = 0
+    selected.forEach((mat, idx) => {
+      const materialId = Number(mat.id)
+      if (!Number.isFinite(materialId) || materialId <= 0) return
+      if (existingIds.has(materialId)) {
+        duplicateCount += 1
+        return
+      }
+      existingIds.add(materialId)
+      nextRows.push({
+        key: `bom-manual-${materialId}-${stamp}-${idx}`,
+        material_id: materialId,
+        material_code: String(mat.mainCode ?? mat.code ?? ''),
+        material_name: String(mat.name ?? ''),
+        material_spec: mat.specification != null ? String(mat.specification) : undefined,
+        unit: mat.baseUnit != null ? String(mat.baseUnit) : undefined,
+        required_quantity: 0,
+        bom_version: productBomVersion != null ? String(productBomVersion) : undefined,
+        issued_quantity: 0,
+      })
+    })
+    if (nextRows.length) {
+      mergeProductCache(selected)
+      setBomFormLines([...current, ...nextRows])
+      messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: nextRows.length }))
+    }
+    if (duplicateCount > 0 && nextRows.length === 0) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.formBomLineDuplicateMaterial'))
+    } else if (duplicateCount > 0) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.formBomLineDuplicateMaterialSkipped', {
+        count: duplicateCount,
+      }))
+    }
+    setCreateAddBomMaterialModalVisible(false)
+  }, [mergeProductCache, messageApi, t])
+  const manufacturingDepartmentSelectOptions = useMemo(() => {
+    const savedId = Number(
+      (currentWorkOrder as { manufacturing_department_id?: number } | null)?.manufacturing_department_id,
+    )
+    const savedName = String(
+      (currentWorkOrder as { manufacturing_department_name?: string } | null)?.manufacturing_department_name
+        ?? '',
+    ).trim()
+    if (!Number.isFinite(savedId) || savedId <= 0 || !savedName) {
+      return manufacturingDepartmentOptions
+    }
+    if (manufacturingDepartmentOptions.some((item) => item.value === savedId)) {
+      return manufacturingDepartmentOptions
+    }
+    return [{ label: savedName, value: savedId }, ...manufacturingDepartmentOptions]
+  }, [currentWorkOrder, manufacturingDepartmentOptions])
+
+  useEffect(() => {
+    if (!isFormPage && !modalVisible) return
+    let cancelled = false
+    const flattenDepts = (
+      nodes: Array<{ id: number; name: string; children?: typeof nodes }>,
+      acc: Array<{ label: string; value: number }> = [],
+    ) => {
+      nodes.forEach((node) => {
+        acc.push({ label: node.name, value: node.id })
+        if (node.children?.length) flattenDepts(node.children, acc)
+      })
+      return acc
+    }
+    void (async () => {
+      try {
+        const tree = await getDepartmentTree({
+          is_active: true,
+          host_resource: KUAIZHIZAO_DOC_HOST.workOrder,
+        })
+        if (cancelled) return
+        setManufacturingDepartmentOptions(flattenDepts(tree?.items ?? []))
+      } catch (error: unknown) {
+        if (cancelled) return
+        setManufacturingDepartmentOptions([])
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.workOrder.formDepartmentLoadFailed')))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isFormPage, modalVisible, messageApi, t])
+
+  useEffect(() => {
+    if (!isFormPage && !modalVisible) return
+    const materialId = Number(formProductMaterial?.id)
+    const seq = productBomVersionLoadSeqRef.current + 1
+    productBomVersionLoadSeqRef.current = seq
+    if (!Number.isFinite(materialId) || materialId <= 0) {
+      setProductBomVersionOptions([])
+      return
+    }
+    void (async () => {
+      try {
+        const items = await bomApi.getByMaterial(materialId, undefined, true)
+        if (seq !== productBomVersionLoadSeqRef.current) return
+        const versions = new Map<string, { label: string; value: string }>()
+        for (const item of items) {
+          const version = String(item.version ?? '').trim()
+          if (!version || versions.has(version)) continue
+          versions.set(version, { label: version, value: version })
+        }
+        const current = String(formRef.current?.getFieldValue('product_bom_version') ?? '').trim()
+        const options = [...versions.values()]
+        if (current && !versions.has(current)) {
+          options.unshift({ label: current, value: current })
+        }
+        setProductBomVersionOptions(options)
+        if (!current && !isEdit) {
+          const defaultVersion = items.find((item) => item.isDefault)?.version
+          if (defaultVersion) {
+            formRef.current?.setFieldsValue({ product_bom_version: String(defaultVersion) })
+            const qty = Number(formRef.current?.getFieldValue('quantity'))
+            void scheduleWorkOrderBomPreview('bom_version', {
+              product_bom_version: String(defaultVersion),
+              quantity: Number.isFinite(qty) && qty > 0 ? qty : undefined,
+            })
+          }
+        }
+      } catch (error: unknown) {
+        if (seq !== productBomVersionLoadSeqRef.current) return
+        setProductBomVersionOptions([])
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.workOrder.formProductBomVersionLoadFailed')))
+      }
+    })()
+  }, [formProductMaterial?.id, isEdit, isFormPage, modalVisible, messageApi, scheduleWorkOrderBomPreview, t])
 
   const {
     customFields: workOrderFormCustomFields,
@@ -2296,12 +2745,22 @@ const WorkOrdersPage: React.FC = () => {
 
   // 从加载来源填充表单：当 productSourceData 有 items 且新建工单弹窗打开时，自动填充产品与数量
   useEffect(() => {
-    if (!productSourceData?.items?.length || !modalVisible || isEdit || !formRef.current) return
+    if (
+      !productSourceData?.items?.length ||
+      (!modalVisible && !isFormPage) ||
+      isEdit ||
+      !formRef.current
+    ) {
+      return
+    }
     const first = productSourceData.items[0]
     const so = productSourceData.salesOrderRef
     formRef.current.setFieldsValue({
       product_id: first.productId,
       quantity: first.quantity,
+      ...(productSourceData.demandItemId
+        ? { demand_item_id: productSourceData.demandItemId }
+        : {}),
       variant_attributes: first.variant_attributes != null
         ? (typeof first.variant_attributes === 'string'
             ? first.variant_attributes
@@ -2344,39 +2803,68 @@ const WorkOrdersPage: React.FC = () => {
     }
     // 自动加载物料绑定的工艺路线及工序
     if (selectedMaterial?.uuid) loadProcessRouteForMaterial(selectedMaterial.uuid)
+    void scheduleWorkOrderBomPreview('product', {
+      product_id: Number(first.productId),
+      quantity: Number(first.quantity) > 0 ? Number(first.quantity) : undefined,
+    })
     return () => {
       cancelled = true
     }
-  }, [productSourceData, modalVisible, isEdit, t])
+  }, [productSourceData, modalVisible, isFormPage, isEdit, scheduleWorkOrderBomPreview, t])
 
   // 创建/编辑弹窗所需数据是否已加载
   const [modalDataLoaded, setModalDataLoaded] = useState(false)
   const [modalDataLoading, setModalDataLoading] = useState(false)
 
-  // 延迟加载：打开创建/编辑弹窗时拉工序/路线/人员/设备等；产品物料走 UniMaterialSelect 按需缓存（对齐销售订单）
+  // 延迟加载：打开创建/编辑弹窗或表单页时拉工序/路线/人员/设备/车间等；产品物料走 UniMaterialSelect 按需缓存
   useEffect(() => {
-    if (!modalVisible) return
+    if (!modalVisible && !isFormPage) return
     if (modalDataLoaded) return
     let cancelled = false
     const loadData = async () => {
       setModalDataLoading(true)
       try {
-        const [operations, routes, usersRes, equipmentRes, moldsRes, toolsRes] =
+        const [
+          operations,
+          routes,
+          usersRes,
+          teamsRes,
+          equipmentRes,
+          moldsRes,
+          toolsRes,
+          workshopsRes,
+        ] =
           await Promise.all([
             operationApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
             processRouteApi.list({ isActive: true, limit: 500 }).catch(() => ({ data: [], total: 0 })),
-            searchUserDisplay({ is_active: true, page_size: 100 }).catch(() => ({ items: [] })),
-            getEquipmentList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
+            searchUserDisplay({ is_active: true, page_size: 200 }).catch(() => ({ items: [] })),
+            workGroupApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
+            getEquipmentList({ is_active: true, limit: 300 }).catch(() => ({ items: [] })),
             getMoldList({ is_active: true, limit: 100 }).catch(() => ({ items: [] })),
             toolApi.list({ limit: 100 }).catch(() => ({ items: [] })),
+            workshopApi.list({ is_active: true, limit: 500 }).catch(() => ({ items: [], total: 0 })),
           ])
         if (cancelled) return
         setOperationList(unwrapProcessPagedList(operations))
         setProcessRouteList(unwrapProcessPagedList(routes))
         setWorkerList(displayItemsToUsers(usersRes?.items || []))
+        const teams = factoryListItems(teamsRes as any)
+        setTeamList(teams)
+        const personnelOpts: Array<{ label: string; value: string }> = []
+        for (const user of (usersRes as any)?.items || []) {
+          personnelOpts.push({
+            label: `[人员] ${user.full_name || user.username}`,
+            value: `U_${user.id}`,
+          })
+        }
+        for (const team of teams) {
+          personnelOpts.push({ label: `[小组] ${team.name}`, value: `T_${team.id}` })
+        }
+        setPersonnelOptions(personnelOpts)
         setEquipmentList(equipmentRes?.items || [])
         setMoldList(moldsRes?.items || [])
         setToolList(toolsRes?.items || [])
+        setWorkshopList(factoryListItems(workshopsRes as any))
         setModalDataLoaded(true)
       } catch (error) {
         if (!cancelled) {
@@ -2388,7 +2876,7 @@ const WorkOrdersPage: React.FC = () => {
     }
     loadData()
     return () => { cancelled = true }
-  }, [modalVisible, modalDataLoaded])
+  }, [modalVisible, isFormPage, modalDataLoaded])
 
   // 加载销售订单列表（MTO模式或编辑时）
   useEffect(() => {
@@ -2558,17 +3046,18 @@ const WorkOrdersPage: React.FC = () => {
       return undefined
     }
     const qtyBase = Number(quickReportingWorkOrder.quantity) || 0
-    const qtyDisplay =
-      Number(quickReportingWorkOrder.display_quantity ?? quickReportingWorkOrder.displayQuantity) ||
-      convertBaseQtyToProductionDisplay(qtyBase, quickReportingWorkOrder)
-    const stdH =
-      quickReportingOperation.standard_time != null
-        ? parseFloat(String(quickReportingOperation.standard_time)) * qtyDisplay
-        : undefined
+    const defaultWorkTime = buildDefaultReportingWorkTime(
+      quickReportingOperation.actual_start_date ?? quickReportingOperation.actualStartDate,
+    )
+    const workTimeFields = {
+      work_start_time: defaultWorkTime.work_start_time,
+      work_end_time: defaultWorkTime.work_end_time,
+      work_hours: defaultWorkTime.work_hours,
+    }
     if (quickReportingOperation.reporting_type === 'status') {
       return {
         completed_status: 'completed',
-        work_hours: stdH ?? 0,
+        ...workTimeFields,
         remarks: undefined,
         producer_mode: 'worker',
         report_team_id: undefined,
@@ -2588,7 +3077,7 @@ const WorkOrdersPage: React.FC = () => {
       ),
       defect_type: undefined,
       defect_reason_text: undefined,
-      work_hours: stdH,
+      ...workTimeFields,
       remarks: undefined,
       producer_mode: 'worker',
       report_team_id: undefined,
@@ -2875,6 +3364,23 @@ const WorkOrdersPage: React.FC = () => {
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
+    if (createWorkOrderMode === 'peer_group') {
+      setIsEdit(false)
+      setCurrentWorkOrder(null)
+      editInitialProcessRouteIdRef.current = null
+      setProductionMode('MTS')
+      setSelectedOperations([])
+      setSelectedMaterialSourceInfo(null)
+      setFormProductMaterial(null)
+      setProductList([])
+      setModalVisible(true)
+      return
+    }
+    navigate(`${WORK_ORDER_LIST_PATH}/new`)
+    return
+  }
+
+  const initWorkOrderCreateForm = () => {
     setIsEdit(false)
     setCurrentWorkOrder(null)
     editInitialProcessRouteIdRef.current = null
@@ -2884,6 +3390,7 @@ const WorkOrdersPage: React.FC = () => {
     setSelectedMaterialSourceInfo(null) // 清空物料来源信息
     setFormProductMaterial(null) // 计划数量单位依赖此缓存，须与上次编辑/选料隔离
     setProductList([]) // 与上次弹窗选料缓存隔离；选料/编辑/来源单据时再按需 merge
+    setBomFormLines([])
     setModalVisible(true)
     // FormModalTemplate 设置了 destroyOnHidden，每次打开 ProForm 都会重新挂载为空，
     // 不需要用 setTimeout 等 ref 就绪再 resetFields
@@ -2896,13 +3403,16 @@ const WorkOrdersPage: React.FC = () => {
     deliveryCreatePrefillRef.current = {
       salesOrderId: salesOrderIdRaw ? Number(salesOrderIdRaw) : undefined,
     }
-    handleCreate()
-    navigate(`${location.pathname}${stripDeliveryCreateQuery(location.search)}`, { replace: true })
+    navigate(`${WORK_ORDER_LIST_PATH}/new${location.search}`, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search])
 
   useEffect(() => {
-    if (!modalVisible || isEdit || !deliveryCreatePrefillRef.current?.salesOrderId || !formRef.current) {
+    if (
+      (!modalVisible && !isFormPage) ||
+      isEdit ||
+      !deliveryCreatePrefillRef.current?.salesOrderId
+    ) {
       return
     }
     const salesOrderId = deliveryCreatePrefillRef.current.salesOrderId
@@ -2914,8 +3424,7 @@ const WorkOrdersPage: React.FC = () => {
         if (cancelled) return
         const items = order.items ?? []
         const line =
-          items.find((it) => Number(it.material_id) > 0 && Number(it.order_quantity) > 0) ??
-          items[0]
+          items.find((it) => Number(it.material_id) > 0 && Number(it.order_quantity) > 0) ?? items[0]
         const materialId = Number(line?.material_id)
         const quantity = Number(line?.order_quantity ?? 0)
         if (!Number.isFinite(materialId) || materialId <= 0) {
@@ -2937,7 +3446,13 @@ const WorkOrdersPage: React.FC = () => {
         setProductSourceData({
           type: 'sales_order',
           materials: mats,
-          items: [{ productId: materialId, quantity: quantity > 0 ? quantity : 1, deliveryDate }],
+          items: [
+            {
+              productId: materialId,
+              quantity: quantity > 0 ? quantity : 1,
+              deliveryDate,
+            },
+          ],
           salesOrderRef: {
             id: order.id,
             code: order.order_code,
@@ -2953,8 +3468,7 @@ const WorkOrdersPage: React.FC = () => {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modalVisible, isEdit])
+  }, [isFormPage, mergeProductCache, messageApi, modalVisible, isEdit, t])
 
   const resetComputationPullPreview = useCallback(() => {
     setComputationPullPreviewOpen(false)
@@ -3096,6 +3610,7 @@ const WorkOrdersPage: React.FC = () => {
     setSoPullBomParams({})
     setSoPullBomMaterials([])
     setSoPullBomMaterialsLoading(false)
+    setSoPullBomExpand({})
   }, [])
 
   const ensureSoPullWorkCenters = useCallback(async () => {
@@ -3112,7 +3627,7 @@ const WorkOrdersPage: React.FC = () => {
   }, [messageApi, soPullWorkCenterList.length, t])
 
   const openSoPullPreview = useCallback(
-    async (salesOrderId: number) => {
+    async (salesOrderId: number, preferredItemIds?: number[]) => {
       setSoPullPreviewOpen(true)
       setSoPullPreviewLoading(true)
       setSoPullPreviewConfirming(false)
@@ -3125,23 +3640,35 @@ const WorkOrdersPage: React.FC = () => {
       setSoPullGranularity('grouped')
       setSoPullBomParams({})
       setSoPullBomMaterials([])
+      setSoPullBomExpand({})
       try {
         const [res] = await Promise.all([
           previewPushSalesOrderToWorkOrder(salesOrderId),
           ensureSoPullWorkCenters(),
         ])
         setSoPullPreviewData(res)
+        const preferred = new Set(
+          (preferredItemIds || []).map((id) => Number(id)).filter((id) => id > 0),
+        )
         const ids: number[] = []
         const qtyMap: Record<number, number> = {}
+        const bomExpandMap: Record<number, boolean> = {}
         ;(res.items || []).forEach((row: any) => {
           const itemId = Number(row.item_id)
           if (!Number.isFinite(itemId) || itemId <= 0) return
           const defaultQty = Number(row.max_push_quantity ?? row.quantity ?? 0)
-          if (defaultQty > 0) ids.push(itemId)
           qtyMap[itemId] = defaultQty > 0 ? defaultQty : 0
+          bomExpandMap[itemId] = row.has_bom === true
+          if (defaultQty <= 0) return
+          if (preferred.size > 0) {
+            if (preferred.has(itemId)) ids.push(itemId)
+          } else {
+            ids.push(itemId)
+          }
         })
         setSoPullSelectedItemIds(ids)
         setSoPullQuantities(qtyMap)
+        setSoPullBomExpand(bomExpandMap)
         if (res.push_mode_default === 'confirm') setSoPullMode('confirm')
         const shouldLoadBomVersions =
           (res.items || []).some((row: any) => row?.has_bom) || res.bom_multi_version_allowed
@@ -3240,12 +3767,17 @@ const WorkOrdersPage: React.FC = () => {
     setSoPullPreviewConfirming(true)
     try {
       const bomPayload = buildDirectPushBomPayload(soPullBomParams)
+      const selectedBomExpand: Record<number, boolean> = {}
+      for (const id of selectedIds) {
+        selectedBomExpand[id] = soPullBomExpand[id] ?? Boolean(rowById.get(id)?.has_bom)
+      }
       const res = await pushSalesOrderToWorkOrder(soPullSourceId, {
         push_mode: soPullMode,
         work_order_granularity: soPullGranularity,
         selected_item_ids: selectedIds,
         selected_quantities: selectedQuantities,
         selected_work_centers: selectedWorkCenters,
+        selected_item_bom_expand: selectedBomExpand,
         ...bomPayload,
       })
       const count = Number(res?.target_documents?.length ?? 0)
@@ -3289,6 +3821,8 @@ const WorkOrdersPage: React.FC = () => {
     soPullSelectedItemIds,
     soPullSourceId,
     soPullWorkCenters,
+    soPullBomExpand,
+    soPullBomParams,
     t,
   ])
 
@@ -3357,71 +3891,62 @@ const WorkOrdersPage: React.FC = () => {
 
   const pullFromComputationQuery = useUniPullQuery<PullDemandComputationCandidate>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions: pullFromWorkOrderScopeOptions,
     defaultScope: 'pushable',
-    loadData: async ({ keyword, page, pageSize, scope }) => {
-      const kw = keyword.trim()
-      const listRes = await listDemandComputations({
-        skip: 0,
-        limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
-        computation_status: '完成',
-        computation_code: kw || undefined,
-      })
-      const rows = listRes?.data || []
-      const candidates = await Promise.all(
-        rows
-          .filter((row) => row.id != null)
-          .map(async (row) => {
-            let canPushWorkOrder = true
-            let disabledReason: string | undefined
-            try {
-              const options = await getPushOptions(row.id!)
-              canPushWorkOrder = !!options.has_production_items && (options.production_choices || []).includes('work_order')
-              if (!options.has_production_items) {
-                disabledReason = t('app.kuaizhizao.workOrder.pull.noProductionItems')
-              } else if (!canPushWorkOrder) {
-                disabledReason = t('app.kuaizhizao.workOrder.pull.cannotConvertWorkOrder')
-              }
-            } catch (error: any) {
-              canPushWorkOrder = false
-              disabledReason = error?.message || t('app.kuaizhizao.workOrder.computationPullPreviewFailed')
-            }
-            return {
-              id: row.id!,
+    loadData: async (params) => {
+      try {
+        const { scope } = params
+        const listRes = await listWorkOrderPullComputations({
+          ...toUniPullQueryHttpParams(params),
+          pullable_only: isPullableScope(scope),
+        })
+        const rows = (listRes?.data ?? []).map(
+          (row) =>
+            ({
+              id: row.id,
               computation_code: row.computation_code,
               business_mode: row.business_mode,
               computation_status: row.computation_status,
               created_at: row.created_at,
               updated_at: row.updated_at,
-              can_push_work_order: canPushWorkOrder,
-              disabled_reason: disabledReason,
-            } as PullDemandComputationCandidate
-          }),
-      )
-      const filtered = filterByPullScope(candidates, scope, isPullWorkOrderComputationSelectable)
-      return paginatePullRows(filtered, page, pageSize)
+              can_push_work_order: row.can_push_work_order,
+              disabled_reason: row.disabled_reason,
+            }) as PullDemandComputationCandidate,
+        )
+        const filtered = filterByPullScope(rows, scope, isPullWorkOrderComputationSelectable)
+        return paginatePullRows(filtered, params.page, params.pageSize)
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.workOrder.pull.computationListLoadFailed')),
+        )
+        return { data: [], total: 0 }
+      }
     },
     isRowDisabled: (record) => record.can_push_work_order === false,
     onConfirm: async (keys, rows) => {
-      const selectedId = Number(keys[0])
+      const selectedRows = rows.filter((row) => keys.some((k) => String(k) === String(row.id)))
+      const selected = selectedRows[0]
+      const selectedId = Number(selected?.id ?? keys[0])
       if (!selectedId) {
         messageApi.warning(t('app.kuaizhizao.workOrder.pull.selectComputation', { source: pullFromDemandComputationAction.sourceLabel }))
         return
       }
-      const selected = rows[0]
       if (selected?.can_push_work_order === false) {
         messageApi.warning(selected.disabled_reason || t('app.kuaizhizao.workOrder.pull.computationUnavailable'))
         return
       }
       pullFromComputationQuery.closeModal()
+      if (selectedRows.length > 1) {
+        messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'))
+      }
       void openComputationPullPreview(selectedId)
     },
   })
 
   const isPullWorkOrderSalesOrderSelectable = useCallback(
     (record: PullSalesOrderCandidate) =>
-      Number(record.remaining_push_quantity ?? 0) > 0 && record.capabilities?.push_work_order?.allowed !== false,
+      isPullOpenLineSelectable(record) && record.capabilities?.push_work_order?.allowed !== false,
     [],
   )
 
@@ -3430,59 +3955,245 @@ const WorkOrdersPage: React.FC = () => {
     selectionType: 'radio',
     scopeOptions: pullFromWorkOrderScopeOptions,
     defaultScope: 'pushable',
-    loadData: async ({ keyword, page, pageSize, scope }) => {
+    loadData: async (params) => {
       try {
-        const result = await listSalesOrdersForPull({
-          skip: 0,
-          limit: 200,
-          order_code: keyword.trim() || undefined,
+        const { scope } = params
+        const listRes = await listSalesOrderWorkOrderPullLines({
+          ...toUniPullQueryHttpParams(params),
+          pullable_only: isPullableScope(scope),
         })
-        const rows = Array.isArray(result) ? result : (result.data ?? [])
-        const candidates = rows.map((row) => ({
-          id: Number(row.id),
-          order_code: row.order_code,
-          customer_name: row.customer_name,
-          status: row.status,
-          review_status: row.review_status,
-          delivery_date: row.delivery_date,
-          updated_at: row.updated_at,
-          remaining_push_quantity: Number(row.remaining_push_quantity ?? 0),
-          capabilities: row.capabilities,
-        }))
-        const filtered = filterByPullScope(candidates, scope, isPullWorkOrderSalesOrderSelectable)
-        return paginatePullRows(filtered, page, pageSize)
-      } catch {
-        messageApi.error(t('app.kuaizhizao.salesOrder.listFailed'))
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 }
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.workOrder.pull.salesOrderLinesLoadFailed')),
+        )
         return { data: [], total: 0 }
       }
     },
     isRowDisabled: (record) => !isPullWorkOrderSalesOrderSelectable(record),
     onConfirm: async (keys, rows) => {
-      const selectedId = Number(keys[0])
-      if (!selectedId) {
-        messageApi.warning(t('app.kuaizhizao.demandComputation.selectSource', { source: pullFromSalesOrderAction.sourceLabel }))
+      const selected = rows.find(
+        (row) =>
+          keys.some((k) => String(k) === String(row.id)) && isPullWorkOrderSalesOrderSelectable(row),
+      )
+      if (!selected) {
+        messageApi.warning(
+          t('app.kuaizhizao.demandComputation.selectSource', {
+            source: pullFromSalesOrderAction.sourceLabel,
+          }),
+        )
         return
       }
-      const selected = rows[0]
-      if (selected?.remaining_push_quantity <= 0 || selected?.capabilities?.push_work_order?.allowed === false) {
+      const orderId = Number(selected.sales_order_id)
+      const lineId = Number(selected.id)
+      if (!orderId || !lineId) {
         messageApi.warning(
-          salesOrderCapabilityReasonMessage(selected?.capabilities?.push_work_order?.reason, t) ||
-            t('app.kuaizhizao.workOrder.tagCannotCreate'),
+          t('app.kuaizhizao.demandComputation.selectSource', {
+            source: pullFromSalesOrderAction.sourceLabel,
+          }),
         )
         return
       }
       pullFromSalesOrderQuery.closeModal()
-      void openSoPullPreview(selectedId)
+      void openSoPullPreview(orderId, [lineId])
+    },
+  })
+
+  const isPullDemandPlanWorkOrderLineSelectable = useCallback(
+    (record: PullDemandPlanWorkOrderLine) => Number(record.remaining_quantity ?? 0) > 0,
+    [],
+  )
+
+  const fillWorkOrderFromDemandPlanLine = useCallback(
+    async (line: PullDemandPlanWorkOrderLine) => {
+      const materialId = Number(line.material_id)
+      if (!Number.isFinite(materialId) || materialId <= 0) {
+        messageApi.warning(
+          t('app.kuaizhizao.demandComputation.selectSource', {
+            source: pullFromDemandPlanAction.sourceLabel,
+          }),
+        )
+        return
+      }
+      const qty = Number(line.remaining_quantity ?? 0)
+      if (qty <= 0) {
+        messageApi.warning(t('app.kuaizhizao.workOrder.pull.computationUnavailable'))
+        return
+      }
+      handleCreate()
+      const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [materialId])
+      if (mats.length) mergeProductCache(mats)
+      const demandItemId = Number(line.demand_item_id ?? line.line_id ?? line.id)
+      const deliveryRaw = line.required_date ?? line.delivery_date
+      const deliveryDate = deliveryRaw ? String(deliveryRaw).slice(0, 10) : undefined
+      setProductSourceData({
+        type: 'demand',
+        materials: mats,
+        items: [{ productId: materialId, quantity: qty, deliveryDate }],
+        demandItemId: demandItemId > 0 ? demandItemId : undefined,
+      })
+    },
+    [handleCreate, mergeProductCache, messageApi, pullFromDemandPlanAction.sourceLabel, t],
+  )
+
+  const pullFromDemandPlanQuery = useUniPullQuery<PullDemandPlanWorkOrderLine>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromWorkOrderScopeOptions,
+    defaultScope: 'pushable',
+    loadData: async (params) => {
+      try {
+        const { scope } = params
+        const listRes = await listDemandPlanWorkOrderPullLines({
+          ...toUniPullQueryHttpParams(params),
+          pullable_only: isPullableScope(scope),
+        })
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 }
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.workOrder.pull.demandPlanLinesLoadFailed')),
+        )
+        return { data: [], total: 0 }
+      }
+    },
+    isRowDisabled: (record) => !isPullDemandPlanWorkOrderLineSelectable(record),
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find(
+        (row) =>
+          keys.some((k) => String(k) === String(row.id)) &&
+          isPullDemandPlanWorkOrderLineSelectable(row),
+      )
+      if (!selected) {
+        messageApi.warning(
+          t('app.kuaizhizao.demandComputation.selectSource', {
+            source: pullFromDemandPlanAction.sourceLabel,
+          }),
+        )
+        return
+      }
+      pullFromDemandPlanQuery.closeModal()
+      await fillWorkOrderFromDemandPlanLine(selected)
+    },
+  })
+
+  const openCreateFromDemandPlan = useCallback(() => {
+    pullFromDemandPlanQuery.openModal()
+  }, [pullFromDemandPlanQuery])
+
+  const pullFromSalesForecastQuery = useUniPullQuery<PullSalesForecastWorkOrderLine>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullFromWorkOrderScopeOptions,
+    defaultScope: 'pushable',
+    loadData: async (params) => {
+      try {
+        const res = await listSalesForecasts({
+          skip: 0,
+          limit: UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+          include_items: true,
+          keyword: params.keyword.trim() || undefined,
+        })
+        const flat: PullSalesForecastWorkOrderLine[] = []
+        for (const forecast of res?.data ?? []) {
+          const forecastId = Number(forecast.id)
+          if (!Number.isFinite(forecastId) || forecastId <= 0) continue
+          const items = forecast.items ?? forecast.forecast_items ?? []
+          items.forEach((item, idx) => {
+            const materialId = Number(item.material_id)
+            const lineId = 'id' in item && item.id != null ? Number(item.id) : idx
+            flat.push({
+              id: `${forecastId}-${lineId}-${Number.isFinite(materialId) ? materialId : idx}`,
+              forecast_id: forecastId,
+              forecast_code: forecast.forecast_code,
+              forecast_name: forecast.forecast_name,
+              material_id: Number.isFinite(materialId) ? materialId : 0,
+              material_code: item.material_code,
+              material_name: item.material_name,
+              material_spec: item.material_spec,
+              forecast_quantity: Number(item.forecast_quantity ?? 0),
+              forecast_date: 'forecast_date' in item ? item.forecast_date : undefined,
+              variant_attributes: item.variant_attributes,
+            })
+          })
+        }
+        return pagePullCandidates(
+          flat,
+          params.scope,
+          params.page,
+          params.pageSize,
+          isPullWorkOrderSalesForecastSelectable,
+        )
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.workOrder.pull.salesForecastLinesLoadFailed')),
+        )
+        return { data: [], total: 0 }
+      }
+    },
+    isRowDisabled: (record) => !isPullWorkOrderSalesForecastSelectable(record),
+    onConfirm: async (keys, rows) => {
+      const selected = rows.find(
+        (row) =>
+          keys.some((key) => String(key) === String(row.id)) &&
+          isPullWorkOrderSalesForecastSelectable(row),
+      )
+      if (!selected) {
+        messageApi.warning(
+          t('app.kuaizhizao.demandComputation.selectSource', {
+            source: pullFromSalesForecastAction.sourceLabel,
+          }),
+        )
+        return
+      }
+      let mats: Awaited<ReturnType<typeof resolveMaterialFormReference>> = []
+      try {
+        mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [selected.material_id])
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.workOrder.pull.salesForecastLinesLoadFailed')),
+        )
+        return
+      }
+      if (mats.length) mergeProductCache(mats)
+      sessionStorage.setItem(
+        WORK_ORDER_FORECAST_PULL_KEY,
+        JSON.stringify({
+          type: 'sales_forecast',
+          materials: mats,
+          items: [
+            {
+              productId: selected.material_id,
+              quantity: selected.forecast_quantity,
+              variant_attributes: selected.variant_attributes,
+            },
+          ],
+        }),
+      )
+      pullFromSalesForecastQuery.closeModal()
+      navigate(`${WORK_ORDER_LIST_PATH}/new`)
     },
   })
 
   /**
    * 处理编辑工单
    */
-  const handleEdit = async (record: WorkOrder) => {
+  const loadWorkOrderIntoForm = async (record: WorkOrder) => {
     try {
       // 加载完整详情
       const detail = await workOrderApi.get(record.id!.toString())
+      let requiredDate = toWorkOrderRequiredDateDayjs((detail as { required_date?: string }).required_date)
+      if (!requiredDate && detail.sales_order_id) {
+        try {
+          const order = await getSalesOrder(detail.sales_order_id, { includeItems: true })
+          const picked = pickSalesOrderDeliveryDate(order, {
+            salesOrderItemId: (detail as { sales_order_item_id?: number }).sales_order_item_id,
+            productId: detail.product_id,
+          })
+          requiredDate = toWorkOrderRequiredDateDayjs(picked)
+        } catch (error: unknown) {
+          console.warn('按销售订单回填工单需求日失败', error)
+        }
+      }
       setIsEdit(true)
       setCreateWorkOrderMode('normal')
       setCurrentWorkOrder(detail)
@@ -3491,13 +4202,85 @@ const WorkOrdersPage: React.FC = () => {
         initialRouteId != null && initialRouteId !== ''
           ? Number(initialRouteId)
           : null
-      setModalVisible(true)
+      if (!isFormPage) {
+        setModalVisible(true)
+      } else {
+        setModalVisible(true)
+      }
+      const bomFromDetail = (detail as { bom_lines?: unknown[] }).bom_lines
+      if (Array.isArray(bomFromDetail) && bomFromDetail.length) {
+        setBomFormLines(
+          bomFromDetail.map((line: Record<string, unknown>, idx: number) => ({
+            key: `bom-${line.material_id ?? idx}`,
+            material_id: Number(line.material_id),
+            material_code: String(line.material_code ?? ''),
+            material_name: String(line.material_name ?? ''),
+            material_spec: line.material_spec != null ? String(line.material_spec) : undefined,
+            warehouse_id: line.warehouse_id != null ? Number(line.warehouse_id) : undefined,
+            warehouse_name: line.warehouse_name != null ? String(line.warehouse_name) : undefined,
+            unit: line.unit != null ? String(line.unit) : undefined,
+            required_quantity: Number(line.required_quantity ?? 0),
+            issued_quantity: line.issued_quantity != null ? Number(line.issued_quantity) : undefined,
+            current_stock: line.current_stock != null ? Number(line.current_stock) : undefined,
+            batch_no: line.batch_no != null ? String(line.batch_no) : undefined,
+            bom_version: line.bom_version != null ? String(line.bom_version) : undefined,
+            line_remarks: line.line_remarks != null ? String(line.line_remarks) : undefined,
+          })),
+        )
+      } else {
+        // 直推半成品等历史单可能未落子件：可编辑态按 BOM 预览回填表单，保存后才落库
+        setBomFormLines([])
+        const productId = Number(detail.product_id)
+        const qty = Number(detail.quantity)
+        const status = String(detail.status || '')
+        const bomReadonly = ['completed', 'cancelled', 'split'].includes(status)
+        if (
+          !bomReadonly &&
+          Number.isFinite(productId) &&
+          productId > 0 &&
+          Number.isFinite(qty) &&
+          qty > 0
+        ) {
+          try {
+            const preview = await workOrderApi.previewBomLines({
+              product_id: productId,
+              quantity: qty,
+              product_bom_version:
+                (detail as { product_bom_version?: string }).product_bom_version || undefined,
+            })
+            if (preview?.length) {
+              setBomFormLines(
+                (preview as Array<Record<string, unknown>>).map((line, idx) =>
+                  mapApiBomLineToFormRow(line, idx),
+                ),
+              )
+            }
+          } catch (previewErr) {
+            console.warn('编辑工单按 BOM 回填子件失败', previewErr)
+          }
+        }
+      }
       // 加载工单工序列表，用于编辑时展示
+      let ops: any[] = []
       try {
         const operations = await workOrderApi.getOperations(record.id!.toString())
-        const ops = (operations || []).map((op: any) => {
+        const idList = (raw: unknown, camel: unknown): number[] => {
+          const source = Array.isArray(raw) ? raw : (Array.isArray(camel) ? camel : [])
+          const out: number[] = []
+          for (const item of source) {
+            const id = Number(item)
+            if (Number.isInteger(id) && id > 0 && !out.includes(id)) out.push(id)
+          }
+          return out
+        }
+        ops = (operations || []).map((op: any) => {
           const completedQty = Number(op.completed_quantity ?? op.completedQuantity ?? 0) || 0
           const status = op.status || 'pending'
+          const workerIds = idList(op.assigned_worker_ids, op.assignedWorkerIds)
+          const workerId = Number(op.assigned_worker_id ?? op.assignedWorkerId)
+          const equipmentIds = idList(op.assigned_equipment_ids, op.assignedEquipmentIds)
+          const equipmentId = Number(op.assigned_equipment_id ?? op.assignedEquipmentId)
+          const teamId = Number(op.assigned_team_id ?? op.assignedTeamId)
           return {
             id: op.id,
             operation_id: op.operation_id,
@@ -3520,13 +4303,26 @@ const WorkOrdersPage: React.FC = () => {
             planned_end_date: op.planned_end_date,
             standard_time: op.standard_time,
             setup_time: op.setup_time,
+            piece_rate: op.piece_rate ?? op.pieceRate,
+            work_requirement: op.work_requirement ?? op.workRequirement,
             remarks: op.remarks,
+            assigned_worker_ids: workerIds.length
+              ? workerIds
+              : (Number.isInteger(workerId) && workerId > 0 ? [workerId] : []),
+            assigned_worker_id: workerIds[0] ?? (Number.isInteger(workerId) && workerId > 0 ? workerId : undefined),
+            assigned_worker_name: op.assigned_worker_name ?? op.assignedWorkerName,
+            assigned_team_id: Number.isInteger(teamId) && teamId > 0 ? teamId : undefined,
+            assigned_team_name: op.assigned_team_name ?? op.assignedTeamName,
+            assigned_equipment_ids: equipmentIds.length
+              ? equipmentIds
+              : (Number.isInteger(equipmentId) && equipmentId > 0 ? [equipmentId] : []),
+            assigned_equipment_id: equipmentIds[0] ?? (Number.isInteger(equipmentId) && equipmentId > 0 ? equipmentId : undefined),
+            assigned_equipment_name: op.assigned_equipment_name ?? op.assignedEquipmentName,
           }
         })
-        setSelectedOperations(ops)
       } catch (e) {
         console.error('加载工单工序失败', e)
-        setSelectedOperations([])
+        ops = []
       }
       // 编辑时 product_id 禁用，仍须按 id 解析物料（计划数量单位），写入按需缓存
       let editProductMaterial: Material | null = null
@@ -3540,21 +4336,15 @@ const WorkOrdersPage: React.FC = () => {
       } else {
         setFormProductMaterial(null)
       }
-      let requiredDate = toWorkOrderRequiredDateDayjs(
-        (detail as { required_date?: string }).required_date,
-      )
-      if (!requiredDate && detail.sales_order_id) {
+      if (ops.length && editProductMaterial?.uuid) {
         try {
-          const order = await getSalesOrder(detail.sales_order_id, { includeItems: true })
-          const picked = pickSalesOrderDeliveryDate(order, {
-            salesOrderItemId: (detail as { sales_order_item_id?: number }).sales_order_item_id,
-            productId: detail.product_id,
-          })
-          requiredDate = toWorkOrderRequiredDateDayjs(picked)
-        } catch (error: unknown) {
-          console.warn('按销售订单回填工单需求日失败', error)
+          const productProcess = await productProcessApi.get(String(editProductMaterial.uuid))
+          ops = mergeMissingAssignmentFromProductProcess(ops, productProcess.lines ?? [])
+        } catch (error) {
+          console.warn('按产品工艺补工序设备与人员失败', error)
         }
       }
+      setSelectedOperations(ops)
       // 延迟设置表单值，确保表单已渲染
       setTimeout(() => {
         const mode = detail.production_mode || 'MTS'
@@ -3576,13 +4366,21 @@ const WorkOrdersPage: React.FC = () => {
           sales_order_id: detail.sales_order_id,
           sales_order_code: detail.sales_order_code,
           sales_order_name: detail.sales_order_name,
+          warehouse_id: (detail as any).warehouse_id,
+          warehouse_name: (detail as any).warehouse_name,
+          manufacturing_department_id: (detail as any).manufacturing_department_id,
+          manufacturing_department_name: (detail as any).manufacturing_department_name,
+          customer_id: (detail as any).customer_id,
+          customer_name: (detail as any).customer_name,
+          customer_order_no: (detail as any).customer_order_no,
+          required_date: requiredDate,
+          product_bom_version: (detail as any).product_bom_version,
           workshop_id: detail.workshop_id,
           workshop_name: detail.workshop_name,
           work_center_id: detail.work_center_id,
           work_center_name: detail.work_center_name,
           status: detail.status,
           priority: detail.priority,
-          required_date: requiredDate,
           planned_start_date: detail.planned_start_date,
           planned_end_date: detail.planned_end_date,
           allow_operation_jump: detail.allow_operation_jump ?? false,
@@ -3604,6 +4402,199 @@ const WorkOrdersPage: React.FC = () => {
       }, 100)
     } catch (error) {
       messageApi.error('获取工单详情失败')
+    }
+  }
+
+  const handleEdit = async (record: WorkOrder) => {
+    if (record?.id == null) return
+    if (!isFormPage) {
+      navigate(`${WORK_ORDER_LIST_PATH}/${record.id}/edit`)
+      return
+    }
+    await loadWorkOrderIntoForm(record)
+  }
+
+  const applyWorkOrderCopyHandoff = useCallback(
+    (payload: WorkOrderCopyHandoffPayload) => {
+      const detail = payload.detail
+      setIsEdit(false)
+      setCurrentWorkOrder(null)
+      editInitialProcessRouteIdRef.current = null
+      setCreateWorkOrderMode('normal')
+      setProductionMode(String(detail.production_mode || 'MTS'))
+      setSelectedOperations(
+        (payload.operations || []).map((op: Record<string, unknown>, idx: number) => ({
+          operation_id: op.operation_id,
+          operation_code: op.operation_code || op.operationCode,
+          operation_name: op.operation_name || op.operationName,
+          sequence: Number(op.sequence ?? idx + 1) || idx + 1,
+          status: 'pending',
+          completed_quantity: 0,
+          has_reporting: false,
+          is_node_operation: op.is_node_operation ?? op.isNodeOperation ?? false,
+          reporting_type: op.reporting_type ?? op.reportingType ?? 'quantity',
+          over_report_mode: op.over_report_mode ?? op.overReportMode ?? 'none',
+          over_report_value: Number(op.over_report_value ?? op.overReportValue ?? 0) || 0,
+          workshop_id: op.workshop_id,
+          workshop_name: op.workshop_name,
+          work_center_id: op.work_center_id,
+          work_center_name: op.work_center_name,
+          standard_time: op.standard_time,
+          setup_time: op.setup_time,
+          remarks: op.remarks,
+        })),
+      )
+      const bomFromCopy = payload.bom_lines
+      if (Array.isArray(bomFromCopy) && bomFromCopy.length) {
+        setBomFormLines(
+          bomFromCopy.map((line, idx) => ({
+            key: `bom-copy-${line.material_id ?? idx}`,
+            material_id: Number(line.material_id),
+            material_code: String(line.material_code ?? ''),
+            material_name: String(line.material_name ?? ''),
+            material_spec: line.material_spec != null ? String(line.material_spec) : undefined,
+            warehouse_id: line.warehouse_id != null ? Number(line.warehouse_id) : undefined,
+            warehouse_name: line.warehouse_name != null ? String(line.warehouse_name) : undefined,
+            unit: line.unit != null ? String(line.unit) : undefined,
+            required_quantity: Number(line.required_quantity ?? 0) || 0,
+            issued_quantity: 0,
+            current_stock: line.current_stock != null ? Number(line.current_stock) : undefined,
+            batch_no: line.batch_no != null ? String(line.batch_no) : undefined,
+            bom_version: line.bom_version != null ? String(line.bom_version) : undefined,
+            line_remarks: line.line_remarks != null ? String(line.line_remarks) : undefined,
+          })),
+        )
+      } else {
+        setBomFormLines([])
+      }
+      const productMaterial = payload.materials?.[0] ?? null
+      setFormProductMaterial(productMaterial)
+      if (payload.materials?.length) mergeProductCache(payload.materials)
+      window.setTimeout(() => {
+        const mode = String(detail.production_mode || 'MTS')
+        formRef.current?.setFieldsValue({
+          name: detail.name,
+          product_id: detail.product_id,
+          product_code: detail.product_code,
+          product_name: detail.product_name,
+          quantity: productMaterial
+            ? Number(detail.quantity) || undefined
+            : resolveWorkOrderFormQuantity(detail as WorkOrder, 'quantity', productMaterial),
+          production_mode: mode,
+          variant_attributes:
+            detail.variant_attributes != null
+              ? typeof detail.variant_attributes === 'string'
+                ? detail.variant_attributes
+                : JSON.stringify(detail.variant_attributes, null, 2)
+              : undefined,
+          workshop_id: detail.workshop_id,
+          workshop_name: detail.workshop_name,
+          work_center_id: detail.work_center_id,
+          work_center_name: detail.work_center_name,
+          warehouse_id: detail.warehouse_id,
+          warehouse_name: detail.warehouse_name,
+          manufacturing_department_id: detail.manufacturing_department_id,
+          manufacturing_department_name: detail.manufacturing_department_name,
+          customer_id: detail.customer_id,
+          customer_name: detail.customer_name,
+          customer_order_no: detail.customer_order_no,
+          required_date: detail.required_date ? dayjs(String(detail.required_date)) : undefined,
+          product_bom_version: detail.product_bom_version,
+          priority: detail.priority,
+          planned_start_date: detail.planned_start_date ? dayjs(String(detail.planned_start_date)) : dayjs(),
+          planned_end_date: detail.planned_end_date ? dayjs(String(detail.planned_end_date)) : undefined,
+          allow_operation_jump: detail.allow_operation_jump ?? false,
+          process_route_id: detail.process_route_id ?? detail.processRouteId,
+          over_report_mode: detail.over_report_mode ?? detail.overReportMode ?? 'none',
+          over_report_value: Number(detail.over_report_value ?? detail.overReportValue ?? 0) || 0,
+          remarks: detail.remarks,
+        })
+        void scheduleWorkOrderBomPreview('quantity', {
+          product_id: Number(detail.product_id),
+          quantity: productMaterial
+            ? Number(detail.quantity) || undefined
+            : resolveWorkOrderFormQuantity(detail as WorkOrder, 'quantity', productMaterial),
+          product_bom_version:
+            detail.product_bom_version != null ? String(detail.product_bom_version) : null,
+        })
+      }, 100)
+    },
+    [mergeProductCache, scheduleWorkOrderBomPreview],
+  )
+
+  useEffect(() => {
+    if (!isFormPage) {
+      formPageInitRef.current = false
+      return
+    }
+    if (formPageInitRef.current) return
+    formPageInitRef.current = true
+    if (isCreatePage) {
+      initWorkOrderCreateForm()
+      const copyRaw = sessionStorage.getItem(WORK_ORDER_COPY_KEY)
+      if (copyRaw) {
+        sessionStorage.removeItem(WORK_ORDER_COPY_KEY)
+        try {
+          const parsed = JSON.parse(copyRaw) as WorkOrderCopyHandoffPayload
+          if (parsed?.type === 'copy' && parsed.detail) {
+            applyWorkOrderCopyHandoff(parsed)
+            return
+          }
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('common.loadFailed')))
+          return
+        }
+      }
+      const raw = sessionStorage.getItem(WORK_ORDER_FORECAST_PULL_KEY)
+      if (raw) {
+        sessionStorage.removeItem(WORK_ORDER_FORECAST_PULL_KEY)
+        let parsed: {
+          type: 'sales_forecast'
+          materials: any[]
+          items: { productId: number; quantity: number }[]
+        }
+        try {
+          parsed = JSON.parse(raw)
+        } catch (error: unknown) {
+          messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.workOrder.pull.salesForecastLinesLoadFailed')))
+          return
+        }
+        if (!parsed?.items?.length) {
+          messageApi.error(t('app.kuaizhizao.workOrder.pull.salesForecastLinesLoadFailed'))
+          return
+        }
+        setProductSourceData(parsed)
+      }
+    } else if (isEditPage && editRouteId) {
+      void loadWorkOrderIntoForm({ id: editRouteId } as WorkOrder)
+    }
+  }, [isCreatePage, isEditPage, isFormPage, editRouteId, applyWorkOrderCopyHandoff, messageApi, t])
+
+  const handleCopySelectedWorkOrder = async () => {
+    const source = selectedWorkOrdersForBatch.length === 1 ? selectedWorkOrdersForBatch[0] : null
+    if (source?.id == null) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.selectToCopy'))
+      return
+    }
+    try {
+      const detail = await workOrderApi.get(String(source.id))
+      const operations = await workOrderApi.getOperations(String(source.id))
+      let materials: Material[] = []
+      if (detail.product_id) {
+        materials = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [detail.product_id])
+      }
+      const bomFromDetail = (detail as { bom_lines?: Array<Record<string, unknown>> }).bom_lines
+      const payload: WorkOrderCopyHandoffPayload = {
+        type: 'copy',
+        detail: detail as unknown as Record<string, unknown>,
+        operations: (operations || []) as Array<Record<string, unknown>>,
+        bom_lines: Array.isArray(bomFromDetail) ? bomFromDetail : undefined,
+        materials,
+      }
+      sessionStorage.setItem(WORK_ORDER_COPY_KEY, JSON.stringify(payload))
+      navigate(`${WORK_ORDER_LIST_PATH}/new`)
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t('common.loadFailed')))
     }
   }
 
@@ -4711,7 +5702,7 @@ const WorkOrdersPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 底部：派工 / 开始→报工（淡色主题 footer） */}
+          {!isOutsourced ? (
           <div
             style={{
               display: 'flex',
@@ -4883,6 +5874,7 @@ const WorkOrdersPage: React.FC = () => {
               )
             })()}
           </div>
+          ) : null}
         </div>
         {/* 箭头连接（不是最后一个） */}
         {index < total - 1 && (
@@ -5249,6 +6241,10 @@ const WorkOrdersPage: React.FC = () => {
    * 处理提交表单（创建/更新）
    */
   const handleSubmit = async (values: any): Promise<void> => {
+    const shouldCommit = commitAfterSaveRef.current
+    commitAfterSaveRef.current = false
+    const shouldSaveAndAudit = saveAndAuditAfterSaveRef.current
+    saveAndAuditAfterSaveRef.current = false
     try {
       const { customData, standardValues } = extractWorkOrderFormValues(values)
       Object.keys(values).forEach((key) => {
@@ -5347,6 +6343,25 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
 
+      if (bomFormLines.length > 0 && createWorkOrderMode === 'normal') {
+        values.bom_lines = bomFormLines
+          .filter((line) => line.material_id != null)
+          .map((line, idx) => ({
+            material_id: Number(line.material_id),
+            material_code: line.material_code,
+            material_name: line.material_name,
+            material_spec: line.material_spec,
+            warehouse_id: line.warehouse_id,
+            warehouse_name: line.warehouse_name,
+            unit: line.unit,
+            required_quantity: line.required_quantity,
+            batch_no: line.batch_no,
+            bom_version: line.bom_version,
+            line_remarks: line.line_remarks,
+            sequence: idx + 1,
+          }))
+      }
+
       // 处理工序设置
       const opsPayload = buildOperationsForCreatePayload(
         values,
@@ -5423,36 +6438,50 @@ const WorkOrdersPage: React.FC = () => {
         const opsSource = routeChangedOnEdit
           ? selectedOperations.map(({ id: _woOpId, ...op }) => op)
           : selectedOperations
-        const opsPayload = opsSource.map((op: any, i: number) => ({
-          ...(routeChangedOnEdit || op.id == null ? {} : { id: Number(op.id) }),
-          operation_id: op.operation_id,
-          operation_code: op.operation_code,
-          operation_name: op.operation_name,
-          sequence: i + 1,
-          workshop_id: op.workshop_id,
-          workshop_name: op.workshop_name,
-          work_center_id: op.work_center_id,
-          work_center_name: op.work_center_name,
-          // 工序计划时刻由后端按工单头计划起止窗口继承；勿回写打开表单时的旧系统排程时间
-          standard_time: op.standard_time,
-          setup_time: op.setup_time,
-          remarks: op.remarks,
-          reporting_type: op.reporting_type ?? 'quantity',
-          allow_jump:
-            Boolean(values.allow_operation_jump ?? currentWorkOrder?.allow_operation_jump) &&
-            !Boolean(op.is_node_operation),
-          is_node_operation: op.is_node_operation ?? false,
-          over_report_mode: op.over_report_mode ?? 'none',
-          over_report_value: Number(op.over_report_value ?? 0) || 0,
-          ...(Array.isArray(op.assigned_worker_ids) && op.assigned_worker_ids.length
-            ? { assigned_worker_ids: op.assigned_worker_ids }
-            : {}),
-          ...(op.assigned_worker_id != null ? { assigned_worker_id: op.assigned_worker_id } : {}),
-          ...(op.assigned_team_id != null ? { assigned_team_id: op.assigned_team_id } : {}),
-          ...(op.assigned_equipment_id != null
-            ? { assigned_equipment_id: op.assigned_equipment_id }
-            : {}),
-        }))
+        const headerOrm = String(values.over_report_mode ?? 'none').trim() || 'none'
+        const headerOrv = Number(values.over_report_value ?? 0) || 0
+        const headerOverReportChanged =
+          String(currentWorkOrder?.over_report_mode ?? 'none') !== headerOrm ||
+          Number(currentWorkOrder?.over_report_value ?? 0) !== headerOrv
+        const opsPayload = opsSource.map((op: any, i: number) => {
+          const opReported =
+            Boolean(op.has_reporting) ||
+            Number(op.completed_quantity ?? op.completedQuantity ?? 0) > 0
+          // 已报工：保留行快照。未报工且头超报有变更：跟头（含改为 none，避免清单 merge 又灌回档案）。
+          // 未报工且头未改：不传超报字段，保留开单落好的档案/行快照。
+          const overReportFields = opReported
+            ? {
+                over_report_mode: String(op.over_report_mode ?? 'none'),
+                over_report_value: Number(op.over_report_value ?? 0) || 0,
+              }
+            : headerOverReportChanged
+              ? { over_report_mode: headerOrm, over_report_value: headerOrv }
+              : {}
+          return {
+            ...(routeChangedOnEdit || op.id == null ? {} : { id: Number(op.id) }),
+            operation_id: op.operation_id,
+            operation_code: op.operation_code,
+            operation_name: op.operation_name,
+            sequence: i + 1,
+            workshop_id: op.workshop_id,
+            workshop_name: op.workshop_name,
+            work_center_id: op.work_center_id,
+            work_center_name: op.work_center_name,
+            // 工序计划时刻由后端按工单头计划起止窗口继承；勿回写打开表单时的旧系统排程时间
+            standard_time: op.standard_time,
+            setup_time: op.setup_time,
+            piece_rate: op.piece_rate,
+            work_requirement: op.work_requirement,
+            remarks: op.remarks,
+            reporting_type: op.reporting_type ?? 'quantity',
+            allow_jump: Boolean(
+              values.allow_operation_jump ?? currentWorkOrder?.allow_operation_jump,
+            ),
+            is_node_operation: false,
+            ...overReportFields,
+            ...workOrderOperationAssignmentPayload(op),
+          }
+        })
         await workOrderApi.updateOperations(currentWorkOrder.id.toString(), {
           operations: opsPayload,
         })
@@ -5462,6 +6491,21 @@ const WorkOrdersPage: React.FC = () => {
         messageApi.success('工单更新成功')
         if (currentWorkOrder.id != null) {
           await saveWorkOrderCustomFieldValues(currentWorkOrder.id, customData)
+        }
+        if (shouldSaveAndAudit && currentWorkOrder.id != null) {
+          try {
+            const { completed } = await runWorkOrderSaveAndAudit(Number(currentWorkOrder.id))
+            if (!completed) {
+              return
+            }
+          } catch {
+            return
+          }
+        } else if (shouldCommit && currentWorkOrder.id != null) {
+          await workOrderApi.commit(Number(currentWorkOrder.id))
+          messageApi.success(t('app.kuaizhizao.workOrder.committed'))
+        } else {
+          messageApi.success('工单更新成功')
         }
       } else {
         if (!values.enable_production_tracking) {
@@ -5497,6 +6541,45 @@ const WorkOrdersPage: React.FC = () => {
         messageApi.success(`工单创建成功！系统已自动匹配工艺路线并生成工序单${childHint}`)
         if (created?.id != null) {
           await saveWorkOrderCustomFieldValues(created.id, customData)
+        }
+        if (shouldSaveAndAudit) {
+          if (created?.id == null) {
+            messageApi.error(t('common.operationFailed'))
+            return
+          }
+          try {
+            const { completed } = await runWorkOrderSaveAndAudit(Number(created.id))
+            if (!completed) {
+              setIsEdit(true)
+              setCurrentWorkOrder(created)
+              actionRef.current?.reload()
+              return
+            }
+          } catch {
+            setIsEdit(true)
+            setCurrentWorkOrder(created)
+            actionRef.current?.reload()
+            return
+          }
+        } else if (shouldCommit) {
+          if (created?.id == null) {
+            messageApi.error(t('common.operationFailed'))
+            return
+          }
+          try {
+            await workOrderApi.commit(Number(created.id))
+          } catch (error: unknown) {
+            setIsEdit(true)
+            setCurrentWorkOrder(created)
+            messageApi.error(getApiErrorMessage(error, t('common.operationFailed')))
+            actionRef.current?.reload()
+            return
+          }
+          messageApi.success(t('app.kuaizhizao.workOrder.committed'))
+        } else {
+          messageApi.success(`工单创建成功！系统已自动匹配工艺路线并生成工序单${childHint}`)
+        }
+        if (created?.id != null) {
           const linked = await completeDeliveryNodeDocumentLinkIfPending({
             docType: 'work_order',
             docId: Number(created.id),
@@ -5507,7 +6590,8 @@ const WorkOrdersPage: React.FC = () => {
             t,
           })
           if (linked) {
-            setModalVisible(false)
+            if (isFormPage) leaveWorkOrderFormPage()
+            else setModalVisible(false)
             resetWorkOrderFormFieldValues()
             invalidateStatistics()
             actionRef.current?.reload()
@@ -5515,7 +6599,8 @@ const WorkOrdersPage: React.FC = () => {
           }
         }
       }
-      setModalVisible(false)
+      if (isFormPage) leaveWorkOrderFormPage()
+      else setModalVisible(false)
       resetWorkOrderFormFieldValues()
       invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
@@ -5566,6 +6651,11 @@ const WorkOrdersPage: React.FC = () => {
           if (wo.status !== 'draft' && wo.status !== 'released') {
             checks.passed = false
             checks.errors.push(`工单状态为"${wo.status}"，不能下达`)
+          }
+
+          if (wo.capabilities?.release?.allowed !== true) {
+            checks.passed = false
+            checks.errors.push(t('app.kuaizhizao.workOrder.batchRelease.auditOrStatusBlocked'))
           }
 
           // 检查3：齐套料检查（调用后端API）
@@ -5728,6 +6818,10 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleRelease = async (record: WorkOrder) => {
     if (!record.id) return
+    if (record.capabilities?.release?.allowed !== true) {
+      messageApi.warning(t('app.kuaizhizao.workOrder.batchRelease.auditOrStatusBlocked'))
+      return
+    }
     const doRelease = async (ignoreShortage: boolean) => {
       await workOrderApi.release(record.id!.toString(), { ignoreShortage })
       messageApi.success(t('app.kuaizhizao.workOrder.msgReleaseSuccess'))
@@ -6329,7 +7423,7 @@ const WorkOrdersPage: React.FC = () => {
         const res = await workOrderApi.previewPushProductionPicking(record.id)
         const data = res as PushPreviewResponse
         if (
-          data.has_blocking_issues ||
+          (data.has_blocking_issues && !(data.items || []).length) ||
           !(data.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0)
         ) {
           messageApi.warning(
@@ -7209,7 +8303,8 @@ const WorkOrdersPage: React.FC = () => {
                 编辑
               </Button>
             )}
-            {workOrder.status === '草稿' && (
+            {['draft', '草稿'].includes(String(workOrder.status || '').trim()) &&
+            workOrder.capabilities?.release?.allowed === true ? (
               <Button
                 type="primary"
                 size="large"
@@ -7222,7 +8317,7 @@ const WorkOrdersPage: React.FC = () => {
               >
                 下达
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </Card>
@@ -8414,13 +9509,1030 @@ const WorkOrdersPage: React.FC = () => {
         },
       ]
 
+  const workOrderMainModalChildren = (
+    <WorkOrderTabGroups enabled={isFormPage}>
+        {!isEdit ? (
+          <>
+            {!isFormPage ? (
+              <Col span={6}>
+                <Form.Item label={t('app.kuaizhizao.workOrder.formCreateMode')} style={{ marginBottom: 24 }}>
+                  <ThemedSegmented
+                    block
+                    className="form-field-segmented"
+                    value={createWorkOrderMode}
+                    onChange={(v) => {
+                      const mode = v as 'normal' | 'peer_group'
+                      setCreateWorkOrderMode(mode)
+                      if (mode === 'peer_group') {
+                        setSelectedOperations([])
+                        const items = formRef.current?.getFieldValue('group_items')
+                        if (!items?.length) {
+                          formRef.current?.setFieldsValue({
+                            group_items: [
+                              { ...EMPTY_PEER_GROUP_ITEM },
+                              { ...EMPTY_PEER_GROUP_ITEM },
+                            ],
+                          })
+                        }
+                      } else {
+                        setSelectedOperations([])
+                        formRef.current?.setFieldsValue({
+                          process_route_id: undefined,
+                          operations: undefined,
+                          allow_operation_jump: false,
+                          over_report_mode: 'none',
+                          over_report_value: 0,
+                        })
+                      }
+                    }}
+                    options={[
+                      { label: t('app.kuaizhizao.workOrder.formCreateModeNormal'), value: 'normal' },
+                      { label: t('app.kuaizhizao.workOrder.formCreateModePeerGroup'), value: 'peer_group' },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+            ) : null}
+            {createWorkOrderMode === 'normal' ? (
+              <CodeField
+                pageCode="kuaizhizao-production-work-order"
+                name="code"
+                label={t('app.kuaizhizao.workOrder.colCode')}
+                required={true}
+                autoGenerateOnCreate={!isEdit}
+                showGenerateButton={false}
+                documentId={isEdit ? currentWorkOrder?.id : undefined}
+                context={{}}
+                colProps={{ span: 6 }}
+              />
+            ) : (
+              <ProFormText
+                name="group_name"
+                label={t('app.kuaizhizao.workOrder.formGroupName')}
+                placeholder={t('app.kuaizhizao.workOrder.formGroupNamePlaceholder')}
+                colProps={{ span: 6 }}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <CodeField
+              pageCode="kuaizhizao-production-work-order"
+              name="code"
+              label={t('app.kuaizhizao.workOrder.colCode')}
+              required={true}
+              autoGenerateOnCreate={false}
+              showGenerateButton={false}
+              documentId={isEdit ? currentWorkOrder?.id : undefined}
+              context={{}}
+              colProps={{ span: 6 }}
+            />
+          </>
+        )}
+        <ProFormText name="production_mode" initialValue="MTS" hidden />
+
+        {!isEdit && createWorkOrderMode === 'peer_group' && (
+          <Col span={24}>
+            <Suspense fallback={<Spin />}>
+              <LazyWorkOrderPeerGroupCreateDetail processRouteList={uniqueProcessRouteList} />
+            </Suspense>
+          </Col>
+        )}
+
+        {createWorkOrderMode === 'normal' && (
+          <>
+        <Col span={isFormPage ? 5 : isEdit ? 24 : 6}>
+          <ProFormField
+            name="product_id"
+            label={
+              isEdit ? (
+                t('app.kuaizhizao.workOrder.colProduct')
+              ) : (
+                <FormFieldTitleSegmentedRow title={t('app.kuaizhizao.workOrder.colProduct')}>
+                  <ThemedSegmented
+                    className={FORM_FIELD_TITLE_SEGMENTED_CLASS}
+                    size="small"
+                    value={onlyShowMake ? 'make' : 'all'}
+                    onChange={(v) => setOnlyShowMake(v === 'make')}
+                    options={[
+                      { label: t('app.kuaizhizao.workOrder.formSegmentMake'), value: 'make' },
+                      { label: t('app.kuaizhizao.workOrder.formSegmentAll'), value: 'all' },
+                    ]}
+                  />
+                </FormFieldTitleSegmentedRow>
+              )
+            }
+            rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formSelectProduct') }]}
+            formItemProps={{ style: { marginBottom: 24 } }}
+            renderFormItem={(_, { onChange: notifyProForm }) => (
+              <Suspense fallback={<Spin style={{ margin: '12px 0' }} />}>
+                <LazyUniMaterialSelect
+                  embedInProFormField
+                  proFormFieldOnChange={
+                    notifyProForm as (value: number | number[] | undefined) => void
+                  }
+                  name="product_id"
+                  placeholder={t('app.kuaizhizao.workOrder.formSelectProduct')}
+                  disabled={isEdit}
+                  sourceType={onlyShowMake ? 'Make' : undefined}
+                  hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
+                  fallbackOption={
+                    isEdit && currentWorkOrder?.product_id
+                      ? {
+                          value: currentWorkOrder.product_id,
+                          label:
+                            `${currentWorkOrder.product_code || ''} - ${currentWorkOrder.product_name || ''}`.trim() ||
+                            String(currentWorkOrder.product_id),
+                        }
+                      : undefined
+                  }
+                  onChange={async (value, material) => {
+                formRef.current?.setFieldsValue({ product_bom_version: undefined })
+                if (value) {
+                  const productId = Number(value)
+                  setFormProductMaterial(null)
+                  // 选料后按 id 重拉物料，计划数量单位用该物料的基础单位名称
+                  let resolved =
+                    material && !Array.isArray(material) ? (material as Material) : undefined
+                  if (Number.isFinite(productId) && productId > 0) {
+                    const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [
+                      productId,
+                    ])
+                    if (mats[0]) resolved = mats[0]
+                  }
+                  if (resolved) {
+                    setFormProductMaterial(resolved)
+                    mergeProductCache([resolved])
+                    const sourceType = resolved.sourceType || (resolved as any).source_type
+                    setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
+                    if (resolved.uuid) {
+                      loadProcessRouteForMaterial(resolved.uuid)
+                    }
+                  } else {
+                    setSelectedMaterialSourceInfo(null)
+                    setFormProductMaterial(null)
+                  }
+                } else {
+                  setSelectedMaterialSourceInfo(null)
+                  setFormProductMaterial(null)
+                }
+                void scheduleWorkOrderBomPreview('product')
+                  }}
+                />
+              </Suspense>
+            )}
+          />
+        </Col>
+        {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
+          <ProFormText
+            name="variant_attributes"
+            label={t('app.kuaizhizao.workOrder.formAttributes')}
+            placeholder={t('app.kuaizhizao.workOrder.formAttributesPlaceholder')}
+            rules={[
+              { required: true, message: t('app.kuaizhizao.workOrder.formAttributesRequired') },
+              {
+                validator: (_, value) => {
+                  if (!value) return Promise.resolve()
+                  try {
+                    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+                    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                      return Promise.reject(
+                        new Error(t('app.kuaizhizao.workOrder.formAttributesJsonInvalid'))
+                      )
+                    }
+                    return Promise.resolve()
+                  } catch {
+                    return Promise.reject(
+                      new Error(t('app.kuaizhizao.workOrder.formAttributesJsonFormatInvalid'))
+                    )
+                  }
+                },
+              },
+            ]}
+            colProps={{ span: 12 }}
+          />
+        )}
+
+        <ProFormDigit
+          name="quantity"
+          label={(() => {
+            const code = String(formProductMaterial?.baseUnit ?? '').trim()
+            if (!code) return t('app.kuaizhizao.workOrder.colPlannedQty')
+            return `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${code}）`
+          })()}
+          placeholder={t('app.kuaizhizao.workOrder.formEnter')}
+          min={0}
+          precision={quantityDecimals}
+          fieldProps={{
+            formatter: (value) => {
+              if (value === undefined || value === null || value === '') return '';
+              const n = Number(value);
+              return Number.isFinite(n) ? formatQuantity(n) : String(value);
+            },
+            parser: (display) => {
+              if (display === undefined || display === null || display === '') return display as '';
+              const n = Number(String(display).replace(/,/g, ''));
+              return Number.isFinite(n) ? n : (display as string);
+            },
+            onChange: (value) => {
+              const qty = Number(value)
+              void scheduleWorkOrderBomPreview('quantity', {
+                quantity: Number.isFinite(qty) ? qty : undefined,
+              })
+            },
+          }}
+          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedQtyRequired') }]}
+          colProps={{ span: 6 }}
+        />
+        <ProFormSelect
+          name="product_bom_version"
+          label={t('app.kuaizhizao.workOrder.formProductBomVersion')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+          options={productBomVersionOptions}
+          fieldProps={{
+            showSearch: true,
+            allowClear: true,
+            optionFilterProp: 'label',
+            disabled: !formProductMaterial?.id,
+            onChange: (value) => {
+              void scheduleWorkOrderBomPreview('bom_version', {
+                product_bom_version: value != null ? String(value) : null,
+              })
+            },
+          }}
+          colProps={{ span: 6 }}
+        />
+        <ProFormSelect
+          name="priority"
+          label={t('app.kuaizhizao.workOrder.colPriority')}
+          options={[
+            { label: t('app.kuaizhizao.workOrder.priorityLow'), value: 'low' },
+            { label: t('app.kuaizhizao.workOrder.priorityNormal'), value: 'normal' },
+            { label: t('app.kuaizhizao.workOrder.priorityHigh'), value: 'high' },
+            { label: t('app.kuaizhizao.workOrder.priorityUrgent'), value: 'urgent' },
+          ]}
+          initialValue="normal"
+          colProps={{ span: 6 }}
+        />
+        <ProFormDatePicker
+          name="planned_start_date"
+          label={t('app.kuaizhizao.workOrder.colPlannedStart')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+          required
+          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
+          colProps={{ span: 6 }}
+          formItemProps={{
+            ...formDateFormItemProps,
+            extra: workOrderPlannedDatesLocked
+              ? t('app.kuaizhizao.workOrder.formPlannedDatesLocked')
+              : formDateFormItemProps?.extra,
+          }}
+          fieldProps={{
+            showTime: true,
+            style: { width: '100%' },
+            format: 'YYYY-MM-DD HH:mm:ss',
+            disabled: workOrderPlannedDatesLocked,
+          }}
+        />
+        <ProFormDatePicker
+          name="planned_end_date"
+          label={t('app.kuaizhizao.workOrder.colPlannedEnd')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+          required
+          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
+          colProps={{ span: 6 }}
+          formItemProps={{
+            ...formDateFormItemProps,
+            extra: workOrderPlannedDatesLocked
+              ? t('app.kuaizhizao.workOrder.formPlannedDatesLocked')
+              : formDateFormItemProps?.extra,
+          }}
+          fieldProps={buildFutureDateShortcutFieldProps({
+            getForm: () => formRef.current,
+            fieldName: 'planned_end_date',
+            baseFieldName: 'planned_start_date',
+            t,
+            fieldProps: {
+              showTime: true,
+              style: { width: '100%' },
+              format: 'YYYY-MM-DD HH:mm:ss',
+              disabled: workOrderPlannedDatesLocked,
+            },
+          })}
+        />
+        <ProFormDatePicker
+          name="required_date"
+          label={t('app.kuaizhizao.workOrder.formRequiredDate')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+          colProps={{ span: 6 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+
+        <Col span={isFormPage ? 5 : 24}>
+          <Form.Item name="process_route_id" label={t('app.kuaizhizao.workOrder.colProcessRoute')} style={{ marginBottom: 16 }}>
+            <UniDropdown
+              placeholder={t('app.kuaizhizao.workOrder.formProcessRoutePlaceholder')}
+              options={uniqueProcessRouteList.map(route => ({
+                label: `${route.code} - ${route.name}`,
+                value: route.id,
+              }))}
+              disabled={isEdit && String(currentWorkOrder?.status || '') !== 'draft'}
+              showSearch
+              allowClear
+              advancedSearch={{
+                label: t('app.kuaizhizao.workOrder.formAdvancedSearch'),
+                fields: [
+                  { name: 'code', label: t('app.kuaizhizao.workOrder.formProcessRouteCode') },
+                  { name: 'name', label: t('app.kuaizhizao.workOrder.formProcessRouteName') },
+                ],
+                onSearch: async (values) => {
+                  try {
+                    const res = await processRouteApi.list({ ...values, limit: 100 });
+                    const list = Array.isArray(res) ? res : (res as any)?.data || [];
+                    return list.map((r: any) => ({
+                      value: r.id,
+                      label: `${r.code ?? ''} - ${r.name ?? ''}`.trim() || String(r.id),
+                    }));
+                  } catch {
+                    return [];
+                  }
+                },
+              }}
+              onChange={async (value) => {
+                if (value) {
+                  try {
+                    const route = uniqueProcessRouteList.find(r => r.id === value)
+                    if (!route || !route.uuid) {
+                      setCreateProcessRouteId(undefined)
+                      messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteNotFound'))
+                      return
+                    }
+                    setCreateProcessRouteId(Number(value))
+                    const routeDetail = await processRouteApi.get(route.uuid)
+                    let routeJump = Boolean(
+                      (routeDetail as any)?.allow_operation_jump ??
+                        (routeDetail as any)?.allowOperationJump ??
+                        false,
+                    )
+                    // 当前产品若有产品工艺且指向该路线，优先用产品工艺的「允许工序跳转」
+                    try {
+                      const productId = formRef.current?.getFieldValue('product_id')
+                      const mat =
+                        (productId != null
+                          ? productList.find((p: any) => Number(p.id) === Number(productId))
+                          : null) ?? formProductMaterial
+                      const matUuid = (mat as any)?.uuid
+                      if (matUuid) {
+                        const pp = await productProcessApi.get(String(matUuid))
+                        if (
+                          pp?.processRouteId != null &&
+                          Number(pp.processRouteId) === Number(value)
+                        ) {
+                          routeJump = Boolean(pp.allowOperationJump)
+                        }
+                      }
+                    } catch {
+                      // 忽略产品工艺读取失败，回退路线开关
+                    }
+                    formRef.current?.setFieldsValue({ allow_operation_jump: routeJump })
+                    const operations = parseOperationSequence(
+                      routeDetail?.operation_sequence,
+                      operationList
+                    )
+                    if (operations.length > 0) {
+                      setSelectedOperations(
+                        operations.map((op: any) => {
+                          const { id: _woOpId, ...rest } = op
+                          return {
+                            ...rest,
+                            is_node_operation: false,
+                            allow_jump: routeJump,
+                          }
+                        }),
+                      )
+                      formRef.current?.setFieldsValue({
+                        operations: operations.map((op: any) => op.operation_id),
+                      })
+                      messageApi.success(
+                        t('app.kuaizhizao.workOrder.msgOperationsLoaded', { count: operations.length })
+                      )
+                    } else {
+                      setSelectedOperations([])
+                      formRef.current?.setFieldsValue({ operations: undefined })
+                      if (routeDetail?.operation_sequence) {
+                        messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteParseFailed'))
+                      } else {
+                        messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteNoSequence'))
+                      }
+                    }
+                  } catch (error: any) {
+                    console.error('获取工艺路线工序失败:', error)
+                    messageApi.error(error.message || t('app.kuaizhizao.workOrder.msgLoadProcessRouteOpsFailed'))
+                    setCreateProcessRouteId(undefined)
+                    setSelectedOperations([])
+                    formRef.current?.setFieldsValue({ operations: undefined })
+                  }
+                } else {
+                  setCreateProcessRouteId(undefined)
+                  formRef.current?.setFieldsValue({
+                    allow_operation_jump: false,
+                  })
+                }
+              }}
+            />
+          </Form.Item>
+        </Col>
+        <UniWarehouseSelect
+          name="warehouse_id"
+          label={t('app.kuaizhizao.workOrder.formWarehouse')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+          hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
+          onChange={(_id, warehouse) => {
+            formRef.current?.setFieldsValue({
+              warehouse_name: warehouse?.name,
+            })
+          }}
+        />
+        <ProFormSelect
+          name="manufacturing_department_id"
+          label={t('app.kuaizhizao.workOrder.formManufacturingDepartment')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+          options={manufacturingDepartmentSelectOptions}
+          fieldProps={{
+            showSearch: true,
+            allowClear: true,
+            optionFilterProp: 'label',
+            onChange: (value: number | undefined, option) => {
+              const picked = Array.isArray(option) ? undefined : option
+              const label = typeof picked?.label === 'string' ? picked.label : undefined
+              formRef.current?.setFieldsValue({
+                manufacturing_department_name: value == null ? undefined : label,
+              })
+            },
+          }}
+        />
+        <ProForm.Item
+          name="customer_id"
+          label={t('app.kuaizhizao.workOrder.formCustomer')}
+          style={{ marginBottom: 16 }}
+        >
+          <CustomerSelectDropdown
+            hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
+            placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+            style={{ width: '100%' }}
+            onCustomerPick={(customer) => {
+              formRef.current?.setFieldsValue({
+                customer_name: customer?.name,
+              })
+            }}
+          />
+        </ProForm.Item>
+        <ProFormText
+          name="customer_order_no"
+          label={t('app.kuaizhizao.workOrder.formCustomerOrderNo')}
+          placeholder={t('app.kuaizhizao.workOrder.formEnter')}
+          colProps={{ span: 6 }}
+        />
+        <div style={{ display: 'none' }}>
+          <ProFormText name="warehouse_name" />
+          <ProFormText name="manufacturing_department_name" />
+          <ProFormText name="customer_name" />
+        </div>
+        {!isFormPage ? (
+          <>
+        <Col span={12}>
+          <Form.Item
+            name="over_report_mode"
+            label={t('app.kuaizhizao.workOrder.formDefaultOverReport')}
+            initialValue="none"
+            style={{ marginBottom: 24 }}
+          >
+            <ThemedSegmented
+              className="form-field-segmented"
+              style={{ width: 'fit-content', maxWidth: '100%' }}
+              options={[
+                { label: t('field.operation.overReportModeNone'), value: 'none' },
+                { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+                { label: t('field.operation.overReportModePercent'), value: 'percent' },
+              ]}
+            />
+          </Form.Item>
+        </Col>
+        <ProFormDependency name={['over_report_mode']}>
+          {({ over_report_mode }) => (
+            <ProFormDigit
+              name="over_report_value"
+              label={formLabelWithHint(
+                t('field.operation.overReportValue'),
+                t('field.operation.overReportValueExtra')
+              )}
+              placeholder={t('app.kuaizhizao.workOrder.formEnter')}
+              colProps={{ span: 12 }}
+              min={0}
+              max={over_report_mode === 'percent' ? 100 : undefined}
+              fieldProps={{
+                precision: 4,
+                max: over_report_mode === 'percent' ? 100 : undefined,
+              }}
+            />
+          )}
+        </ProFormDependency>
+          </>
+        ) : null}
+        {!isFormPage ? (
+        <ProFormSwitch
+          name="allow_operation_jump"
+          label={formLabelWithHint(
+            t('app.kuaizhizao.workOrder.colAllowOpJump'),
+            t('app.kuaizhizao.workOrder.formAllowOpJumpExtra')
+          )}
+          initialValue={false}
+          colProps={{ span: 12 }}
+        />
+        ) : null}
+        {!isEdit && createWorkOrderMode === 'normal' && (
+          <ProFormDependency name={['product_id']}>
+            {({ product_id }) => (
+              <WorkOrderTrackingFields
+                formRef={formRef}
+                productId={product_id}
+                productList={productList}
+                disabled={isEdit}
+              />
+            )}
+          </ProFormDependency>
+        )}
+        {isEdit && createWorkOrderMode === 'normal' && (
+          <ProFormDependency name={['product_id']}>
+            {({ product_id }) => (
+              <WorkOrderTrackingEditFields
+                productId={product_id ?? currentWorkOrder?.product_id}
+                productList={productList}
+                workOrderStatus={currentWorkOrder?.status}
+              />
+            )}
+          </ProFormDependency>
+        )}
+        {isFormPage ? (
+          <div className="wo-tab-basic-full">
+            <CustomFieldsFormSection
+              customFields={workOrderFormCustomFields}
+              customFieldValues={workOrderFormCustomFieldValues}
+              gridColumns={5}
+            />
+          </div>
+        ) : (
+        <CustomFieldsFormSection
+          customFields={workOrderFormCustomFields}
+          customFieldValues={workOrderFormCustomFieldValues}
+          gridColumns={4}
+        />
+        )}
+        {isFormPage ? <span data-wo-section="lines" hidden /> : null}
+        <Form.Item name="operations" hidden />
+        {isFormPage ? (
+          <Col span={24}>
+            <Tabs
+              className="wo-form-line-tabs"
+              items={[
+                {
+                  key: 'operations',
+                  label: t('app.kuaizhizao.workOrder.formOperationsSection'),
+                  children: (
+                    <>
+                      <Suspense
+                        fallback={
+                          <div style={{ padding: 24, textAlign: 'center' }}>
+                            <Spin />
+                          </div>
+                        }
+                      >
+                        <LazyWorkOrderOperationsEditTable
+                          hideSectionTitle
+                          workshopOptions={(workshopList || []).flatMap((item: any) => {
+                            const id = Number(item?.id)
+                            if (!Number.isInteger(id) || id <= 0) return []
+                            const label = String(item?.name ?? item?.code ?? '').trim()
+                            return [{ value: id, label: label || String(id) }]
+                          })}
+                          equipmentOptions={(equipmentList || []).flatMap((item: any) => {
+                            const id = Number(item?.id)
+                            if (!Number.isInteger(id) || id <= 0) return []
+                            const label = `${item.code ?? ''} ${item.name ?? ''}`.trim()
+                            return [{ value: id, label: label || String(id) }]
+                          })}
+                          personnelOptions={personnelOptions}
+                          rows={selectedOperations.map((op: any, idx: number) => ({
+                            key: op.id != null ? `woo-${op.id}` : `new-${op.operation_id ?? idx}`,
+                            ...op,
+                          }))}
+                          onChange={(rows) =>
+                            setSelectedOperations(
+                              rows.map((row, idx) => ({
+                                ...row,
+                                sequence: idx + 1,
+                              })),
+                            )
+                          }
+                          onAdd={() => {
+                            setCreateAddOperationUuids([])
+                            setCreateAddOperationsModalVisible(true)
+                          }}
+                          disabled={
+                            isEdit &&
+                            ['completed', 'cancelled', 'split'].includes(String(currentWorkOrder?.status || ''))
+                          }
+                          headerLeft={(
+                            <div className="wo-ops-meta-row">
+                              <Form.Item
+                                name="over_report_mode"
+                                layout="horizontal"
+                                colon={false}
+                                label={t('app.kuaizhizao.workOrder.formDefaultOverReport')}
+                                initialValue="none"
+                              >
+                                <ThemedSegmented
+                                  className="form-field-segmented"
+                                  block={false}
+                                  options={[
+                                    { label: t('field.operation.overReportModeNone'), value: 'none' },
+                                    { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+                                    { label: t('field.operation.overReportModePercent'), value: 'percent' },
+                                  ]}
+                                />
+                              </Form.Item>
+                              <ProFormDependency name={['over_report_mode']}>
+                                {({ over_report_mode }) => (
+                                  <ProFormDigit
+                                    name="over_report_value"
+                                    layout="horizontal"
+                                    colon={false}
+                                    label={formLabelWithHint(
+                                      t('field.operation.overReportValue'),
+                                      t('field.operation.overReportValueExtra')
+                                    )}
+                                    placeholder={t('app.kuaizhizao.workOrder.formEnter')}
+                                    min={0}
+                                    max={over_report_mode === 'percent' ? 100 : undefined}
+                                    width={96}
+                                    fieldProps={{
+                                      precision: 4,
+                                      max: over_report_mode === 'percent' ? 100 : undefined,
+                                      style: { width: 96 },
+                                    }}
+                                  />
+                                )}
+                              </ProFormDependency>
+                              <ProFormSwitch
+                                name="allow_operation_jump"
+                                layout="horizontal"
+                                colon={false}
+                                label={formLabelWithHint(
+                                  t('app.kuaizhizao.workOrder.colAllowOpJump'),
+                                  t('app.kuaizhizao.workOrder.formAllowOpJumpExtra')
+                                )}
+                                initialValue={false}
+                              />
+                            </div>
+                          )}
+                        />
+                      </Suspense>
+                    </>
+                  ),
+                },
+                {
+                  key: 'bom',
+                  label: t('app.kuaizhizao.workOrder.formBomLinesSection'),
+                  children: (
+                    <Suspense fallback={<Spin />}>
+                      <LazyWorkOrderBomLinesDetail
+                        hideSectionTitle
+                        rows={bomFormLines}
+                        onChange={setBomFormLines}
+                        onAdd={workOrderBomFormReadOnly ? undefined : openBomLineAddModal}
+                        readOnly={workOrderBomFormReadOnly}
+                      />
+                    </Suspense>
+                  ),
+                },
+              ]}
+            />
+          </Col>
+        ) : (
+          <>
+        <Col span={24}>
+          <Suspense fallback={<Spin />}>
+            <LazyWorkOrderBomLinesDetail
+              rows={bomFormLines}
+              onChange={setBomFormLines}
+              onAdd={workOrderBomFormReadOnly ? undefined : openBomLineAddModal}
+              readOnly={workOrderBomFormReadOnly}
+            />
+          </Suspense>
+        </Col>
+        <Form.Item
+          label={t('app.kuaizhizao.workOrder.colOperations')}
+          colon
+          style={{
+            gridColumn: '1 / -1',
+            marginBottom: 24,
+            width: '100%',
+            minWidth: 0,
+            paddingLeft: 8,
+            paddingRight: 8,
+          }}
+        >
+          <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+            <Suspense
+              fallback={
+                <div style={{ padding: 24, textAlign: 'center' }}>
+                  <Spin />
+                </div>
+              }
+            >
+              <LazyCreateWorkOrderOperationsList
+                selectedOperations={selectedOperations}
+                setSelectedOperations={setSelectedOperations}
+                operationList={operationList}
+                formRef={formRef}
+                disabled={
+                  isEdit && ['completed', 'cancelled', 'split'].includes(String(currentWorkOrder?.status || ''))
+                }
+              />
+            </Suspense>
+          </div>
+          {(!isEdit ||
+            !['completed', 'cancelled', 'split'].includes(String(currentWorkOrder?.status || ''))) && (
+            <Button
+              type="dashed"
+              block
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setCreateAddOperationUuids([])
+                setCreateAddOperationsModalVisible(true)
+              }}
+              style={{
+                marginTop: 12,
+                borderStyle: 'dashed',
+                borderColor: 'var(--ant-color-primary)',
+                color: 'var(--ant-color-primary)',
+              }}
+            >
+              {t('app.kuaizhizao.workOrder.modalAddOperation')}
+            </Button>
+          )}
+        </Form.Item>
+          </>
+        )}
+        <ProFormTextArea
+          name="remarks"
+          label={t('common.remark')}
+          placeholder={t('app.kuaizhizao.workOrder.formOptionalPlaceholder')}
+          fieldProps={{ rows: 3 }}
+          colProps={{ span: 24 }}
+        />
+        {isFormPage ? <span data-wo-section="attachments" hidden /> : null}
+        <DocumentAttachmentsField
+          category="work_order_attachments"
+          label={isFormPage ? false : t('app.kuaizhizao.workOrder.colAttachments')}
+        />
+          </>
+        )}
+
+        {!isEdit && createWorkOrderMode === 'peer_group' && (
+          <>
+            <ProFormDatePicker
+              name="planned_start_date"
+              label={t('app.kuaizhizao.workOrder.colPlannedStart')}
+              placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+              required
+              rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
+              colProps={{ span: 12 }}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+            <ProFormDatePicker
+              name="planned_end_date"
+              label={t('app.kuaizhizao.workOrder.colPlannedEnd')}
+              placeholder={t('app.kuaizhizao.workOrder.formSelect')}
+              required
+              rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
+              colProps={{ span: 12 }}
+              fieldProps={buildFutureDateShortcutFieldProps({
+                getForm: () => formRef.current,
+                fieldName: 'planned_end_date',
+                baseFieldName: 'planned_start_date',
+                t,
+                fieldProps: { style: { width: '100%' } },
+              })}
+            />
+          </>
+        )}
+    </WorkOrderTabGroups>
+  )
+
+  const workOrderFormPageHeader = (
+    <>
+      <Space align="center" size={8}>
+        <Button
+          type="text"
+          icon={<ArrowLeftOutlined />}
+          aria-label={t('common.back')}
+          onClick={leaveWorkOrderFormPage}
+        />
+        <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+          {isCreatePage
+            ? t('app.kuaizhizao.workOrder.modalCreate')
+            : t('app.kuaizhizao.workOrder.modalEdit')}
+        </Typography.Title>
+      </Space>
+      <DocumentFormPageHeaderActions
+        onCancel={leaveWorkOrderFormPage}
+        onSaveDraft={() => void formRef.current?.submit?.()}
+        onPrimarySubmit={() => void formRef.current?.submit?.()}
+        isCreatePage={isCreatePage}
+        showSaveDraft={false}
+        canSubmitAfterSave={false}
+        showCommitSubmit={
+          isCreatePage ||
+          (currentWorkOrder != null &&
+            ['', 'draft', '草稿', 'DRAFT'].includes(String(currentWorkOrder.status || '').trim()))
+        }
+        onCommitSubmit={() => {
+          saveAndAuditAfterSaveRef.current = true
+          void formRef.current?.submit?.()
+        }}
+      />
+    </>
+  )
+
+  const workOrderMainFormModalProps = {
+    title: isEdit ? t('app.kuaizhizao.workOrder.modalEdit') : t('app.kuaizhizao.workOrder.modalCreate'),
+    loading: modalDataLoading,
+    onFinish: handleSubmit,
+    isEdit,
+    formRef,
+    grid: !isFormPage,
+    onValuesChange: (changedValues: Record<string, unknown>, allValues: Record<string, unknown>) => {
+      if (createWorkOrderMode !== 'normal' || workOrderBomFormReadOnly) return
+      if (
+        changedValues.product_id === undefined &&
+        changedValues.quantity === undefined &&
+        changedValues.product_bom_version === undefined
+      ) {
+        return
+      }
+      const reason =
+        changedValues.product_id !== undefined
+          ? 'product'
+          : changedValues.quantity !== undefined
+            ? 'quantity'
+            : 'bom_version'
+      const qty = allValues.quantity != null ? Number(allValues.quantity) : undefined
+      void scheduleWorkOrderBomPreview(reason, {
+        product_id:
+          allValues.product_id != null ? Number(allValues.product_id) : undefined,
+        quantity: qty != null && Number.isFinite(qty) ? qty : undefined,
+        product_bom_version:
+          allValues.product_bom_version != null ? String(allValues.product_bom_version) : null,
+      })
+    },
+    onClose: () => {
+      commitAfterSaveRef.current = false
+      saveAndAuditAfterSaveRef.current = false
+      if (isFormPage) {
+        leaveWorkOrderFormPage()
+        return
+      }
+      setModalVisible(false)
+      setCurrentWorkOrder(null)
+      setCreateWorkOrderMode('normal')
+      setSelectedMaterialSourceInfo(null)
+      setFormProductMaterial(null)
+      setProductSourceData(null)
+      setSelectedOperations([])
+      setCreateProcessRouteId(undefined)
+      setCreateAddOperationsModalVisible(false)
+      setCreateAddOperationUuids([])
+      resetWorkOrderFormFieldValues()
+      formRef.current?.resetFields()
+    },
+    width: MODAL_CONFIG.LARGE_WIDTH,
+    extraFooterAfter:
+      createWorkOrderMode !== 'peer_group' &&
+      (!isEdit ||
+        (['', 'draft', '草稿', 'DRAFT'].includes(String(currentWorkOrder?.status || '').trim()) &&
+          ['', '草稿', 'draft', 'DRAFT', '已驳回', '审核驳回', 'rejected', 'REJECTED'].includes(
+            String(currentWorkOrder?.review_status || '').trim(),
+          ))) ? (
+        <Button
+          onClick={() => {
+            commitAfterSaveRef.current = true
+            void formRef.current?.submit?.()
+          }}
+        >
+          {t('common.submit')}
+        </Button>
+      ) : null,
+  }
+
   return (
     <>
       <style>{`
         .work-order-row-overdue td.ant-table-cell {
           background: var(--ant-color-warning-bg) !important;
         }
+        .wo-tab-basic {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          column-gap: 16px;
+        }
+        .wo-tab-basic > .ant-col,
+        .wo-tab-basic > .ant-form-item {
+          max-width: none !important;
+          width: auto !important;
+          flex: none !important;
+          min-width: 0;
+        }
+        .wo-tab-basic > .ant-col-24,
+        .wo-tab-basic > .wo-tab-basic-full {
+          grid-column: 1 / -1;
+        }
+        .wo-form-line-tabs {
+          margin-bottom: 24px;
+        }
+        .wo-form-line-tabs > .ant-tabs-nav {
+          margin-bottom: 12px;
+        }
+        .wo-ops-table .uni-table-detail-header {
+          align-items: center;
+          flex-wrap: nowrap;
+        }
+        .wo-ops-meta-row {
+          display: flex;
+          align-items: center;
+          flex-wrap: nowrap;
+          gap: 16px;
+          width: max-content;
+          max-width: 100%;
+        }
+        .wo-ops-meta-row > * {
+          flex: 0 0 auto;
+          width: auto;
+          min-width: 0;
+        }
+        .wo-ops-meta-row .ant-form-item {
+          margin-bottom: 0;
+          width: auto;
+        }
+        .wo-ops-meta-row .ant-form-item .ant-form-item-row {
+          flex-flow: row nowrap;
+          align-items: center;
+          width: auto;
+        }
+        .wo-ops-meta-row .ant-form-item .ant-form-item-label {
+          flex: 0 0 auto !important;
+          width: auto !important;
+          max-width: none !important;
+          padding: 0 8px 0 0 !important;
+          white-space: nowrap;
+        }
+        .wo-ops-meta-row .ant-form-item .ant-form-item-label > label {
+          height: 32px;
+        }
+        .wo-ops-meta-row .ant-form-item .ant-form-item-control {
+          flex: 0 0 auto !important;
+          width: auto !important;
+          max-width: none !important;
+        }
+        .wo-ops-meta-row .ant-form-item-control-input,
+        .wo-ops-meta-row .ant-form-item-control-input-content {
+          width: auto !important;
+          max-width: none !important;
+          flex: none !important;
+        }
+        .wo-ops-meta-row .ant-segmented {
+          width: max-content !important;
+          max-width: max-content !important;
+        }
+        .wo-ops-meta-row .ant-input-number {
+          width: 96px !important;
+        }
       `}</style>
+      {isFormPage && createWorkOrderMode === 'normal' ? (
+        <DocumentFormPageLayout header={workOrderFormPageHeader}>
+          <Spin spinning={modalDataLoading}>
+            <FormModalTemplate
+              {...workOrderMainFormModalProps}
+              embedded
+              open
+              submitHidden
+            >
+              {workOrderMainModalChildren}
+            </FormModalTemplate>
+          </Spin>
+        </DocumentFormPageLayout>
+      ) : null}
+      {!isFormPage ? (
       <ListPageTemplate statCards={statCards}>
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
@@ -8459,6 +10571,7 @@ const WorkOrdersPage: React.FC = () => {
           })}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
+          deleteButtonText={t('common.delete')}
           showImportButton={true}
           onImport={handleListImport}
           importHeaders={workOrderImportTemplate.importHeaders}
@@ -8618,18 +10731,37 @@ const WorkOrdersPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.workOrder.actionCreateWorkOrder')}
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
+              menuItems={[
+                ...buildKuaizhizaoPullCreateMenuItems(t, [
+                  {
+                    key: 'pull-from-demand-computation',
+                    actionKey: 'work_order.pull_from_demand_computation',
+                    onClick: pullFromComputationQuery.openModal,
+                  },
+                  {
+                    key: 'pull-from-sales-order',
+                    actionKey: 'work_order.pull_from_sales_order',
+                    onClick: pullFromSalesOrderQuery.openModal,
+                  },
+                  {
+                    key: 'pull-from-sales-forecast',
+                    actionKey: 'work_order.pull_from_sales_forecast',
+                    onClick: pullFromSalesForecastQuery.openModal,
+                  },
+                  {
+                    key: 'pull-from-demand-plan',
+                    actionKey: 'work_order.pull_from_demand_plan',
+                    onClick: openCreateFromDemandPlan,
+                  },
+                ]),
+                { type: 'divider', key: 'copy-selected-divider' },
                 {
-                  key: 'pull-from-demand-computation',
-                  actionKey: 'work_order.pull_from_demand_computation',
-                  onClick: pullFromComputationQuery.openModal,
+                  key: 'copy-selected',
+                  label: t('app.kuaizhizao.workOrder.copySelectedCreate'),
+                  disabled: selectedWorkOrdersForBatch.length !== 1,
+                  onClick: () => void handleCopySelectedWorkOrder(),
                 },
-                {
-                  key: 'pull-from-sales-order',
-                  actionKey: 'work_order.pull_from_sales_order',
-                  onClick: pullFromSalesOrderQuery.openModal,
-                },
-              ])}
+              ]}
             />,
             <UniPushToolbarButton
               key={`work-order-push-${selectedWorkOrderForToolbarPush?.id ?? 'none'}`}
@@ -8647,6 +10779,18 @@ const WorkOrdersPage: React.FC = () => {
                 'push-finished-goods-inbound': 'finished_goods_receipt',
                 'push-production-return-inbound': 'production_return',
               }}
+            />,
+            <UniBatchMenuButton
+              key="work-order-submit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={workOrderToolbarAuditMenus.submitItems}
+              buttonText={t('common.submit')}
+            />,
+            <UniBatchMenuButton
+              key="work-order-audit"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={workOrderToolbarAuditMenus.auditItems}
+              buttonText={t('components.uniAction.audit')}
             />,
           ]}
           toolBarActionsAfterDelete={workOrderToolBarActionsAfterDelete}
@@ -8692,6 +10836,7 @@ const WorkOrdersPage: React.FC = () => {
               : []
           }
           onDelete={handleDelete}
+          deleteButtonDisabled={!canToolbarBatchDelete}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.workOrder.msgConfirmDeleteCount', { count })}
           viewTypes={['table', 'productTree', 'orderTree', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.workOrder)}
@@ -8705,6 +10850,7 @@ const WorkOrdersPage: React.FC = () => {
           }}
         />
       </ListPageTemplate>
+      ) : null}
 
       <Suspense fallback={null}>
         <WorkOrderSyncFromSourceModal
@@ -8769,7 +10915,9 @@ const WorkOrdersPage: React.FC = () => {
                   renderPullCapabilityTag(
                     record.can_push_work_order !== false,
                     t('app.kuaizhizao.workOrder.tagCanCreate'),
-                    record.disabled_reason || t('app.kuaizhizao.workOrder.tagCannotCreate'),
+                    record.disabled_reason
+                      ? demandComputationCapabilityReasonMessage(record.disabled_reason, t)
+                      : t('app.kuaizhizao.workOrder.tagCannotCreate'),
                   ),
               },
             ]}
@@ -8804,31 +10952,55 @@ const WorkOrdersPage: React.FC = () => {
         onOk={pullFromSalesOrderQuery.handleConfirm}
         rowKey="id"
         columns={[
-          { title: t('app.kuaizhizao.salesOrder.orderCode'), dataIndex: 'order_code', width: 180, ellipsis: true },
-          { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
           {
-            title: t('common.status'),
-            dataIndex: 'status',
+            title: t('components.uniPullQuery.documentDateColumn'),
+            dataIndex: 'document_date',
+            width: 112,
+            render: (_: unknown, record: PullSalesOrderCandidate) => {
+              const raw = record.document_date || record.order_date
+              return raw ? formatBusinessDateOnly(String(raw)) : '-'
+            },
+          },
+          buildPullQueryPartnerDocumentColumn<PullSalesOrderCandidate>(t, {
+            titleKey: 'app.kuaizhizao.warehouseOutbound.pull.colSalesOrderCode',
+            codeDataIndex: 'order_code',
+            partnerField: 'customer_name',
+          }),
+          buildPullQueryMaterialIdentityColumn<PullSalesOrderCandidate>(t),
+          {
+            title: t('app.kuaizhizao.warehouseOutbound.pull.colOrderQty'),
+            dataIndex: 'suggested_quantity',
             width: 100,
-            align: 'center' as const,
-            render: (v) => renderPullQueryDocStatus(t, v),
+            align: 'right' as const,
+            render: formatQuantity,
           },
           {
-            title: t('app.kuaizhizao.salesOrder.reviewStatus'),
-            dataIndex: 'review_status',
-            width: 120,
-            align: 'center' as const,
-            render: (v) => renderPullQueryReviewStatus(t, v),
+            title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),
+            dataIndex: 'current_stock',
+            width: 112,
+            align: 'right' as const,
+            render: (v: number | undefined) => formatQuantity(Number(v ?? 0)),
+          },
+          {
+            title: t('app.kuaizhizao.workOrder.pull.colPushedWorkOrderQty'),
+            dataIndex: 'pushed_work_order_quantity',
+            width: 112,
+            align: 'right' as const,
+            render: (v: number | undefined, record: PullSalesOrderCandidate) =>
+              formatQuantity(Number(v ?? record.pushed_quantity ?? 0)),
+          },
+          {
+            title: t('app.kuaizhizao.workOrder.pull.colPushedPurchaseQty'),
+            dataIndex: 'pushed_purchase_quantity',
+            width: 112,
+            align: 'right' as const,
+            render: (v: number | undefined) => formatQuantity(Number(v ?? 0)),
           },
           {
             title: t('app.kuaizhizao.salesOrder.deliveryDate'),
-            dataIndex: 'delivery_date',
-            width: 130,
-            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD') : '-'),
-          },
-          {
-            title: t('app.kuaizhizao.reports.remainingQuantity'),
-            dataIndex: 'remaining_push_quantity',
+            dataIndex: 'required_date',
+            width: 112,
+            render: (v: string | null | undefined) => (v ? formatBusinessDateOnly(String(v)) : '-'),
           },
           {
             title: t('app.kuaizhizao.purchaseOrder.form.lineNotes'),
@@ -8957,51 +11129,48 @@ const WorkOrdersPage: React.FC = () => {
             title: t('app.kuaizhizao.purchaseOrder.col.spec'),
             dataIndex: 'material_spec',
             width: 140,
-            align: 'right',
-            render: (v) => Number(v ?? 0),
+            ellipsis: true,
+            render: (value: string | null | undefined) => (value && String(value).trim() ? String(value) : '-'),
           },
           {
-            title: t('common.updatedAt'),
-            dataIndex: 'updated_at',
-            width: 180,
-            render: (v) => (v ? formatDateTime(v, 'YYYY-MM-DD HH:mm:ss') : '-'),
+            title: t('app.kuaizhizao.warehouseOutbound.pull.colOrderQty'),
+            dataIndex: 'forecast_quantity',
+            width: 100,
+            align: 'right' as const,
+            render: formatQuantity,
           },
           {
-            title: t('app.kuaizhizao.workOrder.colConvertStatus'),
-            key: 'convert_status',
-            width: 180,
-            align: 'center',
-            render: (_, record) =>
-              renderPullCapabilityTag(
-                !(record.remaining_push_quantity <= 0 || record.capabilities?.push_work_order?.allowed === false),
-                t('app.kuaizhizao.workOrder.tagCanCreate'),
-                salesOrderCapabilityReasonMessage(record.capabilities?.push_work_order?.reason, t) ||
-                  t('app.kuaizhizao.workOrder.tagCannotCreate'),
-              ),
+            title: t('app.kuaizhizao.salesForecast.forecastDate'),
+            dataIndex: 'forecast_date',
+            width: 112,
+            render: (value: string | null | undefined) => (value ? formatBusinessDateOnly(String(value)) : '-'),
           },
         ]}
-        dataSource={pullFromSalesOrderQuery.dataSource}
-        loading={pullFromSalesOrderQuery.loading}
-        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
-        selectionType={pullFromSalesOrderQuery.selectionType}
-        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
-        selectedRows={pullFromSalesOrderQuery.selectedRows}
-        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
-        isRowDisabled={pullFromSalesOrderQuery.isRowDisabled}
-        searchDraft={pullFromSalesOrderQuery.searchDraft}
-        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
-        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
-        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
-        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
-        searchPlaceholder={t('components.uniPullQuery.searchPlaceholder')}
-        page={pullFromSalesOrderQuery.page}
-        pageSize={pullFromSalesOrderQuery.pageSize}
-        total={pullFromSalesOrderQuery.total}
-        onPageChange={pullFromSalesOrderQuery.handlePageChange}
-        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
-        scope={pullFromSalesOrderQuery.scope}
-        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
-        okText="创建工单"
+        dataSource={pullFromSalesForecastQuery.dataSource}
+        loading={pullFromSalesForecastQuery.loading}
+        confirmLoading={pullFromSalesForecastQuery.confirmLoading}
+        selectionType={pullFromSalesForecastQuery.selectionType}
+        selectedRowKeys={pullFromSalesForecastQuery.selectedRowKeys}
+        selectedRows={pullFromSalesForecastQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromSalesForecastQuery.handleSelectedRowKeysChange}
+        isRowDisabled={pullFromSalesForecastQuery.isRowDisabled}
+        searchDraft={pullFromSalesForecastQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesForecastQuery.setSearchDraft}
+        onSearchApply={pullFromSalesForecastQuery.handleSearchApply}
+        onSearchClear={pullFromSalesForecastQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesForecastQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.workOrder.searchProductSourceForecast')}
+        getRowLabel={(row) =>
+          [row.forecast_code, row.material_code, row.material_name].filter(Boolean).join(' ')
+        }
+        page={pullFromSalesForecastQuery.page}
+        pageSize={pullFromSalesForecastQuery.pageSize}
+        total={pullFromSalesForecastQuery.total}
+        onPageChange={pullFromSalesForecastQuery.handlePageChange}
+        scopeOptions={pullFromSalesForecastQuery.scopeOptions}
+        scope={pullFromSalesForecastQuery.scope}
+        onScopeChange={pullFromSalesForecastQuery.handleScopeChange}
+        okText={t('app.kuaizhizao.workOrder.pull.okCreateWorkOrder')}
       />
 
       <Modal
@@ -9183,7 +11352,7 @@ const WorkOrdersPage: React.FC = () => {
           disabled:
             soPullPreviewLoading ||
             !soPullPreviewData ||
-            !!soPullPreviewData?.has_blocking_issues,
+            (!!soPullPreviewData?.has_blocking_issues && !!soPullPreviewData?.blocking_reason),
         }}
       >
         {soPullPreviewLoading ? (
@@ -9203,6 +11372,14 @@ const WorkOrdersPage: React.FC = () => {
                   salesOrderCapabilityReasonMessage(soPullPreviewData.blocking_reason, t) ||
                   t('app.kuaizhizao.salesOrder.pushFailed')
                 }
+              />
+            ) : null}
+            {soPullPreviewData.has_blocking_issues && !soPullPreviewData.blocking_reason ? (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12 }}
+                title={t('app.kuaizhizao.salesOrder.masterDataMissingAlert')}
               />
             ) : null}
             <div style={{ marginBottom: 10 }}>
@@ -9237,14 +11414,14 @@ const WorkOrdersPage: React.FC = () => {
                 <div style={{ marginBottom: 12 }}>
                   <Spin size="small" /> {t('app.kuaizhizao.salesOrder.directPushBomLoading')}
                 </div>
-              ) : (
+              ) : soPullBomMaterials.length > 0 ? (
                 <DirectPushBomVersionFields
                   enabled
                   materials={soPullBomMaterials}
                   value={soPullBomParams}
                   onChange={setSoPullBomParams}
                 />
-              )
+              ) : null
             ) : null}
             {soPullPreviewData.items?.length > 0 ? (
               <Table
@@ -9324,6 +11501,43 @@ const WorkOrdersPage: React.FC = () => {
                   },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: (
+                      <Tooltip title={t('app.kuaizhizao.salesOrder.colBomExpandChildrenTip')}>
+                        {t('app.kuaizhizao.salesOrder.colBomExpandChildren')}
+                      </Tooltip>
+                    ),
+                    width: 108,
+                    align: 'center' as const,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id)
+                      const hasBom = row?.has_bom === true
+                      if (hasBom) {
+                        return (
+                          <Tooltip title={t('app.kuaizhizao.salesOrder.colBomExpandChildrenTip')}>
+                            <Switch
+                              size="small"
+                              checked={soPullBomExpand[itemId] !== false}
+                              disabled={!soPullSelectedItemIds.includes(itemId)}
+                              onChange={(checked) => {
+                                setSoPullBomExpand((prev) => ({ ...prev, [itemId]: checked }))
+                              }}
+                            />
+                          </Tooltip>
+                        )
+                      }
+                      return (
+                        <Switch
+                          size="small"
+                          checked={!!soPullBomExpand[itemId]}
+                          disabled={!soPullSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setSoPullBomExpand((prev) => ({ ...prev, [itemId]: checked }))
+                          }}
+                        />
+                      )
+                    },
+                  },
                   {
                     title: t('app.kuaizhizao.salesOrder.workCenter'),
                     width: 200,
@@ -9455,7 +11669,8 @@ const WorkOrdersPage: React.FC = () => {
             toolbarPushConfirming ||
             !toolbarPushPreviewData ||
             !!toolbarPushPreviewData?.has_blocking_issues ||
-            !(toolbarPushPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0),
+            !(toolbarPushPreviewData?.items || []).some((row) => Number(row.max_push_quantity ?? 0) > 0) ||
+            (toolbarPushPreviewKind === 'finished_goods_inspection' && !(Number(toolbarPushFqcQuantity) > 0)),
         }}
       >
         {toolbarPushPreviewLoading ? (
@@ -9491,6 +11706,28 @@ const WorkOrdersPage: React.FC = () => {
                   { title: t('common.quantity'), dataIndex: 'quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
                   { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  ...(toolbarPushPreviewKind === 'finished_goods_inspection'
+                    ? [
+                        {
+                          title: t('app.kuaizhizao.salesOrder.colPushQty'),
+                          width: 130,
+                          render: (_: unknown, row: PushPreviewResponse['items'][number]) => {
+                            const maxQty = Number(row.max_push_quantity ?? 0)
+                            return (
+                              <InputNumber
+                                min={0}
+                                max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                                precision={2}
+                                style={{ width: '100%' }}
+                                disabled={!(maxQty > 0)}
+                                value={toolbarPushFqcQuantity}
+                                onChange={(val) => setToolbarPushFqcQuantity(Number(val ?? 0))}
+                              />
+                            )
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
               />
             ) : (
@@ -9506,6 +11743,7 @@ const WorkOrdersPage: React.FC = () => {
       </Modal>
 
       {PrintModal}
+      {workOrderInitiatorModal}
 
       {/* 工序卡报工：与报工管理共用开始/结束/工时三向联动与提交口径 */}
       <FormModalTemplate
@@ -9562,6 +11800,7 @@ const WorkOrdersPage: React.FC = () => {
                   workOrderQuantity={Number(quickReportingWorkOrder.quantity) || 0}
                   operations={quickReportingRouteOperations}
                   workOrderId={quickReportingWorkOrder.id}
+                  workOrder={quickReportingWorkOrder}
                   unitContext={quickReportingWorkOrder}
                 />
               </Col>
@@ -9716,694 +11955,14 @@ const WorkOrdersPage: React.FC = () => {
         </>
       </FormModalTemplate>
 
-      <FormModalTemplate
-        title={isEdit ? t('app.kuaizhizao.workOrder.modalEdit') : t('app.kuaizhizao.workOrder.modalCreate')}
-        open={modalVisible}
-        loading={modalDataLoading}
-        onClose={() => {
-          setModalVisible(false)
-          setCurrentWorkOrder(null)
-          setCreateWorkOrderMode('normal')
-          setSelectedMaterialSourceInfo(null)
-          setFormProductMaterial(null)
-          setProductSourceData(null)
-          setSelectedOperations([])
-          setCreateProcessRouteId(undefined)
-          setCreateAddOperationsModalVisible(false)
-          setCreateAddOperationUuids([])
-          resetWorkOrderFormFieldValues()
-          formRef.current?.resetFields()
-        }}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        formRef={formRef}
-        grid
-      >
-        {!isEdit ? (
-          <>
-            <Col span={6}>
-              <Form.Item label={t('app.kuaizhizao.workOrder.formCreateMode')} style={{ marginBottom: 24 }}>
-                <ThemedSegmented
-                  block
-                  className="form-field-segmented"
-                  value={createWorkOrderMode}
-                  onChange={(v) => {
-                    const mode = v as 'normal' | 'peer_group'
-                    setCreateWorkOrderMode(mode)
-                    if (mode === 'peer_group') {
-                      setSelectedOperations([])
-                      const items = formRef.current?.getFieldValue('group_items')
-                      if (!items?.length) {
-                        formRef.current?.setFieldsValue({
-                          group_items: [
-                            { ...EMPTY_PEER_GROUP_ITEM },
-                            { ...EMPTY_PEER_GROUP_ITEM },
-                          ],
-                        })
-                      }
-                    } else {
-                      setSelectedOperations([])
-                      formRef.current?.setFieldsValue({
-                        process_route_id: undefined,
-                        operations: undefined,
-                        allow_operation_jump: false,
-                        over_report_mode: 'none',
-                        over_report_value: 0,
-                      })
-                    }
-                  }}
-                  options={[
-                    { label: t('app.kuaizhizao.workOrder.formCreateModeNormal'), value: 'normal' },
-                    { label: t('app.kuaizhizao.workOrder.formCreateModePeerGroup'), value: 'peer_group' },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            {createWorkOrderMode === 'normal' ? (
-              <CodeField
-                pageCode="kuaizhizao-production-work-order"
-                name="code"
-                label={t('app.kuaizhizao.workOrder.colCode')}
-                required={true}
-                autoGenerateOnCreate={!isEdit}
-                showGenerateButton={false}
-                documentId={isEdit ? currentWorkOrder?.id : undefined}
-                context={{}}
-                colProps={{ span: 6 }}
-              />
-            ) : (
-              <ProFormText
-                name="group_name"
-                label={t('app.kuaizhizao.workOrder.formGroupName')}
-                placeholder={t('app.kuaizhizao.workOrder.formGroupNamePlaceholder')}
-                colProps={{ span: 6 }}
-              />
-            )}
-            {createWorkOrderMode === 'normal' && (
-              <ProFormText
-                name="name"
-                label={t('app.kuaizhizao.workOrder.colName')}
-                placeholder={t('app.kuaizhizao.workOrder.formOptionalPlaceholder')}
-                colProps={{ span: 12 }}
-              />
-            )}
-          </>
-        ) : (
-          <>
-            <CodeField
-              pageCode="kuaizhizao-production-work-order"
-              name="code"
-              label={t('app.kuaizhizao.workOrder.colCode')}
-              required={true}
-              autoGenerateOnCreate={false}
-              showGenerateButton={false}
-              documentId={isEdit ? currentWorkOrder?.id : undefined}
-              context={{}}
-              colProps={{ span: 6 }}
-            />
-            {createWorkOrderMode === 'normal' && (
-              <ProFormText
-                name="name"
-                label={t('app.kuaizhizao.workOrder.colName')}
-                placeholder={t('app.kuaizhizao.workOrder.formOptionalPlaceholder')}
-                disabled
-                colProps={{ span: 12 }}
-              />
-            )}
-          </>
-        )}
-        <ProFormText name="production_mode" initialValue="MTS" hidden />
-
-        {!isEdit && createWorkOrderMode === 'peer_group' && (
-          <Col span={24}>
-            <Suspense fallback={<Spin />}>
-              <LazyWorkOrderPeerGroupCreateDetail processRouteList={uniqueProcessRouteList} />
-            </Suspense>
-          </Col>
-        )}
-
-        {createWorkOrderMode === 'normal' && (
-          <>
-        {/* 第二行：产品类型 6 | 产品 6 | 加载按钮 4+4+4 */}
-        {!isEdit && (
-          <Col span={6}>
-            <Form.Item label={t('app.kuaizhizao.workOrder.formProductType')} style={{ marginBottom: 24 }}>
-              <ThemedSegmented
-                block
-                className="form-field-segmented"
-                value={onlyShowMake ? 'make' : 'all'}
-                onChange={(v) => setOnlyShowMake(v === 'make')}
-                options={[
-                  { label: t('app.kuaizhizao.workOrder.formSegmentMake'), value: 'make' },
-                  { label: t('app.kuaizhizao.workOrder.formSegmentAll'), value: 'all' },
-                ]}
-              />
-            </Form.Item>
-          </Col>
-        )}
-        <Col span={isEdit ? 24 : 6}>
-          <Suspense fallback={<Spin style={{ margin: '12px 0' }} />}>
-            <LazyUniMaterialSelect
-              name="product_id"
-              label={t('app.kuaizhizao.workOrder.colProduct')}
-              placeholder={t('app.kuaizhizao.workOrder.formSelectProduct')}
-              required
-              disabled={isEdit}
-              sourceType={onlyShowMake ? 'Make' : undefined}
-              hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
-              formItemProps={{ style: { marginBottom: 24 } }}
-              fallbackOption={
-                isEdit && currentWorkOrder?.product_id
-                  ? {
-                      value: currentWorkOrder.product_id,
-                      label:
-                        `${currentWorkOrder.product_code || ''} - ${currentWorkOrder.product_name || ''}`.trim() ||
-                        String(currentWorkOrder.product_id),
-                    }
-                  : undefined
-              }
-              onChange={async (value, material) => {
-                if (value) {
-                  const productId = Number(value)
-                  setFormProductMaterial(null)
-                  // 选料后按 id 重拉物料，计划数量单位用该物料的基础单位名称
-                  let resolved =
-                    material && !Array.isArray(material) ? (material as Material) : undefined
-                  if (Number.isFinite(productId) && productId > 0) {
-                    const mats = await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, [
-                      productId,
-                    ])
-                    if (mats[0]) resolved = mats[0]
-                  }
-                  if (resolved) {
-                    setFormProductMaterial(resolved)
-                    mergeProductCache([resolved])
-                    const sourceType = resolved.sourceType || (resolved as any).source_type
-                    setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
-                    if (resolved.uuid) {
-                      loadProcessRouteForMaterial(resolved.uuid)
-                    }
-                  } else {
-                    setSelectedMaterialSourceInfo(null)
-                    setFormProductMaterial(null)
-                  }
-                } else {
-                  setSelectedMaterialSourceInfo(null)
-                  setFormProductMaterial(null)
-                }
-              }}
-            />
-          </Suspense>
-        </Col>
-        {!isEdit && (
-          <>
-            <Col span={4}>
-              <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
-                <Button
-                  block
-                  size="small"
-                  type="dashed"
-                  style={{
-                    borderStyle: 'dashed',
-                    borderColor: 'var(--ant-color-primary)',
-                    color: 'var(--ant-color-primary)',
-                    fontSize: 12,
-                  }}
-                  onClick={() => {
-                    setProductSourceModalType('sales_order')
-                    setProductSourceModalVisible(true)
-                  }}
-                >
-                  {t('app.kuaizhizao.workOrder.formLoadFromSalesOrder')}
-                </Button>
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
-                <Button
-                  block
-                  size="small"
-                  type="dashed"
-                  style={{
-                    borderStyle: 'dashed',
-                    borderColor: 'var(--ant-color-primary)',
-                    color: 'var(--ant-color-primary)',
-                    fontSize: 12,
-                  }}
-                  onClick={() => {
-                    setProductSourceModalType('sales_forecast')
-                    setProductSourceModalVisible(true)
-                  }}
-                >
-                  {t('app.kuaizhizao.workOrder.formLoadFromSalesForecast')}
-                </Button>
-              </Form.Item>
-            </Col>
-            <Col span={4}>
-              <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
-                <Space.Compact block>
-                  <Button
-                    block
-                    size="small"
-                    type="dashed"
-                    style={{
-                      borderStyle: 'dashed',
-                      borderColor: 'var(--ant-color-primary)',
-                      color: 'var(--ant-color-primary)',
-                      fontSize: 12,
-                    }}
-                    onClick={() => {
-                      setProductSourceModalType('demand')
-                      setProductSourceModalVisible(true)
-                    }}
-                  >
-                    {t('app.kuaizhizao.workOrder.formLoadFromDemand')}
-                  </Button>
-                  {productSourceData && (
-                    <Button
-                      type="link"
-                      onClick={() => {
-                        if (productSourceData.type === 'sales_order') {
-                          formRef.current?.setFieldsValue({
-                            sales_order_id: undefined,
-                            sales_order_code: undefined,
-                            sales_order_name: undefined,
-                            production_mode: 'MTS',
-                          })
-                          setProductionMode('MTS')
-                        }
-                        setProductSourceData(null)
-                      }}
-                      style={{ padding: '0 4px', minWidth: 'auto' }}
-                    >
-                      {t('common.clear')}
-                    </Button>
-                  )}
-                </Space.Compact>
-              </Form.Item>
-            </Col>
-          </>
-        )}
-        {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
-          <ProFormText
-            name="variant_attributes"
-            label={t('app.kuaizhizao.workOrder.formAttributes')}
-            placeholder={t('app.kuaizhizao.workOrder.formAttributesPlaceholder')}
-            rules={[
-              { required: true, message: t('app.kuaizhizao.workOrder.formAttributesRequired') },
-              {
-                validator: (_, value) => {
-                  if (!value) return Promise.resolve()
-                  try {
-                    const parsed = typeof value === 'string' ? JSON.parse(value) : value
-                    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-                      return Promise.reject(
-                        new Error(t('app.kuaizhizao.workOrder.formAttributesJsonInvalid'))
-                      )
-                    }
-                    return Promise.resolve()
-                  } catch {
-                    return Promise.reject(
-                      new Error(t('app.kuaizhizao.workOrder.formAttributesJsonFormatInvalid'))
-                    )
-                  }
-                },
-              },
-            ]}
-            colProps={{ span: 12 }}
-          />
-        )}
-
-        <ProFormDigit
-          name="quantity"
-          label={(() => {
-            const code = String(formProductMaterial?.baseUnit ?? '').trim()
-            if (!code) return t('app.kuaizhizao.workOrder.colPlannedQty')
-            return `${t('app.kuaizhizao.workOrder.colPlannedQty')}（${code}）`
-          })()}
-          placeholder={t('app.kuaizhizao.workOrder.formEnter')}
-          min={0}
-          precision={quantityDecimals}
-          fieldProps={{
-            formatter: (value) => {
-              if (value === undefined || value === null || value === '') return '';
-              const n = Number(value);
-              return Number.isFinite(n) ? formatQuantity(n) : String(value);
-            },
-            parser: (display) => {
-              if (display === undefined || display === null || display === '') return display as '';
-              const n = Number(String(display).replace(/,/g, ''));
-              return Number.isFinite(n) ? n : (display as string);
-            },
-          }}
-          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedQtyRequired') }]}
-          colProps={{ span: 6 }}
-        />
-        <ProFormSelect
-          name="priority"
-          label={t('app.kuaizhizao.workOrder.colPriority')}
-          options={[
-            { label: t('app.kuaizhizao.workOrder.priorityLow'), value: 'low' },
-            { label: t('app.kuaizhizao.workOrder.priorityNormal'), value: 'normal' },
-            { label: t('app.kuaizhizao.workOrder.priorityHigh'), value: 'high' },
-            { label: t('app.kuaizhizao.workOrder.priorityUrgent'), value: 'urgent' },
-          ]}
-          initialValue="normal"
-          colProps={{ span: 6 }}
-        />
-        <ProFormDatePicker
-          name="planned_start_date"
-          label={t('app.kuaizhizao.workOrder.colPlannedStart')}
-          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
-          required
-          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
-          colProps={{ span: 6 }}
-          formItemProps={{
-            ...formDateFormItemProps,
-            extra: workOrderPlannedDatesLocked
-              ? t('app.kuaizhizao.workOrder.formPlannedDatesLocked')
-              : formDateFormItemProps?.extra,
-          }}
-          fieldProps={{
-            showTime: true,
-            style: { width: '100%' },
-            format: 'YYYY-MM-DD HH:mm:ss',
-            disabled: workOrderPlannedDatesLocked,
-          }}
-        />
-        <ProFormDatePicker
-          name="planned_end_date"
-          label={t('app.kuaizhizao.workOrder.colPlannedEnd')}
-          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
-          required
-          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
-          colProps={{ span: 6 }}
-          formItemProps={{
-            ...formDateFormItemProps,
-            extra: workOrderPlannedDatesLocked
-              ? t('app.kuaizhizao.workOrder.formPlannedDatesLocked')
-              : formDateFormItemProps?.extra,
-          }}
-          fieldProps={buildFutureDateShortcutFieldProps({
-            getForm: () => formRef.current,
-            fieldName: 'planned_end_date',
-            baseFieldName: 'planned_start_date',
-            t,
-            fieldProps: {
-              showTime: true,
-              style: { width: '100%' },
-              format: 'YYYY-MM-DD HH:mm:ss',
-              disabled: workOrderPlannedDatesLocked,
-            },
-          })}
-        />
-        <ProFormDatePicker
-          name="required_date"
-          label={t('app.kuaizhizao.workOrder.formRequiredDate')}
-          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
-          colProps={{ span: 6 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-
-        <Col span={24}>
-          <Form.Item name="process_route_id" label={t('app.kuaizhizao.workOrder.colProcessRoute')} style={{ marginBottom: 16 }}>
-            <UniDropdown
-              placeholder={t('app.kuaizhizao.workOrder.formProcessRoutePlaceholder')}
-              options={uniqueProcessRouteList.map(route => ({
-                label: `${route.code} - ${route.name}`,
-                value: route.id,
-              }))}
-              disabled={isEdit && String(currentWorkOrder?.status || '') !== 'draft'}
-              showSearch
-              allowClear
-              advancedSearch={{
-                label: t('app.kuaizhizao.workOrder.formAdvancedSearch'),
-                fields: [
-                  { name: 'code', label: t('app.kuaizhizao.workOrder.formProcessRouteCode') },
-                  { name: 'name', label: t('app.kuaizhizao.workOrder.formProcessRouteName') },
-                ],
-                onSearch: async (values) => {
-                  try {
-                    const res = await processRouteApi.list({ ...values, limit: 100 });
-                    const list = Array.isArray(res) ? res : (res as any)?.data || [];
-                    return list.map((r: any) => ({
-                      value: r.id,
-                      label: `${r.code ?? ''} - ${r.name ?? ''}`.trim() || String(r.id),
-                    }));
-                  } catch {
-                    return [];
-                  }
-                },
-              }}
-              onChange={async (value) => {
-                if (value) {
-                  try {
-                    const route = uniqueProcessRouteList.find(r => r.id === value)
-                    if (!route || !route.uuid) {
-                      setCreateProcessRouteId(undefined)
-                      messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteNotFound'))
-                      return
-                    }
-                    setCreateProcessRouteId(Number(value))
-                    const routeDetail = await processRouteApi.get(route.uuid)
-                    let routeJump = Boolean(
-                      (routeDetail as any)?.allow_operation_jump ??
-                        (routeDetail as any)?.allowOperationJump ??
-                        false,
-                    )
-                    // 当前产品若有产品工艺且指向该路线，优先用产品工艺的「允许工序跳转」
-                    try {
-                      const productId = formRef.current?.getFieldValue('product_id')
-                      const mat =
-                        (productId != null
-                          ? productList.find((p: any) => Number(p.id) === Number(productId))
-                          : null) ?? formProductMaterial
-                      const matUuid = (mat as any)?.uuid
-                      if (matUuid) {
-                        const pp = await productProcessApi.get(String(matUuid))
-                        if (
-                          pp?.processRouteId != null &&
-                          Number(pp.processRouteId) === Number(value)
-                        ) {
-                          routeJump = Boolean(pp.allowOperationJump)
-                        }
-                      }
-                    } catch {
-                      // 忽略产品工艺读取失败，回退路线开关
-                    }
-                    formRef.current?.setFieldsValue({ allow_operation_jump: routeJump })
-                    const operations = parseOperationSequence(
-                      routeDetail?.operation_sequence,
-                      operationList
-                    )
-                    if (operations.length > 0) {
-                      setSelectedOperations(
-                        operations.map((op: any) => {
-                          const { id: _woOpId, ...rest } = op
-                          const isNode = Boolean(rest.is_node_operation ?? rest.isNodeOperation)
-                          return {
-                            ...rest,
-                            is_node_operation: isNode,
-                            allow_jump: routeJump && !isNode,
-                          }
-                        }),
-                      )
-                      formRef.current?.setFieldsValue({
-                        operations: operations.map((op: any) => op.operation_id),
-                      })
-                      messageApi.success(
-                        t('app.kuaizhizao.workOrder.msgOperationsLoaded', { count: operations.length })
-                      )
-                    } else {
-                      setSelectedOperations([])
-                      formRef.current?.setFieldsValue({ operations: undefined })
-                      if (routeDetail?.operation_sequence) {
-                        messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteParseFailed'))
-                      } else {
-                        messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteNoSequence'))
-                      }
-                    }
-                  } catch (error: any) {
-                    console.error('获取工艺路线工序失败:', error)
-                    messageApi.error(error.message || t('app.kuaizhizao.workOrder.msgLoadProcessRouteOpsFailed'))
-                    setCreateProcessRouteId(undefined)
-                    setSelectedOperations([])
-                    formRef.current?.setFieldsValue({ operations: undefined })
-                  }
-                } else {
-                  setCreateProcessRouteId(undefined)
-                  formRef.current?.setFieldsValue({
-                    allow_operation_jump: false,
-                  })
-                }
-              }}
-            />
-          </Form.Item>
-        </Col>
-        <Form.Item name="operations" hidden />
-        <Form.Item
-          label={t('app.kuaizhizao.workOrder.colOperations')}
-          colon
-          style={{
-            gridColumn: '1 / -1',
-            marginBottom: 24,
-            width: '100%',
-            minWidth: 0,
-            paddingLeft: 8,
-            paddingRight: 8,
-          }}
+      {!isFormPage ? (
+        <FormModalTemplate
+          {...workOrderMainFormModalProps}
+          open={modalVisible && createWorkOrderMode === 'peer_group'}
         >
-          <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
-            <Suspense
-              fallback={
-                <div style={{ padding: 24, textAlign: 'center' }}>
-                  <Spin />
-                </div>
-              }
-            >
-              <LazyCreateWorkOrderOperationsList
-                selectedOperations={selectedOperations}
-                setSelectedOperations={setSelectedOperations}
-                operationList={operationList}
-                formRef={formRef}
-                disabled={
-                  isEdit && ['completed', 'cancelled', 'split'].includes(String(currentWorkOrder?.status || ''))
-                }
-              />
-            </Suspense>
-          </div>
-          {(!isEdit ||
-            !['completed', 'cancelled', 'split'].includes(String(currentWorkOrder?.status || ''))) && (
-            <Button
-              type="dashed"
-              block
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setCreateAddOperationUuids([])
-                setCreateAddOperationsModalVisible(true)
-              }}
-              style={{
-                marginTop: 12,
-                borderStyle: 'dashed',
-                borderColor: 'var(--ant-color-primary)',
-                color: 'var(--ant-color-primary)',
-              }}
-            >
-              {t('app.kuaizhizao.workOrder.modalAddOperation')}
-            </Button>
-          )}
-        </Form.Item>
-
-        <Col span={12}>
-          <Form.Item
-            name="over_report_mode"
-            label={t('app.kuaizhizao.workOrder.formDefaultOverReport')}
-            initialValue="none"
-            style={{ marginBottom: 24 }}
-          >
-            <ThemedSegmented
-              className="form-field-segmented"
-              style={{ width: 'fit-content', maxWidth: '100%' }}
-              options={[
-                { label: t('field.operation.overReportModeNone'), value: 'none' },
-                { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
-                { label: t('field.operation.overReportModePercent'), value: 'percent' },
-              ]}
-            />
-          </Form.Item>
-        </Col>
-        <ProFormDigit
-          name="over_report_value"
-          label={formLabelWithHint(
-            t('field.operation.overReportValue'),
-            t('field.operation.overReportValueExtra')
-          )}
-          placeholder={t('app.kuaizhizao.workOrder.formEnter')}
-          colProps={{ span: 12 }}
-          min={0}
-          fieldProps={{ precision: 4 }}
-        />
-        <ProFormSwitch
-          name="allow_operation_jump"
-          label={formLabelWithHint(
-            t('app.kuaizhizao.workOrder.colAllowOpJump'),
-            t('app.kuaizhizao.workOrder.formAllowOpJumpExtra')
-          )}
-          initialValue={false}
-          colProps={{ span: 12 }}
-        />
-        {!isEdit && createWorkOrderMode === 'normal' && (
-          <ProFormDependency name={['product_id']}>
-            {({ product_id }) => (
-              <WorkOrderTrackingFields
-                formRef={formRef}
-                productId={product_id}
-                productList={productList}
-                disabled={isEdit}
-              />
-            )}
-          </ProFormDependency>
-        )}
-        {isEdit && createWorkOrderMode === 'normal' && (
-          <ProFormDependency name={['product_id']}>
-            {({ product_id }) => (
-              <WorkOrderTrackingEditFields
-                productId={product_id ?? currentWorkOrder?.product_id}
-                productList={productList}
-                workOrderStatus={currentWorkOrder?.status}
-              />
-            )}
-          </ProFormDependency>
-        )}
-        <CustomFieldsFormSection
-          customFields={workOrderFormCustomFields}
-          customFieldValues={workOrderFormCustomFieldValues}
-          gridColumns={4}
-        />
-        <DocumentAttachmentsField
-          category="work_order_attachments"
-          label={t('app.kuaizhizao.workOrder.colAttachments')}
-        />
-        <ProFormTextArea
-          name="remarks"
-          label={t('common.remark')}
-          placeholder={t('app.kuaizhizao.workOrder.formOptionalPlaceholder')}
-          fieldProps={{ rows: 3 }}
-          colProps={{ span: 24 }}
-        />
-          </>
-        )}
-
-        {!isEdit && createWorkOrderMode === 'peer_group' && (
-          <>
-            <ProFormDatePicker
-              name="planned_start_date"
-              label={t('app.kuaizhizao.workOrder.colPlannedStart')}
-              placeholder={t('app.kuaizhizao.workOrder.formSelect')}
-              required
-              rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
-              colProps={{ span: 12 }}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-            <ProFormDatePicker
-              name="planned_end_date"
-              label={t('app.kuaizhizao.workOrder.colPlannedEnd')}
-              placeholder={t('app.kuaizhizao.workOrder.formSelect')}
-              required
-              rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
-              colProps={{ span: 12 }}
-              fieldProps={buildFutureDateShortcutFieldProps({
-                getForm: () => formRef.current,
-                fieldName: 'planned_end_date',
-                baseFieldName: 'planned_start_date',
-                t,
-                fieldProps: { style: { width: '100%' } },
-              })}
-            />
-          </>
-        )}
-      </FormModalTemplate>
+          {workOrderMainModalChildren}
+        </FormModalTemplate>
+      ) : null}
 
       <Modal
         title={t('app.kuaizhizao.workOrder.modalAddOperation')}
@@ -10430,194 +11989,12 @@ const WorkOrdersPage: React.FC = () => {
         />
       </Modal>
 
-      {/* 选择产品来源文档 Modal（销售订单/销售预测/需求）- 产品明细 */}
-      <Modal
-        title={
-          productSourceModalType === 'sales_order'
-            ? t('app.kuaizhizao.workOrder.modalSelectProductSourceSalesOrder')
-            : productSourceModalType === 'sales_forecast'
-              ? t('app.kuaizhizao.workOrder.modalSelectProductSourceSalesForecast')
-              : productSourceModalType === 'demand'
-                ? t('app.kuaizhizao.workOrder.modalSelectProductSourceDemand')
-                : t('app.kuaizhizao.workOrder.modalSelectProductSourceGeneric')
-        }
-        open={productSourceModalVisible}
-        onCancel={() => {
-          setProductSourceModalVisible(false)
-          setProductSourceModalType(null)
-          setProductSourceKeyword('')
-        }}
-        footer={null}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-      >
-        <Input.Search
-          allowClear
-          enterButton={t('common.search')}
-          style={{ marginBottom: 12 }}
-          value={productSourceKeyword}
-          onChange={(e) => setProductSourceKeyword(e.target.value)}
-          onSearch={(value) => setProductSourceKeyword(value)}
-          placeholder={
-            productSourceModalType === 'sales_order'
-              ? t('app.kuaizhizao.workOrder.searchProductSourceSalesOrder')
-              : productSourceModalType === 'sales_forecast'
-                ? t('app.kuaizhizao.workOrder.searchProductSourceForecast')
-                : productSourceModalType === 'demand'
-                  ? t('app.kuaizhizao.workOrder.searchProductSourceDemand')
-                  : t('app.kuaizhizao.workOrder.searchProductSourceGeneric')
-          }
-        />
-        <Table
-          loading={productSourceDocLoading}
-          dataSource={productSourceDocList}
-          rowKey={(r: any) => r._row_key ?? `${r._doc_id}-${r.id ?? r.uuid}`}
-          size="small"
-          pagination={{ pageSize: 15 }}
-          onRow={(record: any) => ({
-            style: { cursor: 'pointer' },
-            onClick: () => {
-              const docId = record._doc_id
-              if (!docId) return
-              void (async () => {
-                try {
-                  const sourceItems = productSourceDocList.filter((r: any) => r._doc_id === docId)
-                  const materialIds = Array.from(
-                    new Set(
-                      sourceItems
-                        .map((it: any) => Number(it.material_id))
-                        .filter((id: number) => Number.isFinite(id) && id > 0),
-                    ),
-                  )
-                  const resolved =
-                    materialIds.length > 0
-                      ? await resolveMaterialFormReference(KUAIZHIZAO_DOC_HOST.workOrder, materialIds)
-                      : []
-                  if (resolved.length) mergeProductCache(resolved)
-                  const cache = [...resolved, ...productList]
-                  const itemsWithQty: {
-                    productId: number
-                    quantity: number
-                    variant_attributes?: Record<string, unknown>
-                  }[] = []
-                  const materials: any[] = []
-                  for (const it of sourceItems) {
-                    const product = cache.find(
-                      (m: any) =>
-                        Number(m.id) === Number(it.material_id) ||
-                        (m.code || m.mainCode || m.main_code) === it.material_code,
-                    )
-                    if (!product) continue
-                    const qty =
-                      productSourceModalType === 'sales_forecast'
-                        ? (it.forecast_quantity ?? 0)
-                        : (it.required_quantity ?? 0)
-                    itemsWithQty.push({
-                      productId: product.id,
-                      quantity: Number(qty) || 0,
-                      variant_attributes: it.variant_attributes ?? undefined,
-                      ...(productSourceModalType === 'sales_order' && it.delivery_date
-                        ? { deliveryDate: String(it.delivery_date).slice(0, 10) }
-                        : {}),
-                    })
-                    if (!materials.some((m: any) => Number(m.id) === Number(product.id))) {
-                      materials.push(product)
-                    }
-                  }
-                  setProductSourceData({
-                    type: productSourceModalType!,
-                    materials,
-                    items: itemsWithQty,
-                    ...(productSourceModalType === 'sales_order' && sourceItems[0]?._doc_id != null
-                      ? {
-                          salesOrderRef: {
-                            id: Number(sourceItems[0]._doc_id),
-                            code: sourceItems[0]._order_code,
-                            name:
-                              sourceItems[0]._order_code && sourceItems[0]._customer_name
-                                ? `${sourceItems[0]._order_code} - ${sourceItems[0]._customer_name}`
-                                : sourceItems[0]._order_code || sourceItems[0]._customer_name,
-                          },
-                        }
-                      : {}),
-                  })
-                  setProductSourceModalVisible(false)
-                  setProductSourceModalType(null)
-                  messageApi.success(`已加载 ${materials.length} 个产品`)
-                } catch (e: any) {
-                  messageApi.error(e?.message || '加载失败')
-                }
-              })()
-            },
-          })}
-          columns={[
-            ...(productSourceModalType === 'sales_order'
-              ? [
-                  { title: t('app.kuaizhizao.workOrder.colOrderCode'), dataIndex: '_order_code', key: '_order_code', width: 140 },
-                  { title: t('app.kuaizhizao.workOrder.colCustomer'), dataIndex: '_customer_name', key: '_customer_name', width: 160 },
-                  { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
-                  { title: t('app.kuaizhizao.workOrder.colModel'), dataIndex: 'material_spec', key: 'material_spec', width: 140 },
-                  {
-                    title: t('common.quantity'),
-                    dataIndex: 'required_quantity',
-                    key: 'required_quantity',
-                    width: 80,
-                  },
-                ]
-              : productSourceModalType === 'sales_forecast'
-                ? [
-                    {
-                      title: t('app.kuaizhizao.workOrder.colForecastCode'),
-                      dataIndex: '_forecast_code',
-                      key: '_forecast_code',
-                      width: 120,
-                    },
-                    {
-                      title: t('app.kuaizhizao.workOrder.colForecastName'),
-                      dataIndex: '_forecast_name',
-                      key: '_forecast_name',
-                      width: 120,
-                    },
-                    { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
-                    { title: t('app.kuaizhizao.workOrder.colModel'), dataIndex: 'material_spec', key: 'material_spec', width: 140 },
-                    {
-                      title: t('common.quantity'),
-                      dataIndex: 'forecast_quantity',
-                      key: 'forecast_quantity',
-                      width: 80,
-                    },
-                  ]
-                : productSourceModalType === 'demand'
-                  ? [
-                      {
-                        title: t('app.kuaizhizao.workOrder.colDemandCode'),
-                        dataIndex: '_demand_code',
-                        key: '_demand_code',
-                        width: 120,
-                      },
-                      {
-                        title: t('app.kuaizhizao.workOrder.colDemandName'),
-                        dataIndex: '_demand_name',
-                        key: '_demand_name',
-                        width: 120,
-                      },
-                      { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
-                      {
-                        title: t('app.kuaizhizao.workOrder.colModel'),
-                        dataIndex: 'material_spec',
-                        key: 'material_spec',
-                        width: 140,
-                      },
-                      {
-                        title: t('common.quantity'),
-                        dataIndex: 'required_quantity',
-                        key: 'required_quantity',
-                        width: 80,
-                      },
-                    ]
-                  : []),
-          ]}
-        />
-      </Modal>
+      <UniMaterialBatchPicker
+        open={createAddBomMaterialModalVisible}
+        hostResource={KUAIZHIZAO_DOC_HOST.workOrder}
+        onCancel={() => setCreateAddBomMaterialModalVisible(false)}
+        onConfirm={handleAppendBomMaterials}
+      />
 
       <WorkOrderDetailDrawer
         open={drawerVisible}
@@ -10670,7 +12047,7 @@ const WorkOrdersPage: React.FC = () => {
                   key: 'release',
                   visible:
                     ['draft', '草稿'].includes(workOrderDetail.status || '') &&
-                    (workOrderDetail.capabilities?.release?.allowed ?? true),
+                    workOrderDetail.capabilities?.release?.allowed === true,
                   render: () => (
                     <Button type="primary" onClick={() => handleRelease(workOrderDetail)}>
                       {t('app.kuaizhizao.workOrder.actionRelease')}

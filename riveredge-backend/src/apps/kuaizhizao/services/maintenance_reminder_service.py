@@ -16,7 +16,7 @@ from apps.kuaizhizao.models.maintenance_reminder import MaintenanceReminder
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.equipment_service import EquipmentService
-from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat, to_site_date
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -62,8 +62,9 @@ class MaintenanceReminderService:
                 if not plan.planned_start_date:
                     continue
 
-                # 计算距离到期天数
-                days_until_due = (plan.planned_start_date - now).days
+                plan_day = to_site_date(plan.planned_start_date)
+                today_site = to_site_date(now)
+                days_until_due = (plan_day - today_site).days
 
                 # 判断是否需要提醒
                 reminder_type = None
@@ -170,6 +171,10 @@ class MaintenanceReminderService:
             return (
                 f"设备 {eq_name} 的维护计划 {plan.plan_name} 已过期 "
                 f"{abs(days_until_due)} 天，请尽快处理。"
+            )
+        if days_until_due == 0:
+            return (
+                f"设备 {eq_name} 的维护计划 {plan.plan_name} 今日到期，请安排保养。"
             )
         return (
             f"设备 {eq_name} 的维护计划 {plan.plan_name} 将在 "

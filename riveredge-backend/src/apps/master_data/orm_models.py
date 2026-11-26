@@ -17,6 +17,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.master_data.models.material_code_mapping",
     "apps.master_data.models.material_market_price",
     "apps.master_data.models.material_product_process",
+    "apps.master_data.models.material_group_product_process",
     "apps.master_data.models.material_serial",
     "apps.master_data.models.partner_price_book",
     "apps.master_data.models.performance",

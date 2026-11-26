@@ -38,6 +38,8 @@ export interface UniPullQueryModalProps<T extends object> {
   confirmLoading?: boolean;
 
   selectionType?: UniPullQuerySelectionType;
+  /** 与 useUniPullQuery.defaultCrossPageMode 对齐；未传时 checkbox 默认 cross */
+  defaultCrossPageMode?: import('./UniPullQuerySelectionBar').UniPullQueryCrossPageMode;
   selectedRowKeys: React.Key[];
   onSelectedRowKeysChange: (keys: React.Key[], rows: T[]) => void;
   isRowDisabled?: (record: T) => boolean;
@@ -124,8 +126,6 @@ export interface UseUniPullQueryOptions<T extends object> {
   rowKey: string | ((record: T) => React.Key);
   loadData: (params: UniPullQueryLoadParams) => Promise<UniPullQueryLoadResult<T>>;
   onConfirm: (selectedKeys: React.Key[], selectedRows: T[]) => Promise<void>;
-  /** 取单确认 `onConfirm` 抛错时回调（避免无提示） */
-  onConfirmFailed?: (error: unknown) => void;
   isRowDisabled?: (record: T) => boolean;
   selectionType?: UniPullQuerySelectionType;
   pageSize?: number;
@@ -138,4 +138,11 @@ export interface UseUniPullQueryOptions<T extends object> {
   enableDateFilter?: boolean;
   /** 取单确认 `onConfirm` 抛错时回调（避免无提示） */
   onConfirmFailed?: (error: unknown) => void;
+  /**
+   * 多选时：搜索/日期等筛选变更是否保留已选（默认 checkbox 为 true）。
+   * 范围分段 `scope` 变更仍会清空已选。
+   */
+  preserveSelectionOnFilter?: boolean;
+  /** 多选弹窗默认跨页模式（默认 checkbox 为 cross） */
+  defaultCrossPageMode?: import('./UniPullQuerySelectionBar').UniPullQueryCrossPageMode;
 }

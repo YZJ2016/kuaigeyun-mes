@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
     PurchaseReceiptLineFinanceOccupancyService,
@@ -27,6 +28,21 @@ from apps.kuaizhizao.services.warehouse_service import (
 from infra.exceptions.exceptions import BusinessLogicError
 
 
+@pytest.fixture(autouse=True)
+def _stub_kingdee_withdraw_sync():
+    """撤回钩子：金蝶回写属外围集成，单测内 stub 掉避免触真 ORM。"""
+    with patch(
+        "apps.kuaiconnect.services.document_push.kingdee_im_warehouse_revoke_service"
+        ".sync_im_warehouse_kingdee_after_withdraw",
+        new=AsyncMock(return_value=None),
+    ), patch(
+        "apps.kuaiconnect.services.document_push.kingdee_purchase_receipt_revoke_service"
+        ".sync_purchase_receipt_kingdee_after_withdraw",
+        new=AsyncMock(return_value=None),
+    ):
+        yield
+
+
 def _po_line(**overrides):
     payload = dict(
         material_id=1,
@@ -43,12 +59,12 @@ def _po_line(**overrides):
 
 
 def test_purchase_order_line_omitted_tax_uses_header_and_explicit_zero_stays_zero():
-    omitted = _po_line()
+    with pytest.raises(ValidationError):
+        _po_line()
     explicit_zero = _po_line(tax_rate=Decimal("0"))
-    assert omitted.tax_rate is None
     assert explicit_zero.tax_rate == Decimal("0")
     assert resolve_purchase_line_tax_rate_percent(
-        line_tax_rate=omitted.tax_rate,
+        line_tax_rate=None,
         header_tax_rate=Decimal("0.13"),
     ) == Decimal("13.00")
     assert resolve_purchase_line_tax_rate_percent(

@@ -447,6 +447,11 @@ class InventoryService:
         for idx, (kind_step, key, bucket) in enumerate(steps):
             call = dict(increase_kwargs)
             posted_batch = bucket["batch_no"]
+            idempotency_key = InventoryService._withdraw_location_idempotency_key(
+                withdraw_idempotency_key,
+                "" if kind_step == "null" else str(key[0] or ""),
+                posted_batch,
+            )
             call.update(
                 tenant_id=tenant_id,
                 material_id=material_id,
@@ -454,11 +459,6 @@ class InventoryService:
                 base_quantity=bucket["base"],
                 batch_no=posted_batch,
                 exact_batch_no=True,
-                idempotency_key=InventoryService._withdraw_location_idempotency_key(
-                    withdraw_idempotency_key,
-                    "" if kind_step == "null" else str(key[0] or ""),
-                    posted_batch,
-                ),
             )
             if kind_step == "null":
                 if bucket.get("kind") == "batch":
@@ -478,7 +478,10 @@ class InventoryService:
                 call["aux_quantity_delta"] = aux_share
             if idx == 0 and serial_nos:
                 call["serial_nos"] = serial_nos
-            await InventoryService.increase_stock(**call)
+            await InventoryService.increase_stock(
+                idempotency_key=idempotency_key,
+                **call,
+            )
 
 
     @staticmethod

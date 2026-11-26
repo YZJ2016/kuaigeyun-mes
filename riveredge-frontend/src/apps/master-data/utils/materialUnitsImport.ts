@@ -5,12 +5,18 @@
 import type { TFunction } from 'i18next';
 
 import type { MaterialUnit, MaterialUnits } from '../types/material';
+import {
+  CONVERSION_TYPE_FIXED,
+  CONVERSION_TYPE_FLOATING,
+  normalizeMaterialConversionType,
+} from '../utils/materialConversionType';
 import { resolveFactoryImportHeaderIndexMap } from '../../../utils/spreadsheetImportTemplate';
 
 export interface MaterialUnitsImportRow {
   rowNum: number;
   mainCode: string;
   unit: string;
+  conversionType: MaterialUnit['conversionType'];
   numerator: number;
   denominator: number;
   scenarios: Partial<MaterialUnits['scenarios']>;
@@ -19,6 +25,7 @@ export interface MaterialUnitsImportRow {
 export interface MaterialUnitsImportColumnIndex {
   mainCode: number;
   unit: number;
+  conversionType: number;
   numerator: number;
   denominator: number;
   purchaseUnit: number;
@@ -43,6 +50,7 @@ export function buildMaterialUnitsImportColumnIndex(
   return {
     mainCode: idx('mainCode'),
     unit: idx('unit'),
+    conversionType: idx('conversionType'),
     numerator: idx('numerator'),
     denominator: idx('denominator'),
     purchaseUnit: idx('purchaseUnit'),
@@ -78,8 +86,10 @@ export function parseMaterialUnitsImportRows(
     const rowNum = i + rowOffset;
     const mainCode = cell(row, idx.mainCode);
     const unit = cell(row, idx.unit);
+    const conversionTypeRaw = cell(row, idx.conversionType);
     const numeratorRaw = cell(row, idx.numerator);
     const denominatorRaw = cell(row, idx.denominator);
+    const conversionType = normalizeMaterialConversionType(conversionTypeRaw || CONVERSION_TYPE_FIXED);
 
     if (!mainCode) {
       errors.push({
@@ -95,23 +105,27 @@ export function parseMaterialUnitsImportRows(
       });
       return;
     }
-    if (!numeratorRaw || !denominatorRaw) {
+    if (conversionType === CONVERSION_TYPE_FIXED && (!numeratorRaw || !denominatorRaw)) {
       errors.push({
         row: rowNum,
-        message: t?.('app.master-data.materials.importUnits.conversionRequired') ?? '换算分子与分母不能为空',
+        message: t?.('app.master-data.materials.importUnits.conversionRequired') ?? '固定换算须填写分子与分母',
       });
       return;
     }
 
     try {
-      const numerator = parsePositiveInt(
-        numeratorRaw,
-        t?.('app.master-data.materials.importUnits.numerator') ?? '换算分子',
-      );
-      const denominator = parsePositiveInt(
-        denominatorRaw,
-        t?.('app.master-data.materials.importUnits.denominator') ?? '换算分母',
-      );
+      let numerator = 1;
+      let denominator = 1;
+      if (conversionType === CONVERSION_TYPE_FIXED) {
+        numerator = parsePositiveInt(
+          numeratorRaw,
+          t?.('app.master-data.materials.importUnits.numerator') ?? '换算分子',
+        );
+        denominator = parsePositiveInt(
+          denominatorRaw,
+          t?.('app.master-data.materials.importUnits.denominator') ?? '换算分母',
+        );
+      }
       const scenarios: Partial<MaterialUnits['scenarios']> = {};
       const purchaseUnit = cell(row, idx.purchaseUnit);
       const saleUnit = cell(row, idx.saleUnit);
@@ -126,6 +140,7 @@ export function parseMaterialUnitsImportRows(
         rowNum,
         mainCode,
         unit,
+        conversionType,
         numerator,
         denominator,
         scenarios,
@@ -148,11 +163,15 @@ export function parseMaterialUnitsImportRows(
     }
     group.rowNums.push(row.rowNum);
     const existingUnitIdx = group.units.findIndex((u) => u.unit === row.unit);
-    const unitEntry: MaterialUnit = {
-      unit: row.unit,
-      numerator: row.numerator,
-      denominator: row.denominator,
-    };
+    const unitEntry: MaterialUnit =
+      row.conversionType === CONVERSION_TYPE_FLOATING
+        ? { unit: row.unit, conversionType: CONVERSION_TYPE_FLOATING }
+        : {
+            unit: row.unit,
+            conversionType: CONVERSION_TYPE_FIXED,
+            numerator: row.numerator,
+            denominator: row.denominator,
+          };
     if (existingUnitIdx >= 0) {
       group.units[existingUnitIdx] = unitEntry;
     } else {

@@ -30,13 +30,12 @@ import {
   type OutboundBatchAllocation,
 } from '../outbound/outboundBatchAllocation';
 import { useNumericPrecisionPlaces, buildNumericInputNumberProps, buildNumericFormRules } from '../../../../../hooks/useNumericPrecision';
-import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { useSearchParams } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, message, Table, Row, Col, Typography, Tag, Form as AntForm, Input, InputNumber, Select, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
+import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate,   useDetailDrawerDescriptionItems, detailDrawerBasicColumn, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
@@ -48,7 +47,12 @@ import { storageAreaApi, storageLocationApi } from '../../../../master-data/serv
 import dayjs from 'dayjs';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { DocumentLineUnitSelect, QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
+import {
+  buildDocumentLineAuxQuantityDetailColumn,
+  QuantityWithUnitDisplay,
+} from '../../../../../components/quantity-with-unit';
+import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -74,6 +78,16 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const INVENTORY_TRANSFER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_inventory_transfers';
+
 interface InventoryTransfer {
   id?: number;
   uuid?: string;
@@ -185,6 +199,30 @@ const InventoryTransferPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTransferId, setEditingTransferId] = useState<number | null>(null);
+
+  const {
+    customFields: inventoryTransferFormCustomFields,
+    customFieldValues: inventoryTransferFormCustomFieldValues,
+    loadFieldValues: loadInventoryTransferFormFieldValues,
+    extractFormValues: extractInventoryTransferFormValues,
+    saveCustomFieldValues: saveInventoryTransferCustomFieldValues,
+    resetFieldValues: resetInventoryTransferFormFieldValues,
+  } = useCustomFields({
+    tableName: INVENTORY_TRANSFER_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: inventoryTransferListCustomFields,
+    generateCustomFieldColumns: generateInventoryTransferCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichInventoryTransferRecordsWithCustomFields,
+    customFieldValues: inventoryTransferDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadInventoryTransferFieldValuesForDetail,
+    resetDetailFieldValues: resetInventoryTransferDetailFieldValues,
+  } = useCustomFieldsForList<InventoryTransfer>({ tableName: INVENTORY_TRANSFER_CUSTOM_FIELD_TABLE });
+
+  const inventoryTransferCustomFieldColumns = generateInventoryTransferCustomFieldColumns();
   const editOriginalItemsRef = useRef<InventoryTransferItem[]>([]);
   const pendingModalHydrationRef = useRef<
     | { kind: 'create' }
@@ -461,6 +499,7 @@ const InventoryTransferPage: React.FC = () => {
     setRowMaterialUuid({});
     setRowSerialOptionsLoading({});
     formRef.current?.resetFields();
+    resetInventoryTransferFormFieldValues();
   };
 
   const hydrateCreateModalForm = async (
@@ -480,6 +519,7 @@ const InventoryTransferPage: React.FC = () => {
       createFromWarehouseRef.current = undefined;
       setCreateTransferMode('transfer');
       setSelectedCreateWarehouseId(undefined);
+      resetInventoryTransferFormFieldValues();
       formRef.current?.resetFields();
       formRef.current?.setFieldsValue({
         transfer_date: dayjs(),
@@ -497,6 +537,8 @@ const InventoryTransferPage: React.FC = () => {
     createFromWarehouseRef.current = detail.from_warehouse_id;
     setCreateTransferMode(mode);
     setSelectedCreateWarehouseId(detail.from_warehouse_id);
+    const fieldFormValues =
+      detail.id != null ? await loadInventoryTransferFormFieldValues(detail.id) : {};
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       transfer_mode: mode,
@@ -508,6 +550,7 @@ const InventoryTransferPage: React.FC = () => {
       transfer_reason: detail.transfer_reason,
       remarks: detail.remarks,
       attachments: detail.attachments,
+      ...fieldFormValues,
       items: (detailItems.length ? detailItems : [{ ...defaultTransferItem }]).map((it) => ({
         id: it.id,
         material_id: it.material_id,
@@ -727,17 +770,18 @@ const InventoryTransferPage: React.FC = () => {
    */
   const handleCreateSubmit = async (values: any) => {
     try {
-      const mode = values.transfer_mode || 'transfer';
-      if (mode === 'transfer' && values.from_warehouse_id === values.to_warehouse_id) {
+      const { standardValues, customData } = extractInventoryTransferFormValues(values);
+      const mode = standardValues.transfer_mode || 'transfer';
+      if (mode === 'transfer' && standardValues.from_warehouse_id === standardValues.to_warehouse_id) {
         messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgSameWarehouseError'));
         throw new Error('跨仓调拨时，调出仓库和调入仓库不能相同');
       }
-      if (mode === 'bin_relocation' && values.from_warehouse_id !== values.to_warehouse_id) {
+      if (mode === 'bin_relocation' && standardValues.from_warehouse_id !== standardValues.to_warehouse_id) {
         messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBinSameWarehouseRequired'));
         throw new Error('库内移位时，调出仓库和调入仓库必须相同');
       }
 
-      const itemsWithSerials = ((values.items || []) as Record<string, unknown>[]).map((it, index) => ({
+      const itemsWithSerials = ((standardValues.items || []) as Record<string, unknown>[]).map((it, index) => ({
         ...it,
         serial_numbers: rowSerials[index] ?? parseTransferLineSerialNumbers(it.serial_numbers),
       }));
@@ -756,20 +800,20 @@ const InventoryTransferPage: React.FC = () => {
         rowBatchAllocs,
       );
       const header = {
-        from_warehouse_id: values.from_warehouse_id,
-        to_warehouse_id: values.to_warehouse_id,
+        from_warehouse_id: standardValues.from_warehouse_id,
+        to_warehouse_id: standardValues.to_warehouse_id,
       };
 
       if (isEditMode && editingTransferId) {
         await inventoryTransferApi.update(editingTransferId.toString(), {
-          from_warehouse_id: values.from_warehouse_id,
-          from_warehouse_name: values._from_warehouse_name || '',
-          to_warehouse_id: values.to_warehouse_id,
-          to_warehouse_name: values._to_warehouse_name || '',
-          transfer_date: toApiDateTimeString(values.transfer_date) ?? nowSiteDateTimeString(),
-          transfer_reason: values.transfer_reason,
-          remarks: values.remarks,
-          attachments: normalizeDocumentAttachments(values.attachments),
+          from_warehouse_id: standardValues.from_warehouse_id,
+          from_warehouse_name: standardValues._from_warehouse_name || '',
+          to_warehouse_id: standardValues.to_warehouse_id,
+          to_warehouse_name: standardValues._to_warehouse_name || '',
+          transfer_date: toApiDateTimeString(standardValues.transfer_date) ?? nowSiteDateTimeString(),
+          transfer_reason: standardValues.transfer_reason,
+          remarks: standardValues.remarks,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
           allow_same_warehouse: mode === 'bin_relocation',
         });
 
@@ -806,6 +850,7 @@ const InventoryTransferPage: React.FC = () => {
             });
           }
         }
+        await saveInventoryTransferCustomFieldValues(editingTransferId, customData);
         messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgUpdateSuccess'));
         resetCreateModalState();
         invalidateMenuBadgeCounts();
@@ -814,24 +859,30 @@ const InventoryTransferPage: React.FC = () => {
       }
 
       const payload = {
-        from_warehouse_id: values.from_warehouse_id,
-        from_warehouse_name: values._from_warehouse_name || '',
-        to_warehouse_id: values.to_warehouse_id,
-        to_warehouse_name: values._to_warehouse_name || '',
-        transfer_date: toApiDateTimeString(values.transfer_date) ?? nowSiteDateTimeString(),
-        transfer_reason: values.transfer_reason,
-        remarks: values.remarks,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        from_warehouse_id: standardValues.from_warehouse_id,
+        from_warehouse_name: standardValues._from_warehouse_name || '',
+        to_warehouse_id: standardValues.to_warehouse_id,
+        to_warehouse_name: standardValues._to_warehouse_name || '',
+        transfer_date: toApiDateTimeString(standardValues.transfer_date) ?? nowSiteDateTimeString(),
+        transfer_reason: standardValues.transfer_reason,
+        remarks: standardValues.remarks,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
         allow_same_warehouse: mode === 'bin_relocation',
         items: validItems.map((it) => buildItemPayload(it, header)),
       };
-      if (mode === 'bin_relocation') {
-        await inventoryTransferApi.createBinTransfer(payload);
-        messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgBinCreateSuccess'));
-      } else {
-        await inventoryTransferApi.create(payload);
-        messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgCreateSuccess'));
+      const created =
+        mode === 'bin_relocation'
+          ? await inventoryTransferApi.createBinTransfer(payload)
+          : await inventoryTransferApi.create(payload);
+      const recordId = Number((created as { id?: number })?.id ?? 0);
+      if (recordId > 0) {
+        await saveInventoryTransferCustomFieldValues(recordId, customData);
       }
+      messageApi.success(
+        mode === 'bin_relocation'
+          ? t('app.kuaizhizao.inventoryTransfer.msgBinCreateSuccess')
+          : t('app.kuaizhizao.inventoryTransfer.msgCreateSuccess'),
+      );
       resetCreateModalState();
       invalidateMenuBadgeCounts();
 
@@ -862,16 +913,20 @@ const InventoryTransferPage: React.FC = () => {
     setDetailDrawerVisible(true);
     setDetailLoading(true);
     setCurrentTransfer(null);
+    resetInventoryTransferDetailFieldValues();
     try {
       const detail = await inventoryTransferApi.get(record.id.toString());
       setCurrentTransfer(detail);
+      if (detail.id != null) {
+        await loadInventoryTransferFieldValuesForDetail(detail.id);
+      }
     } catch (error: any) {
       messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgGetDetailFailed'));
       setDetailDrawerVisible(false);
     } finally {
       setDetailLoading(false);
     }
-  }, [messageApi, t]);
+  }, [loadInventoryTransferFieldValuesForDetail, messageApi, resetInventoryTransferDetailFieldValues, t]);
 
   useEffect(() => {
     const idRaw = searchParams.get('id')?.trim();
@@ -1194,6 +1249,7 @@ const InventoryTransferPage: React.FC = () => {
       render: (_, record) => formatCurrencyAmount(record.total_amount),
     },
     ...buildDocumentAuditColumns<InventoryTransfer>(t),
+    ...inventoryTransferCustomFieldColumns,
     {
       title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
@@ -1249,7 +1305,7 @@ const InventoryTransferPage: React.FC = () => {
         </Space>
       ),
     },
-  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, workflowStatusValueEnum, transferModeValueEnum, canExecuteTransfer]);
+  ], WAREHOUSE_DOC_LIST_FIELD_RANK), [t, workflowStatusValueEnum, transferModeValueEnum, canExecuteTransfer, inventoryTransferCustomFieldColumns]);
 
   const getAreaOptions = (warehouseId?: number) =>
     storageAreaList
@@ -1310,6 +1366,7 @@ const InventoryTransferPage: React.FC = () => {
               <QuantityWithUnitDisplay quantity={value} unit={row.material_unit} />
             ),
           },
+          buildDocumentLineAuxQuantityDetailColumn({ t, width: 120 }),
           {
             title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),
             width: 160,
@@ -1408,7 +1465,7 @@ const InventoryTransferPage: React.FC = () => {
         showCreateButton={true}
         createButtonText={createButtonLabel}
         onCreate={handleCreate}
-        request={async (params, sort, _filter, searchFormValues) => {
+        request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           try {
             const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
             const listParams = resolveInventoryTransferListParams(searchFormValues, sort);
@@ -1426,10 +1483,14 @@ const InventoryTransferPage: React.FC = () => {
             } else if (deepLink.uuid) {
               rows = rows.filter((row) => String(row.uuid) === deepLink.uuid);
             }
+            const enriched =
+              meta?.purpose === 'prefetch'
+                ? rows
+                : await enrichInventoryTransferRecordsWithCustomFields(rows);
             return {
-              data: rows,
+              data: enriched,
               success: true,
-              total: deepLink.id || deepLink.uuid ? rows.length : total,
+              total: deepLink.id || deepLink.uuid ? enriched.length : total,
             };
           } catch {
             return { data: [], success: false, total: 0 };
@@ -1437,6 +1498,7 @@ const InventoryTransferPage: React.FC = () => {
         }}
         enableRowSelection={true}
         showDeleteButton={true}
+        deleteButtonText={t('common.delete')}
         onDelete={async (keys) => {
           try {
             for (const id of keys) {
@@ -1610,55 +1672,16 @@ const InventoryTransferPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: t('common.unit'),
-                    dataIndex: 'material_unit',
-                    width: 88,
-                    render: (_: unknown, __: unknown, index: number) => (
-                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
-                        {({ getFieldValue }: { getFieldValue: (name: string | (string | number)[]) => unknown }) => {
-                          const materialId = getFieldValue(['items', index, 'material_id']) as number | undefined;
-                          if (!formRef.current) return null;
-                          return (
-                            <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                              <DocumentLineUnitSelect
-                                form={formRef.current}
-                                listName="items"
-                                rowIndex={index}
-                                fields={{ quantity: 'quantity', unit: 'material_unit' }}
-                                materialId={materialId}
-                                size="small"
-                                noStyle
-                              />
-                            </AntForm.Item>
-                          );
-                        }}
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: t('common.quantity'),
-                    dataIndex: 'quantity',
-                    width: 100,
-                    align: 'right' as const,
-                    render: (_: unknown, __: unknown, index: number) => (
-                      <AntForm.Item
-                        name={[index, 'quantity']}
-                        rules={buildNumericFormRules('quantity', t, {
-                          required: true,
-                          min: 0.01,
-                          requiredMessage: t('app.kuaizhizao.warehouseCommon.required'),
-                          minMessage: t('app.kuaizhizao.batchingCenter.qtyGtZero'),
-                        })}
-                        style={{ margin: 0 }}
-                      >
-                        <InputNumber
-                          placeholder={t('common.quantity')}
-                          {...buildNumericInputNumberProps('quantity', quantityDecimals, { size: 'small' })}
-                        />
-                      </AntForm.Item>
-                    ),
-                  },
+                  ...buildDocumentLineDualQuantityPairColumns({
+                    t,
+                    getForm: () => formRef.current,
+                    quantityField: 'quantity',
+                    unitField: 'material_unit',
+                    scenario: 'purchase',
+                    quantityPrecision: quantityDecimals,
+                    width: 168,
+                    columnSpread: { align: 'right' as const },
+                  }),
                 ];
                 const binCols = createTransferMode === 'bin_relocation'
                   ? [
@@ -1923,6 +1946,11 @@ const InventoryTransferPage: React.FC = () => {
           placeholder={t('app.kuaizhizao.inventoryTransfer.formTransferReasonPlaceholder')}
           fieldProps={{ rows: 3 }}
         />
+        <CustomFieldsFormSection
+          customFields={inventoryTransferFormCustomFields}
+          customFieldValues={inventoryTransferFormCustomFieldValues}
+          gridColumns={2}
+        />
         <DocumentAttachmentsField category="inventory_transfer_attachments" />
         <ProFormTextArea
           name="remarks"
@@ -2162,6 +2190,7 @@ const InventoryTransferPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentTransfer(null);
+          resetInventoryTransferDetailFieldValues();
         }}
         size={DRAWER_CONFIG.HALF_WIDTH}
         basic={
@@ -2174,6 +2203,15 @@ const InventoryTransferPage: React.FC = () => {
           ) : undefined
         }
         collaboration={detailCollaboration}
+        supplementary={
+          currentTransfer &&
+          hasCustomFieldsDetailContent(inventoryTransferListCustomFields, inventoryTransferDetailCustomFieldValues) ? (
+            <CustomFieldsDetailSection
+              customFields={inventoryTransferListCustomFields}
+              customFieldValues={inventoryTransferDetailCustomFieldValues}
+            />
+          ) : undefined
+        }
         traceDocument={
           currentTransfer?.id
             ? {

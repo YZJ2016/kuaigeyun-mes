@@ -37,6 +37,9 @@ def test_downgrade_resolves_different_target_material():
     ), patch(
         "apps.master_data.models.warehouse.Warehouse.get_or_none",
         new=AsyncMock(return_value=warehouse),
+    ), patch(
+        "apps.master_data.services.sync_association_service.material_snapshot_unit_name",
+        new=AsyncMock(return_value="个"),
     ):
         result = asyncio.run(svc._resolve_downgrade_targets(1, defect))
 

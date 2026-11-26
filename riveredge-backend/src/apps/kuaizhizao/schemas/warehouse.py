@@ -54,9 +54,29 @@ class ProductionPickingBase(BaseSchema):
     notes: Optional[str] = Field(None, description="备注")
 
 
+class ProductionPickingBlankItemCreate(DocumentLineDualQuantitySchemaMixin, BaseSchema):
+    """生产领料空白建单明细行"""
+    work_order_id: Optional[int] = Field(None, description="来源工单ID（按行）")
+    work_order_code: Optional[str] = Field(None, max_length=50, description="来源工单编码（按行）")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(..., max_length=20, description="物料单位")
+    required_quantity: float = Field(..., gt=0, description="应领数量")
+    warehouse_id: int = Field(..., description="出库仓库ID")
+    warehouse_name: str = Field(..., max_length=100, description="出库仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
+    batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
+
+
 class ProductionPickingCreate(ProductionPickingBase):
     """生产领料单创建schema"""
-    pass
+    items: Optional[List[ProductionPickingBlankItemCreate]] = Field(
+        None, description="领料明细（空白建单必填）"
+    )
 
 
 class OutboundConfirmationBatchAllocation(BaseSchema):
@@ -462,13 +482,39 @@ class CustomerOutboundBatchOption(BaseSchema):
     returnable_quantity: float = Field(..., description="可退数量")
 
 
+class FinishedGoodsBlankFromWorkOrdersRequest(BaseSchema):
+    """空白成品入库 — 从多工单加载预览"""
+    work_order_ids: List[int] = Field(..., min_length=1, description="工单 ID 列表")
+
+
+class FinishedGoodsBlankFromWorkOrdersLine(BaseSchema):
+    """空白成品入库 — 工单加载明细行"""
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., description="工单编码")
+    work_order_quantity: float = Field(..., description="工单计划数量")
+    received_quantity: float = Field(..., description="已缴库数量")
+    receipt_quantity: float = Field(..., description="本次入库数量默认")
+    material_id: int = Field(..., description="产品物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    material_spec: Optional[str] = Field(None, description="物料规格")
+    material_model: Optional[str] = Field(None, description="物料型号")
+    material_unit: str = Field(..., description="单位")
+
+
+class FinishedGoodsBlankFromWorkOrdersResponse(BaseSchema):
+    """空白成品入库 — 从工单加载预览响应"""
+    items: List[FinishedGoodsBlankFromWorkOrdersLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")
+
+
 # === 成品入库单 ===
 
 class FinishedGoodsReceiptBase(BaseSchema):
     """成品入库单基础schema"""
     receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，如果不提供则自动生成）")
-    work_order_id: int = Field(..., description="工单ID")
-    work_order_code: str = Field(..., max_length=50, description="工单编码")
+    work_order_id: Optional[int] = Field(None, description="工单ID（空白建单可空；勿传0）")
+    work_order_code: str = Field("", max_length=50, description="工单编码（手动创建时为空）")
     sales_order_id: Optional[int] = Field(None, description="销售订单ID")
     sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
     warehouse_id: int = Field(..., description="入库仓库ID")
@@ -492,10 +538,13 @@ class FinishedGoodsReceiptCreate(FinishedGoodsReceiptBase):
 
 
 class FinishedGoodsReceiptUpdate(FinishedGoodsReceiptBase):
+    """成品入库单更新schema（待入库可改表头与明细）"""
+    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
     warehouse_id: Optional[int] = Field(None, description="入库仓库ID")
     warehouse_name: Optional[str] = Field(None, max_length=100, description="入库仓库名称")
-    """成品入库单更新schema"""
-    receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
+    items: Optional[List["FinishedGoodsReceiptItemCreate"]] = Field(
+        None, description="入库明细列表（传入时全量替换，仅待入库/草稿可改）"
+    )
 
 
 class FinishedGoodsReceiptResponse(FinishedGoodsReceiptBase):
@@ -547,6 +596,8 @@ class FinishedGoodsReceiptWithItemsResponse(FinishedGoodsReceiptResponse):
 
 class FinishedGoodsReceiptItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     """成品入库单明细基础schema"""
+    work_order_id: Optional[int] = Field(None, description="来源工单ID（按行）")
+    work_order_code: Optional[str] = Field(None, max_length=50, description="来源工单编码（按行）")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")
     material_name: str = Field(..., max_length=200, description="物料名称")
@@ -564,6 +615,7 @@ class FinishedGoodsReceiptItemBase(DocumentLineDualQuantitySchemaMixin, BaseSche
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     expiry_date: Optional[datetime] = Field(None, description="到期日期")
     quality_status: str = Field("合格", max_length=20, description="质量状态")
     quality_inspection_id: Optional[int] = Field(None, description="质量检验单ID")
@@ -599,8 +651,8 @@ class FinishedGoodsReceiptItemResponse(FinishedGoodsReceiptItemBase):
 class SemiFinishedGoodsReceiptBase(BaseSchema):
     """半成品入库单基础 schema"""
     receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，如果不提供则自动生成）")
-    work_order_id: int = Field(..., description="工单ID")
-    work_order_code: str = Field(..., max_length=50, description="工单编码")
+    work_order_id: Optional[int] = Field(None, description="工单ID（空白建单可空；勿传0）")
+    work_order_code: str = Field("", max_length=50, description="工单编码（手动创建时为空）")
     sales_order_id: Optional[int] = Field(None, description="销售订单ID")
     sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
     warehouse_id: int = Field(..., description="入库仓库ID")
@@ -626,6 +678,9 @@ class SemiFinishedGoodsReceiptCreate(SemiFinishedGoodsReceiptBase):
 class SemiFinishedGoodsReceiptUpdate(SemiFinishedGoodsReceiptBase):
     """半成品入库单更新 schema"""
     receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码")
+    items: Optional[List["SemiFinishedGoodsReceiptItemCreate"]] = Field(
+        None, description="入库明细列表（传入则全量替换，仅待入库/草稿可改）"
+    )
 
 
 class SemiFinishedGoodsReceiptResponse(SemiFinishedGoodsReceiptBase):
@@ -755,6 +810,11 @@ class SalesDeliveryBase(BaseSchema):
     status: str = Field("待出库", max_length=20, description="出库状态")
     total_quantity: float = Field(0, ge=0, description="总出库数量")
     total_amount: float = Field(0, ge=0, description="总金额")
+    price_type: Optional[str] = Field(
+        "tax_inclusive",
+        max_length=20,
+        description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)",
+    )
     currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码")
     exchange_rate: Decimal = Field(default=Decimal("1"), gt=0, description="汇率（相对本位币）")
     payment_method_code: Optional[str] = Field(None, max_length=50, description="付款方式")
@@ -795,6 +855,8 @@ class SalesDeliveryItemEditLine(DocumentLineDualQuantitySchemaMixin, BaseSchema)
     """销售出库单明细编辑行（确认出库前）"""
     id: int = Field(..., description="明细ID")
     delivery_quantity: Optional[float] = Field(None, gt=0, description="出库数量")
+    unit_price: Optional[float] = Field(None, ge=0, description="单价")
+    tax_rate: Optional[float] = Field(None, ge=0, le=100, description="税率（%）")
     warehouse_id: Optional[int] = Field(None, description="行出库仓库ID（对齐金蝶分录）")
     warehouse_name: Optional[str] = Field(None, max_length=100, description="行出库仓库名称")
     location_id: Optional[int] = Field(None, description="库位ID")
@@ -813,11 +875,14 @@ class SalesDeliveryUpdate(BaseSchema):
     delivery_code: Optional[str] = Field(None, max_length=50, description="出库单编码")
     customer_id: Optional[int] = Field(None, description="客户ID")
     customer_name: Optional[str] = Field(None, max_length=200, description="客户名称")
+    customer_contact: Optional[str] = Field(None, max_length=100, description="客户联系人")
+    customer_phone: Optional[str] = Field(None, max_length=50, description="客户电话")
     warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
     warehouse_name: Optional[str] = Field(None, max_length=100, description="出库仓库名称")
     delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
     deliverer_id: Optional[int] = Field(None, description="出库人ID")
     deliverer_name: Optional[str] = Field(None, max_length=100, description="出库人姓名")
+    price_type: Optional[str] = Field(None, max_length=20, description="价格类型")
     shipping_method: Optional[str] = Field(None, max_length=50, description="发货方式")
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="收货地址")
@@ -901,6 +966,7 @@ class SalesDeliveryItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     material_unit: str = Field(..., max_length=20, description="物料单位")
     delivery_quantity: float = Field(..., gt=0, description="出库数量")
     unit_price: float = Field(..., ge=0, description="单价")
+    tax_rate: float = Field(..., ge=0, le=100, description="税率（%，必填）")
     total_amount: float = Field(..., ge=0, description="金额")
     is_gift: bool = Field(False, description="是否赠品")
     gift_ref_unit_price: Optional[float] = Field(None, ge=0, description="赠品参考单价")
@@ -1080,7 +1146,7 @@ class PurchaseReceiptItemBase(DocumentLineDualQuantitySchemaMixin, BaseSchema):
     total_amount: float = Field(..., ge=0, description="金额")
     tax_amount: Optional[float] = Field(None, ge=0, description="行税额（rollup 写回）")
     net_amount: Optional[float] = Field(None, ge=0, description="行价税合计（rollup 写回）")
-    tax_rate: Optional[float] = Field(None, ge=0, description="行税率（百分比）")
+    tax_rate: float = Field(..., ge=0, le=100, description="行税率（百分比，必填）")
     qualified_quantity: float = Field(..., ge=0, description="合格数量")
     unqualified_quantity: float = Field(..., ge=0, description="不合格数量")
     quality_status: str = Field("合格", max_length=20, description="质量状态")
@@ -1388,7 +1454,11 @@ class PurchaseReturnBase(BaseSchema):
     # 退货原因
     return_reason: Optional[str] = Field(None, max_length=200, description="退货原因")
     return_type: str = Field("质量问题", max_length=20, description="退货类型（质量问题/供应商取消/其他）")
-    
+    replenish: bool = Field(
+        False,
+        description="是否补货（是则采购订单可再次下推采购入库）",
+    )
+
     status: str = Field("待退货", max_length=20, description="退货状态")
     total_quantity: float = Field(0, ge=0, description="总退货数量")
     total_amount: float = Field(0, ge=0, description="总金额")
@@ -1767,6 +1837,7 @@ class OtherOutboundItemEditLine(DocumentLineDualQuantitySchemaMixin, BaseSchema)
         None,
         description="多批号分摊；保存时按批拆明细",
     )
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     notes: Optional[str] = Field(None, description="明细备注")
 
 

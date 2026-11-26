@@ -85,6 +85,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderKittingAnalysisResponse,
     WorkOrderRemindBatchingRequest,
     WorkOrderRemindBatchingResponse,
+    WorkOrderBomLinePreviewRequest,
+    WorkOrderBomLineResponse,
     WorkOrderTrackingPreviewRequest,
     WorkOrderTrackingPreviewResponse,
     WorkOrderConfirmTrackingRequest,
@@ -296,6 +298,29 @@ async def create_work_order(
         tenant_id=tenant_id,
         work_order_data=work_order,
         created_by=current_user.id
+    )
+
+
+@router.post(
+    "/work-orders/bom-lines/preview",
+    response_model=List[WorkOrderBomLineResponse],
+    summary="Preview work order BOM component lines",
+)
+async def preview_work_order_bom_lines(
+    body: WorkOrderBomLinePreviewRequest,
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[WorkOrderBomLineResponse]:
+    from apps.kuaizhizao.services.work_order_bom_line_service import WorkOrderBomLineService
+
+    existing = [line.model_dump() for line in (body.lines or [])]
+    return await WorkOrderBomLineService().expand_bom_lines_for_form(
+        tenant_id,
+        product_id=body.product_id,
+        quantity=body.quantity,
+        product_bom_version=body.product_bom_version,
+        variant_attributes=body.variant_attributes,
+        configurable_selections=body.configurable_selections,
+        existing_lines=existing,
     )
 
 

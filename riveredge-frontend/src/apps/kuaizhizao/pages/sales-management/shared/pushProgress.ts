@@ -244,6 +244,24 @@ export function incomingInspectionReturnPushPercent(
   return ratioToPushProgressPercent(Number(pushedQty ?? 0), total);
 }
 
+/** 来料检验下推进度：合格走入库，不合格走退货 */
+export function incomingInspectionDownstreamPushPercent(row: {
+  qualified_quantity?: number | string | null;
+  unqualified_quantity?: number | string | null;
+  pushed_inbound_quantity?: number | string | null;
+  pushed_purchase_return_quantity?: number | string | null;
+}): number {
+  const qualified = Number(row.qualified_quantity ?? 0);
+  const unqualified = Number(row.unqualified_quantity ?? 0);
+  if (qualified > 0) {
+    return finishedGoodsInboundPushPercent(row.pushed_inbound_quantity, qualified);
+  }
+  return incomingInspectionReturnPushPercent(
+    row.pushed_purchase_return_quantity,
+    unqualified,
+  );
+}
+
 /** 成品检验 → 返工单 */
 export function finishedGoodsReworkPushPercent(
   pushedQty?: number | string | null,

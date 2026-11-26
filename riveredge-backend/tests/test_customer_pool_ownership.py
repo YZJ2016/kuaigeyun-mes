@@ -18,6 +18,16 @@ from infra.models.user import User
 
 
 class _FakeCustomer:
+    # audit_actor.model_has_field 依赖 Tortoise `_meta.fields_map` 判定字段存在性
+    _meta = SimpleNamespace(
+        fields_map={
+            "created_by": object(),
+            "created_by_name": object(),
+            "updated_by": object(),
+            "updated_by_name": object(),
+        }
+    )
+
     def __init__(self, **kwargs):
         self.id = kwargs.get("id", 1)
         self.uuid = kwargs.get("uuid", "cust-uuid")

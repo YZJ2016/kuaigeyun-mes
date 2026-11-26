@@ -10,7 +10,6 @@ if (-not (Test-Path (Join-Path $script:ProjectRoot 'riveredge-backend'))) {
 
 $script:BackendDir = Join-Path $script:ProjectRoot 'riveredge-backend'
 $script:FrontendDir = Join-Path $script:ProjectRoot 'riveredge-frontend'
-# H5 产物安装只走 bash ./fast-deploy/deploy.sh install-h5；PS1 侧仅用此目录写占位页与渲染 Caddy 变量，不复制产物
 $script:MobileAppDir = Join-Path $script:ProjectRoot 'riveredge-app\mobile'
 $script:MobileWebDir = Join-Path $script:MobileAppDir 'web-dist'
 $script:EnvFile = Join-Path $script:BackendDir '.env'
@@ -78,6 +77,7 @@ function Load-DeployEnv {
         $script:CADDY_EXTRA_PROXIES_FILE = Join-Path $script:FastDeployDir 'config\caddy-extra-proxies.list'
     }
     if (-not $script:NODE_BUILD_MEM) { $script:NODE_BUILD_MEM = 4096 }
+    if (-not $script:ALLOW_SERVER_BUILD) { $script:ALLOW_SERVER_BUILD = '0' }
     if (-not $script:SERVER_IP) { $script:SERVER_IP = '' }
     if (-not $script:TASKIQ_WORKERS) {
         if ($script:DeployMode -eq 'prod') { $script:TASKIQ_WORKERS = 1 } else { $script:TASKIQ_WORKERS = 2 }
@@ -108,11 +108,47 @@ function Apply-CN-Mirrors {
         # 默认清华：阿里云对 uv.lock hash 路径 .whl.metadata 常 404
         $env:UV_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/'
     }
+    if (-not $env:UV_PYTHON_INSTALL_MIRROR) {
+        $env:UV_PYTHON_INSTALL_MIRROR = 'https://registry.npmmirror.com/-/binary/python-build-standalone'
+    }
     $env:npm_config_registry = 'https://registry.npmmirror.com'
     if (Get-Command npm -ErrorAction SilentlyContinue) {
         npm config set registry https://registry.npmmirror.com 2>$null
     }
-    Write-LogInfo "已启用国内镜像 (uv=$($env:UV_INDEX_URL)；npm=npmmirror)"
+    Write-LogInfo "已启用国内镜像 (uv=$($env:UV_INDEX_URL)；python=$($env:UV_PYTHON_INSTALL_MIRROR)；npm=npmmirror)"
+}
+
+function Resolve-SystemPython311 {
+    foreach ($c in @('python3.11', 'python')) {
+        if (-not (Get-Command $c -ErrorAction SilentlyContinue)) { continue }
+        $ver = & $c -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>$null
+        if ($ver -eq '3.11') { return $c }
+    }
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        $ver = & py -3.11 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>$null
+        if ($ver -eq '3.11') { return 'py -3.11' }
+    }
+    return $null
+}
+
+function Ensure-BackendPythonForUv {
+    if ($env:UV_PYTHON) { return }
+    $py = Resolve-SystemPython311
+    if ($py) {
+        $env:UV_PYTHON = $py
+        Write-LogInfo "uv 使用系统 Python 3.11: $py"
+        return
+    }
+    Apply-CN-Mirrors
+    $uv = Resolve-Uv
+    Write-LogInfo "未检测到 Python 3.11，uv 预装托管解释器（镜像: $($env:UV_PYTHON_INSTALL_MIRROR)）..."
+    & $uv python install 3.11
+    if ($LASTEXITCODE -eq 0) {
+        $env:UV_PYTHON = '3.11'
+        Write-LogOk 'uv 托管 Python 3.11 已安装'
+    } else {
+        Write-LogWarn 'uv python install 3.11 失败；可手动设置 UV_PYTHON_INSTALL_MIRROR 后重试'
+    }
 }
 
 function Detect-ServerIp {
@@ -219,15 +255,47 @@ function Resolve-Uv {
         "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts\uv.exe"
     )
     foreach ($p in $candidates) { if (Test-Path $p) { return $p } }
+    foreach ($root in @(
+        (Join-Path $env:APPDATA 'Python'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python')
+    )) {
+        if (-not (Test-Path $root)) { continue }
+        foreach ($dir in Get-ChildItem $root -Directory -Filter 'Python*' -ErrorAction SilentlyContinue) {
+            $exe = Join-Path $dir.FullName 'Scripts\uv.exe'
+            if (Test-Path $exe) { return $exe }
+        }
+    }
     return 'uv'
+}
+
+function Get-BackendVenvPython {
+    $p = Join-Path $script:BackendDir '.venv\Scripts\python.exe'
+    if (Test-Path -LiteralPath $p) { return $p }
+    return $null
+}
+
+function Start-BackendPythonBackground {
+    param(
+        [string]$Name,
+        [string[]]$PythonArguments,
+        [hashtable]$EnvVars
+    )
+    $venvPy = Get-BackendVenvPython
+    if ($venvPy) {
+        Start-ProcessBackground $Name $venvPy $PythonArguments $EnvVars
+    } else {
+        $uv = Resolve-Uv
+        Start-ProcessBackground $Name $uv (@('run', '--extra', 'pdf') + $PythonArguments) $EnvVars
+    }
 }
 
 function Resolve-Caddy {
     if ($env:RIVEREDGE_CADDY -and (Test-Path -LiteralPath $env:RIVEREDGE_CADDY)) { return $env:RIVEREDGE_CADDY }
     if ($env:CADDY_BIN -and (Test-Path -LiteralPath $env:CADDY_BIN)) { return $env:CADDY_BIN }
-    if (Get-Command caddy -ErrorAction SilentlyContinue) { return (Get-Command caddy).Source }
     $bundled = Join-Path $script:FastDeployDir '.tools\caddy\caddy.exe'
-    if (Test-Path $bundled) { return $bundled }
+    if (Test-Path -LiteralPath $bundled) { return $bundled }
+    $cmd = Get-Command caddy.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($cmd -and $cmd.Path) { return $cmd.Path }
     return $null
 }
 
@@ -1436,6 +1504,7 @@ function Ensure-PlaywrightChromiumPostInstall {
 function Sync-BackendDeps {
     if ($script:BackendDepsSynced) { return }
     Apply-CN-Mirrors
+    Ensure-BackendPythonForUv
     Write-LogInfo '同步 Python 依赖...'
     $uv = Resolve-Uv
     Push-Location $script:BackendDir
@@ -1489,7 +1558,13 @@ function Ensure-SensitiveLexiconPack {
     Push-Location $script:BackendDir
     try {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
-        & $uv run python scripts/pack_sensitive_words.py
+        $venvPy = Get-BackendVenvPython
+        if ($venvPy) {
+            & $venvPy scripts/pack_sensitive_words.py
+        } else {
+            $uv = Resolve-Uv
+            & $uv run python scripts/pack_sensitive_words.py
+        }
         if ($LASTEXITCODE -ne 0) {
             throw '生成 lexicon.pack 失败。检查出网或手动执行: cd riveredge-backend; uv run python scripts/pack_sensitive_words.py'
         }
@@ -1738,9 +1813,14 @@ function Invoke-Migrate {
         if (-not $env:UV_INDEX_URL) {
             $env:UV_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/'
         }
-        Write-LogInfo "uv run aerich（no-sync, index=$($env:UV_INDEX_URL)）"
-        # --no-sync：deps 已 sync；避免 uv run 再按失败镜像拉 .whl.metadata
-        & $uv run --no-sync aerich upgrade
+        $venvPy = Join-Path $script:BackendDir '.venv\Scripts\python.exe'
+        if (Test-Path -LiteralPath $venvPy) {
+            Write-LogInfo '.venv python -m aerich.cli upgrade（绕过 uv run trampoline）'
+            & $venvPy -m aerich.cli upgrade
+        } else {
+            Write-LogInfo "uv run python -m aerich.cli upgrade（no-sync, index=$($env:UV_INDEX_URL)）"
+            & $uv run --no-sync python -m aerich.cli upgrade
+        }
         if ($LASTEXITCODE -ne 0) { throw '数据库迁移失败' }
     } finally { Pop-Location }
     Ensure-IndRelayTables804
@@ -1759,61 +1839,6 @@ function Ensure-FrontendDeps {
     }
 }
 
-function Precompress-WebDist {
-    param([string]$Root)
-    if (-not $Root) { $Root = Join-Path $script:FrontendDir 'dist' }
-    if (-not (Test-Path -LiteralPath $Root)) { return }
-    Add-Type -AssemblyName System.IO.Compression -ErrorAction SilentlyContinue
-    $skip = @{
-        '.gz' = $true; '.br' = $true; '.png' = $true; '.jpg' = $true; '.jpeg' = $true
-        '.webp' = $true; '.gif' = $true; '.ico' = $true; '.woff' = $true; '.woff2' = $true
-        '.mp4' = $true; '.zip' = $true
-    }
-    $brotliType = [type]::GetType('System.IO.Compression.BrotliStream, System.IO.Compression')
-    $gzN = 0
-    $brN = 0
-    foreach ($file in (Get-ChildItem -LiteralPath $Root -Recurse -File)) {
-        $ext = $file.Extension.ToLowerInvariant()
-        if ($skip.ContainsKey($ext)) { continue }
-        if ($file.Length -le 10240) { continue }
-        $src = $file.FullName
-        $gzPath = $src + '.gz'
-        $needGz = -not (Test-Path -LiteralPath $gzPath) -or ($file.LastWriteTimeUtc -gt (Get-Item -LiteralPath $gzPath).LastWriteTimeUtc)
-        if ($needGz) {
-            $inStream = [System.IO.File]::OpenRead($src)
-            try {
-                $tmp = $gzPath + '.tmp'
-                $outStream = [System.IO.File]::Create($tmp)
-                try {
-                    $gzip = New-Object System.IO.Compression.GZipStream($outStream, [System.IO.Compression.CompressionLevel]::Optimal)
-                    try { $inStream.CopyTo($gzip) } finally { $gzip.Dispose() }
-                } finally { $outStream.Dispose() }
-                Move-Item -LiteralPath $tmp -Destination $gzPath -Force
-            } finally { $inStream.Dispose() }
-            $gzN++
-        }
-        if ($null -eq $brotliType) { continue }
-        $brPath = $src + '.br'
-        $needBr = -not (Test-Path -LiteralPath $brPath) -or ($file.LastWriteTimeUtc -gt (Get-Item -LiteralPath $brPath).LastWriteTimeUtc)
-        if ($needBr) {
-            $inStream = [System.IO.File]::OpenRead($src)
-            try {
-                $tmp = $brPath + '.tmp'
-                $outStream = [System.IO.File]::Create($tmp)
-                try {
-                    $brotli = New-Object System.IO.Compression.BrotliStream($outStream, [System.IO.Compression.CompressionLevel]::Fastest)
-                    try { $inStream.CopyTo($brotli) } finally { $brotli.Dispose() }
-                } finally { $outStream.Dispose() }
-                Move-Item -LiteralPath $tmp -Destination $brPath -Force
-            } finally { $inStream.Dispose() }
-            $brN++
-        }
-    }
-    if ($gzN -gt 0 -or $brN -gt 0) {
-        Write-LogOk "已生成 Caddy 预压缩 gzip=$gzN brotli=$brN（$Root）"
-    }
-}
-
 function Invoke-Build {
     Ensure-FrontendDeps
     Write-LogInfo '构建 Web 前端...'
@@ -1825,14 +1850,26 @@ function Invoke-Build {
     } finally { Pop-Location }
     if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) { throw '缺少 dist/index.html' }
     if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\login.html'))) { throw '缺少 dist/login.html（登录 MPA）' }
-    Precompress-WebDist (Join-Path $script:FrontendDir 'dist')
     Write-LogOk '前端构建完成'
 }
 
 function Ensure-FrontendDist {
-    # dist 不再入库，部署机每次 update 现构建；需 Node 与约 NODE_BUILD_MEM MB 内存。
     Load-DeployEnv
-    Invoke-Build
+    $index = Join-Path $script:FrontendDir 'dist\index.html'
+    $login = Join-Path $script:FrontendDir 'dist\login.html'
+    if ($script:ALLOW_SERVER_BUILD -eq '1') {
+        Write-LogWarn 'ALLOW_SERVER_BUILD=1，执行服务器构建（内存占用高，不推荐）...'
+        Invoke-Build
+        return
+    }
+    if (Test-Path $index) {
+        if (-not (Test-Path $login)) {
+            throw '缺少 dist/login.html（登录 MPA）。请重新执行 fast-deploy/build.web.sh 并推送'
+        }
+        Write-LogOk '已检测到 Web dist（含 login.html），跳过服务器构建'
+        return
+    }
+    throw '缺少 dist/index.html。请在 Git Bash 执行 install-web-dist 拉取已发布静态前端，或设置 ALLOW_SERVER_BUILD=1 在本机构建'
 }
 
 function Sync-ProdAppUrls {
@@ -1869,8 +1906,8 @@ function Write-MobileWebDistPlaceholder {
 </head>
 <body>
   <h1>移动端 H5 尚未安装</h1>
-  <p>主仓已正常运行。手机 H5 挂在 /mobile。请先在本机用 HBuilderX 发行 Web，产物目录为 <code>unpackage/dist/build/web</code>。</p>
-  <p>有产物后安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
+  <p>主仓已正常运行。手机端为可选扩展，需私仓 <code>kuaigeyun-client</code>。</p>
+  <p>安装：<code>./fast-deploy/deploy.sh install-h5</code><br />
   或向导菜单 <strong>[4] 扩展应用 → [3] 安装 H5</strong></p>
 </body>
 </html>
@@ -1883,7 +1920,7 @@ function Write-MobileWebDistPlaceholder {
 function Ensure-MobileWebDist {
     $index = Join-Path $script:MobileWebDir 'index.html'
     if (Test-Path $index) { return }
-    Write-LogWarn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时先用 HBuilderX 发行 Web，再执行 ./fast-deploy/deploy.sh install-h5"
+    Write-LogWarn "未部署移动端 H5（可选扩展）。主仓继续启动；需要时执行 ./fast-deploy/deploy.sh install-h5"
     Write-MobileWebDistPlaceholder
 }
 
@@ -2078,15 +2115,16 @@ function Start-BackendDev {
     }
     Stop-Port $script:BACKEND_PORT
     Write-LogInfo "启动后端 (dev, :$($script:BACKEND_PORT))..."
-    $uv = Resolve-Uv
     Push-Location $script:BackendDir
     try {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
         $env:SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
         $env:HOST = '0.0.0.0'
         $env:PORT = "$($script:BACKEND_PORT)"
-        $args = @('run','--extra','pdf','python','scripts/run_dev_server.py')
-        $backendProcId = Start-ProcessBackground 'backend' $uv $args @{ PYTHONPATH = $env:PYTHONPATH; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir; HOST = $env:HOST; PORT = $env:PORT; WORKDIR = $script:BackendDir }
+        Start-BackendPythonBackground 'backend' @('scripts/run_dev_server.py') @{
+            PYTHONPATH = $env:PYTHONPATH; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
+            HOST = $env:HOST; PORT = $env:PORT; WORKDIR = $script:BackendDir
+        }
     } finally { Pop-Location }
     $retries = 0
     while ($retries -lt $script:BackendStartTimeout) {
@@ -2106,13 +2144,15 @@ function Start-WorkerDev {
     Push-Location $script:BackendDir
     try {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
-        $wArgs = @('run','--extra','pdf','taskiq','worker','core.tasks.taskiq_app:broker',
-            '--workers',"$($script:TASKIQ_WORKERS)",
-            'core.tasks.taskiq_app','core.tasks.ai_tasks','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers')
-        Start-ProcessBackground 'worker' $uv $wArgs @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
-        $sArgs = @('run','--extra','pdf','taskiq','scheduler','core.tasks.taskiq_app:scheduler',
-            'core.tasks.taskiq_app')
-        Start-ProcessBackground 'scheduler' $uv $sArgs @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
+        Start-BackendPythonBackground 'worker' @(
+            '-m', 'taskiq', 'worker', 'core.tasks.taskiq_app:broker',
+            '--workers', "$($script:TASKIQ_WORKERS)",
+            'core.tasks.taskiq_app', 'core.tasks.ai_tasks', 'core.tasks.worker_bootstrap', 'core.tasks.data_backup_handlers'
+        ) @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
+        Start-BackendPythonBackground 'scheduler' @(
+            '-m', 'taskiq', 'scheduler', 'core.tasks.taskiq_app:scheduler',
+            'core.tasks.taskiq_app'
+        ) @{ PYTHONPATH = $env:PYTHONPATH; WORKDIR = $script:BackendDir }
     } finally { Pop-Location }
     Write-LogOk 'Taskiq 已启动'
 }
@@ -2154,10 +2194,10 @@ function Start-BackendProd {
     }
     Sync-BackendDeps
     Write-LogInfo "启动后端 (prod, :$($script:BACKEND_PORT))..."
-    $uv = Resolve-Uv
     Set-PlaywrightEnv
-    $args = @('run','--extra','pdf','uvicorn','server.main:app','--host','127.0.0.1',"--port",$script:BACKEND_PORT,'--workers','1')
-    Start-ProcessBackground 'backend' $uv $args @{
+    Start-BackendPythonBackground 'backend' @(
+        '-m', 'uvicorn', 'server.main:app', '--host', '127.0.0.1', "--port", $script:BACKEND_PORT, '--workers', '1'
+    ) @{
         PORT = $script:BACKEND_PORT; HOST = '127.0.0.1'; ENVIRONMENT = 'production'; DEBUG = 'false'
         SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir; PYTHONPATH = (Join-Path $script:BackendDir 'src')
         PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH; WORKDIR = $script:BackendDir
@@ -2171,20 +2211,18 @@ function Start-BackendProd {
 
 function Start-WorkerProd {
     Sync-BackendDeps
-    $uv = Resolve-Uv
     $workerPidFile = Join-Path $script:LogsDir 'worker.pid'
     $workerLogFile = Join-Path $script:LogsDir 'worker.log'
     if (-not (Test-PidFileAlive $workerPidFile)) {
         Remove-Item $workerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Worker...'
         Set-PlaywrightEnv
-        $args = @(
-            'run','--extra','pdf','taskiq','worker','--app-dir','src',
-            '--workers',"$($script:TASKIQ_WORKERS)",
+        Start-BackendPythonBackground 'worker' @(
+            '-m', 'taskiq', 'worker', '--app-dir', 'src',
+            '--workers', "$($script:TASKIQ_WORKERS)",
             'core.tasks.taskiq_app:broker',
-            'core.tasks.taskiq_app','core.tasks.ai_tasks','core.tasks.worker_bootstrap','core.tasks.data_backup_handlers'
-        )
-        Start-ProcessBackground 'worker' $uv $args @{
+            'core.tasks.taskiq_app', 'core.tasks.ai_tasks', 'core.tasks.worker_bootstrap', 'core.tasks.data_backup_handlers'
+        ) @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
             PYTHONPATH = (Join-Path $script:BackendDir 'src'); PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH
             WORKDIR = $script:BackendDir
@@ -2199,11 +2237,10 @@ function Start-WorkerProd {
         Remove-Item $schedulerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Scheduler...'
         Set-PlaywrightEnv
-        $args = @(
-            'run','--extra','pdf','taskiq','scheduler','--app-dir','src',
-            'core.tasks.taskiq_app:scheduler','core.tasks.taskiq_app'
-        )
-        Start-ProcessBackground 'scheduler' $uv $args @{
+        Start-BackendPythonBackground 'scheduler' @(
+            '-m', 'taskiq', 'scheduler', '--app-dir', 'src',
+            'core.tasks.taskiq_app:scheduler', 'core.tasks.taskiq_app'
+        ) @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
             PYTHONPATH = (Join-Path $script:BackendDir 'src'); PLAYWRIGHT_BROWSERS_PATH = $env:PLAYWRIGHT_BROWSERS_PATH
             WORKDIR = $script:BackendDir
@@ -2485,6 +2522,9 @@ function Invoke-Install {
 }
 
 function Invoke-GitCleanUntrackedSafe {
+    if ($IsWindows -or ($env:OS -match 'Windows')) {
+        return
+    }
     $enabled = $script:GIT_CLEAN_ON_UPDATE
     if (-not $enabled) {
         if ($script:DeployMode -ne 'prod') { return }
@@ -2496,6 +2536,7 @@ function Invoke-GitCleanUntrackedSafe {
         '-e', '.logs', '-e', '.logs/',
         '-e', 'riveredge-backend/.env',
         '-e', 'fast-deploy/config/deploy.env',
+        '-e', 'fast-deploy/.tools', '-e', 'fast-deploy/.tools/',
         '-e', 'fast-deploy/tools/workspace/workspace.yaml',
         '-e', '.playwright-browsers', '-e', '.playwright-browsers/',
         '-e', '.caddy-data', '-e', '.caddy-data/',

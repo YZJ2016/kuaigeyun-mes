@@ -5,8 +5,10 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
-from apps.kuaizhizao.models.spare_part import SparePart, SparePartInventory
-from apps.kuaizhizao.services.spare_part_service import SparePartService
+from apps.kuaizhizao.services.spare_part_service import (
+    DEFAULT_SPARE_PART_WAREHOUSE_LOCATION,
+    SparePartService,
+)
 from apps.kuaizhizao.schemas.equipment_extra import (
     SparePartResponse,
     SparePartCreate,
@@ -32,22 +34,8 @@ async def get_alerts(
 async def list_inventory(
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """获取全库位库存"""
-    inv = await SparePartInventory.filter(tenant_id=tenant_id, deleted_at__isnull=True).all()
-    res = []
-    for i in inv:
-        part = await SparePart.filter(id=i.spare_part_id, tenant_id=tenant_id).first()
-        if not part:
-            continue
-        res.append({
-            "id": i.id,
-            "spare_part_id": i.spare_part_id,
-            "part_no": part.part_no,
-            "part_name": part.part_name,
-            "stock_quantity": i.stock_quantity,
-            "warehouse_location": i.warehouse_location,
-        })
-    return res
+    """按备件汇总现存量"""
+    return await service.list_inventory_by_part(tenant_id)
 
 
 @router.post(
@@ -60,12 +48,18 @@ async def stock_adjust(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
+        manual_adjust = body.rel_type is None and body.rel_id is None
+        warehouse_location = (
+            DEFAULT_SPARE_PART_WAREHOUSE_LOCATION
+            if manual_adjust
+            else body.warehouse_location
+        )
         inventory = await service.adjust_stock(
             tenant_id=tenant_id,
             spare_part_id=body.spare_part_id,
             quantity=body.quantity,
             operation_type=body.operation_type,
-            warehouse_location=body.warehouse_location,
+            warehouse_location=warehouse_location,
             rel_type=body.rel_type,
             rel_id=body.rel_id,
             operator_id=current_user.id,
@@ -111,8 +105,16 @@ async def list_spare_parts(
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
     )
+    part_ids = [int(p.id) for p in rows]
+    stock_totals = await service.summarize_stock_quantities(tenant_id, part_ids)
+    items = [
+        SparePartResponse.model_validate(p).model_copy(
+            update={"stock_quantity": stock_totals.get(int(p.id), 0)}
+        )
+        for p in rows
+    ]
     return SparePartListResponse(
-        items=[SparePartResponse.model_validate(p) for p in rows],
+        items=items,
         total=total,
         skip=skip,
         limit=limit,
@@ -141,7 +143,10 @@ async def create_spare_part(
 async def get_spare_part(spare_part_id: int, tenant_id: int = Depends(get_current_tenant)):
     try:
         part = await service.get_spare_part(tenant_id, spare_part_id)
-        return SparePartResponse.model_validate(part)
+        totals = await service.summarize_stock_quantities(tenant_id, [spare_part_id])
+        return SparePartResponse.model_validate(part).model_copy(
+            update={"stock_quantity": totals.get(spare_part_id, 0)}
+        )
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

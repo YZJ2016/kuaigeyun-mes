@@ -99,6 +99,11 @@ async def test_withdraw_receipt_passes_serial_nos_to_decrease():
             "apps.kuaizhizao.services.warehouse_service.in_transaction",
             _noop_tx,
         ),
+        patch(
+            "apps.kuaiconnect.services.document_push.kingdee_purchase_receipt_revoke_service"
+            ".sync_purchase_receipt_kingdee_after_withdraw",
+            AsyncMock(return_value=None),
+        ),
     ):
         await svc.withdraw_receipt_confirmation(tenant_id=1, receipt_id=7, updated_by=9)
 

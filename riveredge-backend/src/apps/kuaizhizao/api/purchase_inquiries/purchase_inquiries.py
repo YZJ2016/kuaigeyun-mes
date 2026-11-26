@@ -79,6 +79,7 @@ async def list_inquiries(
     source_id: Optional[int] = Query(None),
     order_by: Optional[str] = Query(None, description="排序字段，如 created_at、-quote_deadline"),
     include_items: bool = Query(False, description="是否附带询价明细（明细表格视图）"),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     safe_order_by = None
@@ -102,6 +103,7 @@ async def list_inquiries(
         source_id=source_id,
         order_by=safe_order_by,
         include_items=include_items,
+        viewer_id=current_user.id,
     )
 
 
@@ -372,7 +374,8 @@ async def submit_inquiry(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    return await PurchaseInquiryService().submit_inquiry(tenant_id, inquiry_id, current_user.id)
+    """草稿或已驳回变为已提交，不启动审批。"""
+    return await PurchaseInquiryService().commit_inquiry(tenant_id, inquiry_id, current_user.id)
 
 
 @router.post(

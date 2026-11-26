@@ -19,7 +19,7 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Table, Form as AntForm, Select, InputNumber, Input, DatePicker, Dropdown, Row, Col, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, CheckOutlined, MoreOutlined, ShoppingOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable, type UniTableRequestMeta } from '../../../../../components/uni-table';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -47,6 +47,10 @@ import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useNavigate } from 'react-router-dom';
 import { FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { warehouseApi } from '../../../services/production';
+import {
+  KUAIZHIZAO_DELIVERY_NOTICE_FIELD_RESOURCE,
+  resolveWarehouseHubStackedPartyPrimary,
+} from '../shared/warehouseAmountDisplay';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import {
@@ -58,7 +62,8 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import type { Material } from '../../../../master-data/types/material';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
+import { pickDocumentLineDualQuantityFields } from '../../../../../utils/materialDualQuantity';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
@@ -109,6 +114,9 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+
+const DELIVERY_NOTICE_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_delivery_notices';
+
 function deliveryNoticeCapabilityReasonMessage(
   code: string | null | undefined,
   t: (key: string) => string,
@@ -157,8 +165,6 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 };
 
 const deliveryNoticeStatusValueEnum = buildDeliveryNoticeStatusValueEnum();
-
-const DELIVERY_NOTICE_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_delivery_notices';
 
 const DeliveryNotesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -301,12 +307,17 @@ const DeliveryNotesPage: React.FC = () => {
       fixed: 'left',
       sorter: true,
       search: { order: 50 } as ProColumns['search'],
-      render: (_, r) => (
-        <UniTableStackedPrimaryCell
-          primary={String(r.customer_name ?? '')}
-          secondary={String(r.notice_code ?? '')}
-        />
-      ),
+      render: (_, r) => {
+        const party = resolveWarehouseHubStackedPartyPrimary(KUAIZHIZAO_DELIVERY_NOTICE_FIELD_RESOURCE, r);
+        const primary = party?.primary ?? String(r.customer_name ?? '');
+        return (
+          <UniTableStackedPrimaryCell
+            primary={primary}
+            primaryContent={party?.primaryContent}
+            secondary={String(r.notice_code ?? '')}
+          />
+        );
+      },
     },
     { title: t('app.kuaizhizao.deliveryNote.col.noticeCode'), dataIndex: 'notice_code', hideInTable: true, hideInSearch: true },
     { title: t('app.kuaizhizao.deliveryNote.field.customer'), dataIndex: 'customer_name', hideInTable: true, hideInSearch: true },
@@ -435,6 +446,9 @@ const DeliveryNotesPage: React.FC = () => {
           ...(record.status === '待发送'
             ? [{ key: 'send', label: t('app.kuaizhizao.deliveryNote.action.send'), icon: <SendOutlined />, onClick: () => handleSend(record) }]
             : []),
+          ...(record.status === '已发送'
+            ? [{ key: 'sign', label: t('app.kuaizhizao.deliveryNote.action.sign'), icon: <CheckOutlined />, onClick: () => handleSign(record) }]
+            : []),
         ];
         return (
           <Space>
@@ -487,6 +501,7 @@ const DeliveryNotesPage: React.FC = () => {
         material_code: it.material_code || '',
         material_name: it.material_name || '',
         material_unit: it.material_unit || '',
+        ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
         notice_quantity: Number(it.notice_quantity) || 0,
         unit_price: Number(it.unit_price) || 0,
       }));
@@ -537,15 +552,36 @@ const DeliveryNotesPage: React.FC = () => {
     });
   };
 
+  const executeSign = async (record: DeliveryNotice) => {
+    try {
+      await deliveryNoticeApi.sign(record.id!.toString(), {
+        notes: t('app.kuaizhizao.deliveryNote.msg.signDefaultNote'),
+      });
+      messageApi.success(t('app.kuaizhizao.deliveryNote.msg.signSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('app.kuaizhizao.deliveryNote.msg.signFailed'));
+    }
+  };
+
+  const handleSign = (record: DeliveryNotice) => {
+    getAntdModal().confirm({
+      title: t('app.kuaizhizao.deliveryNote.msg.signTitle'),
+      content: t('app.kuaizhizao.deliveryNote.msg.signContent', { code: record.notice_code }),
+      onOk: () => executeSign(record),
+    });
+  };
+
   const executeDelete = async (record: DeliveryNotice) => {
     try {
-          await deliveryNoticeApi.delete(record.id!.toString());
-          messageApi.success(t('common.deleteSuccess'));
-          invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || t('common.deleteFailed'));
-        }
+      await deliveryNoticeApi.delete(record.id!.toString());
+      messageApi.success(t('common.deleteSuccess'));
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.deleteFailed'));
+    }
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -865,7 +901,8 @@ const DeliveryNotesPage: React.FC = () => {
           material_code: it.material_code || '',
           material_name: it.material_name || '',
           material_unit: it.material_unit || '',
-          notice_quantity: Number(it.notice_quantity) || 0,
+          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
+        notice_quantity: Number(it.notice_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
           total_amount: computeSimpleDocumentLineTotal(
             Number(it.notice_quantity) || 0,
@@ -922,7 +959,8 @@ const DeliveryNotesPage: React.FC = () => {
           material_code: it.material_code || '',
           material_name: it.material_name || '',
           material_unit: it.material_unit || '',
-          notice_quantity: Number(it.notice_quantity) || 0,
+          ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
+        notice_quantity: Number(it.notice_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
           total_amount: computeSimpleDocumentLineTotal(
             Number(it.notice_quantity) || 0,
@@ -1206,43 +1244,16 @@ const DeliveryNotesPage: React.FC = () => {
                     </AntForm.Item>
                   ),
                 },
-                {
-                  title: t('common.unit'),
-                  dataIndex: 'material_unit',
-                  width: 80,
-                  render: (_: any, __: any, index: number) => (
-                    <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id}>
-                      {({ getFieldValue }: any) => {
-                        const materialId = getFieldValue(['items', index, 'material_id']);
-                        if (!activeFormRef.current) return null;
-                        return (
-                          <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                            <DocumentLineUnitSelect
-                              form={activeFormRef.current}
-                              listName="items"
-                              rowIndex={index}
-                              fields={{ quantity: 'notice_quantity', unit: 'material_unit' }}
-                              materialId={materialId}
-                              size="small"
-                              noStyle
-                            />
-                          </AntForm.Item>
-                        );
-                      }}
-                    </AntForm.Item>
-                  ),
-                },
-                {
-                  title: t('common.quantity'),
-                  dataIndex: 'notice_quantity',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (_: any, __: any, index: number) => (
-                    <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                      <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
-                    </AntForm.Item>
-                  ),
-                },
+                ...buildDocumentLineDualQuantityPairColumns({
+                  t,
+                  getForm: () => activeFormRef.current,
+                  quantityField: 'notice_quantity',
+                  unitField: 'material_unit',
+                  scenario: 'sale',
+                  quantityPrecision: quantityDecimals,
+                  width: 168,
+                  columnSpread: { align: 'right' as const },
+                }),
                 {
                   title: t('app.kuaizhizao.warehouseOutbound.field.unitPrice'),
                   dataIndex: 'unit_price',
@@ -1491,8 +1502,9 @@ const DeliveryNotesPage: React.FC = () => {
               const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
               pullSourceDeliveryIdRef.current = next;
               setPullSourceDeliveryId(next);
-              pullFromSalesDeliveryQuery.handleSelectedRowKeysChange([], []);
-              pullFromSalesDeliveryQuery.handleSearchApply(pullFromSalesDeliveryQuery.appliedKeyword);
+              pullFromSalesDeliveryQuery.handleSearchApply(
+                pullFromSalesDeliveryQuery.appliedKeyword,
+              );
             }}
           />
         )}

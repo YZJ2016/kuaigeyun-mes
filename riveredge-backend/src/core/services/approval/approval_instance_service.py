@@ -454,10 +454,28 @@ class ApprovalInstanceService:
         owner_id = await ApprovalInstanceService._lookup_document_created_by(
             tenant_id, entity_type, entity_id
         )
+        org_owner_id = int(owner_id) if owner_id else int(user_id)
         if owner_id:
             data.data["document_owner_id"] = int(owner_id)
             if "created_by" not in data.data:
                 data.data["created_by"] = int(owner_id)
+        from core.services.approval.approval_hierarchy_department import (
+            apply_hierarchy_department_on_start,
+        )
+        from core.services.approval.audit_submit_context import get_hierarchy_department_uuid
+
+        hierarchy_uuid = get_hierarchy_department_uuid()
+        if not hierarchy_uuid:
+            raw_hier = data.data.get("hierarchy_department_uuid")
+            if raw_hier is not None and str(raw_hier).strip():
+                hierarchy_uuid = str(raw_hier).strip()
+        await apply_hierarchy_department_on_start(
+            tenant_id,
+            process_nodes=process.nodes,
+            owner_user_id=org_owner_id,
+            payload=data.data,
+            hierarchy_department_uuid=hierarchy_uuid,
+        )
         return await ApprovalInstanceService.create_approval_instance(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -566,15 +584,29 @@ class ApprovalInstanceService:
         tenant_id: int,
         entity_type: str,
         instance: Optional[ApprovalInstance],
+        *,
+        node_key: Optional[str] = None,
+        business_type: Optional[str] = None,
     ) -> Optional[ApprovalProcess]:
         if instance and instance.process_id:
             proc = instance.process
             if proc and proc.deleted_at is None:
                 return proc
-        from core.config.audit_registry import entry_by_entity_type
+        from core.config.audit_registry import (
+            entry_by_entity_type,
+            entry_by_entity_type_and_business,
+            entry_by_node_key,
+        )
         from core.models.audit_document_binding import AuditDocumentBinding
 
-        entry = entry_by_entity_type(entity_type)
+        entry = None
+        nk = str(node_key or "").strip()
+        if nk:
+            entry = entry_by_node_key(nk)
+        if entry is None:
+            entry = entry_by_entity_type_and_business(entity_type, business_type)
+        if entry is None:
+            entry = entry_by_entity_type(entity_type)
         if not entry:
             return None
         binding = await AuditDocumentBinding.filter(
@@ -641,18 +673,179 @@ class ApprovalInstanceService:
         )
 
     @staticmethod
+    def _graph_node_display_rank(graph: Dict[str, Any]) -> Dict[str, tuple]:
+        """节点执行记录顺序：沿连线的层深，同层再按分支出边序号。与设计器自上而下布局一致，不跟节点数组的插入顺序。"""
+        raw_nodes = graph.get("nodes") or []
+        raw_edges = graph.get("edges") or []
+        ids: List[str] = []
+        for node in raw_nodes:
+            if not isinstance(node, dict):
+                continue
+            nid = str(node.get("id") or "")
+            if nid:
+                ids.append(nid)
+        id_set = set(ids)
+        index = {nid: i for i, nid in enumerate(ids)}
+        preds: Dict[str, List[str]] = {nid: [] for nid in ids}
+        outs: Dict[str, List[str]] = {nid: [] for nid in ids}
+        for edge in raw_edges:
+            if not isinstance(edge, dict):
+                continue
+            src = str(edge.get("source") or "")
+            tgt = str(edge.get("target") or "")
+            if src not in id_set or tgt not in id_set:
+                continue
+            preds[tgt].append(src)
+            outs[src].append(tgt)
+
+        depth: Dict[str, int] = {}
+        visiting: Set[str] = set()
+
+        def resolve(nid: str) -> int:
+            if nid in depth:
+                return depth[nid]
+            if nid in visiting:
+                return 0
+            visiting.add(nid)
+            incoming = preds[nid]
+            if nid == "start" or not incoming:
+                layer = 0
+            else:
+                layer = 1 + max(resolve(src) for src in incoming)
+            visiting.discard(nid)
+            depth[nid] = layer
+            return layer
+
+        for nid in ids:
+            resolve(nid)
+
+        branch: Dict[str, int] = {}
+        seen: Set[str] = set()
+        queue: List[str] = []
+        roots = [nid for nid in ids if nid == "start"] or [nid for nid in ids if not preds[nid]]
+        for root in roots:
+            if root in seen:
+                continue
+            branch[root] = 0
+            seen.add(root)
+            queue.append(root)
+        while queue:
+            src = queue.pop(0)
+            targets = outs.get(src) or []
+            split = len(targets) > 1
+            for edge_idx, tgt in enumerate(targets):
+                if tgt in seen:
+                    continue
+                seen.add(tgt)
+                queue.append(tgt)
+                branch[tgt] = edge_idx if split else branch.get(src, 0)
+
+        return {
+            nid: (depth.get(nid, 0), branch.get(nid, 0), index[nid])
+            for nid in ids
+        }
+
+    @staticmethod
+    def _not_triggered_branch_node_ids(
+        graph: Dict[str, Any],
+        instance: Optional[ApprovalInstance],
+        history: List[ApprovalHistory],
+        *,
+        reachable_from_current: Set[str],
+        current_node_id: Optional[str],
+    ) -> Set[str]:
+        """
+        条件已选边后的未走分支节点（含其下游，且当前不可再到达）。
+        与「空审批人自动通过→已跳过」「尚未轮到→待到达」区分，展示为「未触发」。
+        """
+        if not instance or instance.status != "pending":
+            return set()
+        edges = [e for e in (graph.get("edges") or []) if isinstance(e, dict)]
+        node_list = [n for n in (graph.get("nodes") or []) if isinstance(n, dict)]
+        condition_ids = {
+            str(n.get("id") or "")
+            for n in node_list
+            if str(n.get("type") or "") == "condition" and n.get("id")
+        }
+        if not condition_ids:
+            return set()
+
+        # condition_id → 已选中的下一节点
+        chosen_target: Dict[str, str] = {}
+        for h in history:
+            if ApprovalInstanceService._normalize_execution_action(h.action) != "condition_route":
+                continue
+            src = str(h.from_node or "")
+            tgt = str(h.to_node or "")
+            if src in condition_ids and tgt:
+                chosen_target[src] = tgt
+
+        inst_data = instance.data if isinstance(instance.data, dict) else {}
+        for cid in condition_ids:
+            if cid in chosen_target:
+                continue
+            out = [e for e in edges if str(e.get("source") or "") == cid]
+            if not out:
+                continue
+            try:
+                idx = ApprovalInstanceService._read_branch_edge_index(inst_data, cid, len(out))
+            except ValidationError:
+                idx = None
+            if idx is None or idx < 0 or idx >= len(out):
+                continue
+            tgt = str(out[idx].get("target") or "")
+            if tgt:
+                chosen_target[cid] = tgt
+
+        if not chosen_target:
+            return set()
+
+        current = str(current_node_id or "")
+        result: Set[str] = set()
+        for cid, taken in chosen_target.items():
+            out_targets = [
+                str(e.get("target") or "")
+                for e in edges
+                if str(e.get("source") or "") == cid and e.get("target")
+            ]
+            for tgt in out_targets:
+                if not tgt or tgt == taken:
+                    continue
+                # 未选出边及其下游
+                downstream = ApprovalInstanceService._graph_node_ids_reachable_from(graph, tgt)
+                for nid in downstream:
+                    if nid == current or nid in reachable_from_current:
+                        continue
+                    # 已走过路径上的节点不标未触发
+                    result.add(nid)
+        return result
+
+    @staticmethod
     async def _build_nodes_overview(
         tenant_id: int,
         process: ApprovalProcess,
         instance: Optional[ApprovalInstance],
         tasks: List[ApprovalTask],
         history: List[ApprovalHistory],
+        *,
+        execution_tasks: Optional[List[ApprovalTask]] = None,
+        execution_history: Optional[List[ApprovalHistory]] = None,
     ) -> List[Dict[str, Any]]:
+        """
+        构建节点概况。
+
+        tasks/history：只驱动节点态（须为当前活跃实例，避免撤回重提后污染「已通过」）。
+        execution_*：驱动「节点执行记录」；缺省同 tasks/history。
+        撤回重提 / 多次撤销时须传入该单据全部实例的 history/tasks，保留跨轮履历。
+        """
         graph = ApprovalInstanceService._normalize_process_graph(process.nodes)
         overview: List[Dict[str, Any]] = []
         user_ids: List[int] = []
         on_path_to_current: Set[str] = set()
         reachable_from_current: Set[str] = set()
+        not_triggered_ids: Set[str] = set()
+        exec_tasks = execution_tasks if execution_tasks is not None else tasks
+        exec_history = execution_history if execution_history is not None else history
         if instance and instance.status == "pending" and instance.current_node:
             current_id = str(instance.current_node)
             on_path_to_current = ApprovalInstanceService._graph_node_ids_on_some_path_to_target(
@@ -668,12 +861,38 @@ class ApprovalInstanceService:
                 tenant_id, instance, history
             )
 
+        if instance and instance.status == "pending":
+            not_triggered_ids = ApprovalInstanceService._not_triggered_branch_node_ids(
+                graph,
+                instance,
+                history,
+                reachable_from_current=reachable_from_current,
+                current_node_id=str(instance.current_node or "") or None,
+            )
+
         if instance:
             user_ids.append(instance.submitter_id)
         for t in tasks:
             user_ids.append(t.approver_id)
         for h in history:
             user_ids.append(h.action_by)
+        for t in exec_tasks:
+            user_ids.append(t.approver_id)
+        for h in exec_history:
+            user_ids.append(h.action_by)
+
+        def _history_for_node(rows: List[ApprovalHistory], node_id: str) -> List[ApprovalHistory]:
+            # condition_route 只挂在条件节点（from_node），避免目标审批节点重复冒出「条件分支」
+            return [
+                h
+                for h in rows
+                if h.from_node == node_id
+                or (
+                    h.to_node == node_id
+                    and ApprovalInstanceService._normalize_execution_action(h.action)
+                    != "condition_route"
+                )
+            ]
 
         for node in graph.get("nodes") or []:
             if not isinstance(node, dict):
@@ -688,17 +907,9 @@ class ApprovalInstanceService:
             label = str(data.get("label") or node_id)
 
             node_tasks = [t for t in tasks if t.node_id == node_id]
-            # condition_route 只挂在条件节点（from_node），避免目标审批节点重复冒出「条件分支」
-            node_history = [
-                h
-                for h in history
-                if h.from_node == node_id
-                or (
-                    h.to_node == node_id
-                    and ApprovalInstanceService._normalize_execution_action(h.action)
-                    != "condition_route"
-                )
-            ]
+            node_history = _history_for_node(history, node_id)
+            node_exec_tasks = [t for t in exec_tasks if t.node_id == node_id]
+            node_exec_history = _history_for_node(exec_history, node_id)
 
             is_current = bool(
                 instance
@@ -726,10 +937,15 @@ class ApprovalInstanceService:
                 node_status = "skipped"
             elif is_future_after_current:
                 node_status = "waiting"
+            elif node_id in not_triggered_ids and node_type in {"approval", "condition", "cc"}:
+                # 条件未走分支：未触发（勿与待到达、空审批人已跳过混淆）
+                node_status = "not_triggered"
             elif any(
                 h.from_node == node_id
                 and (
                     "空审批人自动通过" in (h.comment or "")
+                    or "与前序节点审批人相同，自动跳过" in (h.comment or "")
+                    or "审批人为单据制单人，自动跳过本人审批" in (h.comment or "")
                     or "emptyApproverPolicy=auto_pass" in (h.comment or "").lower()
                 )
                 for h in node_history
@@ -774,9 +990,8 @@ class ApprovalInstanceService:
                 and node_id not in reachable_from_current
                 and node_type in {"approval", "condition", "cc"}
             ):
-                # 仅旁路死支（已走过路径上未选中、且从当前再也走不到）才「已跳过」；
-                # 当前之后尚未到达的节点保持 waiting（待到达）
-                node_status = "skipped"
+                # 旁路死支兜底：未走条件分支 → 未触发；勿标待到达
+                node_status = "not_triggered"
             else:
                 node_status = "waiting"
 
@@ -798,18 +1013,21 @@ class ApprovalInstanceService:
                     logger.warning("解析节点 {} 可审核人失败: {}", node_id, exc)
 
             executions: List[Dict[str, Any]] = []
-            history_keys: set[tuple[int, int, str]] = set()
+            # 去重须带时间：同人多次通过/撤回不得只留最后一条；仅压 history+task 同源双写
+            history_keys: set[tuple[Any, ...]] = set()
 
             for h in sorted(
-                node_history,
+                node_exec_history,
                 key=lambda x: x.action_at or datetime.min,
                 reverse=True,
             ):
                 norm_action = ApprovalInstanceService._normalize_execution_action(h.action)
-                if norm_action == "document_edit":
-                    dedupe_key = (h.approval_instance_id, h.action_by, norm_action, str(h.action_at))
-                else:
-                    dedupe_key = (h.approval_instance_id, h.action_by, norm_action)
+                dedupe_key = (
+                    h.approval_instance_id,
+                    h.action_by,
+                    norm_action,
+                    str(h.action_at or ""),
+                )
                 if dedupe_key in history_keys:
                     continue
                 history_keys.add(dedupe_key)
@@ -828,13 +1046,20 @@ class ApprovalInstanceService:
                     }
                 )
 
-            for t in node_tasks:
+            for t in node_exec_tasks:
                 if not t.action_at:
+                    continue
+                # 撤回本级会把已通过 task 批量改成 cancelled；不得用 cancelled 冒充执行动作
+                # （真实撤回/撤销以 ApprovalHistory 为准）
+                task_status = str(t.status or "").strip().lower()
+                if task_status in {"cancelled", "canceled", "pending", "suspended"}:
                     continue
                 norm_action = ApprovalInstanceService._normalize_execution_action(t.status)
                 inst_id = t.approval_instance_id
-                if (inst_id, t.approver_id, norm_action) in history_keys:
+                dedupe_key = (inst_id, t.approver_id, norm_action, str(t.action_at or ""))
+                if dedupe_key in history_keys:
                     continue
+                history_keys.add(dedupe_key)
                 user_ids.append(t.approver_id)
                 executions.append(
                     {
@@ -861,6 +1086,14 @@ class ApprovalInstanceService:
                 }
             )
 
+        display_rank = ApprovalInstanceService._graph_node_display_rank(graph)
+        overview.sort(
+            key=lambda item: display_rank.get(
+                str(item.get("node_id") or ""),
+                (10**9, 10**9, 10**9),
+            )
+        )
+
         name_map = await ApprovalInstanceService._user_display_map(tenant_id, user_ids)
         for item in overview:
             for ex in item["executions"]:
@@ -875,9 +1108,13 @@ class ApprovalInstanceService:
         entity_type: str,
         entity_id: int,
         viewer_id: Optional[int] = None,
+        *,
+        node_key: Optional[str] = None,
+        business_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         按 entity_type + entity_id 获取审批状态（统一入口，含流程图与节点概况）。
+        草稿无实例时，可用 node_key / business_type 解析对应审核声明流程（避免同 entity 多业务类型一律回落到默认名）。
         """
         from core.services.approval.approval_viewer_actions import (
             build_flow_viewer_actions,
@@ -893,12 +1130,27 @@ class ApprovalInstanceService:
         instance = await ApprovalInstanceService._resolve_active_instance(entity_instances)
 
         process = await ApprovalInstanceService._resolve_process_for_entity_display(
-            tenant_id, entity_type, instance
+            tenant_id,
+            entity_type,
+            instance,
+            node_key=node_key,
+            business_type=business_type,
         )
 
-        from core.config.audit_registry import entry_by_entity_type
+        from core.config.audit_registry import (
+            entry_by_entity_type,
+            entry_by_entity_type_and_business,
+            entry_by_node_key,
+        )
 
-        audit_entry = entry_by_entity_type(entity_type)
+        audit_entry = None
+        nk = str(node_key or "").strip()
+        if nk:
+            audit_entry = entry_by_node_key(nk)
+        if audit_entry is None:
+            audit_entry = entry_by_entity_type_and_business(entity_type, business_type)
+        if audit_entry is None:
+            audit_entry = entry_by_entity_type(entity_type)
 
         if not instance and not process:
             return {
@@ -986,7 +1238,8 @@ class ApprovalInstanceService:
         process_payload = None
         if process:
             graph = ApprovalInstanceService._normalize_process_graph(process.nodes)
-            # 流程图节点态只认「当前活跃实例」：撤回重提后不得把上一轮的条件分支「已通过」混进来
+            # 节点态只认当前活跃实例（+反审 reopened 上一轮），避免撤回重提污染「已通过」
+            # 执行记录认该单据全部实例履历，多次撤回/重审不得丢
             active_id = int(instance.id) if instance else None
             overview_tasks = [
                 t for t in tasks
@@ -1019,7 +1272,13 @@ class ApprovalInstanceService:
                             and str(h.to_node or "") != current_nid
                         )
             nodes_overview = await ApprovalInstanceService._build_nodes_overview(
-                tenant_id, process, instance, overview_tasks, overview_history
+                tenant_id,
+                process,
+                instance,
+                overview_tasks,
+                overview_history,
+                execution_tasks=tasks,
+                execution_history=history,
             )
             process_payload = {
                 "uuid": str(process.uuid),
@@ -1202,7 +1461,11 @@ class ApprovalInstanceService:
             cur = get_node_config(graph, instance.current_node)
             if cur and cur.get("type") == "approval":
                 spec = await ApprovalInstanceService._resolve_decision_on_approve_spec_for_instance(
-                    tenant_id, graph, cur, instance
+                    tenant_id,
+                    graph,
+                    cur,
+                    instance,
+                    treating_as_approved=int(viewer_id) if viewer_id is not None else None,
                 )
                 if spec and spec.get("field"):
                     current_node_decision = {
@@ -1767,9 +2030,29 @@ class ApprovalInstanceService:
             if review in ("驳回", "已驳回", "rejected"):
                 return "rejected"
             return None
+        if et == "partner_statement":
+            from apps.common.app_orm import finance_orm_ready
+            from apps.kuaicaiwu.models.partner_statement import PartnerStatement
+
+            if not finance_orm_ready():
+                return None
+            row = await PartnerStatement.get_or_none(
+                tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+            )
+            if not row:
+                return None
+            review = str(row.review_status or "").strip()
+            if review in ("已审核", "已通过", "approved"):
+                return "approved"
+            if review in ("驳回", "已驳回", "rejected"):
+                return "rejected"
+            return None
         if et == "purchase_invoice":
+            from apps.common.app_orm import finance_orm_ready
             from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
 
+            if not finance_orm_ready():
+                return None
             row = await PurchaseInvoice.get_or_none(
                 tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
             )
@@ -1924,6 +2207,24 @@ class ApprovalInstanceService:
         instance.current_node = None
         instance.current_approver_id = None
         await instance.save()
+
+        try:
+            from core.services.messaging.approval_wecom_card_service import (
+                invalidate_approval_wecom_cards,
+            )
+
+            await invalidate_approval_wecom_cards(
+                tenant_id=tenant_id,
+                approval_instance_id=int(instance.id),
+                status_label="已撤回",
+            )
+        except Exception as wecom_card_exc:
+            logger.warning(
+                "撤回后失效企微审批卡失败 instance={}: {}",
+                instance.id,
+                wecom_card_exc,
+            )
+
         logger.info(f"审批流程已取消: {entity_type}:{entity_id}")
         return True
 
@@ -2603,6 +2904,9 @@ class ApprovalInstanceService:
         if instance.status != "pending":
             raise ValidationError("审批流程已结束")
 
+        old_current_approver_id = instance.current_approver_id
+        old_status = instance.status
+
         if action_data.action not in ("approve", "reject"):
             raise ValidationError(f"任务操作不支持: {action_data.action}")
 
@@ -2654,6 +2958,15 @@ class ApprovalInstanceService:
         if task.sign_type == "before" and action_data.action == "approve" and task.parent_task_id:
             await ApprovalAdvancedActions.resume_suspended_after_before_sign(
                 tenant_id, instance, task.node_id, task.parent_task_id
+            )
+            await instance.refresh_from_db()
+            ApprovalInstanceService._schedule_approval_action_notifications(
+                tenant_id=tenant_id,
+                approval_instance_id=int(instance.id),
+                user_id=user_id,
+                action=action_data,
+                old_status=old_status,
+                old_current_approver_id=old_current_approver_id,
             )
             return instance
 
@@ -2905,14 +3218,20 @@ class ApprovalInstanceService:
             )
 
         node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
+        approver_type = str(
+            (node_data or {}).get("approverType")
+            or (node_data or {}).get("approver_type")
+            or "user"
+        ).strip().lower()
         empty_policy = str(
             (node_data or {}).get("emptyApproverPolicy")
             or (node_data or {}).get("empty_approver_policy")
             or "block"
         ).strip().lower()
-        # 直属上级没有负责人、多级上级层级不够：跳过本节点，流程继续。
-        # 节点上显式写了升级管理员或兜底审批人时仍走那一项。
-        if approver_type in ("manager", "multi_level_manager") and empty_policy == "block":
+        # 直属上级没有负责人：跳过本节点，流程继续。
+        # 节点上显式写了升级管理员或兜底审批人时仍走那一项；
+        # multi_level_manager 的 block 保留原值（不足 N 级时阻断）。
+        if approver_type == "manager" and empty_policy == "block":
             empty_policy = "auto_pass"
 
         try:
@@ -3481,19 +3800,47 @@ class ApprovalInstanceService:
         return await ApprovalInstanceService._filter_active_user_ids(tenant_id, manager_ids)
 
     @staticmethod
+    async def _resolve_hierarchy_start_department_id(
+        tenant_id: int,
+        owner_user_id: int,
+        instance_data: Optional[Dict[str, Any]],
+    ) -> Optional[int]:
+        data = instance_data if isinstance(instance_data, dict) else {}
+        raw = data.get("hierarchy_department_id")
+        if raw is not None:
+            try:
+                did = int(raw)
+            except (TypeError, ValueError):
+                did = 0
+            if did > 0:
+                return did
+        submitter = await User.filter(
+            id=int(owner_user_id),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).first()
+        if not submitter:
+            return None
+        dept_id = getattr(submitter, "department_id", None)
+        return int(dept_id) if dept_id else None
+
+    @staticmethod
     async def _resolve_submitter_department_manager_ids(
         tenant_id: int,
         submitter_id: int,
         *,
         walk_parent: bool = True,
+        start_department_id: Optional[int] = None,
     ) -> List[int]:
-        """发起人所属部门负责人；无负责人时可沿父部门向上查找。"""
-        submitter = await User.filter(
-            id=submitter_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).first()
-        dept_id = getattr(submitter, "department_id", None) if submitter else None
+        """组织锚点用户所属部门负责人；无负责人时可沿父部门向上查找。"""
+        dept_id = start_department_id
+        if dept_id is None:
+            submitter = await User.filter(
+                id=submitter_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+            dept_id = getattr(submitter, "department_id", None) if submitter else None
         visited: set[int] = set()
         while dept_id and int(dept_id) not in visited:
             visited.add(int(dept_id))
@@ -3589,6 +3936,32 @@ class ApprovalInstanceService:
         conditions = normalized.get("conditions") or []
         inferred = _infer_condition_route_mode(conditions, out_edge_count=out_edge_count)
         return inferred or "formula"
+
+    @staticmethod
+    def _parse_branch_choice_index(value: Any, branch_count: int, *, label: str) -> int:
+        """把审核提交的选边值解析成出边下标。
+
+        数字（含数字字符串）就是下标。「0」「1」不得再当成否/是，
+        否则第二条「否」会被写成第一条，走进总经理节点。
+        仅 true/false/yes/no/on/off 仍按旧布尔选边。
+        """
+        last = max(branch_count, 1) - 1
+        if isinstance(value, bool):
+            return 0 if value else last
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ("true", "yes", "on"):
+                return 0
+            if lowered in ("false", "no", "off"):
+                return last
+            try:
+                return int(lowered)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError(f"请选择「{label}」后再审核通过") from exc
+        try:
+            return int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"请选择「{label}」后再审核通过") from exc
 
     @staticmethod
     def _strip_branch_decision_keys(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -3863,13 +4236,25 @@ class ApprovalInstanceService:
         label = str(data.get("label") or "").strip() or "后续分支"
         conditions = data.get("conditions") or data.get("condition_list") or []
         branches: List[Dict[str, Any]] = []
+        default_index: Optional[int] = None
         for i, edge in enumerate(out_edges):
             cond = conditions[i] if i < len(conditions) and isinstance(conditions[i], dict) else {}
             branch_label = str(cond.get("label") or "").strip()
             if not branch_label:
                 target = by_id.get(str(edge.get("target") or ""))
                 branch_label = ApprovalInstanceService._node_display_label(target) or f"分支{i + 1}"
-            branches.append({"index": i, "label": branch_label})
+            is_default = bool(cond.get("isDefault") or cond.get("is_default"))
+            if is_default and default_index is None:
+                default_index = i
+            target_node = by_id.get(str(edge.get("target") or ""))
+            branches.append(
+                {
+                    "index": i,
+                    "label": branch_label,
+                    "isDefault": is_default,
+                    "targetLabel": ApprovalInstanceService._node_display_label(target_node),
+                }
+            )
         index_field = ApprovalInstanceService._condition_branch_index_key(condition_id)
         first_label = branches[0]["label"] if branches else "是"
         last_label = branches[-1]["label"] if branches else "否"
@@ -3882,7 +4267,7 @@ class ApprovalInstanceService:
             "falseBranchLabel": last_label,
             "conditionNodeId": condition_id,
             "requireExplicit": True,
-            "defaultValue": None,
+            "defaultValue": default_index,
         }
 
     @staticmethod
@@ -3905,9 +4290,10 @@ class ApprovalInstanceService:
         if isinstance(explicit, dict) and str(explicit.get("label") or "").strip():
             inferred = dict(inferred)
             inferred["label"] = str(explicit.get("label")).strip()
-            default_raw = explicit.get("defaultValue")
-            if default_raw is not None:
-                inferred["defaultValue"] = 0 if bool(default_raw) else len(inferred.get("branches") or []) - 1
+            if inferred.get("defaultValue") is None:
+                default_raw = explicit.get("defaultValue")
+                if default_raw is not None:
+                    inferred["defaultValue"] = 0 if bool(default_raw) else len(inferred.get("branches") or []) - 1
         return inferred
 
     @staticmethod
@@ -3942,12 +4328,17 @@ class ApprovalInstanceService:
         instance: ApprovalInstance,
     ) -> bool:
         node_data = node.get("data") if isinstance(node.get("data"), dict) else {}
+        approver_type = str(
+            (node_data or {}).get("approverType")
+            or (node_data or {}).get("approver_type")
+            or "user"
+        ).strip().lower()
         empty_policy = str(
             (node_data or {}).get("emptyApproverPolicy")
             or (node_data or {}).get("empty_approver_policy")
             or "block"
         ).strip().lower()
-        if approver_type in ("manager", "multi_level_manager") and empty_policy == "block":
+        if approver_type == "manager" and empty_policy == "block":
             empty_policy = "auto_pass"
         try:
             approvers = await ApprovalInstanceService._resolve_node_approvers(node, instance)
@@ -3975,10 +4366,13 @@ class ApprovalInstanceService:
         graph: Dict[str, Any],
         approval_node: dict,
         instance: ApprovalInstance,
+        *,
+        treating_as_approved: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         当前审批节点是否须选 previous_approver 分支。
-        若紧接下一审批节点会空审批人自动跳过且再后为条件节点，则分支由本节点审批人选择。
+        若紧接下一审批节点会空审批人自动跳过 / 与前序同人跳过，且再后为条件节点，
+        则分支由本节点审批人选择。
         """
         inst_data = instance.data if isinstance(instance.data, dict) else {}
         spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, approval_node)
@@ -3998,9 +4392,23 @@ class ApprovalInstanceService:
         bridge = ApprovalInstanceService._get_next_node(graph, node_id, instance=None)
         if not bridge or bridge.get("type") != "approval":
             return None
-        if not await ApprovalInstanceService._node_would_auto_pass_when_empty(
+        # 当前审核人即将通过本节点，预测下一节点是否会因「同人已审」被跳过
+        treating_id = treating_as_approved
+        if treating_id is None:
+            try:
+                cur = int(getattr(instance, "current_approver_id", None) or 0)
+                treating_id = cur or None
+            except (TypeError, ValueError):
+                treating_id = None
+        bridge_would_skip = await ApprovalInstanceService._node_would_auto_pass_when_empty(
             tenant_id, bridge, instance
-        ):
+        ) or await ApprovalInstanceService._node_would_auto_pass_same_prior_approver(
+            tenant_id,
+            bridge,
+            instance,
+            treating_as_approved=treating_id,
+        )
+        if not bridge_would_skip:
             return None
         cond = ApprovalInstanceService._get_next_node(
             graph, str(bridge.get("id") or ""), instance=None
@@ -4039,7 +4447,11 @@ class ApprovalInstanceService:
         if not node or node.get("type") != "approval":
             return
         spec = await ApprovalInstanceService._resolve_decision_on_approve_spec_for_instance(
-            tenant_id, graph, node, instance
+            tenant_id,
+            graph,
+            node,
+            instance,
+            treating_as_approved=decided_by,
         )
         if not spec:
             return
@@ -4053,25 +4465,7 @@ class ApprovalInstanceService:
         value = patch[field]
         branches = spec.get("branches") if isinstance(spec.get("branches"), list) else []
         branch_count = len(branches) if branches else 2
-        edge_index: Optional[int] = None
-        if isinstance(value, bool):
-            edge_index = 0 if value else branch_count - 1
-        elif isinstance(value, str):
-            lowered = value.strip().lower()
-            if lowered in ("true", "1", "yes", "on"):
-                edge_index = 0
-            elif lowered in ("false", "0", "no", "off"):
-                edge_index = branch_count - 1
-            else:
-                try:
-                    edge_index = int(value.strip())
-                except (TypeError, ValueError) as exc:
-                    raise ValidationError(f"审批分支决策 {field!r} 须为分支下标") from exc
-        else:
-            try:
-                edge_index = int(value)
-            except (TypeError, ValueError) as exc:
-                raise ValidationError(f"请选择「{label}」后再审核通过") from exc
+        edge_index = ApprovalInstanceService._parse_branch_choice_index(value, branch_count, label=label)
         if edge_index is None or edge_index < 0 or edge_index >= branch_count:
             raise ValidationError(f"分支选择下标无效，须在 0～{branch_count - 1} 之间")
         data = dict(instance.data or {})
@@ -4098,18 +4492,22 @@ class ApprovalInstanceService:
         tenant_id: int,
         submitter_id: int,
         level: int,
+        *,
+        start_department_id: Optional[int] = None,
     ) -> List[int]:
         """
-        沿发起人部门向上，按出现顺序取第 level 个有效部门负责人（level=1 为链上第一个负责人）。
+        沿组织锚点用户部门向上，按出现顺序取第 level 个有效部门负责人（level=1 为链上第一个负责人）。
         """
         if level < 1:
             return []
-        submitter = await User.filter(
-            id=submitter_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).first()
-        dept_id = getattr(submitter, "department_id", None) if submitter else None
+        dept_id = start_department_id
+        if dept_id is None:
+            submitter = await User.filter(
+                id=submitter_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+            dept_id = getattr(submitter, "department_id", None) if submitter else None
         visited: set[int] = set()
         found = 0
         while dept_id and int(dept_id) not in visited:
@@ -4138,7 +4536,7 @@ class ApprovalInstanceService:
         """
         解析节点审批人。兼容前端 camelCase（approverType, approverIds）与后端 snake_case。
         支持：user（指定用户）、role（角色）、department（部门负责人）、manager（直属上级）、
-        multi_level_manager（沿部门树第 N 级负责人；不足 N 级返回空列表）、
+        multi_level_manager（沿部门树第 N 级负责人；不足 N 级返回空列表由创建任务侧跳过）、
         initiator_select / form / form_select / selected（发起时勾选快照）。
         指定用户、角色、部门找不到人时抛 ValidationError，不回落提交人。
         直属上级没有可用负责人时抛出无人可审，由创建任务侧按自动跳过继续流转。
@@ -4166,8 +4564,14 @@ class ApprovalInstanceService:
             approver_ids_raw = [node_data["approver_id"]]
 
         tenant_id = instance.tenant_id
-        submitter_id = instance.submitter_id
+        # 组织锚点 = 制单人；通知/履历里的 submitter_id 仍是点击提交人
+        hierarchy_subject_id = await ApprovalInstanceService._ensure_document_owner_user_id(
+            instance
+        )
         instance_data = instance.data if isinstance(instance.data, dict) else {}
+        start_dept_id = await ApprovalInstanceService._resolve_hierarchy_start_department_id(
+            tenant_id, hierarchy_subject_id, instance_data
+        )
 
         async def _from_selected_snapshot() -> List[int]:
             by_node = instance_data.get("selected_approver_by_node") or {}
@@ -4264,12 +4668,15 @@ class ApprovalInstanceService:
                         "审批节点指定部门未配置可用负责人，无法提交审核"
                     )
                 managers = await ApprovalInstanceService._resolve_submitter_department_manager_ids(
-                    tenant_id, submitter_id, walk_parent=True
+                    tenant_id,
+                    hierarchy_subject_id,
+                    walk_parent=True,
+                    start_department_id=start_dept_id,
                 )
                 if managers:
                     return managers
                 raise ValidationError(
-                    "提交人部门未配置可用负责人，无法提交审核"
+                    "制单人部门未配置可用负责人，无法提交审核"
                 )
             except ValidationError:
                 raise
@@ -4280,12 +4687,15 @@ class ApprovalInstanceService:
         if approver_type == "manager":
             try:
                 managers = await ApprovalInstanceService._resolve_submitter_department_manager_ids(
-                    tenant_id, submitter_id, walk_parent=False
+                    tenant_id,
+                    hierarchy_subject_id,
+                    walk_parent=False,
+                    start_department_id=start_dept_id,
                 )
                 if managers:
                     return managers
                 raise ValidationError(
-                    "提交人直属部门未配置可用负责人，无法提交审核"
+                    "制单人直属部门未配置可用负责人，无法提交审核"
                 )
             except ValidationError:
                 raise
@@ -4305,10 +4715,12 @@ class ApprovalInstanceService:
                 if level < 2:
                     raise ValidationError("multi_level_manager 的 managerLevel 须 ≥ 2")
                 managers = await ApprovalInstanceService._resolve_submitter_department_manager_at_level(
-                    tenant_id, submitter_id, level
+                    tenant_id,
+                    hierarchy_subject_id,
+                    level,
+                    start_department_id=start_dept_id,
                 )
-                # 有第 N 级负责人则返回；不足 N 级返回空。
-                # block 由创建任务侧抛 ValidationError，只有策略本身是 auto_pass 才跳过。
+                # 有第 N 级负责人则返回；不足 N 级返回空，由创建任务侧按 auto_pass 跳过
                 return managers
             except ValidationError:
                 raise
@@ -4834,7 +5246,6 @@ class ApprovalInstanceService:
             logger.warning("催办通知失败: %s", e)
 
     @staticmethod
-    @staticmethod
     async def _pending_approver_ids_for_instance(
         tenant_id: int,
         approval_instance: ApprovalInstance,
@@ -5004,7 +5415,7 @@ class ApprovalInstanceService:
         """
         审批操作通知（站内信，少打扰）：
         - 驳回 → 通知提交人
-        - 进入下一审批人 / 转交 → 通知新审批人
+        - 进入下一审批人 / 转交 → 通知新节点全部待办人（或签多人）
         - 通过/取消 → 不额外刷成功信
         """
         try:
@@ -5065,33 +5476,16 @@ class ApprovalInstanceService:
                 approval_instance.status == "pending"
                 and approval_instance.current_approver_id
                 and approval_instance.current_approver_id != old_current_approver_id
-                and approval_instance.status == "pending"
             ):
-                new_approver = await User.filter(
-                    id=approval_instance.current_approver_id,
+                submitter_name = (
+                    (submitter.full_name or submitter.username) if submitter else "—"
+                )
+                await ApprovalInstanceService._notify_pending_approvers(
                     tenant_id=tenant_id,
-                    deleted_at__isnull=True
-                ).first()
-                if new_approver:
-                    submitter_name = (
-                        (submitter.full_name or submitter.username) if submitter else "—"
-                    )
-                    await ApprovalInstanceService._send_internal_to_user(
-                        tenant_id=tenant_id,
-                        user_id=new_approver.id,
-                        subject=f"待审批：{approval_instance.title}",
-                        content=(
-                            f"您有一个待审批的申请：{approval_instance.title}，"
-                            f"提交人：{submitter_name}，流程：{process.name}。"
-                        ),
-                        trigger_action="pending",
-                        instance=approval_instance,
-                        template_code="approval_pending",
-                        extra_variables={
-                            "submitter_name": submitter_name,
-                            "process_name": process.name,
-                        },
-                    )
+                    approval_instance=approval_instance,
+                    process=process,
+                    submitter_name=submitter_name,
+                )
         except Exception as e:
             logger.error(f"发送审批操作通知失败: {str(e)}")
     
@@ -5348,6 +5742,11 @@ class ApprovalInstanceService:
         处理审批完成后的业务回调（实体注册表驱动）
         """
         try:
+            from apps.kuaizhizao.services.menu_badge_counts_cache import (
+                touch_kuaizhizao_menu_badges_for_tenant,
+            )
+
+            touch_kuaizhizao_menu_badges_for_tenant(int(tenant_id))
             data = approval_instance.data or {}
             entity_type = data.get("entity_type")
             entity_id = data.get("entity_id")
@@ -5507,6 +5906,9 @@ class ApprovalInstanceService:
                 logger.info(f"报价单 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_kuaioa_form_request() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaioa", "轻办公")
                 from apps.kuaioa.services.form_service import apply_form_request_decision
 
                 approved = approval_instance.status == "approved"
@@ -5516,6 +5918,9 @@ class ApprovalInstanceService:
                 logger.info(f"轻办公申请单 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_kuaioa_leave() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaioa", "轻办公")
                 from apps.kuaioa.services.leave_service import apply_leave_request_decision
 
                 if not entity_id:
@@ -5527,6 +5932,9 @@ class ApprovalInstanceService:
                 logger.info(f"请假出差 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_kuaioa_asset_purchase() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaioa", "轻办公")
                 from apps.kuaioa.services.asset_service import apply_asset_purchase_decision
 
                 approved = approval_instance.status == "approved"
@@ -5536,6 +5944,9 @@ class ApprovalInstanceService:
                 logger.info(f"固定资产采买 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_kuaioa_dept_training_application() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaioa", "轻办公")
                 from apps.kuaioa.services.training_workflow_service import (
                     apply_dept_training_application_decision,
                 )
@@ -5549,6 +5960,9 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_kuaioa_training_plan() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaioa", "轻办公")
                 from apps.kuaioa.services.training_workflow_service import (
                     apply_training_plan_decision,
                 )
@@ -5562,6 +5976,9 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_kuaioa_special_work_qualification() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaioa", "轻办公")
                 from apps.kuaioa.services.training_workflow_service import (
                     apply_special_work_qualification_decision,
                 )
@@ -5651,8 +6068,10 @@ class ApprovalInstanceService:
                 logger.info(f"应收单 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_purchase_invoice() -> None:
+                from apps.common.app_orm import require_finance_orm
                 from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
 
+                require_finance_orm()
                 service = PurchaseInvoiceService()
                 if approval_instance.status == "approved":
                     await service.approve_invoice(
@@ -5785,6 +6204,9 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_product_firmware() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.product_firmware_service import ProductFirmwareService
                 from infra.models.user import User
 
@@ -5801,6 +6223,9 @@ class ApprovalInstanceService:
                 logger.info(f"产品固件 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_lab_request() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.schemas.lab_request import LabRequestRejectRequest
                 from apps.kuaiplm.services.lab_request_service import LabRequestService
                 from infra.models.user import User
@@ -5823,6 +6248,9 @@ class ApprovalInstanceService:
                 logger.info(f"实验委托 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_production_file() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.production_file_service import ProductionFileService
                 from infra.models.user import User
 
@@ -5839,6 +6267,9 @@ class ApprovalInstanceService:
                 logger.info(f"生产文件 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_trial_flow() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.trial_flow_service import TrialFlowService
                 from infra.models.user import User
 
@@ -5883,6 +6314,9 @@ class ApprovalInstanceService:
                 logger.info(f"质量投诉 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_engineering_change() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.engineering_change_service import EngineeringChangeService
                 from infra.models.user import User
 
@@ -5899,6 +6333,9 @@ class ApprovalInstanceService:
                 logger.info(f"工程变更 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_sample_process() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.sample_process_service import SampleProcessService
                 from infra.models.user import User
 
@@ -5915,6 +6352,9 @@ class ApprovalInstanceService:
                 logger.info(f"样品加工申请 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_prototype_build_sheet() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.prototype_build_sheet_service import (
                     PrototypeBuildSheetService,
                 )
@@ -5933,6 +6373,9 @@ class ApprovalInstanceService:
                 logger.info(f"样机制作书 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_rd_deliverable() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.rd_project_service import RdProjectService
                 from infra.models.user import User
 
@@ -5980,6 +6423,9 @@ class ApprovalInstanceService:
                 logger.info(f"体系文件 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_material_review() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.material_review_service import MaterialReviewService
                 from infra.models.user import User
 
@@ -5996,6 +6442,9 @@ class ApprovalInstanceService:
                 logger.info(f"物料评审 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_bom_collaboration() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.bom_collaboration_service import BomCollaborationService
                 from infra.models.user import User
 
@@ -6012,6 +6461,9 @@ class ApprovalInstanceService:
                 logger.info(f"BOM 协同 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_project_proposal() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.project_proposal_service import ProjectProposalService
                 from infra.models.user import User
 
@@ -6028,6 +6480,9 @@ class ApprovalInstanceService:
                 logger.info(f"项目建议书 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_mold_sample() -> None:
+                from apps.common.app_orm import require_app_orm
+
+                require_app_orm("kuaiplm", "星研发")
                 from apps.kuaiplm.services.mold_sample_order_service import MoldSampleOrderService
                 from infra.models.user import User
 
@@ -6274,6 +6729,50 @@ class ApprovalInstanceService:
                     f"其他支出单 {entity_id} 审批回调完成: {approval_instance.status}"
                 )
 
+            async def _handle_partner_statement() -> None:
+                from apps.common.app_orm import require_finance_orm
+                from apps.kuaicaiwu.services.partner_statement_service import (
+                    PartnerStatementService,
+                )
+
+                require_finance_orm()
+                service = PartnerStatementService()
+                if approval_instance.status == "approved":
+                    await service.approve_statement(
+                        tenant_id, int(entity_id), approver_id, is_auto_approve=True
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_statement(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        rejection_reason="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(f"往来对账单 {entity_id} 审批回调完成: {approval_instance.status}")
+
+            async def _handle_fund_transfer() -> None:
+                from apps.common.app_orm import require_finance_orm
+                from apps.kuaicaiwu.services.fund_transfer_audit_service import (
+                    FundTransferAuditService,
+                )
+
+                require_finance_orm()
+                service = FundTransferAuditService()
+                if approval_instance.status == "approved":
+                    await service.approve_transfer(
+                        tenant_id, int(entity_id), approver_id, is_auto_approve=True
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_transfer(
+                        tenant_id,
+                        int(entity_id),
+                        approver_id,
+                        rejection_reason="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(f"资金调拨单 {entity_id} 审批回调完成: {approval_instance.status}")
+
             completion_handlers = {
                 "sales_order": _handle_sales_order,
                 "demand": _handle_demand,
@@ -6294,6 +6793,8 @@ class ApprovalInstanceService:
                 "production_picking": _handle_production_picking,
                 "payable": _handle_payable,
                 "receivable": _handle_receivable,
+                "partner_statement": _handle_partner_statement,
+                "fund_transfer": _handle_fund_transfer,
                 "purchase_invoice": _handle_purchase_invoice,
                 "payment_application": _handle_payment_application,
                 "other_expense": _handle_other_expense,
@@ -6327,6 +6828,25 @@ class ApprovalInstanceService:
                 if data.pop("writeback_failure", None) is not None:
                     approval_instance.data = data
                     await approval_instance.save(update_fields=["data", "updated_at"])
+            else:
+                # 流程已结束但无业务写回 → 单据会永久停在待审核（非延迟）
+                logger.error(
+                    "审批完成回调未注册业务写回: entity_type={} entity_id={} "
+                    "instance_id={} status={}",
+                    entity_type,
+                    entity_id,
+                    approval_instance.id,
+                    approval_instance.status,
+                )
+                data = dict(approval_instance.data or {})
+                data["writeback_failure"] = {
+                    "error": f"missing_completion_handler:{entity_type}",
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "instance_status": approval_instance.status,
+                }
+                approval_instance.data = data
+                await approval_instance.save(update_fields=["data", "updated_at"])
 
         except Exception as e:
             logger.error(f"处理审批完成回调失败: {str(e)}")

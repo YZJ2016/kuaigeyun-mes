@@ -25,6 +25,29 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, Valid
 from infra.services.business_config_service import BusinessConfigService
 
 
+def derive_purchase_arrival_delay_capabilities(
+    status: Optional[str],
+    review_status: Optional[str],
+    change_id: Optional[int],
+) -> dict:
+    """延期填报审核能力。已生成变更单后不再反审核本单。"""
+    st = str(status or "")
+    editable = st in (DocumentStatus.DRAFT.value, DocumentStatus.REJECTED.value)
+    submitted = st == DocumentStatus.SUBMITTED.value
+    pending = st == DocumentStatus.PENDING_REVIEW.value
+    approved_open = st == DocumentStatus.AUDITED.value and not change_id
+
+    def cap(ok: bool) -> dict:
+        return {"allowed": ok, "reason": None}
+
+    return {
+        "submit": cap(editable),
+        "withdraw_submit": cap(submitted or pending),
+        "approve": cap(pending),
+        "revoke_approval": cap(approved_open),
+    }
+
+
 class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
     DELAY_REASON_LABELS = {
         "supplier_capacity": "供应商产能",
@@ -73,6 +96,7 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
             deleted_at__isnull=True,
             status__in=[
                 DocumentStatus.DRAFT.value,
+                DocumentStatus.SUBMITTED.value,
                 DocumentStatus.PENDING_REVIEW.value,
                 DocumentStatus.AUDITED.value,
                 "change_generated",
@@ -93,6 +117,7 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
         existing = await self._active_delay_for_item(tenant_id, int(item.id))
         if existing and existing.status in (
             DocumentStatus.DRAFT.value,
+            DocumentStatus.SUBMITTED.value,
             DocumentStatus.PENDING_REVIEW.value,
             DocumentStatus.AUDITED.value,
         ):
@@ -122,7 +147,7 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
                 impact_description=data.impact_description,
                 impacted_assembly_summary=auto_impact or None,
                 status=DocumentStatus.DRAFT.value,
-                review_status=ReviewStatus.PENDING.value,
+                review_status=ReviewStatus.DRAFT.value,
                 attachments=data.attachments,
                 notes=data.notes,
                 created_by=operator_id,
@@ -144,8 +169,8 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
         )
         if not doc:
             raise NotFoundError("延期填报单不存在")
-        if doc.status != DocumentStatus.DRAFT.value:
-            raise BusinessLogicError("仅草稿可编辑")
+        if doc.status not in (DocumentStatus.DRAFT.value, DocumentStatus.REJECTED.value):
+            raise BusinessLogicError("仅草稿或已驳回可编辑")
 
         upd = data.model_dump(exclude_unset=True)
         if "estimated_arrival_date" in upd and upd["estimated_arrival_date"] <= doc.planned_arrival_date:
@@ -160,10 +185,42 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
         return PurchaseArrivalDelayReportResponse.model_validate(doc)
 
     async def submit(self, tenant_id: int, report_id: int, operator_id: int) -> PurchaseArrivalDelayReportResponse:
+        """内部一键：草稿直接进入待审核或免审通过。页面提交走 commit。"""
         doc = await self._get_or_raise(tenant_id, report_id)
         if doc.status != DocumentStatus.DRAFT.value:
             raise BusinessLogicError("仅草稿可提交")
+        await self.commit(tenant_id, report_id, operator_id)
+        return await self.submit_for_review(tenant_id, report_id, operator_id)
 
+    async def commit(self, tenant_id: int, report_id: int, operator_id: int) -> PurchaseArrivalDelayReportResponse:
+        doc = await self._get_or_raise(tenant_id, report_id)
+        if doc.status == DocumentStatus.SUBMITTED.value:
+            return PurchaseArrivalDelayReportResponse.model_validate(doc)
+        if doc.status not in (DocumentStatus.DRAFT.value, DocumentStatus.REJECTED.value):
+            raise BusinessLogicError("仅草稿或已驳回可提交")
+        user_info = await self.get_user_info(operator_id)
+        doc.status = DocumentStatus.SUBMITTED.value
+        doc.review_status = ReviewStatus.DRAFT.value
+        doc.updated_by = operator_id
+        doc.updated_by_name = user_info["name"]
+        await doc.save()
+        return PurchaseArrivalDelayReportResponse.model_validate(doc)
+
+    async def submit_for_review(
+        self, tenant_id: int, report_id: int, operator_id: int
+    ) -> PurchaseArrivalDelayReportResponse:
+        doc = await self._get_or_raise(tenant_id, report_id)
+        if doc.status != DocumentStatus.SUBMITTED.value:
+            raise BusinessLogicError("请先提交延期填报，再提交审核")
+        return await self._enter_review(tenant_id, report_id, operator_id, doc)
+
+    async def _enter_review(
+        self,
+        tenant_id: int,
+        report_id: int,
+        operator_id: int,
+        doc: PurchaseArrivalDelayReport,
+    ) -> PurchaseArrivalDelayReportResponse:
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "purchase_arrival_delay"
         )
@@ -251,6 +308,79 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
             if body.approved:
                 await self._on_approved(tenant_id, doc, operator_id)
         return PurchaseArrivalDelayReportResponse.model_validate(await self._get_or_raise(tenant_id, report_id))
+
+    async def withdraw_submit(
+        self, tenant_id: int, report_id: int, operator_id: int
+    ) -> PurchaseArrivalDelayReportResponse:
+        doc = await self._get_or_raise(tenant_id, report_id)
+        user_info = await self.get_user_info(operator_id)
+        if doc.status == DocumentStatus.SUBMITTED.value:
+            doc.status = DocumentStatus.DRAFT.value
+            doc.review_status = ReviewStatus.DRAFT.value
+            doc.updated_by = operator_id
+            doc.updated_by_name = user_info["name"]
+            await doc.save()
+            return PurchaseArrivalDelayReportResponse.model_validate(doc)
+        if doc.status != DocumentStatus.PENDING_REVIEW.value:
+            raise BusinessLogicError("仅已提交或待审核可撤回")
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        cancelled = await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="purchase_arrival_delay",
+            entity_id=report_id,
+            operator_id=operator_id,
+        )
+        if not cancelled:
+            raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+        doc.status = DocumentStatus.SUBMITTED.value
+        doc.review_status = ReviewStatus.DRAFT.value
+        doc.updated_by = operator_id
+        doc.updated_by_name = user_info["name"]
+        await doc.save()
+        return PurchaseArrivalDelayReportResponse.model_validate(doc)
+
+    async def revoke_approval(
+        self, tenant_id: int, report_id: int, operator_id: int
+    ) -> PurchaseArrivalDelayReportResponse:
+        from core.services.approval.audit_transition import resolve_revoke_to_draft_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        doc = await self._get_or_raise(tenant_id, report_id)
+        if doc.purchase_order_change_id or doc.status == "change_generated":
+            raise BusinessLogicError("已生成采购变更单，不能反审核延期填报")
+        if doc.status != DocumentStatus.AUDITED.value:
+            raise BusinessLogicError("仅已审核可反审核")
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "purchase_arrival_delay"
+        )
+        user_info = await self.get_user_info(operator_id)
+
+        async def _do_revoke(*, reopened: bool = False) -> PurchaseArrivalDelayReportResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            current = await self._get_or_raise(tenant_id, report_id)
+            if landing == "pending":
+                current.status = DocumentStatus.PENDING_REVIEW.value
+                current.review_status = ReviewStatus.PENDING.value
+            else:
+                current.status = DocumentStatus.DRAFT.value
+                current.review_status = ReviewStatus.DRAFT.value
+            current.updated_by = operator_id
+            current.updated_by_name = user_info["name"]
+            await current.save()
+            return PurchaseArrivalDelayReportResponse.model_validate(current)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="purchase_arrival_delay",
+            entity_id=report_id,
+            operator_id=operator_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def _on_approved(
         self, tenant_id: int, doc: PurchaseArrivalDelayReport, operator_id: int

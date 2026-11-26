@@ -27,6 +27,7 @@ _DOC_CODE_ATTR = {
     "payable": "payable_code",
     "receivable": "receivable_code",
     "purchase_invoice": "invoice_code",
+    "partner_statement": "statement_code",
 }
 
 
@@ -59,11 +60,12 @@ async def _auto_approve_finance(
 ) -> None:
     user = await User.filter(id=updated_by).first()
     approver_name = operator_name_from_user(user) if user else ""
+    now = resolve_business_datetime()
     patch: dict[str, Any] = {
         "review_status": "已审核",
         "reviewer_id": updated_by,
         "reviewer_name": approver_name,
-        "review_time": resolve_business_datetime(),
+        "review_time": now,
         "review_remarks": "自动审核",
         "updated_by": updated_by,
         "updated_by_name": approver_name,

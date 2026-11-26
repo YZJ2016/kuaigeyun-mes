@@ -5,9 +5,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { App, Form, Input, theme } from 'antd';
+import { App, Form, Input } from 'antd';
 import { UniDropdown, QuickCreateModal } from '../../../components/uni-dropdown';
-import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../components/layout-templates/constants';
 import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import { invalidateMaterialUnitDisplayMapCache } from '../../../utils/materialUnitDisplay';
 import { useMaterialUnitOptions, MATERIAL_UNIT_OPTIONS_QUERY_KEY, invalidateMaterialUnitOptionsQuery } from '../hooks/useMaterialUnitOptions';
@@ -36,12 +35,12 @@ export const MaterialUnitQuickSelect: React.FC<MaterialUnitQuickSelectProps> = (
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = theme.useToken();
   const queryClient = useQueryClient();
   const unitPerms = useResourcePermissions('master-data:material-unit');
   const { options, isLoading } = useMaterialUnitOptions();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createForm] = Form.useForm<{ name: string }>();
 
@@ -84,22 +83,27 @@ export const MaterialUnitQuickSelect: React.FC<MaterialUnitQuickSelectProps> = (
         placeholder={placeholder}
         style={{ width: '100%', ...style }}
         optionFilterProp="label"
+        open={dropdownOpen && !createOpen}
+        onOpenChange={(next) => {
+          if (!createOpen) setDropdownOpen(next);
+        }}
         quickCreate={
           unitPerms.canCreate
             ? {
                 label: t('app.master-data.materialForm.quickAddUnit'),
                 onClick: () => {
                   createForm.resetFields();
+                  setDropdownOpen(false);
                   setCreateOpen(true);
                 },
               }
             : undefined
         }
       />
+      {/* 不传 zIndex：挂在宿主 Modal 的 ZIndexContext 内，antd 再抬 100，高于单位下拉（宿主 + 50） */}
       <QuickCreateModal
         open={createOpen}
         title={t('app.master-data.materialForm.quickAddUnitTitle')}
-        zIndex={token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET}
         confirmLoading={creating}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}

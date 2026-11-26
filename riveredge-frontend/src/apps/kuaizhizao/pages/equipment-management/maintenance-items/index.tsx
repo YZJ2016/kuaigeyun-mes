@@ -53,6 +53,7 @@ interface MaintenanceItem {
   code?: string;
   name?: string;
   requirement?: string;
+  remark?: string;
   standard_hours?: number;
   is_active?: boolean;
   updated_at?: string;
@@ -166,6 +167,7 @@ const MaintenanceItemsPage: React.FC = () => {
             name,
             standard_hours: parseImportNumber(cellAt('standard_hours')),
             requirement: cellAt('requirement') || null,
+            remark: cellAt('remark') || null,
           };
           if (isActive !== undefined) payload.is_active = isActive;
           return payload;
@@ -191,6 +193,7 @@ const MaintenanceItemsPage: React.FC = () => {
       { title: t('common.name'), dataIndex: 'name' },
       { title: t(`${P}.col.standardHours`), dataIndex: 'standard_hours' },
       { title: t(`${P}.col.requirement`), dataIndex: 'requirement', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
       buildIsActiveDescriptionColumn<MaintenanceItem>(t),
     ],
     [t],
@@ -249,13 +252,24 @@ const MaintenanceItemsPage: React.FC = () => {
       {
         title: t(`${P}.col.requirement`),
         dataIndex: 'requirement',
+        width: 180,
+        minWidth: 180,
+        uniTableKeepWidth: true,
+        resizable: false,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.requirement != null && r.requirement !== '' ? String(r.requirement) : '-'),
+      },
+      {
+        title: t('common.remark'),
+        dataIndex: 'remark',
         minWidth: 160,
         uniTablePrimaryFlex: true,
         uniTableRemainderFlex: true,
         resizable: false,
         ellipsis: true,
         hideInSearch: true,
-        render: (_, r) => (r.requirement != null && r.requirement !== '' ? String(r.requirement) : '-'),
+        render: (_, r) => (r.remark != null && r.remark !== '' ? String(r.remark) : '-'),
       },
       {
         title: t('common.enabled'),
@@ -302,7 +316,7 @@ const MaintenanceItemsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceItems)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-items-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-items-width-v3"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -389,6 +403,9 @@ const MaintenanceItemsPage: React.FC = () => {
           </Col>
           <Col span={24}>
             <ProFormTextArea name="requirement" label={t(`${P}.col.requirement`)} fieldProps={{ rows: 3 }} />
+          </Col>
+          <Col span={24}>
+            <ProFormTextArea name="remark" label={t('common.remark')} fieldProps={{ rows: 2 }} />
           </Col>
           <Col span={24}>
             <ProFormSwitch name="is_active" label={t('common.enabled')} />

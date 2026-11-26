@@ -5,7 +5,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { App, Button, Space, Tag } from 'antd';
-import { ActionType, ProColumns, ProFormDatePicker, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormDatePicker, ProFormInstance, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
@@ -21,9 +21,12 @@ import {
 import { UNI_TABLE_STATUS_BADGE_COLUMN_WIDTH } from '../../../../../utils/uniTableLayoutColumns';
 import {
   PURCHASE_ARRIVAL_DELAY_REASONS,
+  commitPurchaseArrivalDelayReport,
   createPurchaseArrivalDelayReport,
+  getPurchaseArrivalDelayReport,
   listPurchaseArrivalWarnings,
-  submitPurchaseArrivalDelayReport,
+  submitPurchaseArrivalDelayForReview,
+  updatePurchaseArrivalDelayReport,
   type PurchaseArrivalWarningRow,
 } from '../../../services/purchase-arrival';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
@@ -52,9 +55,14 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>();
+  const delayFormRef = useRef<ProFormInstance>(undefined);
+  const commitAfterSaveRef = useRef(false);
+  const editingReportIdRef = useRef<number | null>(null);
   const delayPerms = useResourcePermissions(PURCHASE_ARRIVAL_DELAY_RESOURCE);
   const [delayOpen, setDelayOpen] = useState(false);
   const [delayRow, setDelayRow] = useState<PurchaseArrivalWarningRow | null>(null);
+  const [editingReportId, setEditingReportId] = useState<number | null>(null);
+  const [pendingDelayFormValues, setPendingDelayFormValues] = useState<Record<string, unknown> | null>(null);
   const [summary, setSummary] = useState({ normal: 0, imminent: 0, overdue: 0, total_open_lines: 0 });
 
   const delayReasonOptions = useMemo(
@@ -187,14 +195,38 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
         key: 'option',
         fixed: 'right',
         render: (_, record) => [
-          delayPerms.canCreate && record.processing_status === 'unprocessed' ? (
+          delayPerms.canCreate && (
+            !record.delay_report_id
+            || record.delay_status === 'DRAFT'
+            || record.delay_status === 'REJECTED'
+          ) ? (
             <Button
               key="delay"
               {...rowActionKind('create')}
               {...rowActionLabelKeep()}
               onClick={() => {
-                setDelayRow(record);
-                setDelayOpen(true);
+                void (async () => {
+                  setDelayRow(record);
+                  if (
+                    record.delay_report_id
+                    && (record.delay_status === 'DRAFT' || record.delay_status === 'REJECTED')
+                  ) {
+                    const doc = await getPurchaseArrivalDelayReport(record.delay_report_id);
+                    editingReportIdRef.current = doc.id;
+                    setEditingReportId(doc.id);
+                    setPendingDelayFormValues({
+                      delay_reason: doc.delay_reason,
+                      estimated_arrival_date: doc.estimated_arrival_date ? dayjs(doc.estimated_arrival_date) : undefined,
+                      impact_description: doc.impact_description,
+                    });
+                    setDelayOpen(true);
+                    return;
+                  }
+                  editingReportIdRef.current = null;
+                  setEditingReportId(null);
+                  setPendingDelayFormValues(null);
+                  setDelayOpen(true);
+                })();
               }}
             >
               {t('app.kuaizhizao.purchaseArrival.action.reportDelay')}
@@ -265,30 +297,66 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
       <FormModalTemplate
         title={t('app.kuaizhizao.purchaseArrival.delayModalTitle')}
         open={delayOpen}
-        onOpenChange={setDelayOpen}
+        formRef={delayFormRef}
+        onOpenChange={(open) => {
+          if (!open) {
+            commitAfterSaveRef.current = false;
+            editingReportIdRef.current = null;
+            setPendingDelayFormValues(null);
+            setEditingReportId(null);
+          }
+          setDelayOpen(open);
+        }}
+        afterOpenChange={(open) => {
+          if (open && pendingDelayFormValues) {
+            delayFormRef.current?.setFieldsValue(pendingDelayFormValues);
+          }
+        }}
+        extraFooterAfter={
+          <Button
+            onClick={() => {
+              commitAfterSaveRef.current = true;
+              delayFormRef.current?.submit?.();
+            }}
+          >
+            {t('common.submit')}
+          </Button>
+        }
         initialValues={{
           estimated_arrival_date: delayRow?.required_date ? dayjs(delayRow.required_date).add(7, 'day') : dayjs().add(7, 'day'),
         }}
         onFinish={async (values) => {
           if (!delayRow?.purchase_order_item_id) return false;
+          const commit = commitAfterSaveRef.current;
+          commitAfterSaveRef.current = false;
           try {
-            const created = await createPurchaseArrivalDelayReport({
-              purchase_order_item_id: delayRow.purchase_order_item_id,
+            const payload = {
               delay_reason: values.delay_reason,
               estimated_arrival_date: dayjs(values.estimated_arrival_date).format('YYYY-MM-DD'),
               impact_description: values.impact_description,
-            });
-            let submitted = created;
-            if (delayPerms.canAction?.('submit')) {
-              submitted = await submitPurchaseArrivalDelayReport(created.id);
-            }
-            if (submitted.purchase_order_change_id) {
-              messageApi.success(t('app.kuaizhizao.purchaseArrival.delayChangeGenerated'));
+            };
+            const currentId = editingReportIdRef.current;
+            const saved = currentId
+              ? await updatePurchaseArrivalDelayReport(currentId, payload)
+              : await createPurchaseArrivalDelayReport({
+                  purchase_order_item_id: delayRow.purchase_order_item_id,
+                  ...payload,
+                });
+            editingReportIdRef.current = saved.id;
+            setEditingReportId(saved.id);
+            if (commit) {
+              await commitPurchaseArrivalDelayReport(saved.id);
+              const reviewed = await submitPurchaseArrivalDelayForReview(saved.id);
+              if (reviewed.purchase_order_change_id) {
+                messageApi.success(t('app.kuaizhizao.purchaseArrival.delayChangeGenerated'));
+              } else {
+                messageApi.success(t('app.kuaizhizao.purchaseArrival.delaySubmitted'));
+              }
             } else {
-              messageApi.success(t('app.kuaizhizao.purchaseArrival.delaySubmitted'));
+              messageApi.success(t('app.kuaizhizao.purchaseArrival.delaySaved'));
             }
             setDelayOpen(false);
-    actionRef.current?.reload();
+            actionRef.current?.reload();
             return true;
           } catch (e: unknown) {
             messageApi.error(getApiErrorMessage(e, t('common.operationFailed')));

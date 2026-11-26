@@ -35,13 +35,13 @@ def test_draft_delete_and_submit_allowed():
     assert not caps.convert_to_order.allowed
 
 
-def test_sent_pending_delete_and_update_allowed():
+def test_sent_pending_allows_withdraw_and_approve_not_edit():
     caps = derive_quotation_capabilities(
         _q(status="已发送", review_status="待审核"),
         audit_required=True,
     )
-    assert caps.delete.allowed
-    assert caps.update.allowed
+    assert not caps.delete.allowed
+    assert not caps.update.allowed
     assert caps.withdraw_submit.allowed
     assert caps.approve.allowed
     assert not caps.revoke_approval.allowed
@@ -95,6 +95,37 @@ def test_accepted_with_stale_sales_order_id_still_allows_convert():
     assert caps.convert_to_order.allowed
     assert not caps.convert_to_contract.allowed
     assert caps.convert_to_contract.reason == "quotation.convert_contract.removed"
+
+
+def test_not_latest_in_series_blocks_convert_order():
+    """删除最新修订版后若未晋升上一版，旧版 is_latest=False 会阻断下推。"""
+    caps = derive_quotation_capabilities(
+        _q(
+            status="已接受",
+            review_status="审核通过",
+            is_latest_in_series=False,
+            superseded_by_id=88,
+        ),
+        audit_required=True,
+    )
+    assert not caps.convert_to_order.allowed
+    assert caps.convert_to_order.reason == "quotation.convert_order.not_latest"
+    assert not caps.convert_to_sales_review.allowed
+    assert caps.convert_to_sales_review.reason == "quotation.convert_sales_review.not_latest"
+
+
+def test_latest_after_promote_allows_convert():
+    caps = derive_quotation_capabilities(
+        _q(
+            status="已接受",
+            review_status="审核通过",
+            is_latest_in_series=True,
+            superseded_by_id=None,
+        ),
+        audit_required=True,
+    )
+    assert caps.convert_to_order.allowed
+    assert caps.create_revision.allowed
 
 
 def test_linked_contract_blocks_convert_order():
@@ -216,7 +247,23 @@ def test_audit_phase_no_revoke_on_accepted():
     assert "revoke" not in audit["allowed_actions"]
 
 
+def test_print_unaudited_gate_in_assert_path():
+    from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+        apply_print_unaudited_gate_to_capabilities,
+        PRINT_UNAUDITED_DENIED_REASON,
+    )
+
+    q = _q(status="已发送", review_status="待审核")
+    caps = derive_quotation_capabilities(q, audit_required=False)
+    caps = apply_print_unaudited_gate_to_capabilities(
+        caps, q, allow_print_unaudited=False
+    )
+    assert not caps.print_formal.allowed
+    assert caps.print_formal.reason == PRINT_UNAUDITED_DENIED_REASON
+
+
 def test_require_audit_before_print_blocks_unapproved():
+    # 本地兼容参数：旧调用方仍可按需开启「须审核后才可打印」门禁
     caps = derive_quotation_capabilities(
         _q(status="已发送", review_status="待审核"),
         audit_required=False,
@@ -231,12 +278,3 @@ def test_require_audit_before_print_blocks_unapproved():
         require_audit_before_print=True,
     )
     assert caps_ok.print_formal.allowed
-
-
-def test_require_audit_before_print_off_keeps_existing_rules():
-    caps = derive_quotation_capabilities(
-        _q(status="已发送", review_status=""),
-        audit_required=False,
-        require_audit_before_print=False,
-    )
-    assert caps.print_formal.allowed

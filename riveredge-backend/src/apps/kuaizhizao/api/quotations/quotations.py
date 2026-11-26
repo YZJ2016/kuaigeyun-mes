@@ -13,6 +13,7 @@ from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException, status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_read_or_display
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
@@ -208,6 +209,70 @@ async def list_quotation_salesmen(
         )
 
 
+@router.get(
+    "/sales-order-pull-lines",
+    summary="Open quotation lines for sales order pull",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:quotation"))],
+)
+async def list_quotation_sales_order_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    quotation_id: Optional[int] = Query(None, description="来源报价单"),
+    pullable_only: bool = Query(True, description="仅剩余可转量大于 0"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await quotation_service.list_quotation_sales_order_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            quotation_id=quotation_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出销售订单取单报价开口行失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出销售订单取单报价开口行失败",
+        )
+
+
+@router.get(
+    "/sales-review-pull-lines",
+    summary="Open quotation lines for sales review pull",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:quotation"))],
+)
+async def list_quotation_sales_review_pull_lines(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
+    quotation_id: Optional[int] = Query(None, description="来源报价单"),
+    pullable_only: bool = Query(True, description="仅剩余可转量大于 0"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await quotation_service.list_quotation_sales_review_pull_lines(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            quotation_id=quotation_id,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出订单评审取单报价开口行失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出订单评审取单报价开口行失败",
+        )
+
+
 @router.get("/{quotation_id}", response_model=QuotationResponse, summary="Get quotation")
 async def get_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
@@ -332,15 +397,15 @@ async def withdraw_quotation(
         )
 
 
-@router.post("/{quotation_id}/submit", response_model=QuotationResponse, summary="Submit quotation")
+@router.post("/{quotation_id}/submit", response_model=QuotationResponse, summary="Commit quotation")
 async def submit_quotation(
     quotation_id: int = Path(..., description="报价单ID"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """草稿提交为已发送；蓝图无需审核时自动审核通过，否则进入待审核。"""
+    """草稿或已驳回 → 已提交（review_status=SUBMITTED）。页面提交走本接口；提交审核另走 uni-audit。"""
     try:
-        return await quotation_service.submit_quotation(
+        return await quotation_service.commit_quotation(
             tenant_id=tenant_id,
             quotation_id=quotation_id,
             submitted_by=current_user.id,

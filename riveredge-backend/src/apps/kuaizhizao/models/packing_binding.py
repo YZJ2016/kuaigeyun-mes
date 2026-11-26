@@ -71,6 +71,14 @@ class PackingBinding(BaseModel):
         default="bound",
         description="封箱状态 bound/sealed",
     )
+    target_quantity = fields.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        null=True,
+        description="本箱目标容量（来自箱规 Profile）",
+    )
+    consumed_at = fields.DatetimeField(null=True, description="下游核销时间")
+    packing_profile_id = fields.IntField(null=True, description="应用的箱规配置ID")
     bound_by = fields.IntField(description="绑定人ID")
     bound_by_name = fields.CharField(max_length=100, description="绑定人姓名")
     bound_at = fields.DatetimeField(description="绑定时间")

@@ -11,17 +11,27 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
 from loguru import logger
 
-from apps.kuaizhizao.models.equipment_fault import EquipmentFault, EquipmentRepair
+from apps.kuaizhizao.models.equipment_fault import (
+    EquipmentFault,
+    EquipmentRepair,
+    EquipmentRepairParticipant,
+)
 from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.schemas.equipment import EQUIPMENT_STATUS_PROTECTED
 from apps.kuaizhizao.services.spare_part_service import SparePartService
 from apps.kuaizhizao.schemas.equipment_fault import (
     EquipmentFaultArriveRequest,
     EquipmentFaultCreate,
     EquipmentFaultUpdate,
+    EquipmentRepairAddCollaboratorRequest,
     EquipmentRepairCompleteRequest,
     EquipmentRepairCreate,
+    EquipmentRepairParticipantResponse,
+    EquipmentRepairReassignRequest,
+    EquipmentRepairResponse,
     EquipmentRepairUpdate,
 )
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
@@ -30,10 +40,209 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 from core.utils.timezone_utils import resolve_business_datetime
 
-# 故障/维修驱动设备状态时，下列主数据状态不被覆盖
-_EQUIPMENT_STATUS_PROTECTED = frozenset({"停用", "报废", "校验中"})
+
+async def _find_open_repair_for_fault(
+    tenant_id: int,
+    *,
+    fault_id: Optional[int] = None,
+    fault_uuid: Optional[str] = None,
+) -> Optional[EquipmentRepair]:
+    """同一故障仅允许一张进行中维修单：按故障 id / uuid 查找最新进行中记录。"""
+    if not fault_id and not fault_uuid:
+        return None
+    clauses = []
+    if fault_id:
+        clauses.append(Q(equipment_fault_id=int(fault_id)))
+    if fault_uuid:
+        clauses.append(Q(equipment_fault_uuid=str(fault_uuid)))
+    fault_q = clauses[0]
+    for extra in clauses[1:]:
+        fault_q |= extra
+    return (
+        await EquipmentRepair.filter(
+            fault_q,
+            tenant_id=tenant_id,
+            status="进行中",
+            deleted_at__isnull=True,
+        )
+        .order_by("-id")
+        .first()
+    )
+
+
+async def _inherit_arrival_from_sibling_repair(
+    tenant_id: int,
+    repair: EquipmentRepair,
+) -> bool:
+    """历史重复单：完修前从同故障已签到维修单继承到场信息。"""
+    if repair.arrival_at:
+        return False
+    fault_id = getattr(repair, "equipment_fault_id", None)
+    fault_uuid = getattr(repair, "equipment_fault_uuid", None)
+    if not fault_id and not fault_uuid:
+        return False
+    fault_clauses = []
+    if fault_id:
+        fault_clauses.append(Q(equipment_fault_id=int(fault_id)))
+    if fault_uuid:
+        fault_clauses.append(Q(equipment_fault_uuid=str(fault_uuid)))
+    fault_q = fault_clauses[0]
+    for extra in fault_clauses[1:]:
+        fault_q |= extra
+    sibling = (
+        await EquipmentRepair.filter(
+            fault_q,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            arrival_at__isnull=False,
+        )
+        .exclude(id=repair.id)
+        .order_by("-arrival_at", "-id")
+        .first()
+    )
+    if not sibling or not sibling.arrival_at:
+        return False
+    repair.arrival_at = sibling.arrival_at
+    repair.arrival_by_id = sibling.arrival_by_id
+    repair.arrival_by_name = sibling.arrival_by_name
+    return True
+
 _OPEN_FAULT_STATUSES = ("待处理", "处理中")
 DEFAULT_RESPONSE_MINUTES = 60
+_ROLE_PRIMARY = "主责"
+_ROLE_COLLAB = "协作"
+_PART_ACTIVE = "进行中"
+_PART_REASSIGNED = "已转派"
+_PART_DONE = "已完成"
+_PART_LEFT = "已退出"
+
+
+async def _resolve_user_display(
+    tenant_id: int, user_id: int
+) -> tuple[User, str]:
+    user = await User.filter(id=user_id, tenant_id=tenant_id).first()
+    if not user:
+        raise ValidationError(f"用户不存在: {user_id}")
+    name = (user.full_name or user.username or "").strip() or f"用户{user_id}"
+    return user, name
+
+
+async def _list_repair_participants(
+    tenant_id: int, repair_id: int
+) -> list[EquipmentRepairParticipant]:
+    return (
+        await EquipmentRepairParticipant.filter(
+            tenant_id=tenant_id,
+            repair_id=repair_id,
+            deleted_at__isnull=True,
+        )
+        .order_by("joined_at", "id")
+        .all()
+    )
+
+
+async def serialize_equipment_repair(
+    tenant_id: int, repair: EquipmentRepair
+) -> EquipmentRepairResponse:
+    parts = await _list_repair_participants(tenant_id, repair.id)
+    base = EquipmentRepairResponse.model_validate(repair)
+    return base.model_copy(
+        update={
+            "participants": [
+                EquipmentRepairParticipantResponse.model_validate(p) for p in parts
+            ]
+        }
+    )
+
+
+async def _ensure_started_at(repair: EquipmentRepair, when: datetime) -> bool:
+    if repair.started_at:
+        return False
+    repair.started_at = when
+    return True
+
+
+async def _ensure_primary_participant(
+    tenant_id: int,
+    repair: EquipmentRepair,
+    *,
+    user_id: Optional[int],
+    user_name: Optional[str],
+    joined_at: datetime,
+    actor: Optional[User] = None,
+) -> Optional[EquipmentRepairParticipant]:
+    """接取/到场时确保主责参与人；已有进行中主责则不重复建。"""
+    if not user_id:
+        return None
+    existing = await EquipmentRepairParticipant.filter(
+        tenant_id=tenant_id,
+        repair_id=repair.id,
+        role=_ROLE_PRIMARY,
+        status=_PART_ACTIVE,
+        deleted_at__isnull=True,
+    ).first()
+    if existing:
+        return existing
+    name = (user_name or "").strip()
+    if not name:
+        _, name = await _resolve_user_display(tenant_id, int(user_id))
+    row = EquipmentRepairParticipant(
+        tenant_id=tenant_id,
+        repair_id=repair.id,
+        repair_uuid=repair.uuid,
+        user_id=int(user_id),
+        user_name=name,
+        role=_ROLE_PRIMARY,
+        status=_PART_ACTIVE,
+        joined_at=joined_at,
+    )
+    apply_create_audit(row, actor)
+    await row.save()
+    return row
+
+
+async def _finalize_active_participants(
+    tenant_id: int,
+    repair_id: int,
+    *,
+    left_at: datetime,
+    actor: Optional[User] = None,
+) -> None:
+    rows = await EquipmentRepairParticipant.filter(
+        tenant_id=tenant_id,
+        repair_id=repair_id,
+        status=_PART_ACTIVE,
+        deleted_at__isnull=True,
+    ).all()
+    for row in rows:
+        row.status = _PART_DONE
+        row.left_at = left_at
+        apply_update_audit(row, actor)
+        await row.save()
+
+
+async def _bootstrap_repair_participation(
+    tenant_id: int,
+    repair: EquipmentRepair,
+    *,
+    user_id: Optional[int],
+    user_name: Optional[str],
+    when: Optional[datetime] = None,
+    actor: Optional[User] = None,
+) -> None:
+    """接取/创建维修：记录开始时间并确保主责参与人。"""
+    now = when or resolve_business_datetime()
+    changed = await _ensure_started_at(repair, now)
+    if changed:
+        await repair.save()
+    await _ensure_primary_participant(
+        tenant_id,
+        repair,
+        user_id=user_id,
+        user_name=user_name,
+        joined_at=now,
+        actor=actor,
+    )
 
 
 async def sync_equipment_status_from_faults(
@@ -57,7 +266,7 @@ async def sync_equipment_status_from_faults(
     if not equipment:
         return None
     current = str(equipment.status or "")
-    if current in _EQUIPMENT_STATUS_PROTECTED:
+    if current in EQUIPMENT_STATUS_PROTECTED:
         return current
 
     has_active_repair = await EquipmentRepair.filter(
@@ -127,7 +336,22 @@ class EquipmentFaultService:
             
             if not equipment:
                 raise ValidationError(f"设备不存在: {data.equipment_uuid}")
-            
+            if str(equipment.status or "") in EQUIPMENT_STATUS_PROTECTED:
+                raise ValidationError(
+                    f"设备当前为「{equipment.status}」，不能登记故障；请先通过状态变更/反报废恢复后再报修"
+                )
+            open_fault = await EquipmentFault.filter(
+                tenant_id=tenant_id,
+                equipment_id=equipment.id,
+                status__in=list(_OPEN_FAULT_STATUSES),
+                deleted_at__isnull=True,
+            ).first()
+            if open_fault:
+                raise ValidationError(
+                    f"设备已有未闭环报修单 {open_fault.fault_no}（{open_fault.status}），"
+                    "请先完修或关闭后再新建"
+                )
+
             # 如果没有提供故障记录编号，自动生成
             if not data.fault_no:
                 try:
@@ -213,12 +437,9 @@ class EquipmentFaultService:
         if scanned != fault.equipment_uuid:
             raise ValidationError("扫码设备与故障设备不一致，请扫描本故障设备二维码")
 
-        repair = await EquipmentRepair.filter(
-            tenant_id=tenant_id,
-            equipment_fault_id=fault.id,
-            status="进行中",
-            deleted_at__isnull=True,
-        ).order_by("-id").first()
+        repair = await _find_open_repair_for_fault(
+            tenant_id, fault_id=fault.id, fault_uuid=fault.uuid
+        )
         now = resolve_business_datetime()
         operator_name = (
             (data.repairer_name or "").strip()
@@ -229,6 +450,8 @@ class EquipmentFaultService:
         if repair and repair.arrival_at:
             raise ValidationError("本故障已完成到场签到")
 
+        if not operator or not operator.id:
+            raise ValidationError("须登录后再到场签到")
         if not repair:
             create_data = EquipmentRepairCreate(
                 equipment_uuid=fault.equipment_uuid,
@@ -236,10 +459,11 @@ class EquipmentFaultService:
                 repair_date=now,
                 repair_type=(data.repair_type or "现场维修").strip() or "现场维修",
                 repair_description=fault.fault_description or "到场签到",
-                repairer_id=operator.id if operator else None,
+                repairer_id=int(operator.id),
                 repairer_name=operator_name or None,
                 status="进行中",
             )
+            # 直接建单，避免走 create 内「复用进行中单」分支（此处本就没有）
             repair = await EquipmentRepairService.create_equipment_repair(
                 tenant_id=tenant_id,
                 data=create_data,
@@ -249,11 +473,22 @@ class EquipmentFaultService:
         repair.arrival_at = now
         repair.arrival_by_id = operator.id if operator else None
         repair.arrival_by_name = operator_name or None
+        if not repair.started_at:
+            repair.started_at = now
         if operator and not repair.repairer_id:
             repair.repairer_id = operator.id
             repair.repairer_name = repair.repairer_name or operator_name
         apply_update_audit(repair, operator)
         await repair.save()
+        if operator:
+            await _ensure_primary_participant(
+                tenant_id,
+                repair,
+                user_id=operator.id,
+                user_name=operator_name or repair.repairer_name,
+                joined_at=now,
+                actor=operator,
+            )
 
         from apps.kuaizhizao.services.equipment_fault_reminder_service import (
             EquipmentFaultReminderService,
@@ -529,6 +764,20 @@ class EquipmentRepairService:
                 
                 if not equipment_fault:
                     raise ValidationError(f"设备故障记录不存在: {data.equipment_fault_uuid}")
+
+            if equipment_fault:
+                existing = await _find_open_repair_for_fault(
+                    tenant_id,
+                    fault_id=equipment_fault.id,
+                    fault_uuid=equipment_fault.uuid,
+                )
+                if existing and existing.status == "进行中":
+                    raise ValidationError(
+                        "该故障已有进行中的维修单，请通过转派更换主维修人，勿重复指派"
+                    )
+
+            _, repairer_name = await _resolve_user_display(tenant_id, int(data.repairer_id))
+            data.repairer_name = repairer_name
             
             # 如果没有提供维修记录编号，自动生成
             if not data.repair_no:
@@ -552,10 +801,18 @@ class EquipmentRepairService:
                 equipment_fault_uuid=equipment_fault.uuid if equipment_fault else None,
                 **data.model_dump(exclude_none=True, exclude={'equipment_uuid', 'equipment_fault_uuid'})
             )
+            actor = None
             if created_by is not None:
                 actor = await User.filter(id=created_by).first()
                 apply_create_audit(repair, actor)
             await repair.save()
+            await _bootstrap_repair_participation(
+                tenant_id,
+                repair,
+                user_id=repair.repairer_id or created_by,
+                user_name=repair.repairer_name,
+                actor=actor,
+            )
             await EquipmentRepairService._sync_linked_fault_status(
                 tenant_id=tenant_id,
                 equipment_fault=equipment_fault,
@@ -634,6 +891,7 @@ class EquipmentRepairService:
         repair_end_date: Optional[str] = None,
         created_start_date: Optional[str] = None,
         created_end_date: Optional[str] = None,
+        mine_user_id: Optional[int] = None,
     ) -> tuple[List[EquipmentRepair], int]:
         """
         获取设备维修记录列表
@@ -662,6 +920,23 @@ class EquipmentRepairService:
             query = query.filter(equipment_fault_uuid=equipment_fault_uuid)
         if status:
             query = query.filter(status=status)
+
+        if mine_user_id is not None:
+            participant_repair_ids = await EquipmentRepairParticipant.filter(
+                tenant_id=tenant_id,
+                user_id=mine_user_id,
+                status=_PART_ACTIVE,
+                deleted_at__isnull=True,
+            ).values_list("repair_id", flat=True)
+            participant_ids = list(participant_repair_ids)
+            from tortoise.expressions import Q
+
+            if participant_ids:
+                query = query.filter(
+                    Q(repairer_id=mine_user_id) | Q(id__in=participant_ids)
+                )
+            else:
+                query = query.filter(repairer_id=mine_user_id)
 
         from apps.kuaizhizao.services.equipment_list_core import (
             EQUIPMENT_REPAIR_SORTABLE_FIELDS,
@@ -712,6 +987,7 @@ class EquipmentRepairService:
             raise ValidationError("已取消的维修单不可完工")
         if repair.status == "已完成":
             raise ValidationError("维修单已完工")
+        inherited_arrival = await _inherit_arrival_from_sibling_repair(tenant_id, repair)
         if not repair.arrival_at:
             raise ValidationError("请先到场扫码签到后再完工")
 
@@ -733,8 +1009,21 @@ class EquipmentRepairService:
             repair.attachments = data.attachments
         repair.status = "已完成"
         repair.completed_at = now
+        if not repair.started_at:
+            repair.started_at = repair.arrival_at or now
         apply_update_audit(repair, operator)
         await repair.save()
+        await _finalize_active_participants(
+            tenant_id,
+            repair.id,
+            left_at=now,
+            actor=operator,
+        )
+        if inherited_arrival:
+            logger.info(
+                "equipment repair {} inherited arrival_at from sibling before complete",
+                repair.uuid,
+            )
 
         linked_fault = None
         if repair.equipment_fault_uuid:
@@ -799,8 +1088,13 @@ class EquipmentRepairService:
         
         update_data = data.model_dump(exclude_unset=True, exclude_none=True)
         if update_data.get("status") == "已完成":
+            await _inherit_arrival_from_sibling_repair(tenant_id, repair)
             if not repair.arrival_at and not update_data.get("arrival_at"):
                 raise ValidationError("请先到场扫码签到后再完工")
+            if repair.arrival_at and not update_data.get("arrival_at"):
+                update_data["arrival_at"] = repair.arrival_at
+                update_data.setdefault("arrival_by_id", repair.arrival_by_id)
+                update_data.setdefault("arrival_by_name", repair.arrival_by_name)
             cause = (update_data.get("fault_cause") or repair.fault_cause or "").strip()
             content = (
                 update_data.get("repair_content")
@@ -822,6 +1116,18 @@ class EquipmentRepairService:
             setattr(repair, key, value)
         
         await repair.save()
+
+        if update_data.get("status") == "已完成":
+            done_at = repair.completed_at or resolve_business_datetime()
+            if not repair.started_at:
+                repair.started_at = repair.arrival_at or done_at
+                await repair.save()
+            await _finalize_active_participants(
+                tenant_id,
+                repair.id,
+                left_at=done_at,
+                actor=None,
+            )
 
         if "status" in update_data:
             if repair.equipment_fault_uuid:
@@ -863,6 +1169,122 @@ class EquipmentRepairService:
                         logger.warning("设备恢复消息提醒失败 tenant={}: {}", tenant_id, exc)
             # 已取消等不映射故障状态的路径也需刷新设备状态
             await sync_equipment_status_from_faults(tenant_id, repair.equipment_id)
+        return repair
+
+    @staticmethod
+    async def add_collaborator(
+        tenant_id: int,
+        uuid: str,
+        data: EquipmentRepairAddCollaboratorRequest,
+        *,
+        operator: Optional[User] = None,
+    ) -> EquipmentRepair:
+        repair = await EquipmentRepairService.get_equipment_repair_by_uuid(tenant_id, uuid)
+        if repair.status != "进行中":
+            raise ValidationError("仅进行中的维修单可添加协作人")
+        user, name = await _resolve_user_display(tenant_id, int(data.user_id))
+        active_same = await EquipmentRepairParticipant.filter(
+            tenant_id=tenant_id,
+            repair_id=repair.id,
+            user_id=user.id,
+            status=_PART_ACTIVE,
+            deleted_at__isnull=True,
+        ).first()
+        if active_same:
+            raise ValidationError(f"{name} 已在本维修单进行中，勿重复添加")
+        now = resolve_business_datetime()
+        await _bootstrap_repair_participation(
+            tenant_id,
+            repair,
+            user_id=repair.repairer_id or (operator.id if operator else None),
+            user_name=repair.repairer_name,
+            when=now,
+            actor=operator,
+        )
+        row = EquipmentRepairParticipant(
+            tenant_id=tenant_id,
+            repair_id=repair.id,
+            repair_uuid=repair.uuid,
+            user_id=user.id,
+            user_name=name,
+            role=_ROLE_COLLAB,
+            status=_PART_ACTIVE,
+            joined_at=now,
+            remark=(data.remark or "").strip() or None,
+        )
+        apply_create_audit(row, operator)
+        await row.save()
+        return repair
+
+    @staticmethod
+    async def reassign_primary(
+        tenant_id: int,
+        uuid: str,
+        data: EquipmentRepairReassignRequest,
+        *,
+        operator: Optional[User] = None,
+    ) -> EquipmentRepair:
+        repair = await EquipmentRepairService.get_equipment_repair_by_uuid(tenant_id, uuid)
+        if repair.status != "进行中":
+            raise ValidationError("仅进行中的维修单可转派")
+        to_user, to_name = await _resolve_user_display(tenant_id, int(data.to_user_id))
+        now = resolve_business_datetime()
+        await _bootstrap_repair_participation(
+            tenant_id,
+            repair,
+            user_id=repair.repairer_id or (operator.id if operator else None),
+            user_name=repair.repairer_name,
+            when=now,
+            actor=operator,
+        )
+        current_primary = await EquipmentRepairParticipant.filter(
+            tenant_id=tenant_id,
+            repair_id=repair.id,
+            role=_ROLE_PRIMARY,
+            status=_PART_ACTIVE,
+            deleted_at__isnull=True,
+        ).first()
+        if current_primary and current_primary.user_id == to_user.id:
+            raise ValidationError("转派目标已是当前主责人")
+        if current_primary:
+            current_primary.status = _PART_REASSIGNED
+            current_primary.left_at = now
+            current_primary.reassigned_to_id = to_user.id
+            current_primary.reassigned_to_name = to_name
+            if data.remark:
+                current_primary.remark = (data.remark or "").strip() or current_primary.remark
+            apply_update_audit(current_primary, operator)
+            await current_primary.save()
+        # 目标若已是协作进行中，结束协作段再升为主责
+        active_target = await EquipmentRepairParticipant.filter(
+            tenant_id=tenant_id,
+            repair_id=repair.id,
+            user_id=to_user.id,
+            status=_PART_ACTIVE,
+            deleted_at__isnull=True,
+        ).first()
+        if active_target:
+            active_target.status = _PART_LEFT
+            active_target.left_at = now
+            apply_update_audit(active_target, operator)
+            await active_target.save()
+        new_primary = EquipmentRepairParticipant(
+            tenant_id=tenant_id,
+            repair_id=repair.id,
+            repair_uuid=repair.uuid,
+            user_id=to_user.id,
+            user_name=to_name,
+            role=_ROLE_PRIMARY,
+            status=_PART_ACTIVE,
+            joined_at=now,
+            remark=(data.remark or "").strip() or None,
+        )
+        apply_create_audit(new_primary, operator)
+        await new_primary.save()
+        repair.repairer_id = to_user.id
+        repair.repairer_name = to_name
+        apply_update_audit(repair, operator)
+        await repair.save()
         return repair
     
     @staticmethod

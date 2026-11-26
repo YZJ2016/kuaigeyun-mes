@@ -2,6 +2,7 @@
 
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -364,9 +365,10 @@ def test_normalize_work_order_granularity():
 
 
 def test_resolve_default_work_order_granularity():
+    # 上游 6abba1dbd5 起默认独立工单，组工单需用户显式选择（实现忽略 computation）。
     with_trees = SimpleNamespace(demand_item_bom_trees=[{"demand_item_id": 1}])
     without_trees = SimpleNamespace(demand_item_bom_trees=[])
-    assert DemandComputationService.resolve_default_work_order_granularity(with_trees) == "grouped"
+    assert DemandComputationService.resolve_default_work_order_granularity(with_trees) == "individual"
     assert DemandComputationService.resolve_default_work_order_granularity(without_trees) == "individual"
 
 
@@ -384,6 +386,11 @@ def test_group_preview_item_id_is_computation_item_id(monkeypatch):
             return set()
 
     monkeypatch.setattr(wogs, "WorkOrderGroupService", _FakeGroupSvc)
+    monkeypatch.setattr(
+        DemandComputationService,
+        "_get_already_pushed_exclusions",
+        AsyncMock(return_value={}),
+    )
 
     computation = SimpleNamespace(
         id=16,

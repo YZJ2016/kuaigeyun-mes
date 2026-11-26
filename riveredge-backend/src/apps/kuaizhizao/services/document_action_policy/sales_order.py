@@ -12,6 +12,7 @@ from apps.kuaizhizao.constants import (
     DemandStatus,
     LEGACY_AUDITED_VALUES,
     ReviewStatus,
+    is_submitted_status,
     normalize_status,
 )
 from apps.kuaizhizao.services.document_action_policy.types import (
@@ -123,8 +124,13 @@ def _push_base(order: Any) -> tuple[bool, Optional[str]]:
 
 
 def _can_withdraw_submitted(order: Any) -> bool:
+    """已提交可撤销提交；待审核可撤回审核。已生效按本地流程同样允许撤回。"""
     status = getattr(order, "status", None)
-    if _is_pending_review_status(status) or _is_confirmed(status):
+    if (
+        is_submitted_status(str(status or ""))
+        or _is_pending_review_status(status)
+        or _is_confirmed(status)
+    ):
         return True
     return False
 
@@ -174,19 +180,22 @@ def derive_sales_order_capabilities(
         allows_approve_submitted_pending,
     )
 
-    # delete — 未提交（草稿/误标待审）可删；已提交待审须先撤回
-    delete_status_ok = allows_delete_unsubmitted(
+    # delete — 草稿/驳回/误标待审可删；业务已提交或正式待审须先撤销/撤回
+    submitted = is_submitted_status(str(status or ""))
+    delete_status_ok = (not submitted) and allows_delete_unsubmitted(
         status, review_status, review_submitted=review_submitted
     )
     delete_allowed = delete_status_ok and not has_downstream_documents
     delete_reason = None
     if has_downstream_documents:
         delete_reason = "sales_order.delete.has_downstream"
+    elif submitted:
+        delete_reason = "sales_order.delete.submitted"
     elif not delete_status_ok:
         delete_reason = "sales_order.delete.not_allowed"
     delete_cap = _cap(delete_allowed, delete_reason)
 
-    submit_allowed = allows_submit_unsubmitted(
+    submit_allowed = (not submitted) and allows_submit_unsubmitted(
         status, review_status, review_submitted=review_submitted
     )
     submit_cap = _cap(
@@ -547,6 +556,16 @@ def assert_sales_order_capability(
         require_audit_before_print=require_audit_before_print,
         has_prepayment_receipt=has_prepayment_receipt,
         procurement_fulfillment_mode=procurement_fulfillment_mode,
+    )
+    from apps.kuaizhizao.services.document_action_policy.print_unaudited_gate import (
+        apply_print_unaudited_gate_to_capabilities,
+    )
+    from infra.services.business_config_service import peek_allow_print_unaudited
+
+    tenant_id = int(getattr(order, "tenant_id", 0) or 0)
+    allow_print = peek_allow_print_unaudited(tenant_id) if tenant_id else True
+    caps = apply_print_unaudited_gate_to_capabilities(
+        caps, order, allow_print_unaudited=allow_print
     )
     cap_map = {
         "update": caps.update,

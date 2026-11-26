@@ -24,6 +24,8 @@ export interface SalesInvoice {
   partner_tax_no?: string | null;
   partner_bank_info?: string | null;
   partner_address_phone?: string | null;
+  capabilities?: Record<string, { allowed?: boolean; reason?: string }>;
+  audit?: { phase?: string; [key: string]: unknown };
 }
 
 export interface SalesInvoiceListParams {

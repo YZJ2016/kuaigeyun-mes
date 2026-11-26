@@ -12,6 +12,11 @@ PRINT_STYLE_A4 = """
     font-size: 11pt; line-height: 1.55; color: #1e293b;
   }
   .report { max-width: 186mm; margin: 0 auto; }
+  .report-title-group { text-align: left; }
+  .report-site-name-inline {
+    margin: 0 0 2px 0;
+    font-size: 20pt; font-weight: 700; color: #0f4c81; letter-spacing: 0.5px;
+  }
   .report-header {
     border-bottom: 2px solid #0f4c81;
     padding-bottom: 10px; margin-bottom: 14px;
@@ -39,13 +44,13 @@ PRINT_STYLE_A4 = """
   }
   table.data-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
   table.data-table th {
-    background: #0f4c81; color: #fff; font-weight: 600;
-    padding: 7px 8px; text-align: left; border: 1px solid #0f4c81;
+    background: #fff; color: #1e293b; font-weight: 700;
+    padding: 7px 8px; text-align: left; border: 1px solid #cbd5e1;
   }
   table.data-table td {
     padding: 6px 8px; border: 1px solid #e2e8f0; vertical-align: top;
   }
-  table.data-table tbody tr:nth-child(even) td { background: #f8fafc; }
+  table.data-table tbody td { background: #fff; }
   .totals { margin-top: 8px; text-align: right; font-size: 10.5pt; }
   .totals strong { color: #0f4c81; }
   .sign-row {
@@ -72,6 +77,11 @@ PRINT_STYLE_A4_PLAIN = """
     font-size: 11pt; line-height: 1.55; color: #000;
   }
   .report { max-width: 186mm; margin: 0 auto; }
+  .report-title-group { text-align: left; }
+  .report-site-name-inline {
+    margin: 0 0 2px 0;
+    font-size: 20pt; font-weight: 700; color: #000; letter-spacing: 0.5px;
+  }
   .report-header {
     border-bottom: 2px solid #000;
     padding-bottom: 10px; margin-bottom: 14px;
@@ -176,7 +186,11 @@ def build_a4_document(
     notes_expr: str = "notes",
     style_css: str | None = None,
 ) -> str:
-    signs = "".join(f'<div class="sign-box">{label}：</div>' for label in sign_labels)
+    from apps.kuaizhizao.print.designer_presets import sign_label_content
+
+    signs = "".join(
+        f'<div class="sign-box">{sign_label_content(label)}</div>' for label in sign_labels
+    )
     cols_class = " cols-2" if len(sign_labels) == 2 else ""
     notes_block = ""
     if notes_expr:
@@ -190,7 +204,10 @@ def build_a4_document(
         + f"""
 <div class="report">
   <div class="report-header">
-    <div><h1 class="report-title">{title}</h1></div>
+    <div class="report-title-group">
+      <h1 class="report-site-name-inline">{{{{ site_name }}}}</h1>
+      <h1 class="report-title">{title}</h1>
+    </div>
     <div class="doc-meta">
       <strong>{{{{ code or "—" }}}}</strong>
       打印时间：{{{{ print_time or "—" }}}}
@@ -231,7 +248,10 @@ def build_certificate_document() -> str:
         PRINT_STYLE_A5
         + """
 <div class="cert">
-  <h1 class="cert-title">产品合格证</h1>
+  <div style="text-align:center;margin-bottom:8px;">
+    <h1 class="cert-title" style="margin:0 0 2px 0;font-size:14pt;">{{ site_name }}</h1>
+    <h1 class="cert-title">产品合格证</h1>
+  </div>
   <p class="cert-no">证书编号：{{ release_certificate or "—" }}</p>
   <div class="cert-grid">
     <span class="cert-label">产品名称</span><span class="cert-value">{{ material_name or "—" }}</span>

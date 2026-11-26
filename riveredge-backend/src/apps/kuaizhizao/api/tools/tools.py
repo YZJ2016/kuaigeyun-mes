@@ -67,7 +67,7 @@ async def create_tool(
 ):
     try:
         tool = await ToolService.create_tool(tenant_id, data, current_user=current_user)
-        return ToolResponse.model_validate(tool)
+        return await ToolService.serialize_tool(tenant_id, tool)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -109,7 +109,10 @@ async def list_tools(
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
     )
-    return ToolListResponse(items=[ToolResponse.model_validate(i) for i in items], total=total)
+    return ToolListResponse(
+        items=await ToolService.serialize_tools(tenant_id, items),
+        total=total,
+    )
 
 
 @router.get(
@@ -120,7 +123,7 @@ async def list_tools(
 async def get_tool(uuid: str, tenant_id: int = Depends(get_current_tenant)):
     try:
         tool = await ToolService.get_tool_by_uuid(tenant_id, uuid)
-        return ToolResponse.model_validate(tool)
+        return await ToolService.serialize_tool(tenant_id, tool)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -140,7 +143,7 @@ async def update_tool(
         tool = await ToolService.update_tool(
             tenant_id, uuid, data, current_user=current_user
         )
-        return ToolResponse.model_validate(tool)
+        return await ToolService.serialize_tool(tenant_id, tool)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

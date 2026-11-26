@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException as FastAPIHTTPException, status as http_status
 from loguru import logger
 
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.api.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_permission_codes
 from infra.models.user import User
@@ -33,7 +34,11 @@ from apps.kuaizhizao.schemas.receipt_notice import (
 )
 
 receipt_notice_service = ReceiptNoticeService()
-router = APIRouter(prefix="/receipt-notices", tags=["App - Kuaige Zhizao - Receipt Notice"])
+router = APIRouter(
+    prefix="/receipt-notices",
+    tags=["App - Kuaige Zhizao - Receipt Notice"],
+    dependencies=[Depends(require_kuaizhizao_module_access("receipt-notice", resolve_print=False))],
+)
 
 
 def _http_exception_with_trace(
@@ -127,6 +132,7 @@ async def list_receipt_notices(
         created_end_date=created_end_date,
         order_by=safe_order_by,
         include_items=include_items,
+        current_user=current_user,
     )
 
 
@@ -253,6 +259,7 @@ async def get_receipt_notice(
         return await receipt_notice_service.get_receipt_notice_by_id(
             tenant_id=tenant_id,
             notice_id=notice_id,
+            viewer_id=current_user.id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

@@ -163,6 +163,10 @@ class DemandService(AppBaseService[Demand]):
             create_data['created_by_name'] = user_info['name']
             create_data['updated_by'] = created_by
             create_data['updated_by_name'] = user_info['name']
+            # 保存只落草稿；提交 / 提交审核另走 commit 与 for_review
+            if demand_data.demand_type == "demand_plan":
+                create_data['status'] = DemandStatus.DRAFT
+                create_data['review_status'] = ReviewStatus.DRAFT
             
             # 创建需求
             demand = await Demand.create(
@@ -207,10 +211,22 @@ class DemandService(AppBaseService[Demand]):
                 # 重新加载需求以获取最新数据
                 demand = await Demand.get(tenant_id=tenant_id, id=demand.id)
 
-        # 手工「需求计划」：蓝图 nodes.demand 无需审核时，创建后直接提交并自动通过（与销售订单自动审核一致）
+        # 手工「需求计划」：全局/单证「手动建单自动提交」；有审批流则待审、不过审
         if demand_data.demand_type == "demand_plan":
+            from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+                apply_manual_create_auto_submit,
+            )
             from infra.services.business_config_service import BusinessConfigService
 
+            applied = await apply_manual_create_auto_submit(
+                tenant_id=tenant_id,
+                node_key="demand",
+                entity_id=int(demand.id),
+                operator_id=created_by,
+            )
+            if applied:
+                return await self.get_demand_by_id(tenant_id, int(demand.id))
+            # 配置未开时保留旧行为：免审则创建后直接确认
             if not await BusinessConfigService().check_audit_required(tenant_id, "demand"):
                 return await self.submit_demand(tenant_id, demand.id, created_by)
 
@@ -463,13 +479,21 @@ class DemandService(AppBaseService[Demand]):
                 ]
             data.append(payload)
 
-        from core.services.approval.audit_record_enricher import enrich_data_payload
+        from core.services.approval.audit_record_enricher import (
+            enrich_data_payload,
+            resolve_viewer_id,
+        )
 
-        return await enrich_data_payload(tenant_id, "demand", {
-            "data": data,
-            "total": total,
-            "success": True
-        })
+        return await enrich_data_payload(
+            tenant_id,
+            "demand",
+            {
+                "data": data,
+                "total": total,
+                "success": True,
+            },
+            viewer_id=resolve_viewer_id(filters.get("current_user")),
+        )
 
     async def update_demand(
         self, 
@@ -550,39 +574,80 @@ class DemandService(AppBaseService[Demand]):
             # 返回更新后的需求
             return await self.get_demand_by_id(tenant_id, demand_id)
 
-    async def submit_demand(
-        self, 
-        tenant_id: int, 
-        demand_id: int, 
-        submitted_by: int
+    async def commit_demand(
+        self,
+        tenant_id: int,
+        demand_id: int,
+        submitted_by: int,
     ) -> DemandResponse:
-        """
-        提交需求（提交审核）。
+        """草稿或已驳回 → 已提交。不启动审批。"""
+        from apps.kuaizhizao.constants import is_submitted_status
+        from apps.kuaizhizao.services.document_action_policy.demand import assert_demand_capability
 
-        蓝图 nodes.demand.auditRequired=false 时，与销售订单一致：提交后立即自动审核通过，不创建审批流实例。
-        需审核时：先启动审批实例（暂不发通知），再写单据状态，最后再发待办通知。
-        禁止在写库过程中并发站内信（否则 asyncpg 同连接报
-        「another operation is in progress」）。
-        
-        Args:
-            tenant_id: 租户ID
-            demand_id: 需求ID
-            submitted_by: 提交人ID
-            
-        Returns:
-            DemandResponse: 提交后的需求响应
-            
-        Raises:
-            NotFoundError: 需求不存在
-            BusinessLogicError: 需求状态不允许提交 / 审核开启但无可用流程
-        """
         demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
         if not demand:
             raise NotFoundError("需求", str(demand_id))
+        if is_submitted_status(str(demand.status or "")):
+            return await self.get_demand_by_id(tenant_id, demand_id)
+        assert_demand_capability(demand, "submit")
+        submitter_name = await self.get_user_name(submitted_by)
+        await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
+            status=DemandStatus.SUBMITTED,
+            review_status=ReviewStatus.DRAFT,
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            submit_time=resolve_business_datetime(),
+            updated_by=submitted_by,
+            updated_by_name=submitter_name,
+        )
+        return await self.get_demand_by_id(tenant_id, demand_id)
 
-        if demand.status != DemandStatus.DRAFT:
-            raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {demand.status}")
+    async def submit_demand_for_review(
+        self,
+        tenant_id: int,
+        demand_id: int,
+        submitted_by: int,
+    ) -> DemandResponse:
+        """已提交 → 待审核，或未开审核时直接已确认。"""
+        from apps.kuaizhizao.constants import is_submitted_status
 
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError("需求", str(demand_id))
+        if not is_submitted_status(str(demand.status or "")):
+            raise BusinessLogicError("请先提交计划生产，再提交审核")
+        return await self._enter_demand_review(tenant_id, demand, submitted_by)
+
+    async def submit_demand(
+        self,
+        tenant_id: int,
+        demand_id: int,
+        submitted_by: int,
+    ) -> DemandResponse:
+        """内部一次性进入审核。页面 HTTP / uni-audit submit 须走 commit_demand。"""
+        from apps.kuaizhizao.services.document_action_policy.demand import assert_demand_capability
+
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError("需求", str(demand_id))
+        assert_demand_capability(demand, "submit")
+        return await self._enter_demand_review(tenant_id, demand, submitted_by)
+
+    async def _enter_demand_review(
+        self,
+        tenant_id: int,
+        demand: Demand,
+        submitted_by: int,
+    ) -> DemandResponse:
+        """
+        进入审核。
+
+        蓝图 nodes.demand.auditRequired=false 时直接已确认。
+        需审核时：先启动审批实例（暂不发通知），再写单据状态，最后再发待办通知。
+        """
+        demand_id = int(demand.id)
         submitter_name = await self.get_user_name(submitted_by)
         from infra.services.business_config_service import BusinessConfigService
 
@@ -590,13 +655,13 @@ class DemandService(AppBaseService[Demand]):
 
         if not audit_required:
             logger.info(
-                "需求 %s 蓝图配置为无需审核（nodes.demand.auditRequired=false），跳过审批实例，提交后将自动通过",
+                "需求 %s 蓝图配置为无需审核（nodes.demand.auditRequired=false），跳过审批实例，提交审核后将自动通过",
                 demand.demand_code,
             )
-            await self._mark_demand_submitted(
+            await self._mark_demand_pending_review(
                 tenant_id=tenant_id,
                 demand_id=demand_id,
-                from_status=demand.status,
+                from_status=str(demand.status or ""),
                 submitted_by=submitted_by,
                 submitter_name=submitter_name,
             )
@@ -630,12 +695,10 @@ class DemandService(AppBaseService[Demand]):
             current = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
             if not current:
                 raise NotFoundError("需求", str(demand_id))
-            if current.status != DemandStatus.DRAFT:
-                raise BusinessLogicError(f"只能提交草稿状态的需求，当前状态: {current.status}")
-            await self._mark_demand_submitted(
+            await self._mark_demand_pending_review(
                 tenant_id=tenant_id,
                 demand_id=demand_id,
-                from_status=current.status,
+                from_status=str(current.status or ""),
                 submitted_by=submitted_by,
                 submitter_name=submitter_name,
             )
@@ -664,7 +727,7 @@ class DemandService(AppBaseService[Demand]):
 
         return await self.get_demand_by_id(tenant_id, demand_id)
 
-    async def _mark_demand_submitted(
+    async def _mark_demand_pending_review(
         self,
         *,
         tenant_id: int,
@@ -808,31 +871,68 @@ class DemandService(AppBaseService[Demand]):
             )
         return result if result is not None else await self.get_demand_by_id(tenant_id, demand_id)
 
+    @staticmethod
+    def _is_downstream_review_approved(review_status: object) -> bool:
+        """下游已审核（须先反审核再删，禁止上游跳级级联吞单）。"""
+        raw = str(review_status or "").strip()
+        if not raw:
+            return False
+        upper = raw.upper()
+        if upper in ("APPROVED", "AUDITED"):
+            return True
+        return raw in ("审核通过", "已通过", "已审核", "通过")
+
     async def _is_downstream_executed(
         self,
         tenant_id: int,
         target_type: str,
         target_id: int
     ) -> bool:
-        """判断下游单据是否已执行（已执行则不允许撤回）"""
+        """
+        下游是否禁止被需求计算撤回/删除级联吞掉。
+
+        已审核、已下达/执行中，或已有履约（报工/收货/转单）→ True，须用户先反审核并删除下游。
+        仅草稿且未审核可通过级联清理。
+        """
         if target_type == "work_order":
             from apps.kuaizhizao.models.work_order import WorkOrder
             from apps.kuaizhizao.models.reporting_record import ReportingRecord
             wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=target_id, deleted_at__isnull=True)
             if not wo:
                 return False
+            if self._is_downstream_review_approved(getattr(wo, "review_status", None)):
+                return True
+            status = str(getattr(wo, "status", "") or "").strip().lower()
+            if status in ("released", "in_progress"):
+                return True
             has_report = await ReportingRecord.filter(
                 tenant_id=tenant_id, work_order_id=target_id, deleted_at__isnull=True
             ).exists()
             if has_report:
                 return True
-            if wo.status == "in_progress":
+            if status == "completed" and not getattr(wo, "manually_completed", False):
                 return True
-            if wo.status == "completed" and not getattr(wo, "manually_completed", False):
-                return True  # 正常完成视为已执行
-            return False  # draft/released 或 指定结束且无报工 = 未执行
+            return False  # 仅草稿且未审核
         if target_type == "purchase_order":
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrder
             from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+            po = await PurchaseOrder.get_or_none(
+                tenant_id=tenant_id, id=target_id, deleted_at__isnull=True
+            )
+            if not po:
+                return False
+            if self._is_downstream_review_approved(getattr(po, "review_status", None)):
+                return True
+            status = str(getattr(po, "status", "") or "").strip().upper()
+            if status and status not in (
+                "DRAFT",
+                "PENDING_REVIEW",
+                "REJECTED",
+                "待审核",
+                "已驳回",
+                "草稿",
+            ):
+                return True
             return await PurchaseReceipt.filter(
                 tenant_id=tenant_id, purchase_order_id=target_id, deleted_at__isnull=True
             ).exists()
@@ -841,7 +941,12 @@ class DemandService(AppBaseService[Demand]):
             req = await PurchaseRequisition.get_or_none(tenant_id=tenant_id, id=target_id, deleted_at__isnull=True)
             if not req:
                 return False
-            if req.status in ("部分转单", "全部转单"):
+            if self._is_downstream_review_approved(getattr(req, "review_status", None)):
+                return True
+            if req.status in ("部分转单", "全部转单", "PARTIAL_CONVERTED", "FULL_CONVERTED"):
+                return True
+            status = str(getattr(req, "status", "") or "").strip().upper()
+            if status in ("AUDITED", "APPROVED", "CONFIRMED") or req.status in ("已通过", "已审核"):
                 return True
             has_converted = await PurchaseRequisitionItem.filter(
                 tenant_id=tenant_id,
@@ -856,14 +961,11 @@ class DemandService(AppBaseService[Demand]):
         tenant_id: int,
         computation_id: int
     ) -> None:
-        """级联删除/撤销需求计算下未执行的下游单据"""
+        """级联删除需求计算下仍为草稿且未审核的下游（已审核/已执行不得进入本方法）。"""
         from apps.kuaizhizao.models.document_relation import DocumentRelation
         from apps.kuaizhizao.models.work_order import WorkOrder
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
         from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
-        from apps.kuaizhizao.services.document_relation_new_service import (
-            DocumentRelationNewService,
-        )
 
         rels = await DocumentRelation.filter(
             tenant_id=tenant_id,
@@ -874,26 +976,27 @@ class DemandService(AppBaseService[Demand]):
 
         for rel in rels:
             tt, tid = rel.target_type, rel.target_id
+            # 双保险：调用方应已拦截；此处跳过已审核/已执行，绝不吞单
+            if await self._is_downstream_executed(tenant_id, tt, tid):
+                continue
             if tt == "work_order":
-                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=tid, deleted_at__isnull=True)
-                update_data = {"deleted_at": resolve_business_datetime(), "updated_at": resolve_business_datetime()}
-                if wo and wo.status in ("released", "completed"):
-                    update_data["status"] = "draft"
-                    update_data["manually_completed"] = False
-                await WorkOrder.filter(tenant_id=tenant_id, id=tid).update(**update_data)
+                await WorkOrder.filter(tenant_id=tenant_id, id=tid, deleted_at__isnull=True).update(
+                    deleted_at=resolve_business_datetime(),
+                    updated_at=resolve_business_datetime(),
+                )
             elif tt == "purchase_order":
                 await PurchaseOrder.filter(tenant_id=tenant_id, id=tid).delete()
             elif tt == "purchase_requisition":
                 await PurchaseRequisition.filter(tenant_id=tenant_id, id=tid).update(
                     deleted_at=resolve_business_datetime(), updated_at=resolve_business_datetime()
                 )
-            await DocumentRelationNewService().delete_relation(
-                tenant_id,
+            await DocumentRelation.filter(
+                tenant_id=tenant_id,
                 source_type="demand_computation",
                 source_id=computation_id,
                 target_type=tt,
-                target_id=tid,
-            )
+                target_id=tid
+            ).delete()
 
     async def withdraw_from_computation(
         self,
@@ -904,7 +1007,7 @@ class DemandService(AppBaseService[Demand]):
         撤回需求计算
 
         将已下推到需求计算的需求撤回，清除计算记录及关联。
-        若下游单据（工单/采购单/采购申请）未执行，允许撤回并级联删除；已执行则不允许撤回。
+        若下游仅为草稿且未审核，允许撤回并级联删除；已审核/已下达/已履约则须先反审核并删除下游。
 
         Args:
             tenant_id: 租户ID
@@ -915,14 +1018,11 @@ class DemandService(AppBaseService[Demand]):
 
         Raises:
             NotFoundError: 需求不存在
-            BusinessLogicError: 需求状态不允许撤回或已有已执行的下游单据
+            BusinessLogicError: 需求状态不允许撤回或已有须先反审删除的下游单据
         """
         from apps.kuaizhizao.models.demand_computation import DemandComputation
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
         from apps.kuaizhizao.models.document_relation import DocumentRelation
-        from apps.kuaizhizao.services.document_relation_new_service import (
-            DocumentRelationNewService,
-        )
 
         DOWNSTREAM_TYPES = ("work_order", "purchase_order", "purchase_requisition")
 
@@ -960,7 +1060,8 @@ class DemandService(AppBaseService[Demand]):
                 for rel in downstream_rels:
                     if await self._is_downstream_executed(tenant_id, rel.target_type, rel.target_id):
                         raise BusinessLogicError(
-                            "需求计算已下推的工单/采购单等下游单据已执行，无法撤回。请先处理已执行的下游单据。"
+                            "需求计算已下推的工单/采购单等下游单据已审核或已执行，无法撤回。"
+                            "请先反审核并删除这些下游单据后再撤回需求计算。"
                         )
 
                 if downstream_rels:
@@ -979,22 +1080,21 @@ class DemandService(AppBaseService[Demand]):
                     computation_id=computation.id
                 ).delete()
                 await DemandComputation.filter(tenant_id=tenant_id, id=computation.id).delete()
-                rel_svc = DocumentRelationNewService()
                 for rel_demand_id in demand_ids_in_comp:
-                    await rel_svc.delete_relation(
-                        tenant_id,
+                    await DocumentRelation.filter(
+                        tenant_id=tenant_id,
                         source_type="demand",
                         source_id=rel_demand_id,
                         target_type="demand_computation",
-                        target_id=computation.id,
-                    )
-                    await rel_svc.delete_relation(
-                        tenant_id,
+                        target_id=computation.id
+                    ).delete()
+                    await DocumentRelation.filter(
+                        tenant_id=tenant_id,
                         source_type="demand_computation",
                         source_id=computation.id,
                         target_type="demand",
-                        target_id=rel_demand_id,
-                    )
+                        target_id=rel_demand_id
+                    ).delete()
                     await Demand.filter(tenant_id=tenant_id, id=rel_demand_id).update(
                         pushed_to_computation=False,
                         computation_id=None,
@@ -1066,11 +1166,16 @@ class DemandService(AppBaseService[Demand]):
             from core.services.approval.audit_transition import (
                 resolve_revoke_to_draft_landing_phase,
             )
+            from apps.kuaizhizao.services.document_action_policy.demand import assert_demand_capability
             from infra.services.business_config_service import BusinessConfigService
 
             audit_required = await BusinessConfigService().check_audit_required(tenant_id, "demand")
-            _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
-            target_status = DemandStatus.DRAFT
+            assert_demand_capability(demand, "revoke_approval")
+            landing = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
+            target_status = (
+                DemandStatus.PENDING_REVIEW if landing == "pending" else DemandStatus.DRAFT
+            )
+            target_review = ReviewStatus.PENDING if landing == "pending" else ReviewStatus.DRAFT
 
             # 使用状态流转服务记录
             operator_name = await self.get_user_name(unapproved_by)
@@ -1086,7 +1191,7 @@ class DemandService(AppBaseService[Demand]):
                     to_state=target_status,
                     operator_id=unapproved_by,
                     operator_name=operator_name,
-                    transition_reason="撤销审核"
+                    transition_reason="反审核"
                 )
             except Exception as e:
                 logger.warning(f"发送状态流转失败: {e}")
@@ -1094,7 +1199,7 @@ class DemandService(AppBaseService[Demand]):
             # 更新状态，重置审核信息
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                 status=target_status,
-                review_status=ReviewStatus.PENDING,
+                review_status=target_review,
                 reviewer_id=None,
                 reviewer_name=None,
                 review_time=None,
@@ -2102,7 +2207,7 @@ class DemandService(AppBaseService[Demand]):
             push_note = f"从销售预测 {source_code} 下推创建"
         else:
             # 手工建立需求计划：保留“需求计划”语义，避免误导为订单来源
-            push_note = f"从需求计划 {source_code} 下推创建"
+            push_note = f"从计划生产 {source_code} 下推创建"
 
         comp_service = DemandComputationService()
         comp_data = DemandComputationCreate(
@@ -2135,75 +2240,273 @@ class DemandService(AppBaseService[Demand]):
         }
 
     async def withdraw_demand(
-        self, 
-        tenant_id: int, 
-        demand_id: int, 
-        withdrawn_by: int
+        self,
+        tenant_id: int,
+        demand_id: int,
+        withdrawn_by: int,
     ) -> DemandResponse:
-        """
-        撤回已提交的需求
-        
-        只有“待审核”状态的需求可以撤回。撤回后状态恢复为“草稿”。
-        
-        Args:
-            tenant_id: 租户ID
-            demand_id: 需求ID
-            withdrawn_by: 撤回人ID
-            
-        Returns:
-            DemandResponse: 撤回后的需求响应
-            
-        Raises:
-            NotFoundError: 需求不存在
-            BusinessLogicError: 需求状态不允许撤回
-        """
-        async with in_transaction():
-            demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
-            if not demand:
-                raise NotFoundError(f"需求不存在: {demand_id}")
-            
-            # 只能撤回待审核状态的需求
-            if demand.status != DemandStatus.PENDING_REVIEW:
-                raise BusinessLogicError(f"只能撤回待审核状态的需求，当前状态: {demand.status}")
-            
-            # 检查是否有正在运行的审批流程，如果有则取消
-            try:
-                from core.services.approval.approval_instance_service import ApprovalInstanceService
-                await ApprovalInstanceService.cancel_approval(
-                    tenant_id=tenant_id,
-                    entity_type="demand",
-                    entity_id=demand_id,
-                    operator_id=withdrawn_by,
-                )
-            except Exception as e:
-                logger.warning(f"取消审批流程失败或无需取消: {e}")
-            
-            # 使用状态流转服务记录
-            operator_name = await self.get_user_name(withdrawn_by)
-            try:
-                from apps.kuaizhizao.services.state_transition_service import StateTransitionService
-                state_service = StateTransitionService()
-                
-                await state_service.transition_state(
-                    tenant_id=tenant_id,
-                    entity_type="demand",
-                    entity_id=demand_id,
-                    from_state=demand.status,
-                    to_state=DemandStatus.DRAFT,
-                    operator_id=withdrawn_by,
-                    operator_name=operator_name,
-                    transition_reason="用户撤回"
-                )
-            except Exception as e:
-                logger.warning(f"发送状态流转失败: {e}")
-            
-            # 更新状态为草稿，重置审核状态
+        """已提交撤销为草稿；待审核撤回为已提交。"""
+        from apps.kuaizhizao.constants import is_submitted_status
+        from apps.kuaizhizao.services.document_action_policy.demand import assert_demand_capability
+
+        demand = await Demand.get_or_none(tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True)
+        if not demand:
+            raise NotFoundError(f"需求不存在: {demand_id}")
+        assert_demand_capability(demand, "withdraw_submit")
+        operator_name = await self.get_user_name(withdrawn_by)
+
+        if is_submitted_status(str(demand.status or "")):
             await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
                 status=DemandStatus.DRAFT,
-                review_status=ReviewStatus.PENDING, # 这里保持待审核可能不太对，应该重置为初始状态，但 DemandResponse 中默认为待审核
+                review_status=ReviewStatus.DRAFT,
+                reviewer_id=None,
+                reviewer_name=None,
+                review_time=None,
+                review_remarks=None,
                 updated_by=withdrawn_by,
                 updated_by_name=operator_name,
-                updated_at=resolve_business_datetime()
+                updated_at=resolve_business_datetime(),
             )
-            
             return await self.get_demand_by_id(tenant_id, demand_id)
+
+        if demand.status != DemandStatus.PENDING_REVIEW:
+            raise BusinessLogicError(f"只能撤回待审核或已提交状态的需求，当前状态: {demand.status}")
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        cancelled = await ApprovalInstanceService.cancel_approval(
+            tenant_id=tenant_id,
+            entity_type="demand",
+            entity_id=demand_id,
+            operator_id=withdrawn_by,
+        )
+        if not cancelled:
+            raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+
+        await Demand.filter(tenant_id=tenant_id, id=demand_id).update(
+            status=DemandStatus.SUBMITTED,
+            review_status=ReviewStatus.DRAFT,
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            updated_by=withdrawn_by,
+            updated_by_name=operator_name,
+            updated_at=resolve_business_datetime(),
+        )
+        return await self.get_demand_by_id(tenant_id, demand_id)
+
+    async def list_demand_plan_mrp_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        demand_id: Optional[int] = None,
+        pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.constants import ReviewStatus
+        from apps.kuaizhizao.services.plan_source_line_fulfillment import (
+            demand_plan_item_fulfillment_rows,
+            enrich_pull_lines_bom_warehouse,
+        )
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
+
+        approved_review = (
+            ReviewStatus.APPROVED.value,
+            "APPROVED",
+            "已通过",
+            "审核通过",
+            "通过",
+            "已审核",
+        )
+        dq = Demand.filter(
+            tenant_id=tenant_id,
+            demand_type="demand_plan",
+            deleted_at__isnull=True,
+            review_status__in=approved_review,
+        )
+        if demand_id is not None:
+            dq = dq.filter(id=int(demand_id))
+        dq = apply_pull_query_document_date_filter(
+            dq, field="start_date", date_from=date_from, date_to=date_to
+        )
+        demands = await dq.all()
+        if not demands:
+            return {"data": [], "total": 0}
+        demand_by_id = {int(d.id): d for d in demands}
+        items = await DemandItem.filter(
+            tenant_id=tenant_id, demand_id__in=list(demand_by_id.keys())
+        ).order_by("id")
+        fulfill = await demand_plan_item_fulfillment_rows(
+            tenant_id, items, target="mrp"
+        )
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for it in items:
+            lid = int(it.id)
+            frow = fulfill.get(lid)
+            if not frow:
+                continue
+            if pullable_only and float(frow.get("remaining_quantity") or 0) <= 0:
+                continue
+            demand = demand_by_id.get(int(it.demand_id))
+            if not demand:
+                continue
+            plan_date = demand.start_date
+            code = str(demand.demand_code or "").strip()
+            if kw:
+                hay = " ".join(
+                    [
+                        code,
+                        str(demand.demand_name or ""),
+                        str(it.material_code or ""),
+                        str(it.material_name or ""),
+                        str(it.material_spec or ""),
+                        str(it.notes or ""),
+                    ]
+                ).lower()
+                if kw not in hay:
+                    continue
+            req_date = it.delivery_date or demand.start_date
+            lines.append(
+                {
+                    "id": lid,
+                    "line_id": lid,
+                    "demand_item_id": lid,
+                    "demand_id": int(demand.id),
+                    "demand_code": code,
+                    "plan_date": str(plan_date) if plan_date else None,
+                    "material_id": it.material_id,
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "material_spec": it.material_spec,
+                    "unit": it.material_unit,
+                    "quantity": frow["quantity"],
+                    "analyzed_quantity": frow["analyzed_quantity"],
+                    "remaining_quantity": frow["remaining_quantity"],
+                    "required_date": str(req_date) if req_date else None,
+                    "line_notes": (str(it.notes).strip() if it.notes else None),
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("plan_date") or ""),
+                str(r.get("demand_code") or ""),
+                int(r.get("id") or 0),
+            ),
+            reverse=True,
+        )
+        await enrich_pull_lines_bom_warehouse(tenant_id, lines)
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)
+
+    async def list_demand_plan_work_order_pull_lines(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        demand_id: Optional[int] = None,
+        pullable_only: bool = True,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.constants import ReviewStatus
+        from apps.kuaizhizao.services.plan_source_line_fulfillment import (
+            demand_plan_item_fulfillment_rows,
+            enrich_pull_lines_bom_warehouse,
+        )
+        from apps.kuaizhizao.utils.inventory_helper import paginate_pull_lines_with_stock
+        from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
+
+        approved_review = (
+            ReviewStatus.APPROVED.value,
+            "APPROVED",
+            "已通过",
+            "审核通过",
+            "通过",
+            "已审核",
+        )
+        dq = Demand.filter(
+            tenant_id=tenant_id,
+            demand_type="demand_plan",
+            deleted_at__isnull=True,
+            review_status__in=approved_review,
+        )
+        if demand_id is not None:
+            dq = dq.filter(id=int(demand_id))
+        dq = apply_pull_query_document_date_filter(
+            dq, field="start_date", date_from=date_from, date_to=date_to
+        )
+        demands = await dq.all()
+        if not demands:
+            return {"data": [], "total": 0}
+        demand_by_id = {int(d.id): d for d in demands}
+        items = await DemandItem.filter(
+            tenant_id=tenant_id, demand_id__in=list(demand_by_id.keys())
+        ).order_by("id")
+        fulfill = await demand_plan_item_fulfillment_rows(
+            tenant_id, items, target="work_order"
+        )
+        kw = (keyword or "").strip().lower()
+        lines: List[Dict[str, Any]] = []
+        for it in items:
+            lid = int(it.id)
+            frow = fulfill.get(lid)
+            if not frow:
+                continue
+            if pullable_only and float(frow.get("remaining_quantity") or 0) <= 0:
+                continue
+            demand = demand_by_id.get(int(it.demand_id))
+            if not demand:
+                continue
+            if kw:
+                hay = " ".join(
+                    [
+                        str(demand.demand_code or ""),
+                        str(demand.demand_name or ""),
+                        str(it.material_code or ""),
+                        str(it.material_name or ""),
+                        str(it.material_spec or ""),
+                        str(it.notes or ""),
+                    ]
+                ).lower()
+                if kw not in hay:
+                    continue
+            req_date = it.delivery_date or demand.start_date
+            plan_date = demand.start_date
+            lines.append(
+                {
+                    "id": lid,
+                    "line_id": lid,
+                    "demand_item_id": lid,
+                    "demand_id": int(demand.id),
+                    "demand_code": demand.demand_code,
+                    "plan_date": str(plan_date) if plan_date else None,
+                    "material_id": it.material_id,
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "material_spec": it.material_spec,
+                    "unit": it.material_unit,
+                    "quantity": frow["quantity"],
+                    "transferred_quantity": frow["transferred_quantity"],
+                    "remaining_quantity": frow["remaining_quantity"],
+                    "required_date": str(req_date) if req_date else None,
+                    "line_notes": (str(it.notes).strip() if it.notes else None),
+                }
+            )
+        lines.sort(
+            key=lambda r: (
+                str(r.get("plan_date") or ""),
+                str(r.get("demand_code") or ""),
+                int(r.get("id") or 0),
+            ),
+            reverse=True,
+        )
+        await enrich_pull_lines_bom_warehouse(tenant_id, lines)
+        return await paginate_pull_lines_with_stock(tenant_id, lines, skip, limit)

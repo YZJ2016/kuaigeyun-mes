@@ -28,13 +28,13 @@ export function useUniReportExport(options: UseUniReportExportOptions) {
   const { t } = useTranslation();
   const { title, exportConfig, columns, getFilters, rowKey = 'id', getAllRows, exportAllExcel } = options;
 
-  const exportableKeys = columns
-    .filter((c) => c.dataIndex && !c.hideInTable)
-    .map((c) => String(c.dataIndex));
-
-  const exportableTitles = columns
-    .filter((c) => c.dataIndex && !c.hideInTable)
-    .map((c) => String(c.title ?? c.dataIndex));
+  const exportableColumns = columns.filter((c) => {
+    if (c.hideInTable) return false;
+    const key = c.dataIndex;
+    return typeof key === 'string' && key.length > 0 && key !== 'id' && key !== 'uuid';
+  });
+  const exportableKeys = exportableColumns.map((c) => String(c.dataIndex));
+  const exportableTitles = exportableColumns.map((c) => String(c.title ?? c.dataIndex));
 
   return useCallback(
     async (
@@ -83,10 +83,21 @@ export function useUniReportExport(options: UseUniReportExportOptions) {
         }
         const hide = message.loading(t('components.uniReport.exporting'), 0);
         try {
-          await exportDomainReport(exportConfig.domain, {
-            report_type: exportConfig.reportType,
-            ...getFilters(),
-          });
+          const exportColumns = exportableKeys.map((key, index) => ({
+            key,
+            title: exportableTitles[index] || key,
+          }));
+          await exportDomainReport(
+            exportConfig.domain,
+            {
+              report_type: exportConfig.reportType,
+              ...getFilters(),
+            },
+            {
+              filename: baseName,
+              exportColumns,
+            },
+          );
           hide();
           message.success(t('components.uniReport.exportSuccess', { title }));
         } catch (e) {

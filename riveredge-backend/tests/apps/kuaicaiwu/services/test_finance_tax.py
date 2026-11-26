@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 from apps.kuaicaiwu.services.finance_tax import (
+    compute_purchase_order_header_amounts,
     compute_tax_from_excluding,
     compute_tax_from_including,
     resolve_invoice_amounts_for_create,
@@ -40,6 +41,13 @@ def test_resolve_invoice_amounts_excludes_total_when_exclusive_entry():
     )
     assert excl == Decimal("53097.35")
     assert total == Decimal("60000.01")
+
+
+def test_purchase_order_header_1000_times_10_zero_tax():
+    excl, tax, net = compute_purchase_order_header_amounts(Decimal("10000"), Decimal("0"))
+    assert excl == Decimal("10000.00")
+    assert tax == Decimal("0.00")
+    assert net == Decimal("10000.00")
 
 
 def test_money_exceeds_max_treats_equal_quantized_as_not_exceed():

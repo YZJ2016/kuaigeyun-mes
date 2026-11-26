@@ -1,4 +1,4 @@
-import { getImportDataRows } from './import-preview-utils';
+import { getImportDataRowEntries } from './import-preview-utils';
 import { resolveSystemFieldKey } from './apply-import-mapping';
 
 /** 按唯一键（编码/单号等）处理库内重复时的写入策略 */
@@ -64,10 +64,10 @@ export function extractImportRowKeys(options: {
   if (keyColumnIndex === undefined) {
     return { keyColumnIndex: undefined, rows: [] };
   }
-  const dataRows = getImportDataRows(data, dataStartRow);
-  const rows = dataRows.map((row, index) => ({
-    rowNo: dataStartRow + index + 1,
-    key: String(row?.[keyColumnIndex] ?? '').trim(),
+  const entries = getImportDataRowEntries(data, dataStartRow);
+  const rows = entries.map((entry) => ({
+    rowNo: entry.sheetRow,
+    key: String(entry.cells?.[keyColumnIndex] ?? '').trim(),
   }));
   return { keyColumnIndex, rows };
 }
@@ -91,7 +91,7 @@ export function summarizeImportDuplicates(
       duplicateInFileCount += 1;
       continue;
     }
-    seenInFile.add(key);
+    seenInFile.set(key, 1);
     if (existingKeys.has(key)) {
       updateCount += 1;
     } else {

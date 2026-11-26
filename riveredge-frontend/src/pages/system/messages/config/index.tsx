@@ -69,6 +69,10 @@ const MessageConfigListPage: React.FC = () => {
   const formRef = useRef<ProFormInstance>(null);
   const detailRetryUuidRef = useRef<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const deletableKeys = useMemo(
+    () => selectedRowKeys.filter((k) => String(k) !== BUILTIN_INTERNAL_CHANNEL_UUID),
+    [selectedRowKeys],
+  );
   
   // Modal 相关状态（创建/编辑消息配置）
   const [modalVisible, setModalVisible] = useState(false);
@@ -585,7 +589,7 @@ const MessageConfigListPage: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         deleteConfirmTitle={t('pages.system.messageConfig.batchDeleteConfirmTitle')}
-          deleteConfirmDescription={(count) => t('pages.system.messageConfig.batchDeleteConfirmContent', { count })}
+          deleteConfirmDescription={(count) => t('pages.system.messageConfig.batchDeleteConfirmContent', { count: deletableKeys.length })}
           
         onDelete={handleBatchDelete}
         deleteButtonText={t('common.batchDelete')}
@@ -811,12 +815,20 @@ const MessageConfigListPage: React.FC = () => {
                   <ProFormDependency name={['provider']}>
                     {({ provider }) =>
                       provider === 'wecom' ? (
-                        <ProFormSwitch
-                          name="wecom_use_textcard"
-                          label={t('pages.system.messageConfig.wecomUseTextcard')}
-                          tooltip={t('pages.system.messageConfig.wecomUseTextcardHint')}
-                          colProps={{ span: 24 }}
-                        />
+                        <>
+                          <ProFormSwitch
+                            name="wecom_use_textcard"
+                            label={t('pages.system.messageConfig.wecomUseTextcard')}
+                            tooltip={t('pages.system.messageConfig.wecomUseTextcardHint')}
+                            colProps={{ span: 24 }}
+                          />
+                          <ProFormSwitch
+                            name="sync_approval_notifications"
+                            label={t('pages.system.messageConfig.syncApprovalNotifications')}
+                            tooltip={t('pages.system.messageConfig.syncApprovalNotificationsHint')}
+                            colProps={{ span: 24 }}
+                          />
+                        </>
                       ) : null}
                   </ProFormDependency>
                   <ProFormText

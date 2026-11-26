@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next';
 import type { Operation } from '../types/process';
 import type { ProductProcessLine } from '../types/productProcess';
 import type { OperationItem } from '../components/OperationSequenceEditor';
-import { hoursToDisplayMinutes } from './manufacturingTimeUnits';
+import { hoursToDisplayMinutes, parseRouteRowStandardTime } from './manufacturingTimeUnits';
 import { parseOperationSequenceFromRoute, normalizeOperationSequenceInput } from './processRouteSequenceUtils';
 
 function readIdList(...candidates: unknown[]): number[] {
@@ -175,12 +175,11 @@ export function buildLineFromRowAndOperation(
     operationId: Number(row.operation_id ?? row.operationId ?? op?.id) || op?.id,
     code: String(row.code ?? op?.code ?? ''),
     name: String(row.name ?? op?.name ?? ''),
-    // 路线存小时 → 界面默认分钟；产品工艺 API 存秒由 Panel fromApi 处理
-    standardTime: hoursToDisplayMinutes(_floatOrUndef(row.standard_time ?? row.standardTime)),
-    standardTimeQty: 1,
-    standardTimeUnit: 'm',
+    // 路线新格式存秒 + qty；旧格式存小时；产品工艺 API 存秒由 Panel fromApi 处理
+    ...parseRouteRowStandardTime(row),
     setupTime: hoursToDisplayMinutes(_floatOrUndef(row.setup_time ?? row.setupTime)),
     setupTimeUnit: 'm',
+    pieceRate: _floatOrUndef(row.piece_rate ?? row.pieceRate),
     ...resources,
     reportingType: String(row.reporting_type ?? row.reportingType ?? op?.reportingType ?? 'quantity'),
     isNodeOperation: Boolean(row.is_node_operation ?? row.isNodeOperation ?? false),
@@ -258,7 +257,10 @@ export function operationItemsToLines(
       code: item.code,
       name: item.name,
       standardTime: item.standardTime,
+      standardTimeQty: item.standardTimeQty ?? 1,
+      standardTimeUnit: item.standardTimeUnit ?? 'm',
       setupTime: item.setupTime,
+      pieceRate: item.pieceRate,
       reportingType: item.reportingType ?? 'quantity',
       isNodeOperation: item.isNodeOperation ?? false,
       overReportMode: item.overReportMode ?? 'none',
@@ -272,7 +274,9 @@ export function operationItemsToLines(
   });
 }
 
-/** 按工艺路线模板顺序补齐缺失工序；已存在行保留，路线外自定义行保留在末尾 */
+/** 按工艺路线模板顺序补齐缺失工序；已存在行保留，路线外自定义行保留在末尾。
+ * 工时/工价：产品工艺已填优先；未填时从路线默认补齐。
+ */
 export function mergeProductProcessLinesWithRouteTemplate(
   currentLines: ProductProcessLine[],
   routeLines: ProductProcessLine[],
@@ -287,7 +291,18 @@ export function mergeProductProcessLinesWithRouteTemplate(
     const uid = routeLine.operationUuid;
     if (!uid) continue;
     seen.add(uid);
-    merged.push(currentByUuid.get(uid) ?? routeLine);
+    const current = currentByUuid.get(uid);
+    if (!current) {
+      merged.push(routeLine);
+      continue;
+    }
+    merged.push({
+      ...routeLine,
+      ...current,
+      standardTime: current.standardTime ?? routeLine.standardTime,
+      setupTime: current.setupTime ?? routeLine.setupTime,
+      pieceRate: current.pieceRate ?? routeLine.pieceRate,
+    });
   }
 
   for (const line of currentLines) {
@@ -302,6 +317,7 @@ export function mergeProductProcessLinesWithRouteTemplate(
 
 /**
  * 按工艺路线模板重载工序列表：顺序与模板一致，模板内工序保留已配置字段，移除模板外手工添加的工序。
+ * 工时/工价：产品工艺已填优先；未填时从路线默认补齐。
  */
 export function reloadProductProcessLinesFromRouteTemplate(
   currentLines: ProductProcessLine[],
@@ -315,7 +331,18 @@ export function reloadProductProcessLinesFromRouteTemplate(
   for (const routeLine of routeLines) {
     const uid = routeLine.operationUuid;
     if (!uid) continue;
-    reloaded.push(currentByUuid.get(uid) ?? routeLine);
+    const current = currentByUuid.get(uid);
+    if (!current) {
+      reloaded.push(routeLine);
+      continue;
+    }
+    reloaded.push({
+      ...routeLine,
+      ...current,
+      standardTime: current.standardTime ?? routeLine.standardTime,
+      setupTime: current.setupTime ?? routeLine.setupTime,
+      pieceRate: current.pieceRate ?? routeLine.pieceRate,
+    });
   }
 
   return reloaded;

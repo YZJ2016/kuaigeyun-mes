@@ -789,7 +789,6 @@ const DepartmentListPage: React.FC = () => {
           showSizeChanger: true,
           showQuickJumper: true,
         }}
-        showAdvancedSearch={true}
         expandable={{
           expandedRowKeys,
           onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),

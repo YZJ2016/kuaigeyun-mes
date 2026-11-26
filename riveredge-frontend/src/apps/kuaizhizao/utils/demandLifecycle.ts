@@ -15,6 +15,7 @@ const P = 'app.kuaizhizao.demandManagement';
 
 const DEMAND_PLAN_LIFECYCLE_STAGE_LABELS = [
   '草稿',
+  '已提交',
   '待审核',
   '已驳回',
   '已生效',
@@ -23,6 +24,7 @@ const DEMAND_PLAN_LIFECYCLE_STAGE_LABELS = [
 
 const DEMAND_PLAN_LIFECYCLE_STAGE_I18N: Record<string, string> = {
   草稿: 'app.kuaizhizao.salesOrder.lifecycleDraft',
+  已提交: 'common.submitted',
   待审核: 'app.kuaizhizao.salesOrder.lifecyclePendingReview',
   已驳回: 'app.kuaizhizao.salesOrder.lifecycleRejected',
   已生效: 'app.kuaizhizao.salesOrder.lifecycleEffective',
@@ -58,6 +60,7 @@ export function buildDemandPlanLifecycleValueEnum(
 ): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }> {
   const statusByStage: Record<string, 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning'> = {
     草稿: 'Default',
+    已提交: 'Processing',
     待审核: 'Processing',
     已驳回: 'Error',
     已生效: 'Processing',
@@ -98,6 +101,8 @@ export function resolveDemandPlanListLifecycleParams(
   switch (stage) {
     case '草稿':
       return { status: 'DRAFT' };
+    case '已提交':
+      return { status: 'SUBMITTED' };
     case '待审核':
       return { status: 'PENDING_REVIEW' };
     case '已驳回':

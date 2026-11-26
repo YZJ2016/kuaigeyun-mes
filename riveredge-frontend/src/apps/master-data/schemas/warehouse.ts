@@ -16,6 +16,7 @@ export const WAREHOUSE_TYPE_OPTIONS = [
   { labelKey: 'warehouse.type.defect', value: 'defect' },
   { labelKey: 'warehouse.type.scrap', value: 'scrap' },
   { labelKey: 'warehouse.type.quarantine', value: 'quarantine' },
+  { labelKey: 'warehouse.type.gift', value: 'gift' },
 ];
 
 /** 基础字段：编号、名称、仓库类型（线边仓关联字段之前） */
