@@ -49,7 +49,7 @@ export interface CurrentUser {
   tenant_expires_at?: string;
   is_active?: boolean;
   permissions?: string[];
-  permission_version?: number;
+  permission_version?: number | string;
   department?: { uuid: string; name: string };
   position?: { uuid: string; name: string };
   roles?: Array<{

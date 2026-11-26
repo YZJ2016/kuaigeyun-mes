@@ -148,6 +148,7 @@ class MiscVoucherFinanceBridge:
             source_type=RECEIVABLE_SOURCE_OTHER_INCOME,
             source_id=int(head.id),
             deleted_at__isnull=True,
+            status__not="已作废",
         )
         if existing:
             return int(existing.id), str(existing.receivable_code)
@@ -220,6 +221,7 @@ class MiscVoucherFinanceBridge:
             source_type=PAYABLE_SOURCE_OTHER_EXPENSE,
             source_id=int(head.id),
             deleted_at__isnull=True,
+            status__not="已作废",
         )
         if existing:
             return int(existing.id), str(existing.payable_code)
@@ -374,14 +376,14 @@ class MiscVoucherFinanceBridge:
     async def settle_receivable_for_income_confirm(
         self, tenant_id: int, income_id: int, operator_id: int
     ) -> None:
-        """确认过账即结清：流水为实际资金，审核挂账直接核销，幂等。"""
+        """确认过账即结清：流水为实际资金，审核挂账直接核销；已有收付款则报错。"""
         receivable = await self.get_receivable_for_income(tenant_id, income_id)
         if not receivable:
             return
-        if str(receivable.status or "") == "已结清" and Decimal(
-            str(receivable.remaining_amount or 0)
-        ) <= 0:
-            return
+        if Decimal(str(receivable.received_amount or 0)) > 0 or str(
+            receivable.status or ""
+        ) in ("部分收款", "部分付款", "已结清"):
+            raise BusinessLogicError("挂账已有收/付款记录，请先在应收应付模块处理")
         total = Decimal(str(receivable.total_amount or 0))
         user = await User.get_or_none(id=operator_id)
         payload: Dict[str, Any] = {
@@ -397,14 +399,14 @@ class MiscVoucherFinanceBridge:
     async def settle_payable_for_expense_confirm(
         self, tenant_id: int, expense_id: int, operator_id: int
     ) -> None:
-        """确认过账即结清：流水为实际资金，审核挂账直接核销，幂等。"""
+        """确认过账即结清：流水为实际资金，审核挂账直接核销；已有收付款则报错。"""
         payable = await self.get_payable_for_expense(tenant_id, expense_id)
         if not payable:
             return
-        if str(payable.status or "") == "已结清" and Decimal(
-            str(payable.remaining_amount or 0)
-        ) <= 0:
-            return
+        if Decimal(str(payable.paid_amount or 0)) > 0 or str(
+            payable.status or ""
+        ) in ("部分收款", "部分付款", "已结清"):
+            raise BusinessLogicError("挂账已有收/付款记录，请先在应收应付模块处理")
         total = Decimal(str(payable.total_amount or 0))
         user = await User.get_or_none(id=operator_id)
         payload: Dict[str, Any] = {

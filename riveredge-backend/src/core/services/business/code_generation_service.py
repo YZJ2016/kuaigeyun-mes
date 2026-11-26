@@ -887,7 +887,15 @@ class CodeGenerationService:
             if not model_ref:
                 continue
             module_path, model_name = model_ref
-            model_cls = getattr(importlib.import_module(module_path), model_name, None)
+            try:
+                module = importlib.import_module(module_path)
+            except Exception as exc:
+                logger.warning(
+                    f"check_duplicate 兜底：导入模型模块失败 rule_code={candidate} "
+                    f"module={module_path} err={exc}"
+                )
+                return False
+            model_cls = getattr(module, model_name, None)
             if model_cls is None:
                 return False
             code_field = next(
@@ -900,15 +908,25 @@ class CodeGenerationService:
             )
             if not code_field or not model_has_field(model_cls, code_field):
                 if model_has_field(model_cls, "code"):
+                    logger.warning(
+                        f"check_duplicate 兜底：rule_code={candidate} 的 code_field "
+                        f"{code_field!r} 在模型 {model_name} 上不存在，回退为 'code'"
+                    )
                     code_field = "code"
                 else:
                     return False
-            filters: Dict[str, Any] = {"tenant_id": tenant_id, code_field: code}
+            filters: Dict[str, Any] = {code_field: code}
+            if model_has_field(model_cls, "tenant_id"):
+                filters["tenant_id"] = tenant_id
             if model_has_field(model_cls, "deleted_at"):
                 filters["deleted_at__isnull"] = True
             existing = await model_cls.filter(**filters).first()
             return existing is not None
 
+        logger.warning(
+            f"check_duplicate 兜底：entity_type={entity_type} 的 4 个候选规则码均未命中 "
+            f"ENTITY_MODEL_BY_RULE_CODE 注册表，查重跳过"
+        )
         # 其他实体类型的检查可以在这里扩展
         return False
     

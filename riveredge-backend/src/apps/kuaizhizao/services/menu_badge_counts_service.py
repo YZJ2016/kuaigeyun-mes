@@ -894,8 +894,9 @@ async def fetch_menu_badge_counts(
     now_date = now.date()
 
     await EffectiveAccessService.get(user.id, tenant_id, user=user)
-    permission_version = int(
-        await PermissionVersionService.get_version(tenant_id=tenant_id, user_id=user.id)
+    # 与 effective_access 同口径：租户级 bump（角色矩阵改动）也要让缓存 miss
+    permission_version = (
+        f"v{await PermissionVersionService.get_composite_version(tenant_id=tenant_id, user_id=user.id)}"
     )
 
     runners = _register_menu_badge_runners()

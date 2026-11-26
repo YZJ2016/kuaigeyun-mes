@@ -17,19 +17,19 @@ SectionFragment = dict[str, Any]
 
 _SECTION_TTL_SEC = max(15, int(os.getenv("MENU_BADGE_SECTION_CACHE_TTL", "90")))
 
-_store: dict[tuple[int, int, int, str], tuple[float, SectionFragment]] = {}
-_inflight: dict[tuple[int, int, int, str], asyncio.Future[SectionFragment]] = {}
+_store: dict[tuple[int, int, str, str], tuple[float, SectionFragment]] = {}
+_inflight: dict[tuple[int, int, str, str], asyncio.Future[SectionFragment]] = {}
 
 
-def _cache_key(tenant_id: int, user_id: int, permission_version: int, section_key: str) -> tuple[int, int, int, str]:
-    return (int(tenant_id), int(user_id), int(permission_version), section_key)
+def _cache_key(tenant_id: int, user_id: int, permission_version: str, section_key: str) -> tuple[int, int, str, str]:
+    return (int(tenant_id), int(user_id), str(permission_version), section_key)
 
 
 async def get_or_compute_section(
     *,
     tenant_id: int,
     user_id: int,
-    permission_version: int,
+    permission_version: str,
     section_key: str,
     compute: Callable[[], Awaitable[SectionFragment]],
     bypass_cache: bool = False,

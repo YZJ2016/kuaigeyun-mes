@@ -30,7 +30,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
 async def downgrade(db: BaseDBAsyncClient) -> str:
     return """
         ALTER TABLE "apps_kuaicaiwu_other_incomes"
-            DROP COLUMN "review_status";
+            DROP COLUMN IF EXISTS "review_status";
     """
 
 # 对应上游 1001_20261107183000_other_income_review_status.py

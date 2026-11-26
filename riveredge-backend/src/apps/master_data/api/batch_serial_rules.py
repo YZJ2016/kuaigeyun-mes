@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, Q
 from typing import Any, Optional, Annotated
 from loguru import logger
 
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 from core.services.business.batch_rule_service import BatchRuleService
@@ -24,6 +25,16 @@ from apps.master_data.schemas.batch_serial_rule_schemas import (
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/materials", tags=["App - Master Data - Batch & Serial Rules"])
+
+# 权限码与 manifest navigation 对齐：批号规则 material-batch-rule / 序列号规则 material-serial
+_BATCH_RULE_READ = Depends(require_permission_codes("master-data:material-batch-rule:read"))
+_BATCH_RULE_CREATE = Depends(require_permission_codes("master-data:material-batch-rule:create"))
+_BATCH_RULE_UPDATE = Depends(require_permission_codes("master-data:material-batch-rule:update"))
+_BATCH_RULE_DELETE = Depends(require_permission_codes("master-data:material-batch-rule:delete"))
+_SERIAL_RULE_READ = Depends(require_permission_codes("master-data:material-serial:read"))
+_SERIAL_RULE_CREATE = Depends(require_permission_codes("master-data:material-serial:create"))
+_SERIAL_RULE_UPDATE = Depends(require_permission_codes("master-data:material-serial:update"))
+_SERIAL_RULE_DELETE = Depends(require_permission_codes("master-data:material-serial:delete"))
 
 
 def _http_exception_with_trace(
@@ -54,7 +65,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ==================== 批号规则 ====================
 
-@router.post("/batch-rules", response_model=BatchRuleResponse, summary="Create batch number rule")
+@router.post("/batch-rules", response_model=BatchRuleResponse, summary="Create batch number rule", dependencies=[_BATCH_RULE_CREATE])
 async def create_batch_rule(
     data: BatchRuleCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -73,7 +84,7 @@ async def create_batch_rule(
         )
 
 
-@router.get("/batch-rules", response_model=BatchRuleListResponse, summary="List batch number rules")
+@router.get("/batch-rules", response_model=BatchRuleListResponse, summary="List batch number rules", dependencies=[_BATCH_RULE_READ])
 async def list_batch_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
@@ -112,7 +123,7 @@ async def list_batch_rules(
     return BatchRuleListResponse(items=[BatchRuleResponse.model_validate(r) for r in rules], total=total)
 
 
-@router.get("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="Get batch number rule")
+@router.get("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="Get batch number rule", dependencies=[_BATCH_RULE_READ])
 async def get_batch_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -125,7 +136,7 @@ async def get_batch_rule(
     return BatchRuleResponse.model_validate(rule)
 
 
-@router.put("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="Update batch number rule")
+@router.put("/batch-rules/{rule_uuid}", response_model=BatchRuleResponse, summary="Update batch number rule", dependencies=[_BATCH_RULE_UPDATE])
 async def update_batch_rule(
     rule_uuid: str,
     data: BatchRuleUpdate,
@@ -152,6 +163,7 @@ async def update_batch_rule(
     "/batch-rules/{rule_uuid}/set-default",
     response_model=BatchRuleResponse,
     summary="Set tenant default batch number rule",
+    dependencies=[_BATCH_RULE_UPDATE],
 )
 async def set_default_batch_rule(
     rule_uuid: str,
@@ -172,7 +184,7 @@ async def set_default_batch_rule(
         )
 
 
-@router.delete("/batch-rules/{rule_uuid}", summary="Delete batch number rule")
+@router.delete("/batch-rules/{rule_uuid}", summary="Delete batch number rule", dependencies=[_BATCH_RULE_DELETE])
 async def delete_batch_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -193,7 +205,7 @@ async def delete_batch_rule(
 
 # ==================== 序列号规则 ====================
 
-@router.post("/serial-rules", response_model=SerialRuleResponse, summary="Create serial number rule")
+@router.post("/serial-rules", response_model=SerialRuleResponse, summary="Create serial number rule", dependencies=[_SERIAL_RULE_CREATE])
 async def create_serial_rule(
     data: SerialRuleCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -212,7 +224,7 @@ async def create_serial_rule(
         )
 
 
-@router.get("/serial-rules", response_model=SerialRuleListResponse, summary="List serial number rules")
+@router.get("/serial-rules", response_model=SerialRuleListResponse, summary="List serial number rules", dependencies=[_SERIAL_RULE_READ])
 async def list_serial_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=500, description="每页条数（下拉等场景可一次拉全量）"),
@@ -251,7 +263,7 @@ async def list_serial_rules(
     return SerialRuleListResponse(items=[SerialRuleResponse.model_validate(r) for r in rules], total=total)
 
 
-@router.get("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="Get serial number rule")
+@router.get("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="Get serial number rule", dependencies=[_SERIAL_RULE_READ])
 async def get_serial_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -264,7 +276,7 @@ async def get_serial_rule(
     return SerialRuleResponse.model_validate(rule)
 
 
-@router.put("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="Update serial number rule")
+@router.put("/serial-rules/{rule_uuid}", response_model=SerialRuleResponse, summary="Update serial number rule", dependencies=[_SERIAL_RULE_UPDATE])
 async def update_serial_rule(
     rule_uuid: str,
     data: SerialRuleUpdate,
@@ -291,6 +303,7 @@ async def update_serial_rule(
     "/serial-rules/{rule_uuid}/set-default",
     response_model=SerialRuleResponse,
     summary="Set tenant default serial number rule",
+    dependencies=[_SERIAL_RULE_UPDATE],
 )
 async def set_default_serial_rule(
     rule_uuid: str,
@@ -311,7 +324,7 @@ async def set_default_serial_rule(
         )
 
 
-@router.delete("/serial-rules/{rule_uuid}", summary="Delete serial number rule")
+@router.delete("/serial-rules/{rule_uuid}", summary="Delete serial number rule", dependencies=[_SERIAL_RULE_DELETE])
 async def delete_serial_rule(
     rule_uuid: str,
     current_user: Annotated[User, Depends(get_current_user)],

@@ -29,6 +29,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         JOIN core_permissions pd
           ON pd.tenant_id = p.tenant_id
          AND pd.deleted_at IS NULL
+         AND pd.deprecated_at IS NULL
          AND pd.code = regexp_replace(p.code, ':[^:]+$', ':display')
         WHERE p.code LIKE '%:%:%'
           AND p.code NOT LIKE '%:display'
@@ -42,6 +43,19 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
         UPDATE core_permission_versions
         SET version = version + 1
         WHERE user_id IS NULL;
+
+        -- 无租户级版本行的租户补插 version=2：get_version 对缺行恒返回 1，
+        -- 不补则本次新增授权在 effective_access 缓存（1800s TTL）内不可见
+        INSERT INTO core_permission_versions (tenant_id, user_id, version, updated_at)
+        SELECT DISTINCT r.tenant_id, NULL, 2, NOW()
+        FROM core_roles r
+        WHERE r.deleted_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM core_permission_versions v
+            WHERE v.tenant_id = r.tenant_id
+              AND v.user_id IS NULL
+          );
     """
 
 

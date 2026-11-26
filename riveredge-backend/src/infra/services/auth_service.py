@@ -1174,7 +1174,7 @@ class AuthService:
         from core.services.authorization.permission_version_service import PermissionVersionService
         
         permissions: list[str] = []
-        permission_version = 1
+        permission_version: str | int = "1.1"
         if final_tenant_id is None:
             # spec 143：平台管理员（tenant_id IS NULL）登录无 ambient 组织上下文；
             # Department/Position 为租户模型，按显式 unscoped 内部善后执行
@@ -1189,7 +1189,7 @@ class AuthService:
                 tenant_id=final_tenant_id,
             )
             permissions = sorted(permission_set)
-            permission_version = await PermissionVersionService.get_version(
+            permission_version = await PermissionVersionService.get_composite_version(
                 tenant_id=final_tenant_id,
                 user_id=user.id,
             )
@@ -1552,7 +1552,7 @@ class AuthService:
                 user_id=guest_user.id,
                 tenant_id=default_tenant.id,
             )
-            permission_version = await PermissionVersionService.get_version(
+            permission_version = await PermissionVersionService.get_composite_version(
                 tenant_id=default_tenant.id,
                 user_id=guest_user.id,
             )

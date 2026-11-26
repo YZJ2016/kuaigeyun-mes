@@ -31,6 +31,21 @@ class PermissionVersionService:
         return record.version
 
     @staticmethod
+    async def get_composite_version(tenant_id: int, user_id: int) -> str:
+        """返回 ``{tenant_version}.{user_version}`` 复合版本。
+
+        角色矩阵变更只 bump 租户级（user_id IS NULL），只回用户级版本会让
+        前端菜单/掩码缓存不失效；复合键任一层 bump 都会变。
+        """
+        tenant_version = await PermissionVersionService.get_version(
+            tenant_id=tenant_id, user_id=None
+        )
+        user_version = await PermissionVersionService.get_version(
+            tenant_id=tenant_id, user_id=user_id
+        )
+        return f"{tenant_version}.{user_version}"
+
+    @staticmethod
     async def bump(tenant_id: int, user_id: int | None = None) -> int:
         record = await PermissionVersionService._resolve_record(tenant_id, user_id)
         if not record:

@@ -30678,6 +30678,8 @@ export default {
   'app.master-data.materialForm.countryOfOriginPlaceholder': '请输入原产国',
   'app.master-data.materialForm.customsCode': '海关编码',
   'app.master-data.materialForm.customsCodePlaceholder': '请输入海关编码',
+  'app.master-data.materialForm.countryOfOriginMax': '原产国不能超过100个字符',
+  'app.master-data.materialForm.customsCodeMax': '海关编码不能超过50个字符',
   'app.master-data.materialForm.viewMoreFields': '查看更多',
   'app.master-data.materialForm.viewMoreFieldsHint': '重量、体积、条码、贸易',
   'app.master-data.materialForm.batchManaged': '批号管理',

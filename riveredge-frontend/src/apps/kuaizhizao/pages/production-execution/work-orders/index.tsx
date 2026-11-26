@@ -9038,7 +9038,8 @@ const WorkOrdersPage: React.FC = () => {
         const canSubmitRelease = workOrderPerms.canAction?.('submit') ?? false
         const canEditWorkOrder = record.capabilities?.update?.allowed === true
         const releaseAllowedByCapability = record.capabilities?.release?.allowed === true
-        const releaseAllowedByAudit = isDraft && isWorkOrderPendingReleaseDisplay(record)
+        const releaseAllowedByAudit =
+          isDraft && !record.is_frozen && isWorkOrderPendingReleaseDisplay(record)
         const canRelease =
           isDraft &&
           canSubmitRelease &&
@@ -12069,6 +12070,7 @@ const WorkOrdersPage: React.FC = () => {
                   key: 'release',
                   visible:
                     ['draft', '草稿'].includes(workOrderDetail.status || '') &&
+                    !workOrderDetail.is_frozen &&
                     (workOrderPerms.canAction?.('submit') ?? false) &&
                     (workOrderDetail.capabilities?.release?.allowed === true ||
                       isWorkOrderPendingReleaseDisplay(workOrderDetail)),

@@ -1,6 +1,15 @@
 from tortoise import BaseDBAsyncClient
 
-_PAYMENT_CODES = ("cash", "bank_transfer", "bank_acceptance", "commercial_acceptance", "other")
+# 与 master_data/config/partner_settlement_codes.py PARTNER_PAYMENT_METHOD_CODES 保持一致
+_PAYMENT_CODES = (
+    "cash",
+    "bank_transfer",
+    "bank_acceptance",
+    "bank_transfer_and_acceptance",
+    "commercial_acceptance",
+    "employee_advance",
+    "other",
+)
 
 # 与 partner_settlement_codes.PARTNER_SETTLEMENT_TERMS_CODES | _LEGACY_PERIOD_SETTLEMENT_TERMS 对齐
 _TERMS_CODES = (

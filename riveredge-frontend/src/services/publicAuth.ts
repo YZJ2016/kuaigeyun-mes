@@ -27,7 +27,7 @@ export interface LoginResponse {
     is_infra_admin?: boolean;
     is_tenant_admin?: boolean;
     permissions?: string[];
-    permission_version?: number;
+    permission_version?: number | string;
     department?: { uuid: string; name: string };
     position?: { uuid: string; name: string };
     roles?: Array<{

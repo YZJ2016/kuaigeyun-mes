@@ -2713,7 +2713,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
               name="countryOfOrigin"
               label={t('app.master-data.materialForm.countryOfOrigin')}
               placeholder={t('app.master-data.materialForm.countryOfOriginPlaceholder')}
-              rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
+              rules={[{ max: 100, message: t('app.master-data.materialForm.countryOfOriginMax') }]}
             />
           </div>
           <div className="material-form-basic-grid__cell">
@@ -2721,7 +2721,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
               name="customsCode"
               label={t('app.master-data.materialForm.customsCode')}
               placeholder={t('app.master-data.materialForm.customsCodePlaceholder')}
-              rules={[{ max: 50, message: t('app.master-data.materialForm.barcodeMax') }]}
+              rules={[{ max: 50, message: t('app.master-data.materialForm.customsCodeMax') }]}
             />
           </div>
         </div>

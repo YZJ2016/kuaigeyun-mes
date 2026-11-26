@@ -13,6 +13,7 @@ from datetime import datetime, date
 
 from tortoise.expressions import Q
 from tortoise.exceptions import IntegrityError
+from tortoise.transactions import in_transaction
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from core.models.serial_rule import SerialRule
@@ -172,14 +173,15 @@ class SerialRuleService:
             raise ValidationError("系统内置规则请直接编辑，无需设为默认")
         if not rule.is_active:
             raise ValidationError("停用规则不能设为租户默认")
-        await SerialRule.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            is_default=True,
-        ).update(is_default=False)
-        rule.is_default = True
-        apply_update_audit(rule, current_user)
-        await rule.save()
+        async with in_transaction():
+            await SerialRule.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_default=True,
+            ).update(is_default=False)
+            rule.is_default = True
+            apply_update_audit(rule, current_user)
+            await rule.save()
         return rule
 
     @staticmethod

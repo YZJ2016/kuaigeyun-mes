@@ -2260,6 +2260,9 @@ class OutboundConfirmationRequest(BaseSchema):
     notes: Optional[str] = Field(None, description="确认备注")
     picker_id: Optional[int] = Field(None, description="领料人用户ID（生产领料确认时可二次选择）")
     picker_name: Optional[str] = Field(None, max_length=100, description="领料人姓名")
+    pick_department_id: Optional[int] = Field(None, description="领用部门ID（生产领料确认时可二次选择）")
+    pick_department_code: Optional[str] = Field(None, max_length=64, description="领用部门编码")
+    pick_department_name: Optional[str] = Field(None, max_length=100, description="领用部门名称")
     deliverer_id: Optional[int] = Field(None, description="出库人用户ID（其他出库等确认时可二次选择）")
     deliverer_name: Optional[str] = Field(None, max_length=100, description="出库人姓名")
     items: Optional[List[OutboundConfirmationItem]] = Field(

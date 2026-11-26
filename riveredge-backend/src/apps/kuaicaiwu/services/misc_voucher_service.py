@@ -611,7 +611,14 @@ class MiscVoucherService:
             selected_approver_user_ids=selected_approver_user_ids,
             selected_approver_by_node=selected_approver_by_node,
         )
-        patch: Dict[str, Any] = {"status": "PendingReview", "review_status": "待审核"}
+        patch: Dict[str, Any] = {
+            "status": "PendingReview",
+            "review_status": "待审核",
+            "reviewer_id": None,
+            "reviewer_name": None,
+            "review_time": None,
+            "review_remarks": None,
+        }
         apply_update_audit(patch, user)
         await self.spec.model.filter(id=doc_id).update(**patch)
         if approval_instance_finished_on_submit(instance):
@@ -920,26 +927,29 @@ class MiscVoucherService:
                     operator=user,
                 )
                 await self._unsettle_for_unconfirm(tenant_id, doc_id, int(user.id))
-        if status in ("Approved", "Confirmed"):
-            # 审核通过时已挂应收/应付：作废前先校验可撤销并作废关联财务单，避免孤儿挂账
-            from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
-                MiscVoucherFinanceBridge,
-            )
+        # 作废阶段同事务：挂账校验/作废与单据状态写要么全成要么全败，
+        # 避免 void 成功而 status 未落库导致 Approved 无挂账
+        async with in_transaction():
+            if status in ("Approved", "Confirmed"):
+                # 审核通过时已挂应收/应付：作废前先校验可撤销并作废关联财务单，避免孤儿挂账
+                from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
+                    MiscVoucherFinanceBridge,
+                )
 
-            bridge = MiscVoucherFinanceBridge()
-            if self.spec.voucher_type == "other_income":
-                await bridge.assert_income_receivable_revokable(tenant_id, doc_id)
-                await bridge.void_receivable_for_income_revoke(
-                    tenant_id, doc_id, int(user.id)
-                )
-            else:
-                await bridge.assert_expense_payable_revokable(tenant_id, doc_id)
-                await bridge.void_payable_for_expense_revoke(
-                    tenant_id, doc_id, int(user.id)
-                )
-        patch: Dict[str, Any] = {"status": "Cancelled", "review_status": "已取消"}
-        apply_update_audit(patch, user)
-        await self.spec.model.filter(id=doc_id).update(**patch)
+                bridge = MiscVoucherFinanceBridge()
+                if self.spec.voucher_type == "other_income":
+                    await bridge.assert_income_receivable_revokable(tenant_id, doc_id)
+                    await bridge.void_receivable_for_income_revoke(
+                        tenant_id, doc_id, int(user.id)
+                    )
+                else:
+                    await bridge.assert_expense_payable_revokable(tenant_id, doc_id)
+                    await bridge.void_payable_for_expense_revoke(
+                        tenant_id, doc_id, int(user.id)
+                    )
+            patch: Dict[str, Any] = {"status": "Cancelled", "review_status": "已取消"}
+            apply_update_audit(patch, user)
+            await self.spec.model.filter(id=doc_id).update(**patch)
         return await self.get_or_404(tenant_id, doc_id)
 
     async def delete(self, tenant_id: int, doc_id: int) -> None:

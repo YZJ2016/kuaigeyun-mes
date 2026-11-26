@@ -3509,16 +3509,28 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                             tenant_id=tenant_id, id=item.id
                         ).update(**item_updates)
 
-            from apps.kuaizhizao.utils.production_picking_header import (
-                assert_production_picking_picker_and_department,
+            # 仅本次更新涉及表头领用人/领用部门字段时才校验；纯改备注或明细放行
+            header_fields_submitted = any(
+                key in header_dump
+                for key in (
+                    "picker_id",
+                    "picker_name",
+                    "pick_department_id",
+                    "pick_department_code",
+                    "pick_department_name",
+                )
             )
+            if header_fields_submitted:
+                from apps.kuaizhizao.utils.production_picking_header import (
+                    assert_production_picking_picker_and_department,
+                )
 
-            picking_row = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
-            assert_production_picking_picker_and_department(
-                picker_id=getattr(picking_row, "picker_id", None),
-                pick_department_id=getattr(picking_row, "pick_department_id", None),
-                pick_department_code=getattr(picking_row, "pick_department_code", None),
-            )
+                picking_row = await ProductionPicking.get(tenant_id=tenant_id, id=picking_id)
+                assert_production_picking_picker_and_department(
+                    picker_id=getattr(picking_row, "picker_id", None),
+                    pick_department_id=getattr(picking_row, "pick_department_id", None),
+                    pick_department_code=getattr(picking_row, "pick_department_code", None),
+                )
 
             result = await self.get_production_picking_by_id(tenant_id, picking_id)
 
@@ -4084,18 +4096,88 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
             assert_outbound_hub_capability(picking, "confirm", outbound_type="production_picking")
 
+            if picking.status != '待领料':
+                raise BusinessLogicError("只有待领料状态的生产领料单才能确认领料")
+
+            from apps.kuaizhizao.utils.inbound_confirm_helper import (
+                resolve_production_picking_confirm_picker,
+            )
             from apps.kuaizhizao.utils.production_picking_header import (
                 assert_production_picking_picker_and_department,
             )
 
-            assert_production_picking_picker_and_department(
-                picker_id=getattr(picking, "picker_id", None),
-                pick_department_id=getattr(picking, "pick_department_id", None),
-                pick_department_code=getattr(picking, "pick_department_code", None),
+            # 领用人兜底：请求体 → 单据已存 → 确认操作人
+            picker_id, picker_name = await resolve_production_picking_confirm_picker(
+                confirmed_by=confirmed_by,
+                confirmation_data=confirmation_data,
+                get_user_name=self.get_user_name,
+                existing_picker_id=getattr(picking, "picker_id", None),
+                existing_picker_name=getattr(picking, "picker_name", None),
             )
 
-            if picking.status != '待领料':
-                raise BusinessLogicError("只有待领料状态的生产领料单才能确认领料")
+            # 领用部门兜底：请求体 → 单据已存 → 来源工单生产部门 → 操作人部门
+            resolved_dept_id = getattr(picking, "pick_department_id", None)
+            resolved_dept_code = str(getattr(picking, "pick_department_code", None) or "").strip() or None
+            resolved_dept_name = str(getattr(picking, "pick_department_name", None) or "").strip() or None
+            if confirmation_data is not None:
+                req_dept_id = getattr(confirmation_data, "pick_department_id", None)
+                if req_dept_id is not None and int(req_dept_id) > 0:
+                    resolved_dept_id = int(req_dept_id)
+                req_dept_code = str(getattr(confirmation_data, "pick_department_code", None) or "").strip()
+                if req_dept_code:
+                    resolved_dept_code = req_dept_code
+                req_dept_name = str(getattr(confirmation_data, "pick_department_name", None) or "").strip()
+                if req_dept_name:
+                    resolved_dept_name = req_dept_name
+            dept_missing = int(resolved_dept_id or 0) <= 0 and not resolved_dept_code
+            if dept_missing:
+                wo_ids_for_dept = _picking_related_work_order_ids(picking, picking_items_pre)
+                if wo_ids_for_dept:
+                    wo_for_dept = await WorkOrder.get_or_none(
+                        tenant_id=tenant_id, id=wo_ids_for_dept[0]
+                    )
+                    if wo_for_dept and int(getattr(wo_for_dept, "manufacturing_department_id", 0) or 0) > 0:
+                        resolved_dept_id = int(wo_for_dept.manufacturing_department_id)
+                        resolved_dept_name = resolved_dept_name or str(
+                            getattr(wo_for_dept, "manufacturing_department_name", None) or ""
+                        ).strip() or None
+                        dept_missing = False
+            if dept_missing:
+                confirmer = await User.get_or_none(tenant_id=tenant_id, id=confirmed_by)
+                if confirmer and int(getattr(confirmer, "department_id", 0) or 0) > 0:
+                    resolved_dept_id = int(confirmer.department_id)
+                    dept_missing = False
+            if int(resolved_dept_id or 0) > 0 and (not resolved_dept_code or not resolved_dept_name):
+                from core.models.department import Department
+
+                dept_row = await Department.get_or_none(tenant_id=tenant_id, id=int(resolved_dept_id))
+                if dept_row:
+                    resolved_dept_code = resolved_dept_code or str(getattr(dept_row, "code", None) or "").strip() or None
+                    resolved_dept_name = resolved_dept_name or str(getattr(dept_row, "name", None) or "").strip() or None
+
+            assert_production_picking_picker_and_department(
+                picker_id=picker_id,
+                pick_department_id=resolved_dept_id,
+                pick_department_code=resolved_dept_code,
+            )
+
+            # 解析成功且单据缺表头字段时，同事务写回
+            header_backfill: Dict[str, Any] = {}
+            if int(getattr(picking, "picker_id", 0) or 0) <= 0:
+                header_backfill["picker_id"] = picker_id
+                header_backfill["picker_name"] = picker_name
+            doc_dept_missing = (
+                int(getattr(picking, "pick_department_id", 0) or 0) <= 0
+                and not str(getattr(picking, "pick_department_code", None) or "").strip()
+            )
+            if doc_dept_missing:
+                header_backfill["pick_department_id"] = resolved_dept_id
+                header_backfill["pick_department_code"] = resolved_dept_code
+                header_backfill["pick_department_name"] = resolved_dept_name
+            if header_backfill:
+                await ProductionPicking.filter(tenant_id=tenant_id, id=picking_id).update(
+                    **header_backfill
+                )
 
             if confirmation_data:
                 update_dict = {}
@@ -4111,17 +4193,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         items=confirmation_data.items,
                     )
 
-            from apps.kuaizhizao.utils.inbound_confirm_helper import (
-                resolve_production_picking_confirm_picker,
-            )
-
-            picker_id, picker_name = await resolve_production_picking_confirm_picker(
-                confirmed_by=confirmed_by,
-                confirmation_data=confirmation_data,
-                get_user_name=self.get_user_name,
-                existing_picker_id=getattr(picking, "picker_id", None),
-                existing_picker_name=getattr(picking, "picker_name", None),
-            )
             picking_time = coerce_business_datetime_to_utc(
                 confirmation_data.delivery_time
                 if confirmation_data and confirmation_data.delivery_time
@@ -5091,10 +5162,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                 "material_unit": str(getattr(item, "material_unit", "") or "个"),
             }
 
-        from apps.kuaizhizao.utils.production_picking_header import (
-            assert_production_picking_picker_and_department,
-        )
-
         resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
         resolved_picker_name = str(picker_name or "").strip() or None
         resolved_pick_department_id = (
@@ -5109,12 +5176,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             or pick_department_id is not None
             or (pick_department_code is not None and str(pick_department_code).strip())
         )
-        if header_fields_submitted:
-            assert_production_picking_picker_and_department(
-                picker_id=resolved_picker_id,
-                pick_department_id=resolved_pick_department_id,
-                pick_department_code=resolved_pick_department_code,
-            )
+        if header_fields_submitted and not resolved_picker_id:
+            # 建单只硬要求领用人；领用部门可在确认时按兜底链补齐
+            raise ValidationError("请选择领用人")
 
         async with in_transaction():
             today = today_site_str()
@@ -5516,10 +5580,6 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
         work_order_id = int(call.work_order_id)
 
-        from apps.kuaizhizao.utils.production_picking_header import (
-            assert_production_picking_picker_and_department,
-        )
-
         resolved_picker_id = int(picker_id) if picker_id and int(picker_id) > 0 else None
         resolved_picker_name = str(picker_name or "").strip() or None
         resolved_pick_department_id = (
@@ -5534,12 +5594,9 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
             or pick_department_id is not None
             or (pick_department_code is not None and str(pick_department_code).strip())
         )
-        if header_fields_submitted:
-            assert_production_picking_picker_and_department(
-                picker_id=resolved_picker_id,
-                pick_department_id=resolved_pick_department_id,
-                pick_department_code=resolved_pick_department_code,
-            )
+        if header_fields_submitted and not resolved_picker_id:
+            # 建单只硬要求领用人；领用部门可在确认时按兜底链补齐
+            raise ValidationError("请选择领用人")
 
         async with in_transaction():
             today = today_site_str()

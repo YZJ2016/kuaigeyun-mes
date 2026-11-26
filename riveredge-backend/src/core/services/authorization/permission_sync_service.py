@@ -255,6 +255,7 @@ class PermissionSyncService:
                 JOIN core_permissions pd
                   ON pd.tenant_id = p.tenant_id
                  AND pd.deleted_at IS NULL
+                 AND pd.deprecated_at IS NULL
                  AND pd.code = regexp_replace(p.code, ':[^:]+$', ':display')
                 WHERE p.tenant_id = $1
                   AND pd.code LIKE $2

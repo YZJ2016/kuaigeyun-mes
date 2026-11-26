@@ -400,7 +400,7 @@ class UserService:
 
         await user.fetch_related("department", "position")
         permissions: List[str] = []
-        permission_version = 1
+        permission_version: str | int = "1.1"
         permission_tenant_id = effective_tenant_id or user.tenant_id
         if permission_tenant_id is not None:
             permission_set = await UserPermissionService.get_user_permissions(
@@ -408,7 +408,7 @@ class UserService:
                 tenant_id=permission_tenant_id,
             )
             permissions = sorted(permission_set)
-            permission_version = await PermissionVersionService.get_version(
+            permission_version = await PermissionVersionService.get_composite_version(
                 tenant_id=permission_tenant_id,
                 user_id=user.id,
             )
