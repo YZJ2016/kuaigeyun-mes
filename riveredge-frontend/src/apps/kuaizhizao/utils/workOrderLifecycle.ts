@@ -101,7 +101,7 @@ const WORK_ORDER_REVIEW_APPROVED = new Set([
 ]);
 
 /** 主状态仍为草稿、审核已通过：执行态展示「待下达」（库内 status 仍为 draft） */
-function isWorkOrderPendingReleaseDisplay(record: WorkOrder | Record<string, unknown>): boolean {
+export function isWorkOrderPendingReleaseDisplay(record: WorkOrder | Record<string, unknown>): boolean {
   const status = String(record?.status ?? '').trim();
   if (!['draft', '草稿', 'DRAFT'].includes(status)) return false;
   const review = String(

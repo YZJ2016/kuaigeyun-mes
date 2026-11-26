@@ -115,6 +115,68 @@ MATERIAL_SYNC_MAP_EMPTY_FALLBACKS: Dict[str, List[str]] = {
     "serial_managed": ["enableserial", "enableSerial", "FIsSNManage"],
 }
 
+
+def _material_code_from_kingdee_row(row: Dict[str, Any]) -> str:
+    return cell_str(
+        row.get("number")
+        or row.get("main_code")
+        or row.get("code")
+        or row.get("FNumber")
+    )
+
+
+def collect_kingdee_inactive_material_codes(
+    rows: List[Dict[str, Any]],
+    *,
+    path_for_active: str,
+) -> set[str]:
+    """金蝶行在「仅有效」过滤前识别停用/未审核编码（供增量只改 is_active）。"""
+    from core.services.integration.kingdee_cosmic_material_active import (
+        is_cosmic_material_row_active,
+    )
+    from core.services.integration.kingdee_galaxy_material_active import (
+        is_galaxy_execute_bill_query_path,
+        is_galaxy_material_row_active,
+    )
+
+    path = path_for_active.replace("\\", "/").lower()
+    is_cosmic = "/bd_material/batchquery" in path
+    is_galaxy = is_galaxy_execute_bill_query_path(path)
+    if not is_cosmic and not is_galaxy:
+        return set()
+
+    codes: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if is_cosmic:
+            if is_cosmic_material_row_active(row):
+                continue
+        elif is_galaxy:
+            if is_galaxy_material_row_active(row):
+                continue
+        code = _material_code_from_kingdee_row(row)
+        if code:
+            codes.add(code)
+    return codes
+
+
+async def apply_kingdee_inactive_status_to_materials(
+    tenant_id: int,
+    codes: set[str],
+) -> int:
+    """仅将金蝶已停用/无效的同步物料标为停用；不写其它字段、不动无 external_sync_at 的手工料。"""
+    if not codes:
+        return 0
+    return await Material.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        is_active=True,
+        external_sync_at__isnull=False,
+        main_code__in=list(codes),
+    ).update(is_active=False)
+
+
 # 写入物料 defaults.defaultTaxRate（整型百分比），非 Material 标量列
 MATERIAL_SYNC_DEFAULT_TAX_TARGET = "default_tax_rate"
 
@@ -405,6 +467,7 @@ class MaterialSyncService:
             fetched_total = 0
             fetch_had_source_errors = False
             last_source_api_path = ""
+            kingdee_inactive_codes: set[str] = set()
             for src in sources:
                 field_mapping = src.get("field_mapping") or {}
                 source_field_names = {
@@ -543,6 +606,12 @@ class MaterialSyncService:
                     is_cosmic_material = "/bd_material/batchquery" in path_for_active
                     is_galaxy_material = is_galaxy_execute_bill_query_path(path_for_active)
 
+                    kingdee_inactive_codes.update(
+                        collect_kingdee_inactive_material_codes(
+                            rows, path_for_active=path_for_active
+                        )
+                    )
+
                     out = rows
                     # 苍穹看 status/enable；星空看 FDocumentStatus/FForbidStatus。
                     # 禁止对星空行套用苍穹过滤器，否则「仅有效」会把全部行滤成 fetched=0。
@@ -607,7 +676,18 @@ class MaterialSyncService:
                 result.skipped += one.skipped
                 result.failed += one.failed
                 result.errors = (result.errors + source_errors + list(one.errors))[:20]
-                # 全量/增量均只 upsert 本次命中行；未命中的本地物料不改启用状态、不软删。
+
+            if kingdee_inactive_codes:
+                deactivated = await apply_kingdee_inactive_status_to_materials(
+                    tenant_id, kingdee_inactive_codes
+                )
+                if deactivated:
+                    await emit_sync_progress(
+                        f"金蝶停用/未审核 {len(kingdee_inactive_codes)} 编码，"
+                        f"已同步停用本地物料 {deactivated} 条（仅 is_active）"
+                    )
+                    result.updated += deactivated
+            # 全量/增量：有效行 upsert；停用行仅改 is_active；未拉回的手工料不软删。
             await emit_sync_progress(f"字段映射完成，共处理 {fetched_total} 行源数据…")
             attach_sync_fetch_meta(result, fetched=fetched_total, since=since)
             if prerequisite_errors:

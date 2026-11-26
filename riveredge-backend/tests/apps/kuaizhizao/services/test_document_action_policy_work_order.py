@@ -32,6 +32,24 @@ def test_draft_release_and_update():
     assert not caps.revoke.allowed
 
 
+def test_draft_release_with_audit_phase_when_review_not_written():
+    caps = derive_work_order_capabilities(
+        _wo(review_status="草稿"),
+        audit_required=True,
+        audit_phase="approved",
+    )
+    assert caps.release.allowed
+
+
+def test_draft_release_blocked_pending_audit_phase():
+    caps = derive_work_order_capabilities(
+        _wo(review_status="待审核"),
+        audit_required=True,
+        audit_phase="pending",
+    )
+    assert not caps.release.allowed
+
+
 def test_frozen_blocks_release():
     caps = derive_work_order_capabilities(_wo(is_frozen=True))
     assert not caps.release.allowed

@@ -411,7 +411,7 @@ import {
 } from './workOrderListScrollPreserve'
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
-import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
+import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked, isWorkOrderPendingReleaseDisplay } from '../../../utils/workOrderLifecycle'
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle'
 import { getOutsourceOrderLifecycle } from '../../../utils/outsourceOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
@@ -6820,7 +6820,10 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleRelease = async (record: WorkOrder) => {
     if (!record.id) return
-    if (record.capabilities?.release?.allowed !== true) {
+    const releaseBlocked =
+      record.capabilities?.release?.allowed !== true &&
+      !isWorkOrderPendingReleaseDisplay(record)
+    if (releaseBlocked) {
       messageApi.warning(t('app.kuaizhizao.workOrder.batchRelease.auditOrStatusBlocked'))
       return
     }
@@ -9032,6 +9035,14 @@ const WorkOrdersPage: React.FC = () => {
         const canSplit =
           executionConfig?.split_enabled !== false && (isDraft || isReleased || hasSplitRemaining)
         const canFreeze = !isTerminal && !isCompleted
+        const canSubmitRelease = workOrderPerms.canAction?.('submit') ?? false
+        const canEditWorkOrder = record.capabilities?.update?.allowed === true
+        const releaseAllowedByCapability = record.capabilities?.release?.allowed === true
+        const releaseAllowedByAudit = isDraft && isWorkOrderPendingReleaseDisplay(record)
+        const canRelease =
+          isDraft &&
+          canSubmitRelease &&
+          (releaseAllowedByCapability || releaseAllowedByAudit)
 
         const executeDeleteClick = async () => {
           try {
@@ -9118,6 +9129,13 @@ const WorkOrdersPage: React.FC = () => {
         }
 
         const statusControlItems: any[] = []
+        if (canRelease) {
+          statusControlItems.push(
+            makeItem('release', t('app.kuaizhizao.workOrder.actionRelease'), () => handleRelease(record), {
+              icon: <SendOutlined />,
+            }),
+          )
+        }
         if (canComplete) {
           statusControlItems.push(
             makeItem('complete', t('app.kuaizhizao.workOrder.actionComplete'), () => handleComplete(record), { icon: <StopOutlined /> }),
@@ -9185,16 +9203,18 @@ const WorkOrdersPage: React.FC = () => {
             >
               {t('common.detail')}
             </Button>
-            <Button
-              {...rowActionKind('update')}
-              key="edit"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            >
-              {t('common.edit')}
-            </Button>
+            {canEditWorkOrder ? (
+              <Button
+                {...rowActionKind('update')}
+                key="edit"
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+              >
+                {t('common.edit')}
+              </Button>
+            ) : null}
             {workOrderAuditEnabled ? (
               <UniWorkflowActions
                 {...rowActionKind('skip')}
@@ -9214,7 +9234,7 @@ const WorkOrdersPage: React.FC = () => {
                 }}
               />
             ) : null}
-            {isDraft && (record.capabilities?.release?.allowed ?? true) ? (
+            {canRelease ? (
               <Button
                 {...rowActionKind('release')}
                 key="release"
@@ -12049,7 +12069,9 @@ const WorkOrdersPage: React.FC = () => {
                   key: 'release',
                   visible:
                     ['draft', '草稿'].includes(workOrderDetail.status || '') &&
-                    workOrderDetail.capabilities?.release?.allowed === true,
+                    (workOrderPerms.canAction?.('submit') ?? false) &&
+                    (workOrderDetail.capabilities?.release?.allowed === true ||
+                      isWorkOrderPendingReleaseDisplay(workOrderDetail)),
                   render: () => (
                     <Button type="primary" onClick={() => handleRelease(workOrderDetail)}>
                       {t('app.kuaizhizao.workOrder.actionRelease')}

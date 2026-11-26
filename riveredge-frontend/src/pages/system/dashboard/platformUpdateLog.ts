@@ -44,6 +44,53 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-receipt-zero-tax-rollup-r01',
+    date: '2026-11-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-zero-tax-rollup-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-zero-tax-rollup-r01.description',
+  },
+  {
+    id: 'sales-delivery-confirm-auto-ar-timezone-r01',
+    date: '2026-11-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-delivery-confirm-auto-ar-timezone-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-delivery-confirm-auto-ar-timezone-r01.description',
+  },
+  {
+    id: 'work-order-release-after-audit-r01',
+    date: '2026-11-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-release-after-audit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-order-release-after-audit-r01.description',
+  },
+  {
+    id: 'material-form-basic-grid-five-cols-r01',
+    date: '2026-11-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-form-basic-grid-five-cols-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-form-basic-grid-five-cols-r01.description',
+  },
+  {
+    id: 'warehouse-list-date-filter-site-tz-r01',
+    date: '2026-11-26',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-list-date-filter-site-tz-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.warehouse-list-date-filter-site-tz-r01.description',
+  },
+  {
+    id: 'material-sync-incremental-is-active-r01',
+    date: '2026-11-26',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-incremental-is-active-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-incremental-is-active-r01.description',
+  },
+  {
     id: 'document-tax-rate-required-r01',
     date: '2026-11-26',
     type: 'feature',

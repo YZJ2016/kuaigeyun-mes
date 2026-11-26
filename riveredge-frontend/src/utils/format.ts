@@ -107,6 +107,24 @@ export function formatBusinessDateOnly(
   return formatDateBySiteSetting(date, fallback);
 }
 
+/** 列表筛选用站点业务日键（固定 YYYY-MM-DD，与高级搜索日期区间比较口径一致） */
+export function toSiteBusinessDateKey(
+  date: string | Date | number | Dayjs | null | undefined,
+): string {
+  if (date == null || date === '') return '';
+  if (dayjs.isDayjs(date)) {
+    return date.isValid() ? date.format('YYYY-MM-DD') : '';
+  }
+  const text = String(date).trim();
+  if (DATE_ONLY_PATTERN.test(text)) return text;
+  if (TZ_SUFFIX_PATTERN.test(text) || text.includes('T')) {
+    const d = dayjs(text).tz(getTimezoneFromSiteSetting());
+    return d.isValid() ? d.format('YYYY-MM-DD') : '';
+  }
+  const datePart = text.length >= 10 ? text.slice(0, 10) : text;
+  return DATE_ONLY_PATTERN.test(datePart) ? datePart : '';
+}
+
 /**
  * 格式化日期（使用站点设置中的日期格式和时区）
  * 用于单据、表格等业务展示场景

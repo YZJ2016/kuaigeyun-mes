@@ -16,6 +16,7 @@ async def test_release_work_order_skips_planned_outsource_draft_hook():
     work_order = SimpleNamespace(
         id=42,
         status="draft",
+        review_status=None,
         product_id=7,
         code="WO-TEST",
         quantity=10,

@@ -9,6 +9,7 @@ import {
 } from '../../../utils/tableQueryKey';
 import { documentLineMaterialKeywordHaystack } from '../../../components/document-line-materials-preview';
 import { parseSalesReportDateRange } from '../services/reports';
+import { toSiteBusinessDateKey } from '../../../utils/format';
 
 export const WAREHOUSE_DOC_PINNED_STATUS_FIELD = 'status';
 
@@ -1004,7 +1005,7 @@ export function filterInboundHubRows(
         row.received_at ??
         row.return_time ??
         row.registration_date;
-      const text = String(raw ?? '').trim().slice(0, 10);
+      const text = toSiteBusinessDateKey(raw as string | undefined);
       if (!text) return false;
       if (receiptStart && text < receiptStart) return false;
       if (receiptEnd && text > receiptEnd) return false;

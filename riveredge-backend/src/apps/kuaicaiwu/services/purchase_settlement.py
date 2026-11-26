@@ -367,6 +367,18 @@ def _first_positive_line_tax_percent(lines: Sequence[Any]) -> Optional[Decimal]:
     return None
 
 
+def _rollup_receipt_header_tax_percent(lines: Sequence[Any]) -> Optional[Decimal]:
+    """行税率一致时写回头表（含全行 0%）；否则取首个正税率。"""
+    explicit: list[Decimal] = []
+    for it in lines:
+        raw = getattr(it, "tax_rate", None)
+        if raw is not None:
+            explicit.append(normalize_po_tax_rate_to_percent(raw))
+    if explicit and len(set(explicit)) == 1:
+        return explicit[0]
+    return _first_positive_line_tax_percent(lines)
+
+
 def compute_purchase_receipt_header_rollup(
     receipt: Any,
     lines: Sequence[Any],
@@ -574,7 +586,7 @@ async def sync_purchase_receipt_header_amounts(
     changed = line_excl_changed or purchase_receipt_header_out_of_sync(
         receipt, total_qty=total_qty, excl=excl, tax_amt=tax_amt, net_amt=net_amt
     )
-    line_tax_pct = _first_positive_line_tax_percent(lines)
+    line_tax_pct = _rollup_receipt_header_tax_percent(lines)
 
     if persist and changed:
         upd: Dict[str, Any] = {

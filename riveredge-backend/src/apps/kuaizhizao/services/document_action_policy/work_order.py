@@ -102,6 +102,20 @@ def _review_approved(review: Any) -> bool:
     return raw in _REVIEW_APPROVED or raw.upper() in {"APPROVED"}
 
 
+def _release_audit_satisfied(
+    review: Any,
+    *,
+    audit_required: bool | None,
+    audit_phase: Optional[str] = None,
+) -> bool:
+    """与 audit_phase / 列表「待下达」展示同源：审核已通过即允许下达。"""
+    if not audit_required:
+        return True
+    if _review_approved(review):
+        return True
+    return _norm(audit_phase).lower() == "approved"
+
+
 def derive_work_order_capabilities(
     wo: Any,
     *,
@@ -109,6 +123,7 @@ def derive_work_order_capabilities(
     has_downstream_documents: bool | None = None,
     audit_required: bool | None = None,
     review_submitted: Optional[bool] = None,
+    audit_phase: Optional[str] = None,
 ) -> WorkOrderCapabilities:
     if not _is_list_work_order_row(wo):
         deny = _cap(False, "work_order.not_applicable")
@@ -245,7 +260,9 @@ def derive_work_order_capabilities(
         elif review_norm in _REVIEW_REJECTED:
             release_allowed = False
             release_reason = "work_order.release.audit_rejected"
-        elif review_norm not in _REVIEW_APPROVED:
+        elif not _release_audit_satisfied(
+            review, audit_required=audit_required, audit_phase=audit_phase
+        ):
             release_allowed = False
             release_reason = "work_order.release.audit_required"
     release_cap = _cap(release_allowed, release_reason)
@@ -391,6 +408,7 @@ def assert_work_order_capability(
     has_downstream_documents: bool | None = None,
     audit_required: bool | None = None,
     review_submitted: Optional[bool] = None,
+    audit_phase: Optional[str] = None,
 ) -> None:
     caps = derive_work_order_capabilities(
         wo,
@@ -398,6 +416,7 @@ def assert_work_order_capability(
         has_downstream_documents=has_downstream_documents,
         audit_required=audit_required,
         review_submitted=review_submitted,
+        audit_phase=audit_phase,
     )
     cap_map = {
         "update": caps.update,

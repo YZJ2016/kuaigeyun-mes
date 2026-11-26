@@ -1920,7 +1920,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 
         .material-form-modal .material-form-basic-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(5, minmax(0, 1fr));
           column-gap: 16px;
           row-gap: 8px;
           width: 100%;
@@ -2710,14 +2710,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           </div>
           <div className="material-form-basic-grid__cell">
             <ProFormText
-              name="texture"
-              label={t('app.master-data.materialForm.texture')}
-              placeholder={t('app.master-data.materialForm.texturePlaceholder')}
-              rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
-            />
-          </div>
-          <div className="material-form-basic-grid__cell">
-            <ProFormText
               name="countryOfOrigin"
               label={t('app.master-data.materialForm.countryOfOrigin')}
               placeholder={t('app.master-data.materialForm.countryOfOriginPlaceholder')}
@@ -2732,29 +2724,6 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
               rules={[{ max: 50, message: t('app.master-data.materialForm.barcodeMax') }]}
             />
           </div>
-          <div className="material-form-basic-grid__cell">
-            <ProFormSwitch
-              name="shelfLifeManaged"
-              label={t('app.master-data.materialForm.shelfLifeManaged')}
-            />
-          </div>
-          {shelfLifeManaged ? (
-            <div className="material-form-basic-grid__cell">
-              <ProFormDigit
-                name="shelfLifeDays"
-                label={t('app.master-data.materialForm.shelfLifeDays')}
-                placeholder={t('app.master-data.materialForm.shelfLifeDaysPlaceholder')}
-                min={1}
-                fieldProps={{ precision: 0 }}
-                rules={[
-                  {
-                    required: true,
-                    message: t('app.master-data.materialForm.shelfLifeDaysRequired'),
-                  },
-                ]}
-              />
-            </div>
-          ) : null}
         </div>
       </Panel>
     );
@@ -2877,6 +2846,37 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             fieldProps={{ showSearch: true, allowClear: true, optionFilterProp: 'label' }}
           />
         </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormText
+            name="texture"
+            label={t('app.master-data.materialForm.texture')}
+            placeholder={t('app.master-data.materialForm.texturePlaceholder')}
+            rules={[{ max: 100, message: t('app.master-data.materialForm.textureMax') }]}
+          />
+        </div>
+        <div className="material-form-basic-grid__cell">
+          <ProFormSwitch
+            name="shelfLifeManaged"
+            label={t('app.master-data.materialForm.shelfLifeManaged')}
+          />
+        </div>
+        {shelfLifeManaged ? (
+          <div className="material-form-basic-grid__cell">
+            <ProFormDigit
+              name="shelfLifeDays"
+              label={t('app.master-data.materialForm.shelfLifeDays')}
+              placeholder={t('app.master-data.materialForm.shelfLifeDaysPlaceholder')}
+              min={1}
+              fieldProps={{ precision: 0 }}
+              rules={[
+                {
+                  required: true,
+                  message: t('app.master-data.materialForm.shelfLifeDaysRequired'),
+                },
+              ]}
+            />
+          </div>
+        ) : null}
       </div>
       <CustomFieldsFormSection
         customFields={customFields}

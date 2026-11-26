@@ -2385,12 +2385,30 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         response = response.model_copy(
             update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
         )
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_review_submitted_for_documents,
+        )
+        from core.services.approval.audit_phase import derive_audit_phase
+
+        review_submitted_map = await batch_review_submitted_for_documents(
+            tenant_id, "work_order", [work_order]
+        )
+        wo_review_submitted = review_submitted_map.get(work_order_id)
+        audit_phase = derive_audit_phase(
+            "work_order",
+            work_order.status,
+            work_order.review_status,
+            enabled=audit_required,
+            review_submitted=wo_review_submitted,
+        ).get("phase")
         response = enrich_work_order_capabilities_on_response(
             work_order,
             response,
             has_returnable_picking=returnable_map.get(work_order_id, False),
             has_downstream_documents=downstream_map.get(work_order_id, False),
             audit_required=audit_required,
+            review_submitted=wo_review_submitted,
+            audit_phase=audit_phase,
         )
         return await enrich_record(
             tenant_id, "work_order", response, audit_enabled=audit_required
@@ -3198,6 +3216,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
 
         from core.services.approval.audit_record_enricher import enrich_items
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_review_submitted_for_documents,
+        )
+        from core.services.approval.audit_phase import derive_audit_phase
+
+        review_submitted_map = await batch_review_submitted_for_documents(
+            tenant_id, "work_order", list(work_orders)
+        )
 
         for wo in work_orders:
             try:
@@ -3236,11 +3262,24 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     if gid in group_name_map:
                         item_dict["group_name"] = group_name_map[gid]
 
+                wo_review_submitted = (
+                    review_submitted_map.get(int(wo.id)) if wo.id is not None else None
+                )
+                audit_phase = derive_audit_phase(
+                    "work_order",
+                    wo.status,
+                    wo.review_status,
+                    enabled=audit_required,
+                    review_submitted=wo_review_submitted,
+                ).get("phase")
+
                 item_dict["capabilities"] = derive_work_order_capabilities(
                     wo,
                     has_returnable_picking=returnable_by_wo.get(int(wo.id), False) if wo.id is not None else False,
                     has_downstream_documents=downstream_by_wo.get(int(wo.id), False) if wo.id is not None else False,
                     audit_required=audit_required,
+                    review_submitted=wo_review_submitted,
+                    audit_phase=audit_phase,
                 )
                 if wo.id is not None and include_downstream_push_progress:
                     item_dict["downstream_push_progress"] = push_progress_by_wo.get(int(wo.id), 0.0)
@@ -4978,7 +5017,29 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             audit_required = await BusinessConfigService().check_audit_required(
                 tenant_id, "work_order"
             )
-            assert_work_order_capability(work_order, "release", audit_required=audit_required)
+            from apps.kuaizhizao.services.document_action_policy.enricher import (
+                batch_review_submitted_for_documents,
+            )
+            from core.services.approval.audit_phase import derive_audit_phase
+
+            review_submitted_map = await batch_review_submitted_for_documents(
+                tenant_id, "work_order", [work_order]
+            )
+            wo_review_submitted = review_submitted_map.get(work_order_id)
+            audit_phase = derive_audit_phase(
+                "work_order",
+                work_order.status,
+                work_order.review_status,
+                enabled=audit_required,
+                review_submitted=wo_review_submitted,
+            ).get("phase")
+            assert_work_order_capability(
+                work_order,
+                "release",
+                audit_required=audit_required,
+                review_submitted=wo_review_submitted,
+                audit_phase=audit_phase,
+            )
 
             if (work_order.status or "") == "split":
                 raise BusinessLogicError("已拆分主工单不可下达，请将剩余数量拆分为子工单后由子工单执行")

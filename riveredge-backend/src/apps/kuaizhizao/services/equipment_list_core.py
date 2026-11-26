@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time as dt_time
+from datetime import date, timedelta
 from typing import Any, List, Optional
 
 from tortoise.expressions import Q
@@ -11,6 +11,7 @@ from apps.kuaizhizao.services.quality_service import (
     _parse_optional_api_date,
     _resolve_quality_list_order_by,
 )
+from core.utils.timezone_utils import site_day_bounds_utc, to_naive_utc
 
 SPOT_CHECK_SORTABLE_FIELDS = frozenset({
     "document_no", "equipment_code", "equipment_name", "check_date",
@@ -109,6 +110,23 @@ def apply_equipment_keyword_filter(query, keyword: Optional[str], fields: List[s
     return query.filter(cond)
 
 
+def _apply_site_calendar_day_range(
+    query,
+    *,
+    field: str,
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+):
+    """站点日历日 [start, end] → UTC 瞬时区间，供列表 created_at / 业务时刻字段筛选。"""
+    if start is not None:
+        start_utc, _ = site_day_bounds_utc(start)
+        query = query.filter(**{f"{field}__gte": to_naive_utc(start_utc)})
+    if end is not None:
+        _, end_exclusive = site_day_bounds_utc(end + timedelta(days=1))
+        query = query.filter(**{f"{field}__lt": to_naive_utc(end_exclusive)})
+    return query
+
+
 def apply_equipment_document_date_range(
     query,
     *,
@@ -118,12 +136,9 @@ def apply_equipment_document_date_range(
 ):
     start = _parse_optional_api_date(start_date)
     end = _parse_optional_api_date(end_date)
-    if start is not None:
-        query = query.filter(**{f"{date_field}__gte": start})
-    if end is not None:
-        # 结束日含当天全部时刻。只比较日期零点会把当天已生成的盘点单等单据排除。
-        query = query.filter(**{f"{date_field}__lte": datetime.combine(end, dt_time.max)})
-    return query
+    return _apply_site_calendar_day_range(
+        query, field=date_field, start=start, end=end
+    )
 
 
 def apply_equipment_created_date_range(
@@ -134,11 +149,9 @@ def apply_equipment_created_date_range(
 ):
     start = _parse_optional_api_date(start_date)
     end = _parse_optional_api_date(end_date)
-    if start is not None:
-        query = query.filter(created_at__gte=datetime.combine(start, dt_time.min))
-    if end is not None:
-        query = query.filter(created_at__lte=datetime.combine(end, dt_time.max))
-    return query
+    return _apply_site_calendar_day_range(
+        query, field="created_at", start=start, end=end
+    )
 
 
 def apply_equipment_updated_date_range(
@@ -149,11 +162,9 @@ def apply_equipment_updated_date_range(
 ):
     start = _parse_optional_api_date(start_date)
     end = _parse_optional_api_date(end_date)
-    if start is not None:
-        query = query.filter(updated_at__gte=datetime.combine(start, dt_time.min))
-    if end is not None:
-        query = query.filter(updated_at__lte=datetime.combine(end, dt_time.max))
-    return query
+    return _apply_site_calendar_day_range(
+        query, field="updated_at", start=start, end=end
+    )
 
 
 def pick_search_keyword(keyword: Optional[str] = None, search: Optional[str] = None) -> Optional[str]:

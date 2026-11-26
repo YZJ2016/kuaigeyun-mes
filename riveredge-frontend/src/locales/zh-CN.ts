@@ -2632,6 +2632,30 @@ export default {
   'components.syncFromSource.stepIncrementalEmpty': '水位内无变更',
   'components.syncFromSource.stepSourceEmptyContinue':
     '源端未返回分组行（拉取 0 条），本步完成；后续物料同步会按物料行补齐本地分组',
+  'pages.dashboard.updateLog.entries.purchase-receipt-zero-tax-rollup-r01.title':
+    '采购入库普票 0% 税率下推与价税重算',
+  'pages.dashboard.updateLog.entries.purchase-receipt-zero-tax-rollup-r01.description':
+    '采购订单税率为 0 时入库单不再误用 13% 重算税额；行上显式 0% 不再被头税率盖掉，汇总时头表也会写回 0%。',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-auto-ar-timezone-r01.title':
+    '销售出库确认自动生成应收修复',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-auto-ar-timezone-r01.description':
+    '出库单已带出库时间时，确认出库后自动生成应收与核销预收不再因业务时刻解析报错；出库确认本身不受影响。需重启后端。',
+  'pages.dashboard.updateLog.entries.work-order-release-after-audit-r01.title':
+    '工单审核通过后恢复下达操作',
+  'pages.dashboard.updateLog.entries.work-order-release-after-audit-r01.description':
+    '列表执行态显示待下达且审核已通过时，与审核相位一致恢复下达能力；行操作与详情下达须具备工单提交权限。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.material-form-basic-grid-five-cols-r01.title':
+    '物料基本信息表单调整为每行五列',
+  'pages.dashboard.updateLog.entries.material-form-basic-grid-five-cols-r01.description':
+    '物料新建与编辑「基本信息」改为每行五个字段；材质与保质期管理提到主表区并紧跟存货类别，更多折叠内仅保留重量体积等扩展项。需更新 Web 端。',
+  'pages.dashboard.updateLog.entries.warehouse-list-date-filter-site-tz-r01.title':
+    '修复仓储单据高级搜索按日期筛选无数据',
+  'pages.dashboard.updateLog.entries.warehouse-list-date-filter-site-tz-r01.description':
+    '采购入库等列表的高级搜索在按创建/更新/制单日期筛选时，改为按站点日历日换算 UTC 边界后再查询，避免东八区单据落在前一天 UTC 而被误排除。须重启后端后生效。',
+  'pages.dashboard.updateLog.entries.material-sync-incremental-is-active-r01.title':
+    '物料定时增量同步金蝶启用停用',
+  'pages.dashboard.updateLog.entries.material-sync-incremental-is-active-r01.description':
+    '在「仅有效」过滤前识别金蝶停用或未审核的变更行，对已有 external_sync_at 的本地物料只更新 is_active，不改名称等单位等其它字段；金蝶重新启用的行仍走原映射 upsert。需重启后端。',
   'pages.dashboard.updateLog.entries.role-home-filter-virtual-menu-r01.title':
     '角色首页过滤虚拟菜单应用根',
   'pages.dashboard.updateLog.entries.role-home-filter-virtual-menu-r01.description':
@@ -30638,7 +30662,7 @@ export default {
   'app.master-data.materialForm.customsCode': '海关编码',
   'app.master-data.materialForm.customsCodePlaceholder': '请输入海关编码',
   'app.master-data.materialForm.viewMoreFields': '查看更多',
-  'app.master-data.materialForm.viewMoreFieldsHint': '重量、体积、条码、贸易、保质期',
+  'app.master-data.materialForm.viewMoreFieldsHint': '重量、体积、条码、贸易',
   'app.master-data.materialForm.batchManaged': '批号管理',
   'app.master-data.materialForm.serialManaged': '序列号管理',
   'app.master-data.materialForm.defaultBatchRule': '默认批号规则',

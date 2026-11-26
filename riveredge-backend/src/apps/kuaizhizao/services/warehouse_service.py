@@ -12085,8 +12085,6 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 else getattr(sd_row, "delivery_time", None)
             )
             if time_source is None:
-                from core.utils.timezone_utils import resolve_business_datetime
-
                 confirm_time = coerce_business_datetime_to_utc(resolve_business_datetime())
             else:
                 confirm_time = coerce_business_datetime_to_utc(time_source)
@@ -13388,7 +13386,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     buyer_name=getattr(primary, "buyer_name", None),
                     department_id=getattr(primary, "department_id", None),
                     department_name=getattr(primary, "department_name", None),
-                    tax_rate=po_tax_pct if po_tax_pct > 0 else None,
+                    tax_rate=po_tax_pct,
                     currency=str(getattr(primary, "currency", None) or "CNY").strip() or "CNY",
                     pay_mode=getattr(primary, "payment_method_code", None),
                     advance_payee_id=getattr(primary, "advance_payee_id", None),

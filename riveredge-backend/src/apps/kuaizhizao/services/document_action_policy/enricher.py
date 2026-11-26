@@ -1808,6 +1808,7 @@ def enrich_work_order_capabilities_on_response(
     has_downstream_documents: bool | None = None,
     audit_required: bool | None = None,
     review_submitted: bool | None = None,
+    audit_phase: str | None = None,
 ) -> T:
     caps = derive_work_order_capabilities(
         wo,
@@ -1815,6 +1816,7 @@ def enrich_work_order_capabilities_on_response(
         has_downstream_documents=has_downstream_documents,
         audit_required=audit_required,
         review_submitted=review_submitted,
+        audit_phase=audit_phase,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1829,11 +1831,13 @@ def enrich_work_order_list_capabilities(
     has_downstream_documents_by_id: dict[int, bool] | None = None,
     audit_required: bool | None = None,
     review_submitted_by_id: dict[int, bool] | None = None,
+    audit_phase_by_id: dict[int, str] | None = None,
 ) -> List[T]:
     out: List[T] = []
     lookup = has_returnable_picking_by_id or {}
     downstream_lookup = has_downstream_documents_by_id or {}
     submitted_lookup = review_submitted_by_id or {}
+    phase_lookup = audit_phase_by_id or {}
     for wo, resp in zip(work_orders, responses):
         wo_id = getattr(wo, "id", None)
         has_returnable = lookup.get(int(wo_id)) if wo_id is not None else None
@@ -1844,6 +1848,7 @@ def enrich_work_order_list_capabilities(
             has_downstream_documents=has_downstream,
             audit_required=audit_required,
             review_submitted=submitted_lookup.get(int(wo_id)) if wo_id is not None else None,
+            audit_phase=phase_lookup.get(int(wo_id)) if wo_id is not None else None,
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
