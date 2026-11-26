@@ -6427,6 +6427,7 @@ const WorkOrdersPage: React.FC = () => {
             else delete values[key]
           }
         }
+        delete values.serial_entry_mode
         await workOrderApi.update(currentWorkOrder.id.toString(), values)
         // 编辑保存必须以当前清单为准同步工序（含删除）；换路线后不得携带旧工单工序行 id，避免误匹配残留
         const submittedRouteId =
@@ -6533,6 +6534,7 @@ const WorkOrdersPage: React.FC = () => {
             delete values.planned_serial_nos
           }
         }
+        delete values.serial_entry_mode
         const created = await workOrderApi.create(values)
         const childHint =
           created?.serial_split_child_count && created.serial_split_child_count > 0

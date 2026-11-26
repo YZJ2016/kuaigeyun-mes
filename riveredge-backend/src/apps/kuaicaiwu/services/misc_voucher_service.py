@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from tortoise.transactions import in_transaction
+
 from apps.common.audit_actor import (
     apply_create_audit,
     apply_update_audit,
@@ -517,11 +519,16 @@ class MiscVoucherService:
                 f"当前状态不可提交审核，当前状态: {doc.status}"
             )
         if not audit_required:
-            patch = {"status": "Approved", **self._reviewer_patch(user, "自动审核")}
-            apply_update_audit(patch, user)
-            await self.spec.model.filter(id=doc_id).update(**patch)
-            doc = await self.get_or_404(tenant_id, doc_id)
-            await self._on_voucher_approved(tenant_id, doc, user)
+            async with in_transaction():
+                patch = {
+                    "status": "Approved",
+                    "review_status": "已审核",
+                    **self._reviewer_patch(user, "自动审核"),
+                }
+                apply_update_audit(patch, user)
+                await self.spec.model.filter(id=doc_id).update(**patch)
+                doc = await self.get_or_404(tenant_id, doc_id)
+                await self._on_voucher_approved(tenant_id, doc, user)
             return doc
 
         doc_code = str(getattr(doc, self.spec.code_field, None) or doc_id)
@@ -543,15 +550,20 @@ class MiscVoucherService:
             selected_approver_user_ids=selected_approver_user_ids,
             selected_approver_by_node=selected_approver_by_node,
         )
-        patch: Dict[str, Any] = {"status": "PendingReview"}
+        patch: Dict[str, Any] = {"status": "PendingReview", "review_status": "待审核"}
         apply_update_audit(patch, user)
         await self.spec.model.filter(id=doc_id).update(**patch)
         if approval_instance_finished_on_submit(instance):
-            patch = {"status": "Approved", **self._reviewer_patch(user, "自动审核")}
-            apply_update_audit(patch, user)
-            await self.spec.model.filter(id=doc_id).update(**patch)
-            doc = await self.get_or_404(tenant_id, doc_id)
-            await self._on_voucher_approved(tenant_id, doc, user)
+            async with in_transaction():
+                patch = {
+                    "status": "Approved",
+                    "review_status": "已审核",
+                    **self._reviewer_patch(user, "自动审核"),
+                }
+                apply_update_audit(patch, user)
+                await self.spec.model.filter(id=doc_id).update(**patch)
+                doc = await self.get_or_404(tenant_id, doc_id)
+                await self._on_voucher_approved(tenant_id, doc, user)
             return doc
         return await self.get_or_404(tenant_id, doc_id)
 
@@ -602,15 +614,17 @@ class MiscVoucherService:
         audit_required = await self.audit_required(tenant_id)
 
         async def _do_decide():
-            patch = {
-                "status": "Approved" if approve else "Rejected",
-                **self._reviewer_patch(user, remarks),
-            }
-            apply_update_audit(patch, user)
-            await self.spec.model.filter(id=doc_id).update(**patch)
-            decided = await self.get_or_404(tenant_id, doc_id)
-            if approve:
-                await self._on_voucher_approved(tenant_id, decided, user)
+            async with in_transaction():
+                patch = {
+                    "status": "Approved" if approve else "Rejected",
+                    "review_status": "已审核" if approve else "已驳回",
+                    **self._reviewer_patch(user, remarks),
+                }
+                apply_update_audit(patch, user)
+                await self.spec.model.filter(id=doc_id).update(**patch)
+                decided = await self.get_or_404(tenant_id, doc_id)
+                if approve:
+                    await self._on_voucher_approved(tenant_id, decided, user)
             return decided
 
         if is_auto_approve:
@@ -713,7 +727,7 @@ class MiscVoucherService:
             logger.warning(
                 "取消{}审批流程失败或无需取消: {}", self.spec.doc_label, e
             )
-        patch: Dict[str, Any] = {"status": "Draft"}
+        patch: Dict[str, Any] = {"status": "Draft", "review_status": "草稿"}
         apply_update_audit(patch, user)
         await self.spec.model.filter(id=doc_id).update(**patch)
         return await self.get_or_404(tenant_id, doc_id)
@@ -742,6 +756,7 @@ class MiscVoucherService:
             )
         patch: Dict[str, Any] = {
             "status": "Draft",
+            "review_status": "草稿",
             "reviewer_id": None,
             "reviewer_name": None,
             "review_time": None,
@@ -755,11 +770,16 @@ class MiscVoucherService:
         doc = await self.get_or_404(tenant_id, doc_id)
         audit_required = await self.audit_required(tenant_id)
         if str(doc.status) == "Draft" and not audit_required:
-            patch = {"status": "Approved", **self._reviewer_patch(user, "自动审核")}
-            apply_update_audit(patch, user)
-            await self.spec.model.filter(id=doc_id).update(**patch)
-            doc = await self.get_or_404(tenant_id, doc_id)
-            await self._on_voucher_approved(tenant_id, doc, user)
+            async with in_transaction():
+                patch = {
+                    "status": "Approved",
+                    "review_status": "已审核",
+                    **self._reviewer_patch(user, "自动审核"),
+                }
+                apply_update_audit(patch, user)
+                await self.spec.model.filter(id=doc_id).update(**patch)
+                doc = await self.get_or_404(tenant_id, doc_id)
+                await self._on_voucher_approved(tenant_id, doc, user)
         elif str(doc.status) == "PendingReview" and audit_required:
             raise BusinessLogicError(f"{self.spec.label}待审核中，请先完成审核")
         elif str(doc.status) not in ("Approved", "Draft"):
@@ -790,6 +810,14 @@ class MiscVoucherService:
             raise BusinessLogicError(f"{self.spec.label}待审核中，请先驳回或完成审核")
         if status not in _CANCELABLE:
             raise BusinessLogicError(f"当前状态不可作废，当前状态: {status}")
+        if status == "Confirmed":
+            # 先反过账再作废挂账：unpost 失败则单据仍 Confirmed 且挂账未动
+            await MiscVoucherPostingService().unpost(
+                tenant_id,
+                voucher_type=self.spec.voucher_type,
+                voucher_id=doc_id,
+                operator=user,
+            )
         if status in ("Approved", "Confirmed"):
             # 审核通过时已挂应收/应付：作废前先校验可撤销并作废关联财务单，避免孤儿挂账
             from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
@@ -807,14 +835,7 @@ class MiscVoucherService:
                 await bridge.void_payable_for_expense_revoke(
                     tenant_id, doc_id, int(user.id)
                 )
-        if status == "Confirmed":
-            await MiscVoucherPostingService().unpost(
-                tenant_id,
-                voucher_type=self.spec.voucher_type,
-                voucher_id=doc_id,
-                operator=user,
-            )
-        patch: Dict[str, Any] = {"status": "Cancelled"}
+        patch: Dict[str, Any] = {"status": "Cancelled", "review_status": "已取消"}
         apply_update_audit(patch, user)
         await self.spec.model.filter(id=doc_id).update(**patch)
         return await self.get_or_404(tenant_id, doc_id)

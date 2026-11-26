@@ -2161,7 +2161,11 @@ class SalesOrderService:
                     deleted_at__isnull=True,
                 )
                 if customer:
-                    partner_settlement_method = customer.settlement_method_code
+                    from apps.master_data.config.partner_settlement_codes import (
+                        partner_settlement_terms_for_pricing,
+                    )
+
+                    partner_settlement_method = partner_settlement_terms_for_pricing(customer)
                     if not order_dict.get("salesman_id") and customer.salesman_id:
                         order_dict["salesman_id"] = customer.salesman_id
                         order_dict["salesman_name"] = customer.salesman_name

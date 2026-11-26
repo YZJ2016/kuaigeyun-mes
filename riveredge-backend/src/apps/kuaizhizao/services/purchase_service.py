@@ -415,7 +415,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             # 创建订单明细
             total_quantity = Decimal(0)
             total_amount = Decimal(0)
-            partner_settlement_method = supplier.settlement_method_code if supplier else None
+            from apps.master_data.config.partner_settlement_codes import (
+                partner_settlement_terms_for_pricing,
+            )
+
+            partner_settlement_method = (
+                partner_settlement_terms_for_pricing(supplier) if supplier else None
+            )
 
             line_snapshots = await resolve_line_material_snapshots(
                 tenant_id,
@@ -1713,7 +1719,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         id=supplier_id_for_items,
                     )
                     if supplier_for_items:
-                        partner_settlement_method = supplier_for_items.settlement_method_code
+                        from apps.master_data.config.partner_settlement_codes import (
+                            partner_settlement_terms_for_pricing,
+                        )
+
+                        partner_settlement_method = partner_settlement_terms_for_pricing(
+                            supplier_for_items
+                        )
 
                 # 删除原有明细
                 await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id).delete()

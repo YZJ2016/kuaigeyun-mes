@@ -36,6 +36,10 @@ class OtherIncome(BaseModel):
         max_length=20, default="Draft",
         description="状态 Draft/PendingReview/Approved/Rejected/Confirmed/Cancelled",
     )
+    review_status = fields.CharField(
+        max_length=20, default="草稿",
+        description="审核状态镜像列（草稿/待审核/已审核/已驳回/已取消），由服务层随 status 同步",
+    )
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")
     review_time = fields.DatetimeField(null=True, description="审核时间")
@@ -100,6 +104,10 @@ class OtherExpense(BaseModel):
     status = fields.CharField(
         max_length=20, default="Draft",
         description="状态 Draft/PendingReview/Approved/Rejected/Confirmed/Cancelled",
+    )
+    review_status = fields.CharField(
+        max_length=20, default="草稿",
+        description="审核状态镜像列（草稿/待审核/已审核/已驳回/已取消），由服务层随 status 同步",
     )
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")

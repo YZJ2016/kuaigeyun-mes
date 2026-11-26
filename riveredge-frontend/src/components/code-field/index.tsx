@@ -26,6 +26,13 @@ const ENTITY_TYPE_BY_PAGE_CODE: Record<string, string> = {
   'kuaizhizao-equipment-management-measuring-instruments': 'equipment',
   'kuaizhizao-equipment-management-mold': 'mold',
   'kuaizhizao-equipment-management-tool': 'tool',
+  'kuaizhizao-equipment-inspection-item': 'equipment_inspection_item',
+  'kuaizhizao-equipment-inspection-scheme': 'equipment_inspection_scheme',
+  'kuaizhizao-equipment-patrol-route': 'equipment_patrol_route',
+  'kuaizhizao-mold-maintenance-item': 'mold_maintenance_item',
+  'kuaizhizao-mold-repair-item': 'mold_repair_item',
+  'kuaizhizao-tool-maintenance-item': 'tool_maintenance_item',
+  'kuaizhizao-tool-repair-item': 'tool_repair_item',
 };
 
 interface CodeFieldProps {

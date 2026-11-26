@@ -7,9 +7,11 @@ RUN_IN_TRANSACTION = True
 
 
 async def upgrade(db: BaseDBAsyncClient) -> str:
+    # 本地 MiscVoucherService 仍以 status 承载审核态（上游为 status/review_status 拆分模型），
+    # 故不搬上游末段 status 归 Draft；review_status 仅作镜像列，由服务层同步写入。
     return """
         ALTER TABLE "apps_kuaicaiwu_other_incomes"
-            ADD COLUMN "review_status" VARCHAR(20) NOT NULL DEFAULT '草稿';
+            ADD COLUMN IF NOT EXISTS "review_status" VARCHAR(20) NOT NULL DEFAULT '草稿';
         UPDATE "apps_kuaicaiwu_other_incomes"
             SET "review_status" = '已审核'
             WHERE "status" IN ('Approved', 'Confirmed', '已审核', '已确认');
@@ -20,8 +22,8 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             SET "review_status" = '已驳回'
             WHERE "status" IN ('Rejected', '已驳回');
         UPDATE "apps_kuaicaiwu_other_incomes"
-            SET "status" = 'Draft'
-            WHERE "status" IN ('PendingReview', 'Approved', 'Rejected', '待审核', '已审核', '已驳回');
+            SET "review_status" = '已取消'
+            WHERE "status" IN ('Cancelled', '已取消');
     """
 
 

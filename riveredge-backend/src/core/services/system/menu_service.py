@@ -34,6 +34,7 @@ from core.config.menu_takeover import (
     META_TENANT_DISABLED,
     META_TENANT_PARENT_OVERRIDE,
     merge_menu_meta_for_sync,
+    meta_blocks_menu_activation,
 )
 from core.config.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -1598,6 +1599,12 @@ class MenuService:
             if _optional in update_data and update_data[_optional] is None:
                 update_data.pop(_optional, None)
 
+        # meta 整体直写不得注入/抹掉运行时键（tenant_disabled 等只走专用路径），保留行内已有运行时键
+        if "meta" in update_data:
+            update_data["meta"] = merge_menu_meta_for_sync(
+                menu.meta, update_data["meta"]
+            )
+
         display_name_provided = "display_name" in update_data
         display_name_value = update_data.pop("display_name", None) if display_name_provided else None
 
@@ -2189,6 +2196,9 @@ class MenuService:
                 existing_menu.is_external = menu_is_external
                 existing_menu.external_url = menu_external_url
                 existing_menu.meta = merge_menu_meta_for_sync(existing_menu.meta, menu_meta)
+                # 菜单管理中租户手工停用（meta.tenant_disabled）：同步/重建不得静默重开
+                if meta_blocks_menu_activation(existing_menu.meta):
+                    existing_menu.is_active = False
                 # 租户已在菜单管理中改过父级时，保留挂载点，避免同步/发版把 MRP 等冲回 manifest 默认分组
                 tenant_parent_override = bool(
                     (existing_menu.meta or {}).get(META_TENANT_PARENT_OVERRIDE)

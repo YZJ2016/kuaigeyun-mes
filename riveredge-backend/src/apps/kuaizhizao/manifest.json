@@ -3279,6 +3279,7 @@
     "kuaizhizao:quality-management-nonconforming-ledger:update",
     "kuaizhizao:quality-management-nonconforming-ledger:export",
     "kuaizhizao:quality-management-nonconforming-ledger:approve",
+    "kuaizhizao:quality-management-nonconforming-ledger:revoke",
     "kuaizhizao:quality-management-nonconforming-ledger:close",
     "kuaizhizao:quality-management-oqc-inspection:read",
     "kuaizhizao:quality-management-oqc-inspection:create",

@@ -167,6 +167,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   periodFilter: periodFilterProp,
   periodFilterLabel,
   enableColumnQuery: enableColumnQueryProp,
+  expandable,
 }: UniReportProps<T>) {
   const { t } = useTranslation();
   const internalActionRef = useRef<ActionType>();
@@ -484,6 +485,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           onChange={handleTableChange}
           params={params}
           pagination={reportPagination}
+          expandable={expandable}
         />
     </ListPageTemplate>
   );
