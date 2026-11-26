@@ -714,6 +714,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         total_amount = Decimal(str(material_receipt.total_amount or 0))
         if total_amount <= 0:
             return
+        if not getattr(outsource_work_order, "supplier_id", None):
+            raise BusinessLogicError("委外工单未维护供应商，无法自动生成应付单")
 
         try:
             from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date

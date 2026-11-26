@@ -250,6 +250,9 @@ const EquipmentLineRebindsPage = lazy(() => import('./pages/equipment-management
 const WarehouseDashboard = lazy(() => import('./pages/warehouse-management/dashboard'));
 const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
 const InboundPage = lazy(() => import('./pages/warehouse-management/inbound'));
+const PurchaseReceiptFormPage = lazy(
+  () => import('./pages/warehouse-management/inbound/PurchaseReceiptCreateModal'),
+);
 const InboundPoPullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundPoPullEntryPage'));
 const InboundWorkOrderPullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundWorkOrderPullEntryPage'));
 const InboundSalesReturnPullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundSalesReturnPullEntryPage'));
@@ -476,6 +479,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="purchase-management/purchase-returns/:id/edit" element={withPageSuspense(PurchaseReturnsPage)} />
       <Route path="purchase-management/purchase-returns" element={withPageSuspense(PurchaseReturnsPage)} />
       <Route path="purchase-management/outbound" element={withPageSuspense(PurchaseOutboundPage)} />
+      <Route path="purchase-management/inbound/new" element={withPageSuspense(PurchaseReceiptFormPage)} />
+      <Route path="purchase-management/inbound/:id/edit" element={withPageSuspense(PurchaseReceiptFormPage)} />
       <Route path="purchase-management/inbound" element={withPageSuspense(PurchaseInboundPage)} />
 
       {/* 生产执行路由 */}
@@ -786,6 +791,8 @@ const KuaizhizaoApp: React.FC = () => {
         path="warehouse-management/inbound/entry/receipt-notice/:noticeId"
         element={withPageSuspense(InboundReceiptNoticePullEntryPage)}
       />
+      <Route path="warehouse-management/inbound/new" element={withPageSuspense(PurchaseReceiptFormPage)} />
+      <Route path="warehouse-management/inbound/:id/edit" element={withPageSuspense(PurchaseReceiptFormPage)} />
       <Route path="warehouse-management/inbound" element={withPageSuspense(InboundPage)} />
       <Route path="warehouse-management/other-inbound" element={withPageSuspense(OtherInboundPage)} />
       <Route path="warehouse-management/other-outbound" element={withPageSuspense(OtherOutboundPage)} />

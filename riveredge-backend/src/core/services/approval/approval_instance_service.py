@@ -6117,11 +6117,16 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_other_expense_application() -> None:
-                from apps.kuaizhizao.services.other_expense_application_service import (
-                    OtherExpenseApplicationService,
-                )
-
                 if not entity_id:
+                    return
+                try:
+                    from apps.kuaizhizao.services.other_expense_application_service import (
+                        OtherExpenseApplicationService,
+                    )
+                except ImportError:
+                    logger.warning(
+                        f"其他支出申请 {entity_id} 审批回调跳过：本地无 OtherExpenseApplicationService（该实体类型已摘出）"
+                    )
                     return
                 service = OtherExpenseApplicationService()
                 if approval_instance.status == "approved":

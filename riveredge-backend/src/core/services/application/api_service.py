@@ -536,10 +536,8 @@ class APIService:
                 _fail(index, code_raw, str(exc) or "写入失败")
 
         if to_update:
-            # 仅 bulk_update「库内已有」的行；本批新建的已在 create 时写完
-            update_rows = [
-                row for eid, row in to_update.items() if eid not in created_ids
-            ]
+            # 本批新建后被同 code 后行覆盖的行也要落库（last-wins 语义）
+            update_rows = list(to_update.values())
             if update_rows:
                 await API.bulk_update(update_rows, fields=update_field_names)
 

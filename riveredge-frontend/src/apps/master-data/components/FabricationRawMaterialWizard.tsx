@@ -183,7 +183,7 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
             quantity: Number(values.quantity) || 1,
             unit: values.baseUnit || values.unit || defaultUnit,
             waste_rate: Number(values.wasteRate) || 0,
-            issue_method: values.issueMethod || 'backflush',
+            issue_method: values.issueMethod || 'pick',
           },
         ],
       } as any);

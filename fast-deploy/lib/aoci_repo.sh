@@ -6,7 +6,9 @@ AOCI_FORMAL_DOT_AOCI_REQUIRED=(config.json baseline.json curation.json)
 AOCI_FORMAL_DOT_AOCI_OPTIONAL=(database-baseline.json)
 # 主仓不再 Git 跟踪，与认知索引一并发布到 kuaigeyun-aoci
 AOCI_FORMAL_ROOT_EXTRA=(AGENTS.md .gitattributes)
-AOCI_FORMAL_DIR_EXTRA=(.cursor)
+# 白名单子目录（与主仓 .gitignore 放行的 tracked 目录一致）；
+# 禁止整棵 .cursor 发布：.cursor/mcp.json 是本机密钥配置（主仓 .gitignore 显式排除）
+AOCI_FORMAL_DIR_EXTRA=(.cursor/rules .cursor/memory)
 
 _aoci_default_repo_path() {
     echo "$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-aoci"
@@ -21,8 +23,7 @@ _aoci_repo_token() {
 }
 
 aoci_assert_formal_assets_present() {
-    local root="$1" f rel
-    root="${root:-$PROJECT_ROOT}"
+    local root="${1:-$PROJECT_ROOT}" f rel
     for f in "${AOCI_FORMAL_ROOT_FILES[@]}"; do
         [ -f "$root/$f" ] || {
             log_error "缺少 AOCI 正式文件 ${root}/${f}"
@@ -60,6 +61,19 @@ install_aoci_from_aoci_repo() {
         return 1
     }
     dest="$PROJECT_ROOT"
+    # 覆盖主仓 AGENTS.md/.gitattributes/.cursor 等 tracked 文件前，目标有未提交改动一律失败
+    if _git_is_work_tree "$dest"; then
+        local dirty
+        dirty="$(_git_cmd -C "$(_git_native_path "$dest")" status --porcelain -- \
+            "${AOCI_FORMAL_ROOT_FILES[@]}" "${AOCI_FORMAL_ROOT_EXTRA[@]}" \
+            .aoci "${AOCI_FORMAL_DIR_EXTRA[@]}" 2>/dev/null || true)"
+        if [ -n "$dirty" ]; then
+            log_error "主仓 AOCI 正式资产路径存在未提交改动，拒绝 install-aoci 覆盖："
+            printf '%s\n' "$dirty" | head -20 >&2
+            log_error "请先 git 提交或还原上述文件后重试"
+            return 1
+        fi
+    fi
     mkdir -p "$dest/.aoci"
     for f in "${AOCI_FORMAL_ROOT_FILES[@]}" "${AOCI_FORMAL_ROOT_EXTRA[@]}"; do
         [ -f "$src_root/$f" ] || continue
@@ -97,7 +111,7 @@ sync_aoci_from_repo() {
     load_deploy_env
     local url path branch token
     url="$(_read_repo_url_or_default AOCI_REPO_URL "$DEFAULT_AOCI_REPO_URL")"
-    path="$(read_deploy_env_value AOCI_REPO_PATH || true)"
+    path="$(_read_repo_path_value AOCI_REPO_PATH || true)"
     [ -n "$path" ] || path="$(_aoci_default_repo_path)"
     branch="$(read_deploy_env_value AOCI_GIT_BRANCH || echo develop)"
     token="$(_aoci_repo_token)"
@@ -112,6 +126,15 @@ sync_aoci_from_repo() {
 cmd_install_aoci_repo() {
     sync_aoci_from_repo || return 1
     log_ok "AOCI 源仓已同步并安装到主仓工作区"
+}
+
+cmd_publish_aoci_repo() {
+    local msg="${1:-}" branch full short
+    load_deploy_env
+    branch="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD)" || return 1
+    full="$(git -C "$PROJECT_ROOT" rev-parse HEAD)" || return 1
+    short="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD)" || return 1
+    publish_aoci_to_repo "$branch" "$full" "$short" "$msg" || return 1
 }
 
 write_aoci_source_meta_json() {
@@ -140,19 +163,35 @@ _ensure_aoci_sibling_repo() {
     auth_url="$(_git_auth_url "$clean_url" "$token")"
     git_path="$(_git_native_path "$path")"
 
+    # 区分「远程探测失败（网络/凭证）」与「远端可达但无目标分支」
+    local ls_out ls_rc=0
+    ls_out="$(_git_cmd ls-remote --heads "$auth_url" "refs/heads/${branch}" 2>&1)" || ls_rc=$?
+    if [ "$ls_rc" -ne 0 ]; then
+        log_error "kuaigeyun-aoci: 远程探测失败（网络/凭证），请检查 URL 与 AOCI_GIT_TOKEN"
+        printf '%s\n' "$ls_out" >&2
+        return 1
+    fi
+    local remote_has_branch=0
+    printf '%s\n' "$ls_out" | grep -q . && remote_has_branch=1
+
     if _git_is_work_tree "$path"; then
-        sync_sibling_git_repo "kuaigeyun-aoci" "$url" "$path" "$branch" "$token" || return 1
+        if [ "$remote_has_branch" = "1" ]; then
+            sync_sibling_git_repo "kuaigeyun-aoci" "$url" "$path" "$branch" "$token" || return 1
+        else
+            log_info "kuaigeyun-aoci 远程尚无 ${branch}，沿用本地仓直接发布（首次 publish）…"
+        fi
         return 0
     fi
 
-    if _git_cmd ls-remote --heads "$auth_url" "refs/heads/${branch}" 2>/dev/null | grep -q .; then
+    if [ "$remote_has_branch" = "1" ]; then
         sync_sibling_git_repo "kuaigeyun-aoci" "$url" "$path" "$branch" "$token" || return 1
         return 0
     fi
 
     log_info "kuaigeyun-aoci 远程尚无 ${branch}，初始化本地仓（首次 publish）…"
     if [ -e "$path" ] && [ -n "$(ls -A "$path" 2>/dev/null)" ]; then
-        rm -rf "$path" || return 1
+        log_error "${path} 非空且不是 Git 仓，拒绝 rm -rf；请改 AOCI_REPO_PATH 或手动清理"
+        return 1
     fi
     mkdir -p "$path"
     _git_cmd -C "$git_path" init -b "$branch" || return 1
@@ -166,7 +205,7 @@ publish_aoci_to_repo() {
     load_deploy_env
     local url path branch token repo_root git_path commit_msg f rel
     url="$(_read_repo_url_or_default AOCI_REPO_URL "$DEFAULT_AOCI_REPO_URL")"
-    path="$(read_deploy_env_value AOCI_REPO_PATH || true)"
+    path="$(_read_repo_path_value AOCI_REPO_PATH || true)"
     [ -n "$path" ] || path="$(_aoci_default_repo_path)"
     branch="$(read_deploy_env_value AOCI_GIT_BRANCH || echo develop)"
     token="$(_aoci_repo_token)"
@@ -231,6 +270,17 @@ EOF
     fi
 
     _git_cmd -C "$git_path" -c core.autocrlf=false -c core.safecrlf=false -c diff.renames=false add -A
+    # 白名单校验：暂存区只许是正式资产；挡住 .cursor/mcp.json（本机密钥）等本地运行时文件
+    local staged_bad
+    staged_bad="$(_git_cmd -C "$git_path" diff --staged --name-only | grep -vE \
+        '^(aoci\.txt|aoci\.meta\.txt|aoci\.code\.txt|AGENTS\.md|\.gitattributes|README\.md|aoci-source\.meta\.json|\.aoci/(\.gitignore|config\.json|baseline\.json|curation\.json|database-baseline\.json)|\.cursor/(rules|memory)/)' \
+        || true)"
+    if [ -n "$staged_bad" ]; then
+        log_error "AOCI 仓暂存区含非白名单文件（可能是本机 mcp.json / 运行时文件），已中止发布："
+        printf '%s\n' "$staged_bad" | head -20 >&2
+        _git_cmd -C "$git_path" reset -q 2>/dev/null || true
+        return 1
+    fi
     if _git_cmd -C "$git_path" -c diff.renames=false diff --staged --quiet; then
         log_ok "aoci 仓与上次发布一致，跳过提交/推送"
         return 0

@@ -250,10 +250,17 @@ const AppLoadError: React.FC<{ error: Error; onRetry: () => void }> = ({ error, 
 /** 财务管理旧路径（曾挂在快制造下）重定向到 kuaicaiwu，防止历史链接 404 */
 function KuaizhizaoFinanceLegacyRedirect() {
   const location = useLocation();
-  const next =
-    location.pathname.replace('/apps/kuaizhizao/finance-management', '/apps/kuaicaiwu/finance-management') +
-    location.search;
-  return <Navigate to={next} replace />;
+  const pathname = location.pathname.replace(
+    '/apps/kuaizhizao/finance-management',
+    '/apps/kuaicaiwu/finance-management',
+  );
+  return (
+    <Navigate
+      to={{ pathname, search: location.search, hash: location.hash }}
+      state={location.state}
+      replace
+    />
+  );
 }
 
 const AppRoutes: React.FC = () => {

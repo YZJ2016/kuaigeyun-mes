@@ -790,6 +790,23 @@ class MiscVoucherService:
             raise BusinessLogicError(f"{self.spec.label}待审核中，请先驳回或完成审核")
         if status not in _CANCELABLE:
             raise BusinessLogicError(f"当前状态不可作废，当前状态: {status}")
+        if status in ("Approved", "Confirmed"):
+            # 审核通过时已挂应收/应付：作废前先校验可撤销并作废关联财务单，避免孤儿挂账
+            from apps.kuaicaiwu.services.misc_voucher_finance_bridge import (
+                MiscVoucherFinanceBridge,
+            )
+
+            bridge = MiscVoucherFinanceBridge()
+            if self.spec.voucher_type == "other_income":
+                await bridge.assert_income_receivable_revokable(tenant_id, doc_id)
+                await bridge.void_receivable_for_income_revoke(
+                    tenant_id, doc_id, int(user.id)
+                )
+            else:
+                await bridge.assert_expense_payable_revokable(tenant_id, doc_id)
+                await bridge.void_payable_for_expense_revoke(
+                    tenant_id, doc_id, int(user.id)
+                )
         if status == "Confirmed":
             await MiscVoucherPostingService().unpost(
                 tenant_id,

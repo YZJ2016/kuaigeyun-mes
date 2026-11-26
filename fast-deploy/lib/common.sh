@@ -1712,6 +1712,13 @@ _is_git_repo_url() {
     return 1
 }
 
+# *_REPO_PATH 统一读取入口：自动做 Windows 原生路径 → MSYS 路径转换（cygpath 存在时）
+_read_repo_path_value() {
+    local key="$1" val
+    val="$(read_deploy_env_value "$key" || true)"
+    _fd_repo_local_path "$val"
+}
+
 _read_repo_url_or_default() {
     local key="$1" default="$2" val
     val="$(read_deploy_env_value "$key" || true)"
@@ -4232,12 +4239,12 @@ cmd_ensure_frontend_dist() {
     load_deploy_env
     if [ "${PROD_WEB_DIST_SOURCE:-local_build}" = "dist_repo" ]; then
         local frontend_index="$FRONTEND_DIR/dist/index.html"
-        if [ ! -f "$frontend_index" ]; then
+        if [ ! -f "$frontend_index" ] || [ ! -f "$FRONTEND_DIR/dist/login.html" ]; then
             if [ "${WEB_DIST_AUTO_SYNC:-1}" = "1" ]; then
-                log_info "缺少 Web dist，正在从静态前端发布仓同步…"
+                log_info "Web dist 缺失或不完整，正在从静态前端发布仓同步…"
                 sync_web_dist_from_repo || exit 1
             else
-                log_error "缺少 ${frontend_index}，且 WEB_DIST_AUTO_SYNC=0"
+                log_error "缺少 ${frontend_index} 或 login.html，且 WEB_DIST_AUTO_SYNC=0"
                 log_error "请执行 ./fast-deploy/deploy.sh install-web-dist，或改回 PROD_WEB_DIST_SOURCE=local_build"
                 exit 1
             fi
@@ -4300,7 +4307,7 @@ ensure_mobile_web_dist() {
         fi
         log_warn "从本机发行目录安装 H5 失败，改用占位页（不阻断主仓）"
     else
-        path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+        path="$(_read_repo_path_value CLIENT_REPO_PATH || true)"
         [ -n "$path" ] || path="$(_client_default_repo_path)"
         if _resolve_client_web_dist_dir "$path" >/dev/null 2>&1; then
             log_info "检测到私仓 H5 发行产物，正在安装到 ${MOBILE_WEB_DIR}…"
@@ -4422,7 +4429,7 @@ EOF
 resolve_workbuddy_mcp_dir() {
     load_deploy_env
     local pro_path
-    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    pro_path="$(_read_repo_path_value PRO_REPO_PATH || true)"
     pro_path="${pro_path//\\//}"
     if [ -z "$pro_path" ]; then
         log_error "WORKBUDDY MCP 需要 PRO_REPO_PATH（kuaigeyun-pro 克隆路径）"
@@ -7522,7 +7529,7 @@ sync_extension_git_repos_if_enabled() {
 
     if [ "$pro_en" = "1" ]; then
         pro_url="$(_read_repo_url_or_default PRO_REPO_URL "$DEFAULT_PRO_REPO_URL")"
-        pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+        pro_path="$(_read_repo_path_value PRO_REPO_PATH || true)"
         [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
         pro_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
         pro_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
@@ -7533,7 +7540,7 @@ sync_extension_git_repos_if_enabled() {
 
     if [ "$custom_en" = "1" ]; then
         custom_url="$(_read_repo_url_or_default CUSTOM_REPO_URL "$DEFAULT_CUSTOM_REPO_URL")"
-        custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+        custom_path="$(_read_repo_path_value CUSTOM_REPO_PATH || true)"
         [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
         custom_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
         custom_token="$(read_deploy_env_value CUSTOM_GIT_TOKEN || true)"
@@ -7728,11 +7735,32 @@ _git_validate_repo_url() {
     return 1
 }
 
+# *_REPO_PATH 可能写成 Windows 原生路径（D:\foo 或 D:/foo）；shell 文件操作统一用 MSYS 形式
+_fd_repo_local_path() {
+    local p
+    p="$(_env_read_trim "$1")"
+    if [ -n "$p" ] && is_windows_gitbash && command -v cygpath >/dev/null 2>&1; then
+        case "$p" in
+            [A-Za-z]:[\\/]*|[A-Za-z]:) cygpath -u "$p" 2>/dev/null || printf '%s\n' "$p" ;;
+            *) printf '%s\n' "$p" ;;
+        esac
+    else
+        printf '%s\n' "$p"
+    fi
+}
+
 _git_is_work_tree() {
     local dir="$1"
     [ -n "$dir" ] && [ -e "$dir" ] || return 1
     [ -d "$dir/.git" ] || [ -f "$dir/.git" ] && return 0
-    _git_cmd -C "$(_git_native_path "$dir")" rev-parse --is-inside-work-tree >/dev/null 2>&1
+    # --is-inside-work-tree 对主仓子目录也 true：必须确认 dir 本身就是仓根，
+    # 否则配错的 *_REPO_PATH（如指到主仓内部目录）会改主仓 remote/checkout
+    _git_cmd -C "$(_git_native_path "$dir")" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+    local top dir_real
+    top="$(_git_cmd -C "$(_git_native_path "$dir")" rev-parse --show-toplevel 2>/dev/null)" || return 1
+    dir_real="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
+    top="$(cd "$top" 2>/dev/null && pwd -P)" || return 1
+    [ "$top" = "$dir_real" ]
 }
 
 _sync_sibling_git_repo_fetch() {
@@ -7755,7 +7783,17 @@ _sync_sibling_git_repo_fetch() {
         log_error "同步 ${name} 失败"
         return 1
     fi
-    _git_cmd -C "$git_path" checkout -B "$branch" "origin/${branch}" || {
+    # 脏工作区检出会被带进安装/发布，先失败由人工处理
+    if [ -n "$(_git_cmd -C "$git_path" status --porcelain 2>/dev/null | head -1)" ]; then
+        log_error "${name}: ${path} 存在未提交改动/未跟踪文件，拒绝覆盖同步"
+        log_error "请先人工处理该仓工作区后重试"
+        return 1
+    fi
+    _git_cmd -C "$git_path" checkout -q -B "$branch" "origin/${branch}" || {
+        log_error "同步 ${name} 失败"
+        return 1
+    }
+    _git_cmd -C "$git_path" reset --hard "origin/${branch}" || {
         log_error "同步 ${name} 失败"
         return 1
     }
@@ -7766,7 +7804,7 @@ sync_sibling_git_repo() {
     local name="$1" url="$2" path="$3" branch="${4:-develop}" token="${5:-}"
     local auth_url clean_url git_path
     url="$(_env_read_trim "$url")"
-    path="$(_env_read_trim "$path")"
+    path="$(_fd_repo_local_path "$path")"
     branch="$(_env_read_trim "$branch")"
     token="$(_env_read_trim "$token")"
     [ -n "$branch" ] || branch="develop"
@@ -7777,6 +7815,21 @@ sync_sibling_git_repo() {
     fi
     clean_url="$(_git_strip_auth_url "$url")"
     _git_validate_repo_url "$name" "$clean_url" || return 1
+    # *_REPO_PATH 指到主仓（或主仓内部目录）时会改主仓 remote/checkout，一律拒绝
+    if [ -e "$path" ]; then
+        local path_real root_real
+        path_real="$(cd "$path" 2>/dev/null && pwd -P)"
+        root_real="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)"
+        if [ -n "$path_real" ] && [ -n "$root_real" ]; then
+            case "$path_real" in
+                "$root_real"|"$root_real"/*)
+                    log_error "${name}: *_REPO_PATH 不得指向主仓或主仓内部目录: ${path}"
+                    log_error "请将 ${name} 的 *_REPO_PATH 改为主仓同级目录（如 ../kuaigeyun-${name#kuaigeyun-}）"
+                    return 1
+                    ;;
+            esac
+        fi
+    fi
     auth_url="$(_git_auth_url "$clean_url" "$token")"
     git_path="$(_git_native_path "$path")"
 
@@ -7841,7 +7894,7 @@ prompt_custom_projects_selection() {
     # 已有 CUSTOM_PROJECTS 时仍列出选项；回车默认保持当前（或仅一项时自动选中）
     local custom_path="${1:-}" py gen pid desc choice picked n i cur default_choice
     REPLY=""
-    custom_path="${custom_path:-$(read_deploy_env_value CUSTOM_REPO_PATH || true)}"
+    custom_path="${custom_path:-$(_read_repo_path_value CUSTOM_REPO_PATH || true)}"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
     py="$(_workspace_python_bin)" || return 1
     gen="$PROJECT_ROOT/fast-deploy/tools/workspace/generate_workspace.py"
@@ -7953,7 +8006,7 @@ _ensure_custom_projects_for_compose() {
         return 0
     fi
 
-    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    custom_path="$(_read_repo_path_value CUSTOM_REPO_PATH || true)"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
     # 主程序 update 路径：禁止弹「选择定制项目」；缺配置则跳过，勿打断主仓更新
     if [ "${COMPOSING_FROM_MAIN_UPDATE:-0}" = "1" ]; then
@@ -7987,9 +8040,9 @@ write_workspace_yaml_from_deploy_env() {
     if [ -z "$projects_before" ] && [ -n "$custom_projects" ] && [ "$custom_en" = "1" ]; then
         log_info "已从 workspace.yaml 回填 CUSTOM_PROJECTS=${custom_projects} 到 deploy.env"
     fi
-    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    pro_path="$(_read_repo_path_value PRO_REPO_PATH || true)"
     [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
-    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    custom_path="$(_read_repo_path_value CUSTOM_REPO_PATH || true)"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
 
     if [ "$pro_en" != "1" ] && [ "$custom_en" != "1" ]; then
@@ -8119,12 +8172,12 @@ cmd_install_extension_apps() {
     esac
 
     pro_url="$(_read_repo_url_or_default PRO_REPO_URL "$DEFAULT_PRO_REPO_URL")"
-    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    pro_path="$(_read_repo_path_value PRO_REPO_PATH || true)"
     [ -n "$pro_path" ] || pro_path="$(_pro_default_repo_path)"
     pro_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
     pro_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
     custom_url="$(_read_repo_url_or_default CUSTOM_REPO_URL "$DEFAULT_CUSTOM_REPO_URL")"
-    custom_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    custom_path="$(_read_repo_path_value CUSTOM_REPO_PATH || true)"
     [ -n "$custom_path" ] || custom_path="$(_custom_default_repo_path)"
     custom_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
     custom_token="$(read_deploy_env_value CUSTOM_GIT_TOKEN || true)"
@@ -8215,7 +8268,7 @@ cmd_install_client_repo() {
     load_deploy_env
     local url path branch token
     url="$(_read_repo_url_or_default CLIENT_REPO_URL "$DEFAULT_CLIENT_REPO_URL")"
-    path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+    path="$(_read_repo_path_value CLIENT_REPO_PATH || true)"
     [ -n "$path" ] || path="$(_client_default_repo_path)"
     branch="$(read_deploy_env_value CLIENT_GIT_BRANCH || echo develop)"
     token="$(read_deploy_env_value CLIENT_GIT_TOKEN || true)"
@@ -8267,7 +8320,8 @@ install_web_dist_from_dist_repo() {
     dest_dist="$FRONTEND_DIR/dist"
     mkdir -p "$dest_dist"
     if command -v rsync >/dev/null 2>&1; then
-        rsync -a --delete --exclude 'dist.meta.json' "$src_root/" "$dest_dist/" || {
+        rsync -a --delete --exclude '.git' --exclude 'dist.meta.json' --exclude 'README.md' \
+            "$src_root/" "$dest_dist/" || {
             log_error "rsync Web dist 失败: ${src_root} → ${dest_dist}"
             return 1
         }
@@ -8277,6 +8331,9 @@ install_web_dist_from_dist_repo() {
             log_error "复制 Web dist 失败: ${src_root} → ${dest_dist}"
             return 1
         }
+        # cp -a 不带 exclude：dist 仓 .git / 说明文件不得装进对外 dist
+        rm -rf "$dest_dist/.git" 2>/dev/null || true
+        rm -f "$dest_dist/dist.meta.json" "$dest_dist/README.md" 2>/dev/null || true
     fi
     if [ -f "$dist_repo_root/dist.meta.json" ]; then
         cp -f "$dist_repo_root/dist.meta.json" "$dest_dist/dist.meta.json" 2>/dev/null || true
@@ -8292,7 +8349,7 @@ sync_web_dist_from_repo() {
     load_deploy_env
     local url path branch token
     url="$(_read_repo_url_or_default WEB_DIST_REPO_URL "$DEFAULT_WEB_DIST_REPO_URL")"
-    path="$(read_deploy_env_value WEB_DIST_REPO_PATH || true)"
+    path="$(_read_repo_path_value WEB_DIST_REPO_PATH || true)"
     [ -n "$path" ] || path="$(_dist_default_repo_path)"
     branch="$(read_deploy_env_value WEB_DIST_GIT_BRANCH || echo develop)"
     token="$(_web_dist_repo_token)"
@@ -8368,7 +8425,7 @@ publish_web_dist_to_repo() {
     load_deploy_env
     local url path branch token repo_root git_path commit_msg
     url="$(_read_repo_url_or_default WEB_DIST_REPO_URL "$DEFAULT_WEB_DIST_REPO_URL")"
-    path="$(read_deploy_env_value WEB_DIST_REPO_PATH || true)"
+    path="$(_read_repo_path_value WEB_DIST_REPO_PATH || true)"
     [ -n "$path" ] || path="$(_dist_default_repo_path)"
     branch="$(read_deploy_env_value WEB_DIST_GIT_BRANCH || echo develop)"
     token="$(_web_dist_repo_token)"
@@ -8609,6 +8666,7 @@ fd_dispatch() {
         restart-frontend)  cmd_restart_frontend ;;
         restart-worker)    cmd_restart_worker ;;
         restart-scheduler) cmd_restart_scheduler ;;
+        restart-postgres)  cmd_restart_postgres ;;
         restart-caddy)     cmd_restart_caddy ;;
         install-service)   cmd_install_service ;;
         uninstall-service) cmd_uninstall_service ;;
@@ -8624,6 +8682,9 @@ fd_dispatch() {
         install-aoci|aoci-install)
             cmd_install_aoci_repo
             ;;
+        publish-aoci|aoci-publish)
+            cmd_publish_aoci_repo "${1:-}"
+            ;;
         install-client|install-h5)
             cmd_install_client_repo
             ;;
@@ -8636,7 +8697,7 @@ fd_dispatch() {
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | setup-swap | free-memory | build | start | stop | status | update | restart-backend | restart-frontend | restart-worker | restart-scheduler | restart-caddy | diag-workbuddy-mcp | pro-apps [pro|custom|all] | install-custom | install-web-dist | install-aoci | install-service | uninstall-service"
+            echo "用法: wizard | check | install | configure | migrate | low-spec-mode [on|off|status] | setup-swap | free-memory | build | start | stop | status | update | restart-backend | restart-frontend | restart-worker | restart-scheduler | restart-postgres | restart-caddy | diag-workbuddy-mcp | pro-apps [pro|custom|all] | install-custom | install-web-dist | install-aoci | publish-aoci | install-service | uninstall-service"
             exit 1
             ;;
     esac

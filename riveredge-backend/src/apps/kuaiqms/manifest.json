@@ -227,26 +227,26 @@
           {
             "title": "app.kuaizhizao.menu.quality-management.internal-audits",
             "path": "/apps/kuaizhizao/quality-management/internal-audits",
-            "sort_order": 2,
+            "sort_order": 3,
             "permission": "kuaizhizao:quality-management-internal-audits:read"
+          },
+          {
+            "title": "app.kuaizhizao.menu.quality-management.management-reviews",
+            "path": "/apps/kuaizhizao/quality-management/management-reviews",
+            "sort_order": 4,
+            "permission": "kuaizhizao:quality-management-management-reviews:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.nonconformity-reports",
             "path": "/apps/kuaizhizao/quality-management/nonconformity-reports",
-            "sort_order": 4,
+            "sort_order": 5,
             "permission": "kuaizhizao:quality-management-nonconformity-reports:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.corrective-actions",
             "path": "/apps/kuaizhizao/quality-management/corrective-actions",
-            "sort_order": 5,
+            "sort_order": 6,
             "permission": "kuaizhizao:quality-management-corrective-actions:read"
-          },
-          {
-            "title": "app.kuaizhizao.menu.quality-management.management-reviews",
-            "path": "/apps/kuaizhizao/quality-management/management-reviews",
-            "sort_order": 3,
-            "permission": "kuaizhizao:quality-management-management-reviews:read"
           },
           {
             "title": "app.kuaizhizao.menu.quality-management.quality-objectives",

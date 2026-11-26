@@ -193,9 +193,60 @@ export function normalizePurchaseOrderDetail(detail: PurchaseOrder): PurchaseOrd
     currency: String(detail.currency ?? raw.currency ?? ''),
     order_date: detail.order_date ?? (raw.orderDate as string | undefined),
     delivery_date: detail.delivery_date ?? (raw.deliveryDate as string | undefined),
+    payment_method_code:
+      (detail.payment_method_code as string | undefined) ??
+      (raw.paymentMethodCode as string | undefined) ??
+      undefined,
+    payment_wire_percent:
+      detail.payment_wire_percent ??
+      (raw.paymentWirePercent as number | undefined) ??
+      undefined,
+    payment_acceptance_percent:
+      detail.payment_acceptance_percent ??
+      (raw.paymentAcceptancePercent as number | undefined) ??
+      undefined,
+    advance_payee_id:
+      detail.advance_payee_id ?? (raw.advancePayeeId as number | undefined) ?? undefined,
+    advance_payee_name:
+      (detail.advance_payee_name as string | undefined) ??
+      (raw.advancePayeeName as string | undefined) ??
+      undefined,
     items: (detail.items || []).map((it) =>
       normalizePurchaseOrderItem(it as unknown as Record<string, unknown>),
     ),
+  };
+}
+
+/** 采购订单 → 采购入库表单：付款方式与员工垫付（与订单头码表一致） */
+export function resolvePurchaseOrderPaymentForReceipt(
+  order: PurchaseOrder | Record<string, unknown>,
+): {
+  pay_mode?: string;
+  payment_wire_percent?: number;
+  payment_acceptance_percent?: number;
+  advance_payee_id?: number;
+  advance_payee_name?: string;
+} {
+  const raw = order as Record<string, unknown>;
+  const code = String(
+    raw.payment_method_code ?? raw.paymentMethodCode ?? '',
+  ).trim();
+  const wire = raw.payment_wire_percent ?? raw.paymentWirePercent;
+  const accept = raw.payment_acceptance_percent ?? raw.paymentAcceptancePercent;
+  const payeeId = raw.advance_payee_id ?? raw.advancePayeeId;
+  const payeeName = String(raw.advance_payee_name ?? raw.advancePayeeName ?? '').trim();
+  return {
+    ...(code ? { pay_mode: code } : {}),
+    ...(wire != null && wire !== '' && Number.isFinite(Number(wire))
+      ? { payment_wire_percent: Number(wire) }
+      : {}),
+    ...(accept != null && accept !== '' && Number.isFinite(Number(accept))
+      ? { payment_acceptance_percent: Number(accept) }
+      : {}),
+    ...(payeeId != null && payeeId !== '' && Number.isFinite(Number(payeeId)) && Number(payeeId) > 0
+      ? { advance_payee_id: Number(payeeId) }
+      : {}),
+    ...(payeeName ? { advance_payee_name: payeeName } : {}),
   };
 }
 

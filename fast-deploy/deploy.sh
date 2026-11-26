@@ -10,6 +10,7 @@
 #   ./fast-deploy/deploy.sh install-custom             # 仅定制包 kuaigeyun-custom
 #   ./fast-deploy/deploy.sh install-web-dist           # 可选：PC Web dist（拉 kuaigeyun-dist → riveredge-frontend/dist）
 #   ./fast-deploy/deploy.sh install-aoci               # 可选：AOCI 认知索引（拉 kuaigeyun-aoci → 主仓工作区）
+#   ./fast-deploy/deploy.sh publish-aoci [说明]         # 可选：发布主仓 AOCI 正式资产 → kuaigeyun-aoci
 #   ./fast-deploy/deploy.sh install-h5                 # 移动端 H5（复制已有的 HBuilderX Web 发行产物到 /mobile）
 #   ./fast-deploy/deploy.sh install-client             # 同上（兼容旧名）
 #   ./fast-deploy/deploy.sh stop|status|update|low-spec-mode|setup-swap|free-memory|...
@@ -53,7 +54,7 @@ case "$SUBCMD" in
 esac
 export DEPLOY_MODE="${DEPLOY_MODE:-prod}"
 
-KNOWN_CMDS="wizard check install configure migrate low-spec-mode low_spec_mode lowspec setup-swap setup_swap swap free-memory build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client install-h5 install-web-dist install-dist install-aoci aoci-install ext-apps pro-apps-status ext-apps-status diag-workbuddy-mcp workbuddy-mcp-diag restart-backend restart-frontend restart-worker restart-scheduler restart-caddy"
+KNOWN_CMDS="wizard check install configure migrate low-spec-mode low_spec_mode lowspec setup-swap setup_swap swap free-memory build start stop status update install-service uninstall-service deploy pro-apps install-pro install-custom install-client install-h5 install-web-dist install-dist install-aoci aoci-install publish-aoci aoci-publish restart-postgres ext-apps pro-apps-status ext-apps-status diag-workbuddy-mcp workbuddy-mcp-diag restart-backend restart-frontend restart-worker restart-scheduler restart-caddy"
 is_known_cmd() {
     case " ${KNOWN_CMDS} " in
         *" $1 "*) return 0 ;;
@@ -63,7 +64,7 @@ is_known_cmd() {
 
 if [ -n "$SUBCMD" ] && ! is_known_cmd "$SUBCMD"; then
     echo "未知命令: $SUBCMD" >&2
-    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update|pro-apps|install-web-dist|install-aoci|install-h5|restart-backend|restart-frontend|restart-worker|restart-scheduler|restart-caddy|install-service|uninstall-service]" >&2
+    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update|pro-apps|install-web-dist|install-aoci|publish-aoci|install-h5|restart-backend|restart-frontend|restart-worker|restart-scheduler|restart-postgres|restart-caddy|install-service|uninstall-service]" >&2
     exit 1
 fi
 

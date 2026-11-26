@@ -125,7 +125,6 @@ import InboundQuickPullModals, {
 import type {
   InboundPullEntryNavigationState,
   PurchaseReceiptEntryHandoff,
-  PurchaseReceiptPoComposePayload,
 } from './inboundPullEntryTypes';
 import { fetchInboundHubList } from './inboundListAggregate';
 import { fetchInboundHubDetail } from './inboundHubDetail';
@@ -141,8 +140,12 @@ import { pullPaymentApplicationFromPurchaseReceipt } from '../../../services/pay
 import { pushDocumentExternal } from '../../../services/document-push';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
 import FinishedGoodsReceiptCreateModal from './FinishedGoodsReceiptCreateModal';
-import PurchaseReceiptCreateModal from './PurchaseReceiptCreateModal';
 import OtherInboundEditModal from './OtherInboundEditModal';
+import {
+  purchaseReceiptCreatePath,
+  purchaseReceiptEditPath,
+  resolveInboundListPath,
+} from './inboundPaths';
 import { runInboundHubConfirmFromRecord } from './inboundHubRunConfirm';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
 import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
@@ -666,9 +669,10 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     [t],
   );
   const inboundPerms = useResourcePermissions(permissionResource);
-  const [purchaseReceiptCreateOpen, setPurchaseReceiptCreateOpen] = useState(false);
-  const [purchaseReceiptPoCompose, setPurchaseReceiptPoCompose] =
-    useState<PurchaseReceiptPoComposePayload | null>(null);
+  const inboundFormListPath = useMemo(
+    () => resolveInboundListPath(location.pathname),
+    [location.pathname],
+  );
   const handledPoComposeKeyRef = useRef<string | null>(null);
   const [finishedGoodsReceiptCreateOpen, setFinishedGoodsReceiptCreateOpen] = useState(false);
   const [productionBlankReceiptKind, setProductionBlankReceiptKind] = useState<
@@ -707,7 +711,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
   const handleCreate = useCallback(() => {
     if (enablePurchaseBlankCreate) {
-      setPurchaseReceiptCreateOpen(true);
+      navigate(purchaseReceiptCreatePath(inboundFormListPath));
       return;
     }
     if (enableFinishedGoodsBlankCreate) {
@@ -723,6 +727,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     fixedReceiptType,
     openProductionBlankCreate,
     defaultInboundQuickPullKey,
+    inboundFormListPath,
+    navigate,
   ]);
   useNewShortcut(handleCreate);
 
@@ -953,13 +959,15 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     isEditablePurchaseReceipt(order) || isEditableOtherInbound(order);
 
   const handleEdit = useCallback((record: InboundOrder) => {
+    if (record.receipt_type === 'purchase' && record.id != null) {
+      navigate(purchaseReceiptEditPath(Number(record.id), inboundFormListPath));
+      return;
+    }
     setEditModalRecord(record);
-  }, []);
+  }, [inboundFormListPath, navigate]);
 
   const handleEditModalClose = useCallback(() => {
     setEditModalRecord(null);
-    setPurchaseReceiptPoCompose(null);
-    setPurchaseReceiptCreateOpen(false);
   }, []);
 
   const handleEditModalSuccess = useCallback(() => {
@@ -1390,14 +1398,21 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     const compose = (location.state as InboundPullEntryNavigationState | null)
       ?.purchaseReceiptPoCompose;
     if (compose?.purchaseOrderId) {
-      const key = `po:${compose.purchaseOrderId}:${JSON.stringify(compose.quantities)}`;
+      const orderKey = (
+        compose.purchaseOrderIds?.length
+          ? [...compose.purchaseOrderIds].sort((a, b) => a - b)
+          : [compose.purchaseOrderId]
+      ).join(',');
+      const key = `po:${orderKey}:${JSON.stringify(compose.quantities)}`;
       if (handledPoComposeKeyRef.current !== key) {
         handledPoComposeKeyRef.current = key;
-        navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
-        setPurchaseReceiptPoCompose(compose);
+        navigate(purchaseReceiptCreatePath(inboundFormListPath), {
+          replace: true,
+          state: { purchaseReceiptPoCompose: compose },
+        });
       }
     }
-  }, [location.pathname, location.search, location.state, navigate]);
+  }, [inboundFormListPath, location.state, navigate]);
 
   useEffect(() => {
     const dc = (location.state as InboundPullEntryNavigationState | null)?.inboundDirectConfirm;
@@ -3232,11 +3247,18 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         ref={quickPullRef}
         onSuccess={(result) => {
           if (result?.purchaseReceiptPoCompose?.purchaseOrderId) {
-            setPurchaseReceiptPoCompose(result.purchaseReceiptPoCompose);
+            navigate(purchaseReceiptCreatePath(inboundFormListPath), {
+              state: { purchaseReceiptPoCompose: result.purchaseReceiptPoCompose },
+            });
             return;
           }
           invalidateMenuBadgeCounts();
-    actionRef.current?.reload();
+          actionRef.current?.reload();
+          const editId = Number(result?.editPurchaseReceiptId);
+          if (Number.isFinite(editId) && editId > 0) {
+            navigate(purchaseReceiptEditPath(editId, inboundFormListPath));
+            return;
+          }
         }}
       />
 
@@ -3825,43 +3847,6 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
             (editModalRecord?.receipt_type === 'finished_goods' ||
               editModalRecord?.receipt_type === 'semi_finished_goods')
           ) {
-            handleEditModalSuccess();
-            return;
-          }
-          invalidateMenuBadgeCounts();
-          actionRef.current?.reload();
-        }}
-      />
-      <PurchaseReceiptCreateModal
-        open={
-          purchaseReceiptCreateOpen ||
-          purchaseReceiptPoCompose != null ||
-          editModalRecord?.receipt_type === 'purchase'
-        }
-        receiptId={
-          purchaseReceiptCreateOpen || purchaseReceiptPoCompose != null
-            ? null
-            : editModalRecord?.receipt_type === 'purchase'
-              ? editModalRecord.id ?? null
-              : null
-        }
-        poCompose={purchaseReceiptPoCompose}
-        onClose={() => {
-          if (editModalRecord?.receipt_type === 'purchase') {
-            handleEditModalClose();
-            return;
-          }
-          setPurchaseReceiptCreateOpen(false);
-          setPurchaseReceiptPoCompose(null);
-        }}
-        onSuccess={() => {
-          if (purchaseReceiptPoCompose != null) {
-            setPurchaseReceiptPoCompose(null);
-            invalidateMenuBadgeCounts();
-            actionRef.current?.reload();
-            return;
-          }
-          if (!purchaseReceiptCreateOpen && editModalRecord?.receipt_type === 'purchase') {
             handleEditModalSuccess();
             return;
           }

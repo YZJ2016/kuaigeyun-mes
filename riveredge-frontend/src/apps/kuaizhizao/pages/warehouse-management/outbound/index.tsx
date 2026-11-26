@@ -575,9 +575,24 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const [productionPickingCreateOpen, setProductionPickingCreateOpen] = useState(false);
   const enableSalesDeliveryBlankCreate =
     fixedOutboundType === 'sales_delivery' && outboundPerms.canCreate;
+  const enableProductionPickingBlankCreate =
+    fixedOutboundType === 'production_picking' && outboundPerms.canCreate;
+  /** 采购退货出库页：对齐销售退货入库，提供新建/取单入口（落到采购退货单页完整表单） */
+  const enablePurchaseReturnCreate =
+    fixedOutboundType === 'purchase_return' && purchaseReturnPerms.canCreate === true;
+  const purchaseReturnsListPath = '/apps/kuaizhizao/purchase-management/purchase-returns';
+
   const handleCreate = useCallback(() => {
     if (enableSalesDeliveryBlankCreate) {
       navigate(salesDeliveryCreatePath(outboundFormListPath));
+      return;
+    }
+    if (enableProductionPickingBlankCreate) {
+      setProductionPickingCreateOpen(true);
+      return;
+    }
+    if (enablePurchaseReturnCreate) {
+      navigate(`${purchaseReturnsListPath}?openCreate=1`);
       return;
     }
     quickPullRef.current?.open(defaultOutboundQuickPullKey);
@@ -597,8 +612,33 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
     () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseOutbound.createSalesDelivery')),
     [t],
   );
+  const productionPickingCreateButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseOutbound.createProductionPicking')),
+    [t],
+  );
+  const purchaseReturnCreateButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.purchaseReturn.create')),
+    [t],
+  );
+  const purchaseReturnPullMenuItems = useMemo(
+    () =>
+      enablePurchaseReturnCreate
+        ? buildKuaizhizaoPullCreateMenuItems(t, [
+            {
+              key: 'pull-from-purchase-receipt',
+              actionKey: 'purchase_return.pull_from_purchase_receipt',
+              onClick: () => navigate(`${purchaseReturnsListPath}?openPull=purchase_receipt`),
+            },
+            {
+              key: 'pull-from-purchase-order',
+              actionKey: 'purchase_return.pull_from_purchase_order',
+              onClick: () => navigate(`${purchaseReturnsListPath}?openPull=purchase_order`),
+            },
+          ])
+        : [],
+    [enablePurchaseReturnCreate, navigate, purchaseReturnsListPath, t],
+  );
 
-  useNewShortcut(handleCreate);
   const pullLoadLabel = useMemo(
     () => withSingleNewShortcutHint(t('components.uniPull.loadFromDocument')),
     [t],
@@ -2061,27 +2101,52 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         }}
         toolBarRender={() => {
           const items: React.ReactNode[] = [];
-          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs);
-          if (enableSalesDeliveryBlankCreate && outboundPullMenuSpecs.length) {
+          if (enablePurchaseReturnCreate) {
             items.push(
               <UniPullCreateToolbar
-                key="outbound-sales-delivery-blank-create"
-                compactKey="outbound-sales-delivery-blank-create"
+                key="outbound-purchase-return-create"
+                compactKey="outbound-purchase-return-create"
                 createIcon={<PlusOutlined />}
-                createLabel={salesDeliveryCreateButtonLabel}
+                createLabel={purchaseReturnCreateButtonLabel}
+                onCreate={handleCreate}
+                menuItems={purchaseReturnPullMenuItems}
+              />,
+            );
+          }
+          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs);
+          const blankCreateEnabled =
+            enableSalesDeliveryBlankCreate || enableProductionPickingBlankCreate;
+          const createLabel = enableSalesDeliveryBlankCreate
+            ? salesDeliveryCreateButtonLabel
+            : productionPickingCreateButtonLabel;
+          if (blankCreateEnabled && outboundPullMenuSpecs.length) {
+            items.push(
+              <UniPullCreateToolbar
+                key={
+                  enableSalesDeliveryBlankCreate
+                    ? 'outbound-sales-delivery-blank-create'
+                    : 'outbound-production-picking-blank-create'
+                }
+                compactKey={
+                  enableSalesDeliveryBlankCreate
+                    ? 'outbound-sales-delivery-blank-create'
+                    : 'outbound-production-picking-blank-create'
+                }
+                createIcon={<PlusOutlined />}
+                createLabel={createLabel}
                 onCreate={handleCreate}
                 menuItems={pullMenuItems}
               />,
             );
-          } else if (enableSalesDeliveryBlankCreate) {
+          } else if (blankCreateEnabled) {
             items.push(
               <Button
-                key="outbound-sales-delivery-blank-create-only"
+                key="outbound-blank-create-only"
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={handleCreate}
               >
-                {salesDeliveryCreateButtonLabel}
+                {createLabel}
               </Button>,
             );
           } else if (outboundPullMenuSpecs.length) {

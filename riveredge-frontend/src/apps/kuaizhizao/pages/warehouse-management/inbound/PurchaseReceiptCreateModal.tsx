@@ -1,24 +1,42 @@
 /**
- * 采购入库空白建单（无来源采购订单/通知/检验）。
- * 表头补齐金蝶外推常用字段：供应商、采购员、验收人、付款方式、税率、币别。
+ * 采购入库新建/编辑独立页（UniTab DocumentFormPageLayout）。
+ * 表头：供应商、采购员、验收人、付款方式、币别等；税率在明细行。
+ * 金蝶 billtype_number 仅走仓储业务配置 / 接口样例，不进本表单。
  * 采购员工号由选人自动写入 buyer_operator_number（隐藏字段），不再单独填写。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Button, Col, Form as AntForm, Input, InputNumber, Row, Space, Tooltip } from 'antd';
+import { App, Button, Col, Form as AntForm, Input, InputNumber, Row, Select, Space, Spin, Tooltip, Typography } from 'antd';
 import {
+  ProForm,
   ProFormDatePicker,
+  ProFormDependency,
   ProFormItem,
   ProFormText,
   ProFormTextArea,
   type ProFormInstance,
 } from '@ant-design/pro-components';
-import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import {
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DetailDrawerSection,
+  DocumentFormPageHeaderActions,
+  DocumentFormPageLayout,
+} from '../../../../../components/layout-templates';
+import { useLeaveFormTab } from '../../../../../components/uni-tabs/navigateClosingTab';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
+import { purchaseReceiptEditPath, resolveInboundListPath } from './inboundPaths';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
-import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+} from '../../../utils/documentAttachments';
 import {
   buildDocumentLineAttachmentsFormColumn,
   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
@@ -62,12 +80,16 @@ import { readPurchaseReceiptFormUnitPrice } from '../shared/purchaseReceiptWareh
 import { getPurchaseOrder } from '../../../services/purchase';
 import {
   enrichPurchaseOrderItemsMaterial,
+  resolveDocumentLineMaterialModel,
+  resolveDocumentLineMaterialSpec,
   getOutstandingPoItems,
   normalizePurchaseOrderDetail,
+  resolvePurchaseOrderPaymentForReceipt,
+  resolvePurchaseReceiptLineWarehouse,
 } from './inboundPoReceiptEntryUtils';
+import { resolvePrimaryDefaultWarehouseFromMaterial } from '../../../../master-data/utils/materialDefaultWarehouse';
 import type { PurchaseReceiptPoComposePayload } from './inboundPullEntryTypes';
-import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
-import { DocumentLineDualQuantityFormCell } from '../../../../../components/quantity-with-unit/documentLineDualQuantityColumn';
+import { buildDocumentLineDualQuantityPairColumns } from '../../../../../components/quantity-with-unit';
 import {
   documentLineDualQuantityForPush,
   validateDualQuantityBeforeSave,
@@ -76,16 +98,18 @@ import {
   fetchMaterialForUnitSelectCache,
   prefetchMaterialsForUnitSelect,
 } from '../../../../../components/material-unit-select';
-import { materialApi, materialBatchApi } from '../../../../master-data/services/material';
+import {
+  materialApi,
+  materialBatchApi,
+  materialSerialApi,
+  MATERIAL_SERIAL_GENERATE_MAX_COUNT,
+} from '../../../../master-data/services/material';
+import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import type { Material } from '../../../../master-data/types/material';
 import {
   applyPurchaseDocumentLineMaterialPricing,
   repriceUnlockedPurchaseDocumentLineIfNeeded,
 } from '../../../../master-data/utils/resolve-partner-material-price';
-import { partnerPaymentMethodSelectOptions } from '../../../../master-data/utils/partner-static-labels';
-import { isPartnerEmployeeAdvancePaymentMethod } from '../../../../master-data/utils/paymentMethodMix';
-import { resolvePartnerAdvancePayeeName } from '../../../components/PartnerPaymentAdvancePayeeField';
-import { PaymentMethodWithMixFormItems } from '../../../components/PaymentMethodWithMixFormItems';
 import {
   normalizeFormListItems,
   resolveFormListFieldForSubmit,
@@ -99,7 +123,14 @@ import { getBusinessConfig } from '../../../../../services/businessConfig';
 import {
   applySupplierLedgerRecognition,
   resolveOrgPayableDefaultFromBusinessConfig,
+  resolveSupplierFormFieldValues,
 } from '../../purchase-management/shared/applySupplierFormFields';
+import {
+  partnerPaymentMethodSelectOptions,
+} from '../../../../master-data/utils/partner-static-labels';
+import { isPartnerEmployeeAdvancePaymentMethod } from '../../../../master-data/utils/paymentMethodMix';
+import { resolvePartnerAdvancePayeeName } from '../../../components/PartnerPaymentAdvancePayeeField';
+import { PaymentMethodWithMixFormItems } from '../../../components/PaymentMethodWithMixFormItems';
 import {
   PurchaseDepartmentFormField,
   resolvePurchaseDepartmentPayload,
@@ -116,11 +147,13 @@ import type { User } from '../../../../../services/user';
 import { searchUserDisplay } from '../../../../../services/user';
 import {
   displayItemsToUsers,
+  formatUserDisplayLabel,
   normalizeUserDisplayName,
 } from '../../../../../utils/userDisplay';
 import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
 import {
   isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
@@ -129,8 +162,71 @@ import {
 } from '../../../../../utils/priceTypeSwitch';
 import {
   DEFAULT_PURCHASE_PRICE_TYPE,
+  normalizePurchasePriceType,
   purchaseFormPriceType,
 } from '../../purchase-management/shared/purchasePriceType';
+
+const shouldUpdatePurchaseReceiptAmounts = (
+  prev: Record<string, unknown> | undefined,
+  curr: Record<string, unknown> | undefined,
+) => prev?.items !== curr?.items || prev?.price_type !== curr?.price_type;
+
+function resolvePurchaseReceiptFormPriceType(
+  poCtx: PurchaseReceiptPoSettlementCtx | null,
+  formPriceType: unknown,
+): PriceTypeValue {
+  return purchaseFormPriceType(poCtx?.priceType ?? formPriceType);
+}
+
+function mapPurchaseReceiptDetailLineToForm(
+  line: Record<string, unknown>,
+  headerTax: unknown,
+  headerPriceType: unknown,
+): Record<string, unknown> {
+  const lineTaxPct = resolveReceiptLineTaxPercent(line.tax_rate, headerTax);
+  const pt = normalizePurchasePriceType(headerPriceType);
+  const formUnit = readPurchaseReceiptFormUnitPrice(line);
+  const displayRaw = line.display_unit_price ?? line.displayUnitPrice;
+  const hasStoredDisplay =
+    displayRaw != null && displayRaw !== '' && Number(displayRaw) > 0;
+  const serials = Array.isArray(line.serial_numbers)
+    ? line.serial_numbers.map((item) => String(item))
+    : [];
+  const receiptQty = Number(line.receipt_quantity) || 0;
+  return {
+    material_id: positiveId(line.material_id) ?? undefined,
+    material_code: String(line.material_code ?? ''),
+    material_name: String(line.material_name ?? ''),
+    material_spec: resolveDocumentLineMaterialSpec(line),
+    material_model: resolveDocumentLineMaterialModel(line),
+    material_unit: String(line.material_unit ?? line.unit ?? ''),
+    receipt_quantity: receiptQty,
+    tax_rate: lineTaxPct,
+    unit_price: formUnit,
+    display_unit_price: hasStoredDisplay
+      ? Number(displayRaw)
+      : pt === 'tax_inclusive' && formUnit > 0
+        ? formUnit
+        : undefined,
+    warehouse_id: positiveId(line.warehouse_id) ?? undefined,
+    warehouse_name: String(line.warehouse_name ?? ''),
+    location_id: positiveId(line.location_id) ?? undefined,
+    location_code: line.location_code != null ? String(line.location_code) : '',
+    batch_number: line.batch_number != null ? String(line.batch_number) : undefined,
+    aux_quantity: line.aux_quantity != null ? Number(line.aux_quantity) : undefined,
+    aux_unit: line.aux_unit != null ? String(line.aux_unit) : undefined,
+    unit_conversion_rate:
+      line.unit_conversion_rate != null ? Number(line.unit_conversion_rate) : undefined,
+    purchase_order_item_id: positiveId(line.purchase_order_item_id) ?? undefined,
+    receipt_notice_item_id: positiveId(line.receipt_notice_item_id) ?? undefined,
+    serial_numbers_json: serials.length ? JSON.stringify(serials) : '',
+    serial_numbers: serials.length ? serials : undefined,
+    unqualified_quantity: Number(line.unqualified_quantity) || 0,
+    quality_status: String(line.quality_status || '合格'),
+    line_status: String(line.status ?? line.line_status ?? '待入库'),
+    attachments: line.attachments,
+  };
+}
 
 const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 
@@ -143,12 +239,15 @@ const PURCHASE_RECEIPT_ORDER_TYPE_FALLBACK: Pick<DictionaryItem, 'value' | 'labe
 const defaultLineItem = {
   receipt_quantity: 1,
   unit_price: 0,
+  tax_rate: 13,
   warehouse_id: undefined as number | undefined,
   warehouse_name: undefined as string | undefined,
   location_id: undefined as number | undefined,
   location_code: undefined as string | undefined,
   batch_number: undefined as string | undefined,
   batch_managed: false,
+  serial_managed: false,
+  serial_numbers: undefined as string[] | undefined,
   material_uuid: undefined as string | undefined,
   batch_rule_id: undefined as number | undefined,
   default_batch_rule_id: undefined as number | undefined,
@@ -156,18 +255,6 @@ const defaultLineItem = {
   aux_unit: undefined,
   unit_conversion_rate: undefined,
 };
-
-function resolvePrimaryDefaultWarehouse(
-  material: Material | null | undefined,
-): { id: number; name: string } | null {
-  const defWhs = material?.defaults?.defaultWarehouses;
-  if (!defWhs?.length) return null;
-  const sorted = [...defWhs].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
-  const first = sorted[0];
-  const id = Number(first?.warehouseId ?? 0);
-  if (!(id > 0)) return null;
-  return { id, name: String(first?.warehouseName ?? '').trim() };
-}
 
 function PurchaseReceiptCreateLocationCell({
   index,
@@ -292,41 +379,6 @@ function PurchaseReceiptCreateWarehouseCell({
 }
 
 /** 历史金蝶 CREDIT/CASH → 表单码；客商码原样 */
-const TAX_RATE_PERCENT_ADDON_STYLE: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  padding: '0 8px',
-  color: 'var(--ant-color-text-secondary)',
-  background: 'var(--ant-color-fill-alter)',
-  border: '1px solid var(--ant-color-border)',
-  borderLeft: 0,
-  borderRadius: '0 var(--ant-border-radius) var(--ant-border-radius) 0',
-  fontSize: 'inherit',
-};
-
-/** Form.Item 子组件须接收 value/onChange；不可直接用 Space.Compact 包裹 InputNumber */
-function TaxRatePercentInput({
-  value,
-  onChange,
-}: {
-  value?: number | null;
-  onChange?: (value: number | null) => void;
-}) {
-  return (
-    <Space.Compact style={{ width: '100%' }}>
-      <InputNumber
-        value={value}
-        onChange={onChange}
-        min={0}
-        max={100}
-        precision={2}
-        style={{ width: '100%' }}
-      />
-      <span style={TAX_RATE_PERCENT_ADDON_STYLE}>%</span>
-    </Space.Compact>
-  );
-}
-
 function normalizeReceiptPayModeForForm(raw: unknown): string | undefined {
   const s = String(raw ?? '').trim();
   if (!s) return undefined;
@@ -336,15 +388,8 @@ function normalizeReceiptPayModeForForm(raw: unknown): string | undefined {
   return s;
 }
 
-export type PurchaseReceiptCreateModalProps = {
-  open: boolean;
-  onClose: () => void;
-  onSuccess?: () => void;
-  /** 有值时用同一套新建表单编辑已有采购入库单 */
-  receiptId?: number | null;
-  /** 采购订单取单后尚未下推：打开新建弹窗预填，保存时才建单 */
-  poCompose?: PurchaseReceiptPoComposePayload | null;
-};
+export type PurchaseReceiptCreateModalProps = Record<string, never>;
+
 function positiveId(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -354,6 +399,19 @@ function purchaseReceiptFormPriceType(taxRatePercent: number): 'tax_inclusive' |
   return taxRatePercent > 0 ? 'tax_inclusive' : 'tax_exclusive';
 }
 
+function resolveReceiptLineTaxPercent(
+  lineTax: unknown,
+  headerTax: unknown,
+  fallback = 13,
+): number {
+  if (lineTax != null && lineTax !== '' && Number.isFinite(Number(lineTax))) {
+    return purchaseOrderTaxRateToPercent(lineTax);
+  }
+  if (headerTax != null && headerTax !== '' && Number.isFinite(Number(headerTax))) {
+    return purchaseOrderTaxRateToPercent(headerTax);
+  }
+  return fallback;
+}
 
 function parseSerialNumbers(raw: unknown): string[] | undefined {
   if (Array.isArray(raw)) {
@@ -382,6 +440,7 @@ function UserPickField({
   required,
   userList,
   loading,
+  operatorNumberField,
 }: {
   name: string;
   nameField: string;
@@ -390,6 +449,7 @@ function UserPickField({
   required?: boolean;
   userList: User[];
   loading: boolean;
+  operatorNumberField?: string;
 }) {
   const { t } = useTranslation();
   const form = AntForm.useFormInstance();
@@ -399,7 +459,7 @@ function UserPickField({
   const options = useMemo(() => {
     const base = userList.map((u) => ({
       value: Number(u.id),
-      label: normalizeUserDisplayName(u.full_name || u.username),
+      label: formatUserDisplayLabel(u),
     }));
     const bid =
       pickedId != null && pickedId !== '' && Number.isFinite(Number(pickedId))
@@ -431,10 +491,17 @@ function UserPickField({
           loading={loading}
           style={{ width: '100%' }}
           options={options}
-          onChange={(_val, opt: { label?: React.ReactNode } | undefined) => {
-            form.setFieldsValue({
+          onChange={(val, opt: { label?: React.ReactNode } | undefined) => {
+            const patch: Record<string, unknown> = {
               [nameField]: typeof opt?.label === 'string' ? opt.label : undefined,
-            });
+            };
+            if (operatorNumberField) {
+              const uid = val != null && val !== '' && Number.isFinite(Number(val)) ? Number(val) : NaN;
+              const picked = Number.isFinite(uid) ? userList.find((u) => Number(u.id) === uid) : undefined;
+              // 换人必须同步工号；无工号则清空，禁止沿用上一任隐藏字段
+              patch[operatorNumberField] = picked?.employee_number?.trim() || undefined;
+            }
+            form.setFieldsValue(patch);
           }}
         />
       </ProFormItem>
@@ -445,26 +512,47 @@ function UserPickField({
   );
 }
 
-export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProps> = ({
-  open,
-  onClose,
-  onSuccess,
-  receiptId = null,
-  poCompose = null,
-}) => {
+export const PurchaseReceiptCreateModal: React.FC = () => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
-  const editingId = open && receiptId != null && Number(receiptId) > 0 ? Number(receiptId) : null;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const { message: messageApi, modal: modalApi } = App.useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = useParams<{ id?: string }>();
+  const listPath = resolveInboundListPath(location.pathname);
+  const leaveFormPage = useLeaveFormTab(listPath);
+
+  const { runAfterPersist: runPurchaseReceiptSaveAndAudit, initiatorModal: purchaseReceiptInitiatorModal } =
+    useDocumentFormCommitAndSubmitReview({
+      entityType: 'purchase_receipt',
+      entityLabel: t('app.kuaizhizao.warehouseInbound.purchaseReceiptEntity'),
+      commit: (id) => warehouseApi.purchaseReceipt.commit(id),
+    });
+  const isCreatePage = /\/inbound\/new$/.test(location.pathname);
+  const editRouteId = (() => {
+    const fromParams = Number(params.id);
+    if (Number.isFinite(fromParams) && fromParams > 0) return fromParams;
+    const m = location.pathname.match(/\/inbound\/(\d+)\/edit$/);
+    return m ? Number(m[1]) : null;
+  })();
+  const editingId =
+    !isCreatePage && editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0
+      ? editRouteId
+      : null;
+  const copySourceId = (() => {
+    if (!isCreatePage) return null;
+    const raw = new URLSearchParams(location.search).get('copyFrom');
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+  const poCompose =
+    isCreatePage && location.state && typeof location.state === 'object'
+      ? ((location.state as { purchaseReceiptPoCompose?: PurchaseReceiptPoComposePayload })
+          .purchaseReceiptPoCompose ?? null)
+      : null;
   const formRef = useRef<ProFormInstance>();
-  const [formLoading, setFormLoading] = useState(false);
-  const sourceLinkRef = useRef<{ purchase_order_id: number | null; purchase_order_code: string }>({
-    purchase_order_id: null,
-    purchase_order_code: '',
-  });
-  /** 仅编辑历史「赊购 CREDIT」时追加选项，新建不再提供赊购 */
-  const [includeLegacyCreditOption, setIncludeLegacyCreditOption] = useState(false);
+  const commitAfterSaveRef = useRef(false);
+  const [documentStatus, setDocumentStatus] = useState('待入库');
+  const [reviewStatus, setReviewStatus] = useState('草稿');
   const currentUser = useCurrentUser();
   const {
     options: departmentOptions,
@@ -476,8 +564,16 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
   const amountDecimals = useNumericPrecisionPlaces('amount');
   const trackingFlags = useWarehouseTrackingFlags();
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
+  const [generatingSerialIdx, setGeneratingSerialIdx] = useState<number | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [linkedPoId, setLinkedPoId] = useState<number | null>(null);
+  const [poSettlementCtx, setPoSettlementCtx] = useState<PurchaseReceiptPoSettlementCtx | null>(
+    null,
+  );
+  /** 仅编辑历史「赊购 CREDIT」时追加选项，新建不再提供赊购 */
+  const [includeLegacyCreditOption, setIncludeLegacyCreditOption] = useState(false);
   const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>(() =>
     mapSystemDictionaryItemOptions('ORDER_TYPE', PURCHASE_RECEIPT_ORDER_TYPE_FALLBACK as DictionaryItem[], t),
   );
@@ -501,10 +597,6 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     };
     void loadOrderType();
   }, [messageApi, t]);
-  const [linkedPoId, setLinkedPoId] = useState<number | null>(null);
-  const [poSettlementCtx, setPoSettlementCtx] = useState<PurchaseReceiptPoSettlementCtx | null>(
-    null,
-  );
 
   useEffect(() => {
     if (linkedPoId == null || linkedPoId <= 0) {
@@ -542,6 +634,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           headerTaxRate: order.tax_rate,
           poiById,
         });
+        formRef.current?.setFieldsValue({ price_type: priceType });
       } catch {
         if (!cancelled) setPoSettlementCtx(null);
       }
@@ -551,6 +644,12 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     };
   }, [linkedPoId]);
 
+  const sourceLinkRef = useRef<{ purchase_order_id: number | null; purchase_order_code: string }>({
+    purchase_order_id: null,
+    purchase_order_code: '',
+  });
+  const leaveFormPageRef = useRef(leaveFormPage);
+  leaveFormPageRef.current = leaveFormPage;
   const { data: businessConfig } = useQuery({
     queryKey: ['businessConfigFinanceRecognition'],
     queryFn: getBusinessConfig,
@@ -585,12 +684,13 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
   }, [currentUser]);
 
   const resetForm = useCallback(() => {
+    setIncludeLegacyCreditOption(false);
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       items: [{ ...defaultLineItem }],
       receipt_time: dayjs(),
       pay_mode: undefined,
-      tax_rate: 13,
+      price_type: 'tax_inclusive',
       currency: 'CNY',
       buyer_id: defaultPerson.id,
       buyer_name: defaultPerson.name,
@@ -601,7 +701,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
   }, [defaultPerson, orgPayableDefault]);
 
   useEffect(() => {
-    if (!open || editingId) return;
+    if (editingId) return;
     const rid = formRef.current?.getFieldValue('receiver_id');
     if (rid != null && rid !== '') return;
     if (defaultPerson.id == null && !defaultPerson.name) return;
@@ -609,7 +709,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       receiver_id: defaultPerson.id,
       receiver_name: defaultPerson.name,
     });
-  }, [open, editingId, defaultPerson]);
+  }, [editingId, defaultPerson]);
 
   const clearLineWarehouseDependents = useCallback((index: number) => {
     formRef.current?.setFieldValue(['items', index, 'location_id'], undefined);
@@ -653,10 +753,13 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       if (!formRef.current) return;
       if (!material) {
         formRef.current.setFieldValue(['items', index, 'batch_managed'], false);
+        formRef.current.setFieldValue(['items', index, 'serial_managed'], false);
         formRef.current.setFieldValue(['items', index, 'material_uuid'], undefined);
+        formRef.current.setFieldValue(['items', index, 'serial_numbers'], undefined);
         return;
       }
       let batchManaged = !!(material.batchManaged ?? (material as { batch_managed?: boolean }).batch_managed);
+      let serialManaged = !!(material.serialManaged ?? (material as { serial_managed?: boolean }).serial_managed);
       const fromPicker = readMaterialTrackingFromPicker(material as unknown as Record<string, unknown>);
       if (fromPicker) {
         applyMaterialTrackingToFormRow(
@@ -666,6 +769,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           fromPicker,
         );
         batchManaged = fromPicker.batchManaged;
+        serialManaged = fromPicker.serialManaged;
       }
       if (material.uuid) {
         try {
@@ -680,6 +784,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               meta,
             );
             batchManaged = meta.batchManaged;
+            serialManaged = meta.serialManaged;
           }
         } catch {
           /* 使用列表/选择器字段 */
@@ -689,13 +794,41 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         ['items', index, 'batch_managed'],
         isMaterialBatchEntryEnabled(trackingFlags, batchManaged),
       );
+      formRef.current.setFieldValue(
+        ['items', index, 'serial_managed'],
+        isMaterialSerialEntryEnabled(trackingFlags, serialManaged),
+      );
+      formRef.current.setFieldValue(
+        ['items', index, 'material_spec'],
+        String(material.specification ?? '').trim() || undefined,
+      );
+      formRef.current.setFieldValue(
+        ['items', index, 'material_model'],
+        String(material.model ?? '').trim() || undefined,
+      );
+      const existingWh = Number(formRef.current.getFieldValue(['items', index, 'warehouse_id']));
+      if (!(existingWh > 0)) {
+        let matForWh: Material | undefined = material;
+        const mid = Number(material.id);
+        if (mid > 0 && !resolvePrimaryDefaultWarehouseFromMaterial(material)) {
+          try {
+            const full = await fetchMaterialForUnitSelectCache(mid);
+            if (full) matForWh = full;
+          } catch {
+            /* 列表快照无 defaults 时尝试完整档案 */
+          }
+        }
+        const primaryWh = resolvePrimaryDefaultWarehouseFromMaterial(matForWh);
+        if (primaryWh) {
+          formRef.current.setFieldValue(['items', index, 'warehouse_id'], primaryWh.id);
+          formRef.current.setFieldValue(['items', index, 'warehouse_name'], primaryWh.name);
+        }
+      }
     },
     [trackingFlags],
   );
 
   useEffect(() => {
-    if (!open) return;
-    resetForm();
     let cancelled = false;
     (async () => {
       setUsersLoading(true);
@@ -713,120 +846,213 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       setFormLoading(true);
       void (async () => {
         try {
-          const orderRaw = await getPurchaseOrder(String(poCompose.purchaseOrderId));
-          if (cancelled) return;
-          const order = normalizePurchaseOrderDetail(orderRaw);
-          const materialById = await prefetchMaterialsForUnitSelect(
-            (order.items || []).map((it) => it.material_id),
+          const orderIds = (
+            poCompose.purchaseOrderIds?.length
+              ? [...poCompose.purchaseOrderIds]
+              : [poCompose.purchaseOrderId]
+          )
+            .map((id) => Number(id))
+            .filter((id) => id > 0);
+          const ordersNormalized = await Promise.all(
+            orderIds.map(async (oid) =>
+              normalizePurchaseOrderDetail(await getPurchaseOrder(String(oid))),
+            ),
           );
+          if (cancelled || !ordersNormalized.length) return;
+
+          const primary = ordersNormalized[0];
+          const materialIdSet = new Set<number>();
+          for (const order of ordersNormalized) {
+            for (const it of order.items || []) {
+              const mid = Number(it.material_id);
+              if (mid > 0) materialIdSet.add(mid);
+            }
+          }
+          const materialById = await prefetchMaterialsForUnitSelect([...materialIdSet]);
           if (cancelled) return;
-          const orderWithMaterials = {
-            ...order,
-            items: enrichPurchaseOrderItemsMaterial(order.items || [], materialById),
-          };
-          const outstanding = getOutstandingPoItems(orderWithMaterials);
-          const poCode = String(order.order_code ?? '').trim();
+
+          type ComposeLine = { order: (typeof ordersNormalized)[0]; item: NonNullable<(typeof ordersNormalized)[0]['items']>[0] };
+          const composeLines: ComposeLine[] = [];
+          for (const order of ordersNormalized) {
+            const orderWithMaterials = {
+              ...order,
+              items: enrichPurchaseOrderItemsMaterial(order.items || [], materialById),
+            };
+            const outstanding = getOutstandingPoItems(orderWithMaterials);
+            for (const it of outstanding) {
+              if (it.id != null && (poCompose.quantities[it.id] ?? 0) > 0) {
+                composeLines.push({ order: orderWithMaterials, item: it });
+              }
+            }
+          }
+
+          const poCodes = ordersNormalized
+            .map((o) => String(o.order_code ?? '').trim())
+            .filter(Boolean);
+          // 备注可展示多单号；头字段 purchase_order_code 仅存主单号（max 50，与后端/下推一致）
+          const poCodeLabel = poCodes.join('、');
+          const primaryPoCode = String(primary.order_code ?? '').trim();
           sourceLinkRef.current = {
             purchase_order_id: poCompose.purchaseOrderId,
-            purchase_order_code: poCode,
+            purchase_order_code: primaryPoCode,
           };
-          setLinkedPoId(poCompose.purchaseOrderId);
-          const headerTaxPct = purchaseOrderTaxRateToPercent(orderWithMaterials.tax_rate ?? 13);
-          const poPriceType = (() => {
-            const raw = String(
-              (orderWithMaterials as { price_type?: string; priceType?: string }).price_type ??
-                (orderWithMaterials as { priceType?: string }).priceType ??
-                '',
-            ).trim();
-            return raw === 'tax_inclusive' || raw === 'tax_exclusive'
-              ? raw
-              : purchaseReceiptFormPriceType(headerTaxPct);
-          })();
-          const formItems = outstanding
-            .filter((it) => it.id != null && (poCompose.quantities[it.id] ?? 0) > 0)
-            .map((it) => {
-              const lineId = it.id!;
-              const serialList = poCompose.lineSerials[lineId] ?? [];
-              const lineTaxPct = (() => {
-                const fromLine = purchaseOrderTaxRateToPercent(
-                  (it as { tax_rate?: number }).tax_rate,
-                );
-                return fromLine > 0 ? fromLine : headerTaxPct;
-              })();
-              const pushQty = Number(poCompose.quantities[lineId]) || 0;
-              // 分批第二次取单：副数量以取单 remaining_aux 为准，禁止仅按整单 ordered 比例重算
-              const handoffAuxRaw = poCompose.auxQuantities?.[lineId];
-              const dualFromOrdered = documentLineDualQuantityForPush(
-                it as unknown as Record<string, unknown>,
-                {
-                  sourcePrimaryQty: Number(it.ordered_quantity) || 0,
-                  pushPrimaryQty: pushQty,
-                },
-              );
-              const dual =
-                handoffAuxRaw != null && Number.isFinite(Number(handoffAuxRaw))
-                  ? {
-                      ...dualFromOrdered,
-                      aux_quantity: Number(handoffAuxRaw),
-                    }
-                  : dualFromOrdered;
-              return {
-                purchase_order_item_id: lineId,
-                material_id: it.material_id,
-                material_code: String(it.material_code ?? ''),
-                material_name: String(it.material_name ?? ''),
-                material_spec: it.material_spec != null ? String(it.material_spec) : undefined,
-                material_unit: String(it.material_unit ?? ''),
-                receipt_quantity: pushQty,
-                tax_rate: lineTaxPct,
-                unit_price: readPurchaseOrderEnteredUnitPrice(it, poPriceType) ?? undefined,
-                aux_quantity: dual.aux_quantity,
-                aux_unit: dual.aux_unit,
-                unit_conversion_rate: dual.unit_conversion_rate,
-                warehouse_id: poCompose.lineWh[lineId],
-                warehouse_name: String(it.warehouse_name ?? ''),
-                location_id: poCompose.lineLoc[lineId],
-                location_code: poCompose.lineLocCode[lineId] ?? '',
-                batch_number: poCompose.batchNumbers[lineId],
-                serial_numbers_json: serialList.length ? JSON.stringify(serialList) : '',
-                unqualified_quantity: 0,
-                quality_status: '合格',
-                line_status: '待入库',
-              };
+          if (orderIds.length > 1) {
+            setLinkedPoId(null);
+          } else {
+            setLinkedPoId(poCompose.purchaseOrderId);
+          }
+          const headerTaxPct = purchaseOrderTaxRateToPercent(primary.tax_rate ?? 13);
+          const formItems: typeof defaultLineItem[] = [];
+          for (const { order: orderWithMaterials, item: it } of composeLines) {
+            const lineId = it.id!;
+            const serialList = poCompose.lineSerials[lineId] ?? [];
+            const orderHeaderTax = purchaseOrderTaxRateToPercent(orderWithMaterials.tax_rate ?? 13);
+            const lineTaxPct = resolveReceiptLineTaxPercent(
+              (it as { tax_rate?: number }).tax_rate,
+              orderHeaderTax,
+            );
+            const pushQty = Number(poCompose.quantities[lineId]) || 0;
+            const poPriceType = (() => {
+              const raw = String(
+                (orderWithMaterials as { price_type?: string; priceType?: string }).price_type ??
+                  (orderWithMaterials as { priceType?: string }).priceType ??
+                  '',
+              ).trim();
+              return raw === 'tax_inclusive' || raw === 'tax_exclusive'
+                ? raw
+                : purchaseReceiptFormPriceType(orderHeaderTax);
+            })();
+            // 分批第二次取单：副数量以取单 remaining_aux 为准，禁止仅按整单 ordered 比例重算
+            const handoffAuxRaw = poCompose.auxQuantities?.[lineId];
+            const dualFromOrdered = documentLineDualQuantityForPush(
+              it as unknown as Record<string, unknown>,
+              {
+                sourcePrimaryQty: Number(it.ordered_quantity) || 0,
+                pushPrimaryQty: pushQty,
+              },
+            );
+            const dual =
+              handoffAuxRaw != null && Number.isFinite(Number(handoffAuxRaw))
+                ? {
+                    ...dualFromOrdered,
+                    aux_quantity: Number(handoffAuxRaw),
+                  }
+                : dualFromOrdered;
+            let material = it.material_id
+              ? materialById.get(String(it.material_id))
+              : undefined;
+            if (
+              material &&
+              !resolvePrimaryDefaultWarehouseFromMaterial(material) &&
+              !(Number(poCompose.lineWh[lineId]) > 0) &&
+              !(Number((it as { warehouse_id?: number }).warehouse_id) > 0)
+            ) {
+              try {
+                const full = await fetchMaterialForUnitSelectCache(Number(it.material_id));
+                if (full) material = full;
+              } catch {
+                /* ignore */
+              }
+            }
+            const headerWh = Number(
+              (orderWithMaterials as { warehouse_id?: number }).warehouse_id ?? 0,
+            );
+            const lineWh = resolvePurchaseReceiptLineWarehouse(it, material, {
+              explicitWarehouseId: poCompose.lineWh[lineId],
+              headerWarehouseId: headerWh > 0 ? headerWh : undefined,
             });
-          const taxPct = purchaseOrderTaxRateToPercent(orderWithMaterials.tax_rate ?? 13);
+            formItems.push({
+              purchase_order_item_id: lineId,
+              material_id: it.material_id,
+              material_code: String(it.material_code ?? ''),
+              material_name: String(it.material_name ?? ''),
+              material_spec: resolveDocumentLineMaterialSpec(
+                it as unknown as Record<string, unknown>,
+                material,
+              ),
+              material_model: resolveDocumentLineMaterialModel(
+                it as unknown as Record<string, unknown>,
+                material,
+              ),
+              material_unit: String(it.material_unit ?? ''),
+              receipt_quantity: pushQty,
+              tax_rate: lineTaxPct,
+              unit_price: readPurchaseOrderEnteredUnitPrice(it, poPriceType) ?? undefined,
+              warehouse_id: lineWh.warehouse_id,
+              warehouse_name: String(lineWh.warehouse_name ?? it.warehouse_name ?? ''),
+              location_id: poCompose.lineLoc[lineId],
+              location_code: poCompose.lineLocCode[lineId] ?? '',
+              batch_number: poCompose.batchNumbers[lineId],
+              aux_quantity: dual.aux_quantity,
+              aux_unit: dual.aux_unit,
+              unit_conversion_rate: dual.unit_conversion_rate,
+              serial_numbers_json: serialList.length ? JSON.stringify(serialList) : '',
+              unqualified_quantity: 0,
+              quality_status: '合格',
+              line_status: '待入库',
+            });
+          }
           const notesText =
             String(poCompose.notes ?? '').trim() ||
-            (poCode
-              ? t('app.kuaizhizao.warehouseInbound.poCompose.defaultNotes', { code: poCode })
+            (poCodeLabel
+              ? t('app.kuaizhizao.warehouseInbound.poCompose.defaultNotes', { code: poCodeLabel })
               : '');
-          const poPayMode = normalizeReceiptPayModeForForm(orderWithMaterials.payment_method_code);
+          const poPayment = resolvePurchaseOrderPaymentForReceipt(primary);
+          const poPayMode = normalizeReceiptPayModeForForm(
+            poPayment.pay_mode ?? primary.payment_method_code,
+          );
           const poPayableRecognition = String(
-            orderWithMaterials.payable_recognition ??
-              (orderWithMaterials as { payableRecognition?: string }).payableRecognition ??
+            primary.payable_recognition ??
+              (primary as { payableRecognition?: string }).payableRecognition ??
               orgPayableDefault,
           );
           setIncludeLegacyCreditOption(poPayMode === 'CREDIT');
+          if (orderIds.length > 1) {
+            const poiById: PurchaseReceiptPoSettlementCtx['poiById'] = {};
+            for (const { item } of composeLines) {
+              const poiId = Number(item.id);
+              if (poiId > 0) {
+                poiById[poiId] = item as PurchaseReceiptPoSettlementCtx['poiById'][number];
+              }
+            }
+            const primaryPriceType = (() => {
+              const raw = String(
+                (primary as { price_type?: string; priceType?: string }).price_type ??
+                  (primary as { priceType?: string }).priceType ??
+                  '',
+              ).trim();
+              return raw === 'tax_inclusive' || raw === 'tax_exclusive'
+                ? raw
+                : purchaseReceiptFormPriceType(headerTaxPct);
+            })();
+            setPoSettlementCtx({
+              priceType: primaryPriceType,
+              headerTaxRate: primary.tax_rate,
+              poiById,
+            });
+          }
           formRef.current?.setFieldsValue({
-            order_type: String(orderWithMaterials.order_type ?? '标准采购').trim() || '标准采购',
-            supplier_id: positiveId(orderWithMaterials.supplier_id) ?? undefined,
-            supplier_name: String(orderWithMaterials.supplier_name ?? ''),
+            order_type: String(primary.order_type ?? '标准采购').trim() || '标准采购',
+            supplier_id: positiveId(primary.supplier_id) ?? undefined,
+            supplier_name: String(primary.supplier_name ?? ''),
             payable_recognition: poPayableRecognition,
-            buyer_id: positiveId(orderWithMaterials.buyer_id) ?? undefined,
-            buyer_name: String(orderWithMaterials.buyer_name ?? ''),
-            department_id: positiveId(orderWithMaterials.department_id) ?? undefined,
-            department_name: String(orderWithMaterials.department_name ?? ''),
+            buyer_id: positiveId(primary.buyer_id) ?? undefined,
+            buyer_name: String(primary.buyer_name ?? ''),
+            department_id: positiveId(primary.department_id) ?? undefined,
+            department_name: String(primary.department_name ?? ''),
             receiver_id: poCompose.receiverId ?? defaultPerson.id,
             receiver_name: String(poCompose.receiverName ?? '').trim() || defaultPerson.name,
             receipt_time: poCompose.receiptTimeIso ? dayjs(poCompose.receiptTimeIso) : dayjs(),
             delivery_note: poCompose.deliveryNote ?? '',
             pay_mode: poPayMode,
-            advance_payee_id: (orderWithMaterials as { advance_payee_id?: number }).advance_payee_id ?? undefined,
-            advance_payee_name: (orderWithMaterials as { advance_payee_name?: string }).advance_payee_name ?? undefined,
-            price_type: poPriceType,
-            tax_rate: taxPct,
-            currency: String(orderWithMaterials.currency ?? 'CNY').trim() || 'CNY',
+            payment_wire_percent: poPayment.payment_wire_percent,
+            payment_acceptance_percent: poPayment.payment_acceptance_percent,
+            advance_payee_id: poPayment.advance_payee_id,
+            advance_payee_name: poPayment.advance_payee_name,
+            price_type: purchaseReceiptFormPriceType(headerTaxPct),
+            currency: String(primary.currency ?? 'CNY').trim() || 'CNY',
             notes: notesText,
+            attachments: [],
             items: formItems.length ? formItems : [{ ...defaultLineItem }],
           });
           await Promise.all(
@@ -842,7 +1068,89 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           if (cancelled) return;
           const err = error as { message?: string };
           messageApi.error(err?.message || t('app.kuaizhizao.warehouseInbound.entry.purchase.loadFailed'));
-          onCloseRef.current();
+          leaveFormPageRef.current();
+        } finally {
+          if (!cancelled) setFormLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!editingId && copySourceId) {
+      setFormLoading(true);
+      void (async () => {
+        try {
+          const detail = (await warehouseApi.purchaseReceipt.get(String(copySourceId))) as Record<
+            string,
+            unknown
+          >;
+          if (cancelled) return;
+          sourceLinkRef.current = { purchase_order_id: null, purchase_order_code: '' };
+          setLinkedPoId(null);
+          setDocumentStatus('待入库');
+          setReviewStatus('草稿');
+          const rawItems = Array.isArray(detail.items) ? detail.items : [];
+          const headerPriceType = normalizePurchasePriceType(
+            (detail as { price_type?: string }).price_type
+              ?? (detail as { priceType?: string }).priceType,
+          );
+          const items = rawItems.length
+            ? rawItems.map((row) => ({
+                ...mapPurchaseReceiptDetailLineToForm(
+                  row as Record<string, unknown>,
+                  detail.tax_rate,
+                  headerPriceType,
+                ),
+                line_status: '待入库',
+              }))
+            : [{ ...defaultLineItem }];
+          const formPayMode = normalizeReceiptPayModeForForm(detail.pay_mode);
+          setIncludeLegacyCreditOption(formPayMode === 'CREDIT');
+          formRef.current?.setFieldsValue({
+            order_type: String(detail.order_type ?? '标准采购').trim() || '标准采购',
+            supplier_id: positiveId(detail.supplier_id) ?? undefined,
+            supplier_name: String(detail.supplier_name ?? ''),
+            payable_recognition: String(
+              (detail.payable_recognition as string | undefined)
+                ?? (detail.payableRecognition as string | undefined)
+                ?? orgPayableDefault,
+            ),
+            buyer_id: positiveId(detail.buyer_id) ?? undefined,
+            buyer_name: String(detail.buyer_name ?? ''),
+            buyer_operator_number: String(detail.buyer_operator_number ?? ''),
+            department_id: positiveId(detail.department_id) ?? undefined,
+            department_name: String(detail.department_name ?? ''),
+            receiver_id: positiveId(detail.receiver_id) ?? defaultPerson.id,
+            receiver_name: String(detail.receiver_name ?? '').trim() || defaultPerson.name,
+            receipt_time: dayjs(),
+            delivery_note: String(detail.delivery_note ?? ''),
+            pay_mode: formPayMode,
+            advance_payee_id: (detail as { advance_payee_id?: number }).advance_payee_id ?? undefined,
+            advance_payee_name: (detail as { advance_payee_name?: string }).advance_payee_name ?? undefined,
+            price_type: headerPriceType,
+            currency: String(detail.currency ?? 'CNY'),
+            notes: String(detail.notes ?? ''),
+            attachments: mapAttachmentsToUploadList(
+              (detail as { attachments?: Parameters<typeof mapAttachmentsToUploadList>[0] }).attachments,
+            ),
+            items,
+          });
+          await Promise.all(
+            items.map(async (row, index) => {
+              const materialId = Number(row.material_id);
+              if (!(materialId > 0)) return;
+              const material = await fetchMaterialForUnitSelectCache(materialId);
+              if (cancelled || !material) return;
+              await syncLineMaterialTracking(index, material);
+            }),
+          );
+        } catch (error: unknown) {
+          if (cancelled) return;
+          const err = error as { message?: string };
+          messageApi.error(err?.message || t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed'));
+          leaveFormPageRef.current();
         } finally {
           if (!cancelled) setFormLoading(false);
         }
@@ -855,6 +1163,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     if (!editingId) {
       sourceLinkRef.current = { purchase_order_id: null, purchase_order_code: '' };
       setLinkedPoId(null);
+      setDocumentStatus('待入库');
+      setReviewStatus('草稿');
       resetForm();
       return () => {
         cancelled = true;
@@ -869,6 +1179,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           unknown
         >;
         if (cancelled) return;
+        setDocumentStatus(String(detail.status || '待入库'));
+        setReviewStatus(String(detail.review_status || '草稿'));
         const poId = positiveId(detail.purchase_order_id);
         sourceLinkRef.current = {
           purchase_order_id: poId,
@@ -876,42 +1188,32 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         };
         setLinkedPoId(poId);
         const rawItems = Array.isArray(detail.items) ? detail.items : [];
+        const headerPriceType = normalizePurchasePriceType(
+          (detail as { price_type?: string }).price_type
+            ?? (detail as { priceType?: string }).priceType,
+        );
         const items = rawItems.length
-          ? rawItems.map((row) => {
-              const line = row as Record<string, unknown>;
-              const serials = Array.isArray(line.serial_numbers)
-                ? line.serial_numbers.map((item) => String(item))
-                : [];
-              return {
-                material_id: positiveId(line.material_id) ?? undefined,
-                material_code: String(line.material_code ?? ''),
-                material_name: String(line.material_name ?? ''),
-                material_spec: line.material_spec != null ? String(line.material_spec) : undefined,
-                material_model: line.material_model != null ? String(line.material_model) : undefined,
-                material_unit: String(line.material_unit ?? line.unit ?? ''),
-                receipt_quantity: Number(line.receipt_quantity) || 0,
-                unit_price: readPurchaseReceiptFormUnitPrice(line),
-                warehouse_id: positiveId(line.warehouse_id) ?? undefined,
-                warehouse_name: String(line.warehouse_name ?? ''),
-                location_id: positiveId(line.location_id) ?? undefined,
-                location_code: line.location_code != null ? String(line.location_code) : '',
-                batch_number: line.batch_number != null ? String(line.batch_number) : undefined,
-                aux_quantity: line.aux_quantity != null ? Number(line.aux_quantity) : undefined,
-                aux_unit: line.aux_unit != null ? String(line.aux_unit) : undefined,
-                unit_conversion_rate:
-                  line.unit_conversion_rate != null ? Number(line.unit_conversion_rate) : undefined,
-                purchase_order_item_id: positiveId(line.purchase_order_item_id) ?? undefined,
-                receipt_notice_item_id: positiveId(line.receipt_notice_item_id) ?? undefined,
-                serial_numbers_json: serials.length ? JSON.stringify(serials) : '',
-                unqualified_quantity: Number(line.unqualified_quantity) || 0,
-                quality_status: String(line.quality_status || '合格'),
-                line_status: String(line.status || '待入库'),
-                attachments: line.attachments,
-              };
-            })
+          ? rawItems.map((row) =>
+              mapPurchaseReceiptDetailLineToForm(
+                row as Record<string, unknown>,
+                detail.tax_rate,
+                headerPriceType,
+              ),
+            )
           : [{ ...defaultLineItem }];
         const receiptTimeRaw = detail.receipt_time;
-        const formPayMode = normalizeReceiptPayModeForForm(detail.pay_mode);
+        let formPayMode = normalizeReceiptPayModeForForm(detail.pay_mode);
+        let paymentFromPo: ReturnType<typeof resolvePurchaseOrderPaymentForReceipt> = {};
+        if (!formPayMode && poId) {
+          try {
+            const poRaw = await getPurchaseOrder(String(poId));
+            const po = normalizePurchaseOrderDetail(poRaw);
+            paymentFromPo = resolvePurchaseOrderPaymentForReceipt(po);
+            formPayMode = normalizeReceiptPayModeForForm(paymentFromPo.pay_mode);
+          } catch {
+            /* 关联订单付款方式补全失败不挡编辑 */
+          }
+        }
         setIncludeLegacyCreditOption(formPayMode === 'CREDIT');
         formRef.current?.setFieldsValue({
           order_type: String(detail.order_type ?? '标准采购').trim() || '标准采购',
@@ -932,15 +1234,24 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           receipt_time: receiptTimeRaw ? dayjs(String(receiptTimeRaw)) : dayjs(),
           delivery_note: String(detail.delivery_note ?? ''),
           pay_mode: formPayMode,
-          advance_payee_id: (detail as { advance_payee_id?: number }).advance_payee_id ?? undefined,
-          advance_payee_name: (detail as { advance_payee_name?: string }).advance_payee_name ?? undefined,
-          price_type: purchaseReceiptFormPriceType(
-            purchaseOrderTaxRateToPercent(detail.tax_rate ?? 13),
-          ),
-          billtype_number: String(detail.billtype_number ?? 'im_PurInBill_STD_BT_S'),
-          tax_rate: detail.tax_rate != null ? Number(detail.tax_rate) : 13,
+          payment_wire_percent:
+            (detail as { payment_wire_percent?: number }).payment_wire_percent ??
+            paymentFromPo.payment_wire_percent,
+          payment_acceptance_percent:
+            (detail as { payment_acceptance_percent?: number }).payment_acceptance_percent ??
+            paymentFromPo.payment_acceptance_percent,
+          advance_payee_id:
+            (detail as { advance_payee_id?: number }).advance_payee_id ??
+            paymentFromPo.advance_payee_id,
+          advance_payee_name:
+            (detail as { advance_payee_name?: string }).advance_payee_name ??
+            paymentFromPo.advance_payee_name,
+          price_type: headerPriceType,
           currency: String(detail.currency ?? 'CNY'),
           notes: String(detail.notes ?? ''),
+          attachments: mapAttachmentsToUploadList(
+            (detail as { attachments?: Parameters<typeof mapAttachmentsToUploadList>[0] }).attachments,
+          ),
           items,
         });
         await Promise.all(
@@ -956,7 +1267,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         if (cancelled) return;
         const err = error as { message?: string };
         messageApi.error(err?.message || t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed'));
-        onCloseRef.current();
+        leaveFormPageRef.current();
       } finally {
         if (!cancelled) setFormLoading(false);
       }
@@ -965,7 +1276,18 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     return () => {
       cancelled = true;
     };
-  }, [editingId, messageApi, open, orgPayableDefault, poCompose, resetForm, syncLineMaterialTracking, t]);
+  }, [
+    copySourceId,
+    defaultPerson,
+    editingId,
+    messageApi,
+    orgPayableDefault,
+    poCompose,
+    priceDecimals,
+    resetForm,
+    syncLineMaterialTracking,
+    t,
+  ]);
 
   const buildFormItemColumns = useCallback(
     (showTaxColumns: boolean) => [
@@ -980,6 +1302,27 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               <Input />
             </AntForm.Item>
             <AntForm.Item name={[index, 'material_name']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'purchase_order_item_id']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'receipt_notice_item_id']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'serial_numbers_json']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'serial_managed']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'unqualified_quantity']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'quality_status']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'line_status']} hidden>
               <Input />
             </AntForm.Item>
             <AntForm.Item
@@ -1015,7 +1358,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
                   resolveMaterialScenarioUnit(mat, 'purchase'),
                 );
                 void syncLineMaterialTracking(index, mat);
-                const primaryWh = resolvePrimaryDefaultWarehouse(mat);
+                const primaryWh = resolvePrimaryDefaultWarehouseFromMaterial(mat);
                 if (primaryWh) {
                   formRef.current?.setFieldValue(['items', index, 'warehouse_id'], primaryWh.id);
                   formRef.current?.setFieldValue(['items', index, 'warehouse_name'], primaryWh.name);
@@ -1034,46 +1377,25 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         ),
       },
       ...buildDocumentDetailSpecModelFormColumns(t),
-      {
-        title: t('common.quantity'),
-        dataIndex: 'receipt_quantity',
-        width: DOCUMENT_DETAIL_COL_WIDTH.quantity + 80,
-        ...DOCUMENT_DETAIL_NUM_COL,
-        render: (_: unknown, __: unknown, index: number) => (
-          <AntForm.Item
-            noStyle
-            shouldUpdate={(prev, curr) =>
-              prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
-            }
-          >
-            {({ getFieldValue }) => {
-              const materialId = getFieldValue(['items', index, 'material_id']);
-              if (!formRef.current) return null;
-              return (
-                <DocumentLineDualQuantityFormCell
-                  form={formRef.current}
-                  listName="items"
-                  rowIndex={index}
-                  quantityField="receipt_quantity"
-                  unitField="material_unit"
-                  scenario="purchase"
-                  quantityPrecision={quantityDecimals}
-                  materialId={materialId}
-                  inlineUnitWithQuantity
-                  onAfterQuantityChange={() => {
-                    const supplierId = Number(formRef.current?.getFieldValue('supplier_id'));
-                    void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, index, {
-                      asOfField: 'receipt_time',
-                      unitPriceField: 'unit_price',
-                      supplierId: Number.isFinite(supplierId) && supplierId > 0 ? supplierId : undefined,
-                    });
-                  }}
-                />
-              );
-            }}
-          </AntForm.Item>
-        ),
-      },
+      ...buildDocumentLineDualQuantityPairColumns({
+        t,
+        getForm: () => formRef.current,
+        quantityField: 'receipt_quantity',
+        unitField: 'material_unit',
+        scenario: 'purchase',
+        quantityPrecision: quantityDecimals,
+        width: 168,
+        columnSpread: DOCUMENT_DETAIL_NUM_COL,
+        onAfterQuantityChange: (index) => {
+          const supplierId = Number(formRef.current?.getFieldValue('supplier_id'));
+          void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, index, {
+            asOfField: 'receipt_time',
+            unitPriceField: 'unit_price',
+            trigger: 'quantity',
+            supplierId: Number.isFinite(supplierId) && supplierId > 0 ? supplierId : undefined,
+          });
+        },
+      }),
       {
         title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
         dataIndex: 'warehouse_id',
@@ -1143,11 +1465,79 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         ),
       },
       {
+        title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+        dataIndex: 'serial_numbers',
+        width: 160,
+        ...DOCUMENT_DETAIL_TEXT_COL,
+        render: (_: unknown, __: unknown, index: number) => (
+          <>
+            <AntForm.Item name={[index, 'serial_numbers']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item
+              noStyle
+              shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+            >
+              {({ getFieldValue }) => {
+                const row = getFieldValue('items')?.[index];
+                if (!isMaterialSerialEntryEnabled(trackingFlags, row?.serial_managed)) {
+                  return <span>—</span>;
+                }
+                const qty = Number(row?.receipt_quantity ?? 0);
+                const expected = qty > 0 ? Math.floor(qty) : 0;
+                const sn = getFieldValue(['items', index, 'serial_numbers']);
+                const serials = Array.isArray(sn)
+                  ? sn.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+                  : parseSerialNumbers(sn) ?? [];
+                return (
+                  <SerialNumbersImportTrigger
+                    serials={serials}
+                    expectedCount={expected > 0 ? expected : undefined}
+                    materialLabel={row?.material_code || row?.material_name}
+                    generateLoading={generatingSerialIdx === index}
+                    onSerialsChange={(next) =>
+                      formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
+                    }
+                    onGenerate={async () => {
+                      const uuid = getFieldValue(['items', index, 'material_uuid']);
+                      if (!uuid || !(expected > 0)) return [];
+                      const count = Math.min(expected, MATERIAL_SERIAL_GENERATE_MAX_COUNT);
+                      setGeneratingSerialIdx(index);
+                      try {
+                        const res = await materialSerialApi.generate(String(uuid), count, {});
+                        formRef.current?.setFieldValue(
+                          ['items', index, 'serial_numbers'],
+                          res.serial_nos,
+                        );
+                        messageApi.success(
+                          t('app.kuaizhizao.warehouseInbound.msg.serialGenerated', {
+                            count: res.count,
+                          }),
+                        );
+                        return res.serial_nos;
+                      } catch (e: unknown) {
+                        messageApi.error(
+                          (e as Error)?.message ||
+                            t('app.kuaizhizao.warehouseInbound.msg.serialGenerateFailed'),
+                        );
+                        return [];
+                      } finally {
+                        setGeneratingSerialIdx(null);
+                      }
+                    }}
+                  />
+                );
+              }}
+            </AntForm.Item>
+          </>
+        ),
+      },
+      {
         title: showTaxColumns
           ? t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice')
           : t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
         dataIndex: 'unit_price',
-        width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
+        width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice + 28,
         ...DOCUMENT_DETAIL_NUM_COL,
         render: (_: unknown, __: unknown, index: number) => (
           <AntForm.Item name={[index, 'unit_price']} noStyle>
@@ -1155,6 +1545,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               size={DOCUMENT_DETAIL_CONTROL_SIZE}
               style={{ width: '100%' }}
               min={0}
+              precision={priceDecimals}
               prefix="¥"
             />
           </AntForm.Item>
@@ -1189,14 +1580,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
               ...DOCUMENT_DETAIL_NUM_COL,
               render: (_: unknown, __: unknown, index: number) => (
-                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                <AntForm.Item noStyle shouldUpdate={shouldUpdatePurchaseReceiptAmounts}>
                   {({ getFieldValue }) => {
                     const row = normalizeFormListItems<Record<string, unknown>>(
                       getFieldValue('items'),
                     )[index];
                     const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
-                    const priceType = purchaseFormPriceType(
-                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    const priceType = resolvePurchaseReceiptFormPriceType(
+                      poSettlementCtx,
+                      getFieldValue('price_type'),
                     );
                     const line = computePurchaseReceiptFormLineAmounts(
                       row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
@@ -1214,14 +1606,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
               ...DOCUMENT_DETAIL_NUM_COL,
               render: (_: unknown, __: unknown, index: number) => (
-                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                <AntForm.Item noStyle shouldUpdate={shouldUpdatePurchaseReceiptAmounts}>
                   {({ getFieldValue }) => {
                     const row = normalizeFormListItems<Record<string, unknown>>(
                       getFieldValue('items'),
                     )[index];
                     const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
-                    const priceType = purchaseFormPriceType(
-                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    const priceType = resolvePurchaseReceiptFormPriceType(
+                      poSettlementCtx,
+                      getFieldValue('price_type'),
                     );
                     const line = computePurchaseReceiptFormLineAmounts(
                       row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
@@ -1239,14 +1632,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
               ...DOCUMENT_DETAIL_NUM_COL,
               render: (_: unknown, __: unknown, index: number) => (
-                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                <AntForm.Item noStyle shouldUpdate={shouldUpdatePurchaseReceiptAmounts}>
                   {({ getFieldValue }) => {
                     const row = normalizeFormListItems<Record<string, unknown>>(
                       getFieldValue('items'),
                     )[index];
                     const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
-                    const priceType = purchaseFormPriceType(
-                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    const priceType = resolvePurchaseReceiptFormPriceType(
+                      poSettlementCtx,
+                      getFieldValue('price_type'),
                     );
                     const line = computePurchaseReceiptFormLineAmounts(
                       row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
@@ -1266,14 +1660,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
               ...DOCUMENT_DETAIL_NUM_COL,
               render: (_: unknown, __: unknown, index: number) => (
-                <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items !== curr?.items}>
+                <AntForm.Item noStyle shouldUpdate={shouldUpdatePurchaseReceiptAmounts}>
                   {({ getFieldValue }) => {
                     const row = normalizeFormListItems<Record<string, unknown>>(
                       getFieldValue('items'),
                     )[index];
                     const taxPct = purchaseOrderTaxRateToPercent(row?.tax_rate ?? 13);
-                    const priceType = purchaseFormPriceType(
-                      poSettlementCtx?.priceType ?? getFieldValue('price_type'),
+                    const priceType = resolvePurchaseReceiptFormPriceType(
+                      poSettlementCtx,
+                      getFieldValue('price_type'),
                     );
                     const line = computePurchaseReceiptFormLineAmounts(
                       row as Parameters<typeof computePurchaseReceiptFormLineAmounts>[0],
@@ -1293,13 +1688,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       ),
     ],
     [
-      amountDecimals,
       clearLineWarehouseDependents,
       generatingBatchIdx,
+      generatingSerialIdx,
       handleGenerateBatch,
-      poSettlementCtx,
-      priceDecimals,
+      messageApi,
       quantityDecimals,
+      priceDecimals,
+      amountDecimals,
+      poSettlementCtx,
       syncLineMaterialTracking,
       t,
       trackingFlags,
@@ -1330,6 +1727,25 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       messageApi.error(msg);
       throw new Error(msg);
     }
+    const zeroTaxLines = validItems.filter((item) => {
+      const raw = item.tax_rate;
+      return raw != null && raw !== '' && Number(raw) === 0;
+    });
+    if (zeroTaxLines.length > 0) {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        modalApi.confirm({
+          title: t('app.kuaizhizao.warehouseInbound.confirmZeroTaxRateTitle'),
+          content: t('app.kuaizhizao.warehouseInbound.confirmZeroTaxRateContent', {
+            count: zeroTaxLines.length,
+          }),
+          okText: t('app.kuaizhizao.warehouseInbound.confirmZeroTaxRateOk'),
+          cancelText: t('app.kuaizhizao.warehouseInbound.confirmZeroTaxRateCancel'),
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+      if (!confirmed) return;
+    }
 
     const supplierId = Number(values.supplier_id) || 0;
     if (supplierId <= 0) {
@@ -1337,6 +1753,10 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       messageApi.error(msg);
       throw new Error(msg);
     }
+
+    await prefetchMaterialsForUnitSelect(
+      validItems.map((it) => Number(it.material_id) || 0),
+    );
 
     const servicePurchase = String(values.order_type ?? '').trim() === '服务采购';
 
@@ -1365,7 +1785,38 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           throw new Error(msg);
         }
       }
+      if (
+        !servicePurchase &&
+        isMaterialBatchEntryEnabled(trackingFlags, Boolean(it.batch_managed)) &&
+        !String(it.batch_number ?? '').trim()
+      ) {
+        const msg = t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+          material: materialLabel,
+          batches: '—',
+        });
+        messageApi.error(msg);
+        throw new Error(msg);
+      }
       const material = await fetchMaterialForUnitSelectCache(Number(it.material_id));
+      const serialManaged =
+        it.serial_managed != null
+          ? !!it.serial_managed
+          : !!(material as Material | null)?.serialManaged;
+      if (!servicePurchase && isMaterialSerialEntryEnabled(trackingFlags, serialManaged)) {
+        const serials = Array.isArray(it.serial_numbers)
+          ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+          : parseSerialNumbers(it.serial_numbers_json) ?? [];
+        const qty = Math.floor(Number(it.receipt_quantity) || 0);
+        if (serials.length !== qty) {
+          const msg = t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+            material: materialLabel,
+            required: qty,
+            actual: serials.length,
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
+      }
       const dualErr = validateDualQuantityBeforeSave({
         material: material as Material | null,
         scenario: 'purchase',
@@ -1389,7 +1840,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     const headerWhName = String(validItems[0]?.warehouse_name ?? '').trim();
 
     const fromPoCompose = !editingId && poCompose?.purchaseOrderId;
-    const submitLinkedPoId = fromPoCompose
+    const linkedPoId = fromPoCompose
       ? poCompose.purchaseOrderId
       : editingId
         ? sourceLinkRef.current.purchase_order_id
@@ -1401,7 +1852,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         : '';
 
     const payload = {
-        purchase_order_id: submitLinkedPoId,
+        purchase_order_id: linkedPoId,
         purchase_order_code: linkedPoCode,
         order_type: String(values.order_type ?? '标准采购').trim() || '标准采购',
         supplier_id: supplierId,
@@ -1445,18 +1896,22 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           }
           return name;
         })(),
-        tax_rate: values.tax_rate != null ? Number(values.tax_rate) : 13,
+        tax_rate: (() => {
+          const first = validItems[0];
+          const pct = purchaseOrderTaxRateToPercent(first?.tax_rate ?? 13);
+          return pct;
+        })(),
         currency: String(values.currency ?? 'CNY').trim() || 'CNY',
         receiver_id: values.receiver_id != null ? Number(values.receiver_id) : undefined,
         receiver_name: String(values.receiver_name ?? '').trim() || undefined,
         warehouse_id: headerWhId > 0 ? headerWhId : null,
         warehouse_name: headerWhId > 0 ? headerWhName || null : null,
-        receipt_time:
-          values.receipt_time && typeof (values.receipt_time as { format?: unknown }).format === 'function'
-            ? toApiBusinessDocumentDateTime(values.receipt_time as dayjs.Dayjs)
-            : undefined,
+        receipt_time: toApiBusinessDocumentDateTime(values.receipt_time),
         delivery_note: String(values.delivery_note ?? '').trim() || undefined,
         notes: String(values.notes ?? '').trim() || undefined,
+        attachments: normalizeDocumentAttachments(
+          values.attachments as Parameters<typeof normalizeDocumentAttachments>[0],
+        ),
         payable_recognition: values.payable_recognition,
         items: validItems.map((it) => {
           const qty = Number(it.receipt_quantity) || 0;
@@ -1470,6 +1925,12 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             {
               receipt_quantity: qty,
               unit_price: price,
+              display_unit_price:
+                it.display_unit_price != null && Number(it.display_unit_price) > 0
+                  ? Number(it.display_unit_price)
+                  : priceType === 'tax_inclusive' && price > 0
+                    ? price
+                    : undefined,
               tax_rate: taxPct,
               purchase_order_item_id: poiId ?? undefined,
             },
@@ -1486,7 +1947,9 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           );
           const lineWhId = Number(it.warehouse_id) || 0;
           const unqualified = Number(it.unqualified_quantity) || 0;
-          const serials = parseSerialNumbers(it.serial_numbers_json);
+          const serials = Array.isArray(it.serial_numbers)
+            ? it.serial_numbers.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+            : parseSerialNumbers(it.serial_numbers_json);
           return {
             purchase_order_item_id: positiveId(it.purchase_order_item_id),
             receipt_notice_item_id: positiveId(it.receipt_notice_item_id),
@@ -1494,6 +1957,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             material_code: String(it.material_code ?? ''),
             material_name: String(it.material_name ?? ''),
             material_spec: it.material_spec != null ? String(it.material_spec) : undefined,
+            material_model: it.material_model != null ? String(it.material_model).trim() || undefined : undefined,
             material_unit: String(it.material_unit ?? ''),
             aux_quantity: it.aux_quantity != null ? Number(it.aux_quantity) : undefined,
             aux_unit: it.aux_unit != null ? String(it.aux_unit) : undefined,
@@ -1524,58 +1988,182 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           };
         }),
     };
+    const shouldCommit = commitAfterSaveRef.current;
+    commitAfterSaveRef.current = false;
     try {
+      let savedId = editingId;
       if (editingId) {
         await warehouseApi.purchaseReceipt.update(String(editingId), payload);
-        messageApi.success(t('common.updateSuccess'));
+        if (!shouldCommit) messageApi.success(t('common.updateSuccess'));
       } else if (fromPoCompose && poCompose) {
-        await warehouseApi.purchaseReceipt.create({ ...payload, status: '草稿' });
-        messageApi.success(t('common.createSuccess'));
+        const created = (await warehouseApi.purchaseReceipt.create({ ...payload, status: '草稿' })) as {
+          id?: number;
+        };
+        savedId = created?.id ?? null;
+        if (!shouldCommit) messageApi.success(t('common.createSuccess'));
       } else {
-        await warehouseApi.purchaseReceipt.create(payload);
-        messageApi.success(t('common.createSuccess'));
+        const created = (await warehouseApi.purchaseReceipt.create(payload)) as { id?: number };
+        savedId = created?.id ?? null;
+        if (!shouldCommit) messageApi.success(t('common.createSuccess'));
       }
-      onClose();
-      onSuccess?.();
+      if (shouldCommit) {
+        if (savedId == null) {
+          messageApi.error(t('common.operationFailed'));
+          return;
+        }
+        try {
+          const { completed } = await runPurchaseReceiptSaveAndAudit(savedId);
+          if (!completed) {
+            if (!editingId && savedId != null) {
+              navigate(purchaseReceiptEditPath(savedId, listPath), { replace: true });
+            }
+            return;
+          }
+        } catch (error: unknown) {
+          if (!editingId && savedId != null) {
+            navigate(purchaseReceiptEditPath(savedId, listPath), { replace: true });
+          }
+          const err = error as { message?: string };
+          messageApi.error(err?.message || t('common.operationFailed'));
+          return;
+        }
+      }
+      leaveFormPage();
     } catch (error: unknown) {
       const err = error as { message?: string };
       if (err?.message !== t('app.kuaizhizao.warehouseInbound.msg.needValidPurchaseLine')) {
-        messageApi.error(err?.message || t('common.createFailed'));
+        messageApi.error(
+          err?.message || (editingId ? t('common.updateFailed') : t('common.createFailed')),
+        );
       }
       throw error;
     }
   };
 
+  const purchaseReceiptFormCanCommit = (() => {
+    const status = documentStatus.trim();
+    const review = reviewStatus.trim();
+    const editableBusiness = ['', '草稿', 'draft', 'DRAFT', '待入库'].includes(status);
+    const editableReview = ['', '草稿', 'draft', 'DRAFT', '已驳回', '审核驳回', 'rejected'].includes(review);
+    return editableBusiness && editableReview;
+  })();
+
+  const pageTitle = editingId
+    ? t('app.kuaizhizao.warehouseInbound.editPurchaseReceiptModal')
+    : poCompose
+      ? t('app.kuaizhizao.warehouseInbound.composePurchaseReceiptModal')
+      : t('app.kuaizhizao.warehouseInbound.createPurchaseReceiptModal');
+
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('_refresh');
+    const cleanSearch = sp.toString();
+    const tabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    setCustomPageTitle(location.pathname, pageTitle);
+    setCustomPageTitle(tabKey, pageTitle);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: tabKey, path: location.pathname, title: pageTitle },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(location.pathname);
+      removeCustomPageTitle(tabKey);
+    };
+  }, [location.pathname, location.search, pageTitle]);
+
+  const triggerSave = useCallback(() => {
+    commitAfterSaveRef.current = false;
+    void formRef.current?.submit?.();
+  }, []);
+
+  const triggerCommit = useCallback(() => {
+    commitAfterSaveRef.current = true;
+    void formRef.current?.submit?.();
+  }, []);
+
+  useSubmitShortcut(() => {
+    if (purchaseReceiptFormCanCommit) triggerSave();
+  }, true);
+
   return (
-    <FormModalTemplate
-      title={
-        editingId
-          ? t('app.kuaizhizao.warehouseInbound.editPurchaseReceiptModal')
-          : poCompose
-            ? t('app.kuaizhizao.warehouseInbound.composePurchaseReceiptModal')
-            : t('app.kuaizhizao.warehouseInbound.createPurchaseReceiptModal')
+    <>
+    <DocumentFormPageLayout
+      header={
+        <>
+          <Space align="center" size={8}>
+            <Button
+              type="text"
+              icon={<ArrowLeftOutlined />}
+              aria-label={t('common.back')}
+              onClick={() => {
+                commitAfterSaveRef.current = false;
+                leaveFormPage();
+              }}
+            />
+            <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+              {pageTitle}
+            </Typography.Title>
+          </Space>
+          <DocumentFormPageHeaderActions
+            onCancel={() => {
+              commitAfterSaveRef.current = false;
+              leaveFormPage();
+            }}
+            onSaveDraft={triggerSave}
+            onPrimarySubmit={triggerSave}
+            isCreatePage={isCreatePage}
+            canSubmitAfterSave={purchaseReceiptFormCanCommit}
+            showSaveDraft={purchaseReceiptFormCanCommit}
+            showCommitSubmit={purchaseReceiptFormCanCommit}
+            onCommitSubmit={triggerCommit}
+            primaryLoading={formLoading}
+            saveDraftLoading={formLoading}
+            commitSubmitLoading={formLoading}
+          />
+        </>
       }
-      open={open}
-      onClose={onClose}
-      formRef={formRef}
-      onFinish={handleFinish}
-      width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-      grid={false}
-      initialValues={{
-        receipt_time: dayjs(),
-        items: [{ ...defaultLineItem }],
-        price_type: DEFAULT_PURCHASE_PRICE_TYPE,
-        tax_rate: 13,
-        currency: 'CNY',
-      }}
     >
+      <Spin spinning={formLoading}>
+        <ProForm
+          key={
+            isCreatePage
+              ? `purchase-receipt-create:${location.search}:${poCompose?.purchaseOrderId ?? ''}`
+              : `purchase-receipt-edit:${editingId ?? ''}`
+          }
+          formRef={formRef}
+          layout="vertical"
+          submitter={false}
+          scrollToFirstError
+          onFinish={handleFinish}
+          onFinishFailed={({ errorFields }) => {
+            const first = errorFields?.[0];
+            const errText = first?.errors?.filter(Boolean)[0];
+            messageApi.error(errText || t('components.layoutTemplates.formModal.checkFormHint'));
+          }}
+          initialValues={{
+            order_type: '标准采购',
+            receipt_time: dayjs(),
+            items: [{ ...defaultLineItem }],
+            pay_mode: undefined,
+            currency: 'CNY',
+            buyer_id: defaultPerson.id,
+            buyer_name: defaultPerson.name,
+            receiver_id: defaultPerson.id,
+            receiver_name: defaultPerson.name,
+            price_type: DEFAULT_PURCHASE_PRICE_TYPE,
+          }}
+        >
       <ProFormText name="price_type" hidden />
-      <Row gutter={16}>
-        <Col span={6}>
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+        <div className="document-form-untitled-groups">
+          <div className="document-form-untitled-group">
+      {/* 一行 5 格：对齐采购订单；行1 身份/往来/人员/日期，行2 结算/组织/验收 */}
+      <Row gutter={16} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormItem
             name="order_type"
             label={t('app.kuaizhizao.purchaseReceipt.field.orderType')}
-            initialValue="标准采购"
             rules={[
               {
                 required: true,
@@ -1592,7 +2180,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             />
           </ProFormItem>
         </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormItem
             name="supplier_id"
             label={t('app.kuaizhizao.warehouseInbound.field.supplier')}
@@ -1607,8 +2195,13 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               placeholder={t('app.kuaizhizao.warehouseInbound.selectSupplierRequired')}
               onSupplierPick={(supplier) => {
                 if (!supplier) {
-                  formRef.current?.setFieldsValue({ supplier_id: undefined, supplier_name: '' });
+                  formRef.current?.setFieldsValue({
+                    supplier_id: undefined,
+                    supplier_name: '',
+                    pay_mode: undefined,
+                  });
                   applySupplierLedgerRecognition(formRef, null, orgPayableDefault);
+                  setIncludeLegacyCreditOption(false);
                   return;
                 }
                 applySupplierLedgerRecognition(
@@ -1616,9 +2209,28 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
                   supplier as Record<string, unknown>,
                   orgPayableDefault,
                 );
+                const resolved = resolveSupplierFormFieldValues(
+                  supplier as Record<string, unknown>,
+                  [],
+                  orgPayableDefault,
+                );
+                setIncludeLegacyCreditOption(false);
+                const linkedPo =
+                  linkedPoId != null && linkedPoId > 0
+                    ? linkedPoId
+                    : sourceLinkRef.current.purchase_order_id;
+                const inheritPayFromPo =
+                  Boolean(poCompose?.purchaseOrderId) ||
+                  (linkedPo != null && Number(linkedPo) > 0);
                 formRef.current?.setFieldsValue({
                   supplier_id: supplier.id,
                   supplier_name: supplier.name ?? '',
+                  ...(inheritPayFromPo
+                    ? {}
+                    : {
+                        pay_mode: resolved.payment_method_code,
+                        ...(resolved.currency != null ? { currency: resolved.currency } : {}),
+                      }),
                 });
                 const sid = Number(supplier.id);
                 const lineItems = normalizeFormListItems<Record<string, unknown>>(
@@ -1640,17 +2252,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           </ProFormItem>
           <ProFormText name="supplier_name" hidden />
         </Col>
-        <Col span={6}>
-          <ProFormItem
-            name="payable_recognition"
-            label={t('field.document.ledgerRecognition')}
-            initialValue={orgPayableDefault}
-            rules={[{ required: true, message: t('field.document.ledgerRecognitionRequired') }]}
-          >
-            <UniDropdown options={payableLedgerRecognitionOptions} style={{ width: '100%' }} />
-          </ProFormItem>
-        </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <UserPickField
             name="buyer_id"
             nameField="buyer_name"
@@ -1658,30 +2260,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             placeholder={t('app.kuaizhizao.warehouseInbound.field.buyerPlaceholder')}
             userList={users}
             loading={usersLoading}
+            operatorNumberField="buyer_operator_number"
           />
           <ProFormText name="buyer_operator_number" hidden />
         </Col>
-        <Col span={6}>
-          <PurchaseDepartmentFormField
-            options={departmentOptions}
-            loading={departmentOptionsLoading}
-          />
-        </Col>
-        <Col span={6}>
-          <UserPickField
-            name="receiver_id"
-            nameField="receiver_name"
-            label={t('app.kuaizhizao.warehouseInbound.field.acceptor')}
-            placeholder={t('app.kuaizhizao.warehouseInbound.field.acceptorPlaceholder')}
-            required
-            userList={users}
-            loading={usersLoading}
-          />
-        </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="receipt_time"
             label={t('app.kuaizhizao.warehouseInbound.field.receiptDate')}
+            rules={[{ required: true, message: t('app.kuaizhizao.warehouseInbound.field.receiptDateRequired') }]}
             fieldProps={{
               style: { width: '100%' },
               onChange: () => {
@@ -1699,14 +2286,26 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             }}
           />
         </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormText
             name="delivery_note"
             label={t('app.kuaizhizao.warehouseInbound.field.deliveryNote')}
             placeholder={t('app.kuaizhizao.warehouseInbound.field.deliveryNotePlaceholder')}
           />
         </Col>
-        <Col span={6}>
+      </Row>
+      <Row gutter={16} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProFormItem
+            name="payable_recognition"
+            label={t('field.document.ledgerRecognition')}
+            initialValue={orgPayableDefault}
+            rules={[{ required: true, message: t('field.document.ledgerRecognitionRequired') }]}
+          >
+            <UniDropdown options={payableLedgerRecognitionOptions} style={{ width: '100%' }} />
+          </ProFormItem>
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <PaymentMethodWithMixFormItems
             formRef={formRef}
             options={payModeOptions}
@@ -1715,16 +2314,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             methodField="pay_mode"
           />
         </Col>
-        <Col span={6}>
-          <ProFormItem
-            name="tax_rate"
-            label={t('app.kuaizhizao.warehouseInbound.field.taxRate')}
-            rules={[{ required: true, message: t('app.kuaizhizao.warehouseInbound.field.taxRateRequired') }]}
-          >
-            <TaxRatePercentInput />
-          </ProFormItem>
-        </Col>
-        <Col span={6}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
           <ProFormText
             name="currency"
             label={t('app.kuaizhizao.warehouseInbound.field.currency')}
@@ -1732,97 +2322,132 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             rules={[{ required: true, message: t('app.kuaizhizao.warehouseInbound.field.currencyRequired') }]}
           />
         </Col>
-      </Row>
-
-      <DocumentDetailTableStyles />
-      <AntForm.Item
-        noStyle
-        shouldUpdate={(prev, curr) => prev?.price_type !== curr?.price_type}
-      >
-        {({ getFieldValue }) => {
-          const priceType = purchaseFormPriceType(
-            poSettlementCtx?.priceType ?? getFieldValue('price_type'),
-          );
-          const showTaxColumns = priceType === 'tax_inclusive';
-          return (
-            <UniTableDetail
-              name="items"
-              title={t('app.kuaizhizao.warehouseInbound.createLinesTitle')}
-              required
-              requiredMessage={t('app.kuaizhizao.warehouseInbound.msg.needValidPurchaseLine')}
-              leftExtra={(
-                <PriceTypeSwitch
-                  disabled={!!poSettlementCtx?.priceType}
-                  checked={priceType === 'tax_inclusive'}
-                  checkedChildren={t('app.kuaizhizao.purchaseOrder.form.taxIncl')}
-                  unCheckedChildren={t('app.kuaizhizao.purchaseOrder.form.taxExcl')}
-                  onChange={handlePurchaseReceiptPriceTypeChange}
-                />
-              )}
-              headerExtra={(
-                <Space size={8}>
-                  <Button
-                    type="default"
-                    icon={<PlusOutlined />}
-                    onClick={() => {
-                      const next = [
-                        ...(formRef.current?.getFieldValue('items') ?? []),
-                        { ...defaultLineItem },
-                      ];
-                      formRef.current?.setFieldsValue({ items: next });
-                    }}
-                  >
-                    {t('common.addDetail')}
-                  </Button>
-                </Space>
-              )}
-              columns={buildFormItemColumns(showTaxColumns)}
-              disabledAdd
-              initialValue={{ ...defaultLineItem }}
-              tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
-            />
-          );
-        }}
-      </AntForm.Item>
-
-      <AntForm.Item
-        noStyle
-        shouldUpdate={(prev, curr) => prev?.items !== curr?.items}
-      >
-        {({ getFieldValue }) => (
-          <DocumentAmountSummary
-            variant="purchase"
-            getFieldValue={getFieldValue}
-            quantityField="receipt_quantity"
-            priceType={
-              poSettlementCtx?.priceType ??
-              String(getFieldValue('price_type') ?? 'tax_inclusive')
-            }
-            goodsTotalsFn={(formItems) =>
-              computePurchaseReceiptFormGoodsTotals(
-                formItems,
-                getFieldValue('tax_rate'),
-                poSettlementCtx?.priceType ??
-                  String(getFieldValue('price_type') ?? 'tax_inclusive'),
-                poSettlementCtx,
-              )
-            }
-            style={{ marginBottom: 16 }}
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <PurchaseDepartmentFormField
+            options={departmentOptions}
+            loading={departmentOptionsLoading}
           />
-        )}
-      </AntForm.Item>
-
-      <Row gutter={16}>
-        <Col span={24}>
-          <ProFormTextArea
-            name="notes"
-            label={t('common.remark')}
-            placeholder={t('app.kuaizhizao.warehouseInbound.field.inboundRemarksPlaceholder')}
-            fieldProps={{ rows: 3 }}
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <UserPickField
+            name="receiver_id"
+            nameField="receiver_name"
+            label={t('app.kuaizhizao.warehouseInbound.field.acceptor')}
+            placeholder={t('app.kuaizhizao.warehouseInbound.field.acceptorPlaceholder')}
+            required
+            userList={users}
+            loading={usersLoading}
           />
         </Col>
       </Row>
-    </FormModalTemplate>  );
+          </div>
+        </div>
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev, curr) => prev?.price_type !== curr?.price_type}
+        >
+          {({ getFieldValue }) => {
+            const priceType = resolvePurchaseReceiptFormPriceType(
+              poSettlementCtx,
+              getFieldValue('price_type'),
+            );
+            const showTaxColumns = priceType === 'tax_inclusive';
+            return (
+              <>
+                <DocumentDetailTableStyles />
+                <UniTableDetail
+                  name="items"
+                  title={t('app.kuaizhizao.warehouseInbound.createLinesTitle')}
+                  required
+                  requiredMessage={t('app.kuaizhizao.warehouseInbound.msg.needValidPurchaseLine')}
+                  leftExtra={(
+                    <PriceTypeSwitch
+                      disabled={!!poSettlementCtx?.priceType}
+                      checked={priceType === 'tax_inclusive'}
+                      checkedChildren={t('app.kuaizhizao.purchaseOrder.form.taxIncl')}
+                      unCheckedChildren={t('app.kuaizhizao.purchaseOrder.form.taxExcl')}
+                      onChange={handlePurchaseReceiptPriceTypeChange}
+                    />
+                  )}
+                  headerExtra={(
+                    <Space size={8}>
+                      <Button
+                        type="default"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          const next = [
+                            ...(formRef.current?.getFieldValue('items') ?? []),
+                            { ...defaultLineItem },
+                          ];
+                          formRef.current?.setFieldsValue({ items: next });
+                        }}
+                      >
+                        {t('common.addDetail')}
+                      </Button>
+                    </Space>
+                  )}
+                  columns={buildFormItemColumns(showTaxColumns)}
+                  disabledAdd
+                  initialValue={{ ...defaultLineItem }}
+                  tableProps={DOCUMENT_DETAIL_TABLE_PROPS}
+                />
+              </>
+            );
+          }}
+        </AntForm.Item>
+
+        <AntForm.Item
+          noStyle
+          shouldUpdate={shouldUpdatePurchaseReceiptAmounts}
+        >
+          {({ getFieldValue }) => (
+            <DocumentAmountSummary
+              variant="purchase"
+              getFieldValue={getFieldValue}
+              quantityField="receipt_quantity"
+              priceType={resolvePurchaseReceiptFormPriceType(
+                poSettlementCtx,
+                getFieldValue('price_type'),
+              )}
+              goodsTotalsFn={(formItems) =>
+                computePurchaseReceiptFormGoodsTotals(
+                  formItems,
+                  getFieldValue('tax_rate'),
+                  resolvePurchaseReceiptFormPriceType(
+                    poSettlementCtx,
+                    getFieldValue('price_type'),
+                  ),
+                  poSettlementCtx,
+                )
+              }
+              style={{ marginBottom: 16 }}
+            />
+          )}
+        </AntForm.Item>
+
+        <ProFormTextArea
+          name="notes"
+          label={t('common.remark')}
+          placeholder={t('app.kuaizhizao.warehouseInbound.field.inboundRemarksPlaceholder')}
+          fieldProps={{ rows: 3 }}
+        />
+      </DetailDrawerSection>
+
+      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+        <DocumentAttachmentsField
+          category="purchase_receipt_attachments"
+          label={false}
+        />
+      </DetailDrawerSection>
+        </ProForm>
+      </Spin>
+    </DocumentFormPageLayout>
+    {purchaseReceiptInitiatorModal}
+    </>
+  );
 };
 
 export default PurchaseReceiptCreateModal;

@@ -307,6 +307,7 @@ const REDIRECT_ONLY_TAB_PATH_PATTERNS: RegExp[] = [
   /^\/apps\/kuaiplm\/knowledge-base\/detail\/[^/]+$/,
   // 轻财务旧链：finance-management/* → 快制造财务中心（勿占「财务管理/财务中心」双页签）
   /^\/apps\/kuaicaiwu\/finance-management(?:\/.*)?$/,
+  /^\/apps\/kuaizhizao\/finance-management(?:\/.*)?$/,
   /^\/apps\/kuaicaiwu\/cost-management\/dashboard$/,
   /^\/apps\/kuaicaiwu\/management-dashboard$/,
   /^\/apps\/kuaicaiwu\/management-analysis\/margin-report$/,

@@ -485,19 +485,19 @@ wizard_ext_default_path() {
     case "$1" in
         pro)
             local p
-            p="$(read_deploy_env_value PRO_REPO_PATH || true)"
+            p="$(_read_repo_path_value PRO_REPO_PATH || true)"
             [ -n "$p" ] || p="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
             echo "$p"
             ;;
         custom)
             local p
-            p="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+            p="$(_read_repo_path_value CUSTOM_REPO_PATH || true)"
             [ -n "$p" ] || p="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-custom"
             echo "$p"
             ;;
         client|h5)
             local p
-            p="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+            p="$(_read_repo_path_value CLIENT_REPO_PATH || true)"
             [ -n "$p" ] || p="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
             echo "$p"
             ;;
@@ -977,7 +977,7 @@ wizard_configure_pro_repo() {
     load_deploy_env
     local cur_url cur_path cur_branch cur_token input
     cur_url="$(read_deploy_env_value PRO_REPO_URL || echo "${WIZARD_PRO_REPO_GITEE}.git")"
-    cur_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    cur_path="$(_read_repo_path_value PRO_REPO_PATH || true)"
     [ -n "$cur_path" ] || cur_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-pro"
     cur_branch="$(read_deploy_env_value PRO_GIT_BRANCH || echo develop)"
     cur_token="$(read_deploy_env_value PRO_GIT_TOKEN || true)"
@@ -1007,7 +1007,7 @@ wizard_configure_custom_repo() {
     load_deploy_env
     local cur_url cur_path cur_branch cur_token input
     cur_url="$(read_deploy_env_value CUSTOM_REPO_URL || echo "${WIZARD_CUSTOM_REPO_GITEE}.git")"
-    cur_path="$(read_deploy_env_value CUSTOM_REPO_PATH || true)"
+    cur_path="$(_read_repo_path_value CUSTOM_REPO_PATH || true)"
     [ -n "$cur_path" ] || cur_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-custom"
     cur_branch="$(read_deploy_env_value CUSTOM_GIT_BRANCH || echo develop)"
     cur_token="$(read_deploy_env_value CUSTOM_GIT_TOKEN || true)"
@@ -1059,7 +1059,7 @@ wizard_configure_client_repo() {
     load_deploy_env
     local cur_url cur_path cur_branch cur_token input
     cur_url="$(read_deploy_env_value CLIENT_REPO_URL || echo "${WIZARD_CLIENT_REPO_GITEE}.git")"
-    cur_path="$(read_deploy_env_value CLIENT_REPO_PATH || true)"
+    cur_path="$(_read_repo_path_value CLIENT_REPO_PATH || true)"
     [ -n "$cur_path" ] || cur_path="$(cd "$PROJECT_ROOT/.." && pwd)/kuaigeyun-client"
     cur_branch="$(read_deploy_env_value CLIENT_GIT_BRANCH || echo develop)"
     cur_token="$(read_deploy_env_value CLIENT_GIT_TOKEN || true)"
