@@ -710,6 +710,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                     "reviewer_name",
                     "review_time",
                     "review_remarks",
+                    "detail_items",
                 },
             )
             # 与上方显式 kwargs 冲突的键一律剔除（防止漏 exclude / 旧调用方再塞编码）
@@ -743,6 +744,33 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             )
             payload.update(tax_fields)
 
+            from apps.kuaicaiwu.services.invoice_settlement_guard import (
+                assert_settlement_mode_items_consistency,
+            )
+            from apps.kuaicaiwu.config.finance_settlement_contract import (
+                SETTLEMENT_MODE_DETAIL,
+            )
+            from apps.kuaicaiwu.services.invoice_settlement_policy import (
+                assert_invoice_settlement_mode_allowed,
+            )
+
+            mode = await assert_invoice_settlement_mode_allowed(
+                tenant_id, getattr(invoice_data, "settlement_mode", None)
+            )
+            payload["settlement_mode"] = mode
+            detail_items = getattr(invoice_data, "detail_items", None) or []
+            if mode == SETTLEMENT_MODE_DETAIL:
+                if not detail_items:
+                    from infra.exceptions.exceptions import ValidationError
+
+                    raise ValidationError("明细采购发票须提供 detail_items")
+                assert_settlement_mode_items_consistency(
+                    mode,
+                    [item.model_dump() for item in detail_items],
+                )
+            else:
+                assert_settlement_mode_items_consistency(mode, [])
+
             invoice = await PurchaseInvoice.create(
                 tenant_id=tenant_id,
                 invoice_code=code,
@@ -753,6 +781,15 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 review_status="草稿",
                 **payload,
             )
+            if mode == SETTLEMENT_MODE_DETAIL and detail_items:
+                from apps.kuaicaiwu.models.purchase_invoice_item import PurchaseInvoiceItem
+
+                for row in detail_items:
+                    await PurchaseInvoiceItem.create(
+                        tenant_id=tenant_id,
+                        purchase_invoice_id=invoice.id,
+                        **row.model_dump(),
+                    )
             if invoice_data.purchase_order_id:
                 # 与 hooks / 标签表一致：snake_case purchase_order（勿写 PurchaseOrder）
                 event_source_type, event_source_id = "purchase_order", invoice_data.purchase_order_id
@@ -922,6 +959,8 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             query = query.filter(verification_status=filters['verification_status'])
         if filters.get('tax_period'):
             query = query.filter(tax_period=filters['tax_period'])
+        if filters.get("settlement_mode"):
+            query = query.filter(settlement_mode=str(filters["settlement_mode"]).strip())
 
         query, order_expr = apply_finance_invoice_list_filters(
             query,

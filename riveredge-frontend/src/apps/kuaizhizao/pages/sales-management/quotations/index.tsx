@@ -1783,7 +1783,7 @@ const QuotationsPage: React.FC = () => {
           material_id: material?.id ?? material?.material_id,
           material_code: material?.main_code ?? material?.mainCode ?? material?.code ?? materialCode,
           material_name: material?.name ?? material?.material_name ?? '',
-          material_spec: material?.specification ?? material?.material_spec ?? spec,
+          material_spec: material?.specification ?? '',
           material_unit: material?.base_unit ?? material?.baseUnit ?? material?.material_unit ?? unit,
           quote_quantity: quantity,
           unit_price: unitPrice,

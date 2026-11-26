@@ -37,6 +37,11 @@ class FundTransfer(BaseModel):
     external_account_number = fields.CharField(max_length=64, null=True, description="外部账号")
 
     amount = fields.DecimalField(max_digits=16, decimal_places=4, description="调拨金额")
+    payment_method = fields.CharField(
+        max_length=50,
+        default="转账",
+        description="付款方式：转账、承兑、现金",
+    )
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
 
     status = fields.CharField(max_length=20, default="Draft", description="Draft/Confirmed/Cancelled")

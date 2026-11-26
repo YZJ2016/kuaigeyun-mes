@@ -18,6 +18,7 @@ import {
   recalcDocumentStoredLineAmount,
 } from '../../kuaizhizao/utils/documentLineAmounts';
 import { getCachedNumericPrecisionPlaces } from '../../../hooks/useNumericPrecision';
+import { quantizeNumericByPlaces } from '../../../services/businessConfig';
 
 type FormWithLineItems = {
   getFieldValue: (name: string | (string | number)[]) => unknown;
@@ -797,7 +798,13 @@ export function toFormUnitPriceFromExclusive(
   ) {
     return unitPrice;
   }
-  return convertUnitPriceByPriceType(unitPrice, inflateTaxRate, 'tax_exclusive', 'tax_inclusive');
+  const converted = convertUnitPriceByPriceType(
+    unitPrice,
+    inflateTaxRate,
+    'tax_exclusive',
+    'tax_inclusive',
+  );
+  return quantizeNumericByPlaces(converted, getCachedNumericPrecisionPlaces('price'));
 }
 
 /**
@@ -1196,6 +1203,10 @@ export async function applyPurchaseDocumentLineMaterialPricing(
     fallbackTaxRate?: number;
     /** 改数量重算时：价本未命中则保留行上已有单价，避免把手工价/回填价清成 0 */
     preserveUnitPriceWhenUnresolved?: boolean;
+    /**
+     * 只更新价税与伙伴料号，不覆盖行上规格/型号（下推、换供应商重价；物料 stub 常缺 uuid）。
+     */
+    preserveSpecSnapshot?: boolean;
   },
 ): Promise<void> {
   if (!form) return;
@@ -1267,11 +1278,12 @@ export async function applyPurchaseDocumentLineMaterialPricing(
       up = existing;
     }
   }
-  /** 改数量重算与销售一致：只动价税，不冲行规格/型号/伙伴料号快照 */
-  const priceOnly = options?.preserveUnitPriceWhenUnresolved === true;
-  const refreshPartnerSnapshot = !priceOnly;
+  /** 改数量/换供应商重价：只动价税（数量未命中价本时保留单价）；规格型号仅选料写入 */
+  const preserveSpecSnapshot =
+    options?.preserveSpecSnapshot === true || options?.preserveUnitPriceWhenUnresolved === true;
+  const refreshPartnerSnapshot = !options?.preserveUnitPriceWhenUnresolved;
   form.setFieldValue?.(['items', index, unitPriceField], up);
-  if (!priceOnly) {
+  if (!preserveSpecSnapshot) {
     form.setFieldValue?.(['items', index, 'material_spec'], materialSpec);
     form.setFieldValue?.(['items', index, 'material_model'], materialModel);
   }
@@ -1362,7 +1374,10 @@ export async function refreshPartnerMaterialLineSnapshot(
   }
 }
 
-/** 未锁定来源行：按当前数量重算采购单价 */
+/**
+ * 未锁定来源行：按数量/供应商/日期重算采购单价。
+ * trigger=partner|quantity 时不覆盖行规格/型号快照（与下推、选料带入一致）。
+ */
 export async function repriceUnlockedPurchaseDocumentLineIfNeeded(
   form: FormWithLineItems | null | undefined,
   index: number,
@@ -1427,6 +1442,8 @@ export async function repriceUnlockedPurchaseDocumentLineIfNeeded(
     if (!shouldReprice) return;
   }
 
+  const preserveSpecOnReprice =
+    options?.trigger === 'quantity' || options?.trigger === 'partner';
   await applyPurchaseDocumentLineMaterialPricing(form, index, material, {
     materialList: options?.materialList,
     asOfField: options?.asOfField,
@@ -1434,6 +1451,7 @@ export async function repriceUnlockedPurchaseDocumentLineIfNeeded(
     supplierId: options?.supplierId,
     fallbackTaxRate: options?.fallbackTaxRate,
     preserveUnitPriceWhenUnresolved: options?.trigger === 'quantity',
+    preserveSpecSnapshot: preserveSpecOnReprice,
   });
 }
 

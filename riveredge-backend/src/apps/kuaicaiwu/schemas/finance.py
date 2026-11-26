@@ -134,9 +134,31 @@ class PayableListResponse(BaseSchema):
 
 # === 采购发票 ===
 
+class PurchaseInvoiceItemCreate(BaseSchema):
+    """采购明细发票行（严格 1:1 源单行）。"""
+
+    item_name: str = Field(..., max_length=200)
+    spec_model: Optional[str] = Field(None, max_length=100)
+    unit: Optional[str] = Field(None, max_length=20)
+    quantity: Optional[Decimal] = Field(None, ge=0)
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    amount: Decimal = Field(..., ge=0)
+    tax_rate: Decimal = Field(...)
+    tax_amount: Decimal = Field(..., ge=0)
+    source_doc_type: str = Field(..., max_length=50)
+    source_doc_id: int = Field(...)
+    source_line_id: int = Field(...)
+    partner_statement_line_id: Optional[int] = Field(None)
+
+
 class PurchaseInvoiceBase(BaseSchema):
     """采购发票基础schema"""
     invoice_code: Optional[str] = Field(None, max_length=50, description="发票编码")
+    settlement_mode: str = Field(
+        "summary",
+        max_length=16,
+        description="结算粒度 summary 汇总 | detail 明细",
+    )
     purchase_order_id: Optional[int] = Field(None, description="采购订单ID")
     purchase_order_code: Optional[str] = Field(None, max_length=50, description="采购订单编码")
     supplier_id: int = Field(..., description="供应商ID")
@@ -208,6 +230,10 @@ class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     partner_statement_ids: Optional[List[int]] = Field(
         None,
         description="从往来对账单（按发票立账）加载入库开票时须传入对账单ID，用于放行月结阻断",
+    )
+    detail_items: Optional[List[PurchaseInvoiceItemCreate]] = Field(
+        None,
+        description="明细发票货物行（settlement_mode=detail 时必填）",
     )
 
 
@@ -651,8 +677,30 @@ class ReceiptVoucherListResponse(BaseSchema):
 
 # === 销售发票 ===
 
+class SalesInvoiceDetailItemCreate(BaseSchema):
+    """销售明细发票行（严格 1:1 源单行）。"""
+
+    item_name: str = Field(..., max_length=200)
+    spec_model: Optional[str] = Field(None, max_length=100)
+    unit: Optional[str] = Field(None, max_length=20)
+    quantity: Optional[Decimal] = Field(None, ge=0)
+    unit_price: Optional[Decimal] = Field(None, ge=0)
+    amount: Decimal = Field(..., ge=0)
+    tax_rate: Decimal = Field(...)
+    tax_amount: Decimal = Field(..., ge=0)
+    source_doc_type: str = Field(..., max_length=50)
+    source_doc_id: int = Field(...)
+    source_line_id: int = Field(...)
+    partner_statement_line_id: Optional[int] = Field(None)
+
+
 class SalesInvoiceBase(BaseSchema):
     """销售发票基础schema"""
+    settlement_mode: str = Field(
+        "summary",
+        max_length=16,
+        description="结算粒度 summary 汇总 | detail 明细",
+    )
     sales_order_id: Optional[int] = Field(None, description="销售订单ID")
     sales_order_code: Optional[str] = Field(None, max_length=50, description="销售订单编码")
     customer_id: int = Field(..., description="客户ID")
@@ -692,6 +740,10 @@ class SalesInvoiceCreate(SalesInvoiceBase):
     partner_statement_ids: Optional[List[int]] = Field(
         None,
         description="从往来对账单（按发票立账）加载出库开票时须传入对账单ID",
+    )
+    detail_items: Optional[List[SalesInvoiceDetailItemCreate]] = Field(
+        None,
+        description="明细发票货物行（settlement_mode=detail 时必填）",
     )
 
 
@@ -881,6 +933,9 @@ class PartnerStatementPreviewResponse(BaseSchema):
     balance_label: str
     summary: PartnerStatementSummaryResponse
     lines: List[PartnerStatementLineResponse]
+    document_lines: Optional[List[PartnerStatementLineResponse]] = Field(
+        None, description="单据头粒度明细，列表展示与勾选应使用本字段"
+    )
     partner_snapshot: dict = Field(default_factory=dict)
     excluded_from_period: int = Field(
         0, description="本期因已纳入其它对账单而排除的明细行数"

@@ -54,6 +54,7 @@ import {
   patchLineStatementAmount,
   previewLineKey,
   recalcPartnerStatementLines,
+  resolvePartnerStatementTableLines,
 } from '../../../utils/partnerStatementAmountUtils';
 import { usePartnerStatementLineColumns } from '../../../utils/partnerStatementLineColumns';
 import { useFinanceVoucherDetail } from '../../../components/FinanceVoucherDetailProvider';
@@ -358,7 +359,11 @@ const PartnerStatementsPage: React.FC = () => {
       });
       setCreateAmountBasis(basis);
       setPreview(data);
-      const recalc = recalcPartnerStatementLines(data.summary.opening_balance, data.lines || []);
+      const tableSource =
+        data.document_lines?.length
+          ? data.document_lines
+          : resolvePartnerStatementTableLines({ lines: data.lines }, data.lines || []);
+      const recalc = recalcPartnerStatementLines(data.summary.opening_balance, tableSource);
       setPreviewEditableLines(recalc.lines);
       setPreviewSelectedRowKeys(allPreviewLineKeys(recalc.lines));
       try {

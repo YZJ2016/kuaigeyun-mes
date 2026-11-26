@@ -77,8 +77,9 @@ def test_inventory_unit_converts_box_line_to_stock_qty():
 
 
 def test_apply_unit_code_map_can_skip_builtin():
-    assert apply_unit_code_map("kg") == "004"
-    assert apply_unit_code_map("kg", use_builtin_aliases=False) == "kg"
+    assert apply_unit_code_map("kg") == "kg"
+    assert apply_unit_code_map("个", use_builtin_aliases=True) == "006"
+    assert apply_unit_code_map("个", use_builtin_aliases=False) == "个"
 
 
 def test_purchase_receipt_plan_restates_unit_price_keeps_tax_amount():

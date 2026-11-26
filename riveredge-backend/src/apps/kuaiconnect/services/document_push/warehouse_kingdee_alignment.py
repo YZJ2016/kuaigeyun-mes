@@ -149,6 +149,27 @@ async def list_inventory_pull_blocker_records(tenant_id: int) -> List[Dict[str, 
             code = str(getattr(row, code_attr, None) or row.id)
             posted = str(getattr(row, "status", None) or "") in posted_statuses
             has_relation = int(row.id) in related_ids
+            if source_type == "purchase_receipt":
+                from apps.kuaiconnect.services.document_push.kingdee_purchase_receipt_push_service import (
+                    purchase_receipt_push_skip_reason,
+                )
+
+                pr_skip = purchase_receipt_push_skip_reason(
+                    row,
+                    already_pushed=has_relation,
+                )
+                if pr_skip == "服务采购入库单不外推金蝶":
+                    continue
+            if source_type == "finished_goods_receipt":
+                fgcfg = warehouse.get(config_key) or {}
+                if not isinstance(fgcfg, dict):
+                    fgcfg = {}
+                billtype = str(
+                    fgcfg.get("billtype_number") or fgcfg.get("bill_type_number") or ""
+                ).strip()
+                if not billtype or billtype.startswith("REPLACE"):
+                    # 未配置「生产完工入库」单据类型时无法外推，不应拦全租户即时库存入站
+                    continue
             last_kind, last_status = await _latest_push_log(tenant_id, source_type, int(row.id))
             reason = inventory_pull_block_reason(
                 label=label,

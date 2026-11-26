@@ -374,17 +374,47 @@
 }
 
 /*
- * 堆叠主列同一套规则：标识行（单号 / 编码）不可截断，固定 max-content 供实测；
- * 单元格自己包住内容——左固定列是不透明 sticky 单元格，不裁剪就会把溢出部分
- * 直接画到相邻列上（主行文字仍由自身 text-overflow 省略号收尾）。
+ * 堆叠主列：单元格与叠列根必须裁剪，避免左固定列或不带 primary-flex 的 keepWidth 列
+ * 把长客商名/单号画到邻列。主行、次行超出列宽用省略号；悬停 title 保留全文。
  */
-.uni-table-container .ant-table-tbody > tr > td.uni-table-primary-flex-cell {
+.uni-table-container .ant-table-tbody > tr > td.uni-table-primary-flex-cell,
+.uni-table-container .ant-table-tbody > tr > td:has(.uni-table-stacked-primary-cell) {
   overflow: hidden;
 }
 
+.uni-table-container .uni-table-stacked-primary-cell {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.uni-table-container .uni-table-stacked-primary-line,
+.uni-table-container .uni-table-stacked-secondary-line {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.uni-table-container .uni-table-stacked-primary-text,
+.uni-table-container .uni-table-stacked-secondary-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uni-table-container .uni-table-stacked-primary-text > span,
+.uni-table-container .uni-table-stacked-primary-text .ant-typography {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 .uni-table-container .ant-table-tbody > tr > td.uni-table-primary-flex-cell .uni-table-stacked-identity {
-  width: max-content;
-  flex: none;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
 }
 
 .uni-table-container .ant-pro-table-list-toolbar {

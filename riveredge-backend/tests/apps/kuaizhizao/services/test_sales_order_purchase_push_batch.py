@@ -44,6 +44,35 @@ def test_partial_push_line_triplet_keeps_second_pull_visible():
 
 
 @pytest.mark.asyncio
+async def test_po_pull_passes_purchase_order_track():
+    with patch(
+        "apps.kuaizhizao.services.sales_order_purchase_push.require_purchase_requisition_for_tenant",
+        new_callable=AsyncMock,
+        return_value=False,
+    ):
+        with patch(
+            "apps.kuaizhizao.services.sales_order_purchase_push._list_sales_order_buy_pull_lines",
+            new_callable=AsyncMock,
+            return_value={"data": [], "total": 0},
+        ) as inner:
+            await list_purchase_order_sales_order_pull_lines(1)
+            inner.assert_awaited_once()
+            assert inner.await_args.kwargs["purchase_pull_track"] == "purchase_order"
+
+
+@pytest.mark.asyncio
+async def test_pr_pull_passes_requisition_track():
+    with patch(
+        "apps.kuaizhizao.services.sales_order_purchase_push._list_sales_order_buy_pull_lines",
+        new_callable=AsyncMock,
+        return_value={"data": [], "total": 0},
+    ) as inner:
+        await list_purchase_requisition_sales_order_pull_lines(1)
+        inner.assert_awaited_once()
+        assert inner.await_args.kwargs["purchase_pull_track"] == "purchase_requisition"
+
+
+@pytest.mark.asyncio
 async def test_po_pull_lines_empty_when_require_pr_gate():
     with patch(
         "apps.kuaizhizao.services.sales_order_purchase_push.require_purchase_requisition_for_tenant",

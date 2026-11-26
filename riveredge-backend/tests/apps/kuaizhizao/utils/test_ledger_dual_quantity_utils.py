@@ -199,3 +199,14 @@ def test_confirmation_single_primary_only():
         m, primary_quantity=7, secondary_quantity_raw=None
     )
     assert inv_q == base_q == Decimal("7")
+
+
+def test_confirmation_inv_equals_base_uses_primary_not_aux_for_base():
+    """库存单位=基本单位时，行上残留的辅数量不得把基本量算偏导致过账失败。"""
+    m = _mat(base="KG", inv="KG", units=_fixed_aux_units("BOX"))
+    inv_q, base_q = resolve_confirmation_ledger_pair(
+        m,
+        primary_quantity=Decimal("100"),
+        secondary_quantity_raw=Decimal("1"),
+    )
+    assert inv_q == base_q == Decimal("100")

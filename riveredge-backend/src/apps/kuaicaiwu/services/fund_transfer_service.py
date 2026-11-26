@@ -14,6 +14,10 @@ from tortoise.expressions import Q
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.bank_account import BankAccount
+from apps.kuaicaiwu.constants.fund_transfer_payment_method import (
+    FUND_TRANSFER_PAYMENT_METHOD_DEFAULT,
+    normalize_fund_transfer_payment_method,
+)
 from apps.kuaicaiwu.models.fund_transfer import FundTransfer
 from apps.kuaicaiwu.services.fund_transfer_posting_service import FundTransferPostingService
 from apps.kuaicaiwu.services.finance_voucher_codes import allocate_fund_transfer_code
@@ -117,9 +121,13 @@ class FundTransferService(AppBaseService[FundTransfer]):
         currency: Optional[str] = None,
         notes: Optional[str] = None,
         attachments: Optional[list] = None,
+        payment_method: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> FundTransfer:
         type_norm = self.normalize_transfer_type(transfer_type)
+        pm = normalize_fund_transfer_payment_method(
+            payment_method or FUND_TRANSFER_PAYMENT_METHOD_DEFAULT
+        )
         self._validate_payload(
             transfer_type=type_norm,
             from_bank_account_id=from_bank_account_id,
@@ -149,6 +157,7 @@ class FundTransferService(AppBaseService[FundTransfer]):
             "external_bank_name": (external_bank_name or None),
             "external_account_number": (external_account_number or None),
             "amount": Decimal(str(amount)),
+            "payment_method": pm,
             "currency": cur,
             "status": "Draft",
             "review_status": "草稿",
@@ -216,6 +225,10 @@ class FundTransferService(AppBaseService[FundTransfer]):
             "notes": data.get("notes", row.notes),
             "attachments": data.get("attachments", row.attachments),
         }
+        if "payment_method" in data:
+            update_fields["payment_method"] = normalize_fund_transfer_payment_method(
+                data.get("payment_method")
+            )
         apply_update_audit(update_fields, current_user)
         await FundTransfer.filter(id=row.id).update(**update_fields)
         refreshed = await FundTransfer.get_or_none(
@@ -300,8 +313,10 @@ class FundTransferService(AppBaseService[FundTransfer]):
                     "external_bank_name",
                     "external_account_number",
                     "amount",
+                    "payment_method",
                     "currency",
                     "status",
+                    "review_status",
                     "notes",
                     "attachments",
                     "created_at",

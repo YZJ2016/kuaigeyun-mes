@@ -18,10 +18,32 @@ export interface ProcessParameterUpdateRequest {
   category: string;
   parameter_key: string;
   value: any;
+  migrate_opposite_invoices?: boolean;
 }
 
 export interface BatchProcessParameterUpdateRequest {
   parameters: Record<string, Record<string, any>>;
+  migrate_opposite_invoices?: boolean;
+}
+
+export type InvoiceSettlementModeMigrationPreview = {
+  current_mode: string;
+  target_mode: string;
+  purchase_opposite_count: number;
+  sales_opposite_count: number;
+  needs_migration: boolean;
+};
+
+export async function previewInvoiceSettlementModeMigration(
+  targetMode: string,
+): Promise<InvoiceSettlementModeMigrationPreview> {
+  return apiRequest<InvoiceSettlementModeMigrationPreview>(
+    '/infra/business-config/parameters/invoice-settlement-mode-migration-preview',
+    {
+      method: 'GET',
+      params: { target_mode: targetMode },
+    },
+  );
 }
 
 export interface BusinessConfigSchema {

@@ -787,6 +787,7 @@ class DocumentPrintService:
         "purchase_requisition": "PURCHASE_REQUISITION_PRINT",
         "payment_application": "PAYMENT_APPLICATION_PRINT",
         "finance_payment": "FINANCE_PAYMENT_PRINT",
+        "fund_transfer": "FUND_TRANSFER_PRINT",
         "purchase_receipt": "PURCHASE_RECEIPT_PRINT",
         "sales_forecast": "SALES_FORECAST_PRINT",
         "sales_order": "SALES_ORDER_PRINT",
@@ -1519,6 +1520,22 @@ class DocumentPrintService:
                 await self._format_finance_payment_data(document, loc),
             )
 
+        elif document_type == "fund_transfer":
+            from apps.kuaicaiwu.models.fund_transfer import FundTransfer
+
+            document = await FundTransfer.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"资金调拨单不存在: {document_id}")
+            return await self._finalize_print_context(
+                tenant_id,
+                document_type,
+                document_id,
+                document,
+                await self._format_fund_transfer_data(document, loc),
+            )
+
         elif document_type == "purchase_receipt":
             document = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
@@ -2091,28 +2108,90 @@ class DocumentPrintService:
 
     async def _format_sales_delivery_data(self, delivery: SalesDelivery) -> Dict[str, Any]:
         """格式化销售出库单数据"""
+        from apps.kuaizhizao.services.warehouse_service import (
+            _customer_order_no_from_so_item,
+            _normalize_customer_order_no_text,
+        )
+        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.master_data.models.material import Material
+
+        fmt = await self._resolve_print_numeric_formatters(delivery.tenant_id)
+        fmt_qty, fmt_price, fmt_amount = fmt["fmt_qty"], fmt["fmt_price"], fmt["fmt_amount"]
         items = await SalesDeliveryItem.filter(
             tenant_id=delivery.tenant_id, delivery_id=delivery.id
-        ).all()
-        items_data = [
+        ).order_by("id")
+        header_customer_order_no = _normalize_customer_order_no_text(
+            getattr(delivery, "customer_order_no", None)
+        )
+        so_item_ids = sorted(
             {
-                "material_code": i.material_code,
-                "material_name": i.material_name,
-                "material_spec": i.material_spec,
-                "material_unit": i.material_unit,
-                "delivery_quantity": str(i.delivery_quantity),
-                "unit_price": str(i.unit_price),
-                "total_amount": str(i.total_amount),
-                "location_code": i.location_code,
-                "batch_number": i.batch_number,
-                "customer_order_no": getattr(i, "customer_order_no", None) or "",
-                "pricing_method": i.material_unit or "",
-                "weight": "",
-                "status": i.status,
-                "notes": i.notes,
+                int(i.sales_order_item_id)
+                for i in items
+                if int(getattr(i, "sales_order_item_id", 0) or 0) > 0
             }
-            for i in items
-        ]
+        )
+        so_items_by_id: Dict[int, SalesOrderItem] = {}
+        if so_item_ids:
+            for so_it in await SalesOrderItem.filter(
+                tenant_id=delivery.tenant_id, id__in=so_item_ids, deleted_at__isnull=True
+            ):
+                so_items_by_id[int(so_it.id)] = so_it
+        material_ids = sorted(
+            {int(i.material_id) for i in items if int(getattr(i, "material_id", 0) or 0) > 0}
+        )
+        material_by_id: Dict[int, Material] = {}
+        if material_ids:
+            for mat in await Material.filter(
+                tenant_id=delivery.tenant_id, id__in=material_ids, deleted_at__isnull=True
+            ):
+                material_by_id[int(mat.id)] = mat
+        items_data = []
+        for i in items:
+            partner_name = str(getattr(i, "partner_material_name", None) or "").strip()
+            material_name = str(i.material_name or "").strip()
+            mat = material_by_id.get(int(i.material_id)) if i.material_id else None
+            material_texture = str(getattr(mat, "texture", None) or "").strip() if mat else ""
+            if partner_name:
+                product_name = partner_name
+                process_method = material_name
+            else:
+                product_name = material_name
+                process_method = ""
+            so_item_id = int(getattr(i, "sales_order_item_id", 0) or 0)
+            so_it = so_items_by_id.get(so_item_id) if so_item_id > 0 else None
+            line_customer_order_no = _normalize_customer_order_no_text(
+                getattr(i, "customer_order_no", None)
+            )
+            if not line_customer_order_no:
+                line_customer_order_no = _customer_order_no_from_so_item(
+                    so_it, header_customer_order_no
+                )
+            partner_material_code = str(getattr(i, "partner_material_code", None) or "").strip()
+            items_data.append(
+                {
+                    "material_code": i.material_code,
+                    "material_name": material_name,
+                    "material_texture": material_texture,
+                    "texture": material_texture,
+                    "product_name": product_name,
+                    "process_method": process_method,
+                    "partner_material_name": partner_name,
+                    "partner_material_code": partner_material_code,
+                    "material_spec": getattr(i, "material_spec", None) or "",
+                    "material_model": getattr(i, "material_model", None) or "",
+                    "material_unit": i.material_unit,
+                    "delivery_quantity": fmt_qty(i.delivery_quantity),
+                    "unit_price": fmt_price(i.unit_price),
+                    "total_amount": fmt_amount(i.total_amount),
+                    "location_code": i.location_code,
+                    "batch_number": i.batch_number,
+                    "customer_order_no": line_customer_order_no or "",
+                    "pricing_method": i.material_unit or "",
+                    "weight": "",
+                    "status": i.status,
+                    "notes": i.notes,
+                }
+            )
         delivery_time = (
             to_api_isoformat(delivery.delivery_time) if delivery.delivery_time else None
         )
@@ -2508,6 +2587,62 @@ class DocumentPrintService:
             if payment.created_at
             else None,
             "items": items_data,
+        }
+
+    _FUND_TRANSFER_TYPE_LABELS = {
+        "internal": "内部互转",
+        "external_out": "调出至外部",
+        "external_in": "自外部调入",
+    }
+
+    async def _format_fund_transfer_data(
+        self, transfer: Any, loc: Optional[str]
+    ) -> Dict[str, Any]:
+        from apps.kuaicaiwu.models.bank_account import BankAccount
+        from core.utils.amount_precision import format_business_amount
+        from core.utils.timezone_utils import to_api_isoformat
+
+        fmt = await self._resolve_print_numeric_formatters(transfer.tenant_id)
+        amount_places = fmt.get("amount_decimal_places", 2)
+
+        def _amount(value: Any) -> str:
+            return format_business_amount(value, decimal_places=amount_places)
+
+        async def _acct_label(acct_id: Optional[int]) -> str:
+            if not acct_id:
+                return ""
+            acct = await BankAccount.get_or_none(
+                tenant_id=transfer.tenant_id,
+                id=int(acct_id),
+                deleted_at__isnull=True,
+            )
+            if not acct:
+                return ""
+            code = str(getattr(acct, "account_code", None) or "").strip()
+            name = str(getattr(acct, "account_name", None) or "").strip()
+            return " / ".join(p for p in (code, name) if p)
+
+        type_raw = str(transfer.transfer_type or "")
+        return {
+            "document_type": "fund_transfer",
+            "transfer_code": transfer.transfer_code,
+            "transfer_date": to_api_isoformat(transfer.transfer_date)
+            if transfer.transfer_date
+            else None,
+            "transfer_type": type_raw,
+            "transfer_type_label": self._FUND_TRANSFER_TYPE_LABELS.get(type_raw, type_raw),
+            "payment_method": str(transfer.payment_method or "转账"),
+            "amount": _amount(transfer.amount),
+            "currency": transfer.currency or "CNY",
+            "from_account_label": await _acct_label(transfer.from_bank_account_id),
+            "to_account_label": await _acct_label(transfer.to_bank_account_id)
+            or str(transfer.external_account_name or ""),
+            "external_account_name": transfer.external_account_name or "",
+            "external_bank_name": transfer.external_bank_name or "",
+            "external_account_number": transfer.external_account_number or "",
+            "status": transfer.status or "",
+            "review_status": transfer.review_status or "",
+            "notes": transfer.notes or "",
         }
 
     async def _format_purchase_receipt_data(self, receipt: PurchaseReceipt) -> Dict[str, Any]:

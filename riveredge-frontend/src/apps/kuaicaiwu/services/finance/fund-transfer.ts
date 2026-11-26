@@ -2,6 +2,14 @@ import { apiRequest } from '../../../../services/api';
 
 export type FundTransferType = 'internal' | 'external_out' | 'external_in';
 
+export type FundTransferPaymentMethod = '转账' | '承兑' | '现金';
+
+export const FUND_TRANSFER_PAYMENT_METHODS: FundTransferPaymentMethod[] = [
+  '转账',
+  '承兑',
+  '现金',
+];
+
 export type FundTransfer = {
   id: number;
   tenant_id: number;
@@ -18,6 +26,7 @@ export type FundTransfer = {
   external_bank_name?: string | null;
   external_account_number?: string | null;
   amount: number;
+  payment_method?: FundTransferPaymentMethod | string;
   currency: string;
   status: string;
   review_status?: string | null;
@@ -53,6 +62,7 @@ export type FundTransferCreateData = {
   external_bank_name?: string;
   external_account_number?: string;
   currency?: string;
+  payment_method?: FundTransferPaymentMethod;
   notes?: string;
   attachments?: unknown;
 };

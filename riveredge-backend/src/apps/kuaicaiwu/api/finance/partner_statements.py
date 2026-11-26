@@ -198,6 +198,21 @@ async def get_partner_statement(
         raise _http_exception_with_trace(404, str(e), "/partner-statements/{id}", tenant_id)
 
 
+@router.get("/{id}/material-lines")
+async def list_partner_statement_material_lines(
+    id: int,
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaicaiwu.services.partner_statement_line_service import (
+        PartnerStatementLineService,
+    )
+
+    await service.get_statement(tenant_id, id)
+    rows = await PartnerStatementLineService().list_line_dicts(tenant_id, id)
+    return {"items": rows, "total": len(rows)}
+
+
 @router.patch("/{id}/header", response_model=PartnerStatementResponse)
 async def update_partner_statement_header(
     id: int,

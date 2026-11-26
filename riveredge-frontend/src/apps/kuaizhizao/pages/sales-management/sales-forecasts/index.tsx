@@ -500,7 +500,7 @@ export default function SalesForecastsPage() {
             material_id: mat?.id,
             material_code: mat?.mainCode || mat?.code || materialCode,
             material_name: mat?.name || '',
-            material_spec: mat?.specification || spec,
+            material_spec: mat?.specification ?? '',
             material_unit: mat?.baseUnit || unit || defaultUnit,
             forecast_quantity: quantity || 1,
             forecast_date: forecastDate && dayjs(forecastDate).isValid() ? dayjs(forecastDate) : dayjs(),

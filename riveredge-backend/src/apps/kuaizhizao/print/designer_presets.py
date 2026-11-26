@@ -416,9 +416,12 @@ _TABLE_COLUMNS: dict[str, list[dict[str, str]]] = {
         ("备注", "notes"),
     ),
     "sales_delivery": _col(
+        ("客户订单号", "customer_order_no"),
         ("物料编号", "material_code"),
         ("物料名称", "material_name"),
         ("规格", "material_spec"),
+        ("材质/型号", "material_model"),
+        ("客户料号", "partner_material_code"),
         ("单位", "material_unit"),
         ("出库数量", "delivery_quantity"),
         ("库位", "location_code"),

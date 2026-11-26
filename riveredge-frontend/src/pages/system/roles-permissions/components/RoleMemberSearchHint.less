@@ -1,0 +1,50 @@
+.role-member-search-hint-new-tag {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 4px;
+
+  &__shine {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: inherit;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: -40%;
+      left: -70%;
+      width: 40%;
+      height: 180%;
+      background: linear-gradient(
+        105deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.15) 40%,
+        rgba(255, 255, 255, 0.85) 50%,
+        rgba(255, 255, 255, 0.15) 60%,
+        transparent 100%
+      );
+      transform: skewX(-18deg);
+      animation: role-member-search-hint-new-shimmer 2.4s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes role-member-search-hint-new-shimmer {
+  0% {
+    left: -75%;
+  }
+  100% {
+    left: 135%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-member-search-hint-new-tag__shine::after {
+    animation: none;
+  }
+}

@@ -39,6 +39,16 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseReceiptPullCandidate,
 )
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status, is_pending_review_status
+
+
+def _assert_purchase_order_department(
+    department_id: Any, department_name: Any
+) -> tuple[int, str]:
+    did = int(department_id or 0)
+    name = str(department_name or "").strip()
+    if did <= 0 or not name:
+        raise ValidationError("请选择部门")
+    return did, name
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.services.document_action_policy.enricher import (
     enrich_purchase_order_detail_capabilities,
@@ -304,6 +314,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     raise ValidationError("非草稿订单必须指定有效供应商")
                 if not order_data.supplier_name:
                     order_data.supplier_name = "待定供应商"
+
+            dept_id, dept_name = _assert_purchase_order_department(
+                order_data.department_id, order_data.department_name
+            )
+            order_data.department_id = dept_id
+            order_data.department_name = dept_name
 
             # 流程设置强执行：必须先有采购申请才可下采购单
             config_service = BusinessConfigService()
@@ -1674,6 +1690,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             update_dict['updated_by_name'] = user_info["name"]
 
             await self._resolve_buyer_fields(update_dict)
+
+            dept_id, dept_name = _assert_purchase_order_department(
+                update_dict.get("department_id", order.department_id),
+                update_dict.get("department_name", order.department_name),
+            )
+            update_dict["department_id"] = dept_id
+            update_dict["department_name"] = dept_name
 
             next_supplier_id = update_dict.get("supplier_id", order.supplier_id)
             next_status = update_dict.get("status", order.status)

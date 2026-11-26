@@ -150,6 +150,9 @@ import {
 import { TWO_COLUMN_LEFT_PANEL_BACKGROUND } from '../../../components/layout-templates/constants';
 import { TwoColumnLayoutResizer } from '../../../components/layout-templates/TwoColumnLayoutResizer';
 import { useResizableLeftPanelWidth } from '../../../components/layout-templates/useResizableLeftPanelWidth';
+import { RoleMemberSearchHint } from './components/RoleMemberSearchHint';
+
+const ROLE_MEMBER_SEARCH_NEW_HINT_STORAGE_KEY = 'riveredge.rolesPermissions.memberSearchNewHint.v4';
 
 const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
   sales: 'field.role.functionalDomainSales',
@@ -551,6 +554,9 @@ const RolesPermissionsPage: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
   const [roleSearchKeyword, setRoleSearchKeyword] = useState('');
+  const [roleSearchNewHintOpen, setRoleSearchNewHintOpen] = useState(false);
+  const roleSearchAnchorRef = useRef<HTMLDivElement>(null);
+  const roleSearchNewHintWatchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [roleTreeData, setRoleTreeData] = useState<DataNode[]>([]);
   const [filteredRoleTreeData, setFilteredRoleTreeData] = useState<DataNode[]>([]);
   const [expandedRoleKeys, setExpandedRoleKeys] = useState<React.Key[]>([]);
@@ -716,7 +722,8 @@ const RolesPermissionsPage: React.FC = () => {
         return (
           role.name.toLowerCase().includes(keyword) ||
           role.code.toLowerCase().includes(keyword) ||
-          (role.description && role.description.toLowerCase().includes(keyword))
+          (role.description && role.description.toLowerCase().includes(keyword)) ||
+          (role.member_search_labels ?? []).some((label) => label.toLowerCase().includes(keyword))
         );
       })
       .sort((a, b) => {
@@ -814,34 +821,11 @@ const RolesPermissionsPage: React.FC = () => {
     }));
 
     setRoleTreeData(treeNodes);
-    if (!roleSearchKeyword.trim()) {
-      setFilteredRoleTreeData(treeNodes);
+    setFilteredRoleTreeData(treeNodes);
+    if (roleSearchKeyword.trim() && treeNodes.length > 0) {
+      setExpandedRoleKeys(treeNodes.map((node) => String(node.key)));
     }
   }, [filteredRoles, roleSearchKeyword, handleEditRole, handleDeleteRole, t, token]);
-
-  /**
-   * 过滤角色树（根据搜索关键词）
-   */
-  useEffect(() => {
-    if (!roleSearchKeyword.trim()) {
-      setFilteredRoleTreeData(roleTreeData);
-      return;
-    }
-
-    const searchLower = roleSearchKeyword.toLowerCase().trim();
-    const filtered = roleTreeData.filter(node => {
-      const title = (node.title as any)?.props?.children?.[0]?.props?.children?.[1]?.props?.children || '';
-      const titleText = typeof title === 'string' ? title : '';
-      return titleText.toLowerCase().includes(searchLower);
-    });
-
-    setFilteredRoleTreeData(filtered);
-
-    // 如果有搜索结果，自动展开所有节点
-    if (filtered.length > 0) {
-      setExpandedRoleKeys(filtered.map(node => node.key));
-    }
-  }, [roleTreeData, roleSearchKeyword]);
 
   /**
    * 数据/字段权限筛选所需菜单树（按需加载，避免首屏多一次全量菜单请求）
@@ -1326,9 +1310,23 @@ const RolesPermissionsPage: React.FC = () => {
   const applyRoleUsersResult = useCallback((roleUuid: string, res: { items?: RoleUserListItem[]; total?: number }) => {
     const items = res.items || [];
     const total = res.total ?? items.length;
+    const memberSearchLabels = items.flatMap((user) => {
+      const labels: string[] = [];
+      const fullName = (user.full_name || '').trim();
+      if (fullName) labels.push(fullName);
+      const username = (user.username || '').trim();
+      if (username && username !== fullName) labels.push(username);
+      return labels;
+    });
     setRoleUsers(items);
-    setSelectedRole((prev) => (prev?.uuid === roleUuid ? { ...prev, user_count: total } : prev));
-    setRoles((prev) => prev.map((r) => (r.uuid === roleUuid ? { ...r, user_count: total } : r)));
+    setSelectedRole((prev) =>
+      prev?.uuid === roleUuid ? { ...prev, user_count: total, member_search_labels: memberSearchLabels } : prev,
+    );
+    setRoles((prev) =>
+      prev.map((r) =>
+        r.uuid === roleUuid ? { ...r, user_count: total, member_search_labels: memberSearchLabels } : r,
+      ),
+    );
   }, []);
 
   const loadRoleUsers = useCallback(async (roleUuid: string) => {
@@ -1576,6 +1574,80 @@ const RolesPermissionsPage: React.FC = () => {
     loadRoles();
   }, []);
 
+  const dismissRoleSearchNewHint = useCallback(() => {
+    setRoleSearchNewHintOpen(false);
+    try {
+      localStorage.setItem(ROLE_MEMBER_SEARCH_NEW_HINT_STORAGE_KEY, '1');
+    } catch {
+      /* quota / private mode */
+    }
+  }, []);
+
+  useEffect(() => {
+    let intersectionObserver: IntersectionObserver | null = null;
+    const stopWatch = () => {
+      if (roleSearchNewHintWatchTimerRef.current != null) {
+        window.clearInterval(roleSearchNewHintWatchTimerRef.current);
+        roleSearchNewHintWatchTimerRef.current = null;
+      }
+      intersectionObserver?.disconnect();
+      intersectionObserver = null;
+    };
+
+    const tryOpenHint = () => {
+      try {
+        if (localStorage.getItem(ROLE_MEMBER_SEARCH_NEW_HINT_STORAGE_KEY)) {
+          stopWatch();
+          return true;
+        }
+      } catch {
+        stopWatch();
+        return true;
+      }
+      const anchor = roleSearchAnchorRef.current;
+      if (!anchor || document.visibilityState !== 'visible') {
+        return false;
+      }
+      const rect = anchor.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) {
+        return false;
+      }
+      setRoleSearchNewHintOpen(true);
+      stopWatch();
+      return true;
+    };
+
+    try {
+      if (localStorage.getItem(ROLE_MEMBER_SEARCH_NEW_HINT_STORAGE_KEY)) {
+        return undefined;
+      }
+    } catch {
+      return undefined;
+    }
+
+    if (tryOpenHint()) {
+      return undefined;
+    }
+
+    intersectionObserver = new IntersectionObserver(
+      () => {
+        tryOpenHint();
+      },
+      { threshold: 0.01 },
+    );
+    const anchor = roleSearchAnchorRef.current;
+    if (anchor) {
+      intersectionObserver.observe(anchor);
+    }
+    roleSearchNewHintWatchTimerRef.current = window.setInterval(() => {
+      tryOpenHint();
+    }, 400);
+
+    return () => {
+      stopWatch();
+    };
+  }, []);
+
   /**
    * 处理 URL 参数（从账户管理等页面跳转时自动选中角色并打开编辑）
    */
@@ -1760,16 +1832,23 @@ const RolesPermissionsPage: React.FC = () => {
           }}
         >
           {/* 左侧栏 Header：首行搜索与中间/右侧首行同高 */}
-          <div className="roles-permissions-column-header-row roles-permissions-column-header-row--primary roles-permissions-column-header-row--left">
-            <Input
-              placeholder={t('pages.system.roles.searchRole')}
-              prefix={<SearchOutlined />}
-              value={roleSearchKeyword}
-              onChange={(e) => setRoleSearchKeyword(e.target.value)}
-              allowClear
-              size="medium"
-              style={{ width: '100%' }}
-            />
+          <div
+            ref={roleSearchAnchorRef}
+            className="roles-permissions-column-header-row roles-permissions-column-header-row--primary roles-permissions-column-header-row--left"
+          >
+            <RoleMemberSearchHint open={roleSearchNewHintOpen} onDismiss={dismissRoleSearchNewHint}>
+              <span style={{ display: 'block', width: '100%' }}>
+                <Input
+                  placeholder={t('pages.system.roles.searchRole')}
+                  prefix={<SearchOutlined />}
+                  value={roleSearchKeyword}
+                  onChange={(e) => setRoleSearchKeyword(e.target.value)}
+                  allowClear
+                  size="medium"
+                  style={{ width: '100%' }}
+                />
+              </span>
+            </RoleMemberSearchHint>
           </div>
           <div className="roles-permissions-column-header-row roles-permissions-column-header-row--secondary roles-permissions-column-header-row--left">
             <div style={{ display: 'flex', gap: 8, width: '100%' }}>

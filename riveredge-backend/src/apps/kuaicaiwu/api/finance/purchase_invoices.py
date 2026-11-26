@@ -101,6 +101,15 @@ async def create_purchase_invoice(
             if settle_amount <= 0:
                 raise BusinessLogicError("同时付款金额须大于 0")
 
+        from apps.kuaicaiwu.config.finance_settlement_contract import SETTLEMENT_MODE_DETAIL
+        from apps.kuaicaiwu.services.invoice_settlement_policy import (
+            assert_invoice_settlement_mode_allowed,
+        )
+
+        settlement_mode = await assert_invoice_settlement_mode_allowed(
+            tenant_id, data.settlement_mode
+        )
+
         pull_preview: Optional[Dict[str, Any]] = None
         pull_source_ids: list[int] = []
         if data.source_ids:
@@ -175,7 +184,17 @@ async def create_purchase_invoice(
             )
             invoice_id = int(invoice.id)
             occupancy_amt = purchase_invoice_occupancy_amount(invoice)
-            if pull_preview and data.source_type and pull_source_ids:
+            if settlement_mode == SETTLEMENT_MODE_DETAIL:
+                from apps.kuaicaiwu.services.purchase_invoice_detail_occupancy import (
+                    record_detail_purchase_invoice_occupancy,
+                )
+
+                await record_detail_purchase_invoice_occupancy(
+                    tenant_id,
+                    invoice_id,
+                    created_by=current_user.id,
+                )
+            elif pull_preview and data.source_type and pull_source_ids:
                 code_by_source: dict[int, str] = {}
                 for item in pull_preview.get("items") or []:
                     iid = int(item.get("item_id") or 0)
@@ -297,6 +316,7 @@ async def list_purchase_invoices(
     review_status: Optional[str] = None,
     verification_status: Optional[str] = Query(None),
     tax_period: Optional[str] = Query(None),
+    settlement_mode: Optional[str] = Query(None, description="summary|detail"),
     created_start_date: Optional[str] = Query(None),
     created_end_date: Optional[str] = Query(None),
     updated_start_date: Optional[str] = Query(None),
@@ -320,6 +340,7 @@ async def list_purchase_invoices(
         supplier_name=supplier_name,
         invoice_number=invoice_number,
         review_status=review_status,
+        settlement_mode=settlement_mode,
         start_date=doc_date_start,
         end_date=doc_date_end,
         created_start_date=created_start_date,

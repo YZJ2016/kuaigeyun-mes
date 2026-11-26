@@ -48,6 +48,8 @@ export interface PartnerStatementPreview {
   balance_label: string;
   summary: PartnerStatementSummary;
   lines: PartnerStatementLine[];
+  /** 单据头粒度；列表展示与勾选须用本字段 */
+  document_lines?: PartnerStatementLine[];
   partner_snapshot?: Record<string, unknown>;
   /** 本期因已纳入其它对账单而排除的行数 */
   excluded_from_period?: number;
@@ -83,6 +85,7 @@ export interface PartnerStatement {
   transaction_details?: {
     summary?: PartnerStatementSummary;
     lines?: PartnerStatementLine[];
+    document_lines?: PartnerStatementLine[];
     balance_label?: string;
     partner_snapshot?: Record<string, unknown>;
     amount_basis?: PartnerStatementAmountBasis;
@@ -182,6 +185,9 @@ export const partnerStatementService = {
       method: 'PATCH',
       data,
     }),
+
+  listMaterialLines: (id: number) =>
+    apiRequest<{ items: PartnerStatementLine[]; total: number }>(`${API}/${id}/material-lines`),
 
   refreshPreview: (id: number, data: { amount_basis: PartnerStatementAmountBasis }) =>
     apiRequest<PartnerStatementRefreshPreviewResult>(`${API}/${id}/refresh-preview`, {

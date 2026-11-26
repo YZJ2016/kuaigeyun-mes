@@ -54,6 +54,11 @@ class PartnerStatement(BaseModel):
     confirmed_at = fields.DatetimeField(null=True, description="内部确认时间")
     confirmed_by = fields.IntField(null=True, description="确认人ID")
 
+    statement_line_granularity = fields.CharField(
+        max_length=20,
+        default="material_line",
+        description="对账明细粒度 material_line",
+    )
     ledger_posting_mode = fields.CharField(
         max_length=20, default="immediate", description="立账方式 immediate/by_invoice"
     )

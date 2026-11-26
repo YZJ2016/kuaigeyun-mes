@@ -6,6 +6,7 @@ NAS WebDAV 文件存储适配器（铁威马 TOS 等）。
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from contextlib import asynccontextmanager
@@ -16,7 +17,9 @@ import httpx
 
 from core.services.file.storage.base import FileStorageBackend
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.infrastructure.http.client import get_http_client
+
+# 写探针路径须与业务上传一致（多级 MKCOL + PUT），避免「浅层探针通过、深路径上传失败」
+_NAS_WEBDAV_WRITE_PROBE_KEY = "_riveredge_probe/1/2026/11/writable.txt"
 
 
 def _normalize_root_path(root_path: Any) -> str:
@@ -43,6 +46,17 @@ _DAV_CONTENT_LENGTH_RE = re.compile(
     r"<(?:[Dd]:)?getcontentlength[^>]*>\s*(\d+)\s*</(?:[Dd]:)?getcontentlength>",
     re.IGNORECASE,
 )
+
+# 迁移单文件含 MKCOL + PUT + 存在校验，内网 NAS 也可能超过 60s
+_NAS_WEBDAV_TIMEOUT = httpx.Timeout(180.0, connect=30.0)
+_NAS_WEBDAV_RETRYABLE = (
+    httpx.TimeoutException,
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.WriteError,
+    httpx.RemoteProtocolError,
+)
+_NAS_WEBDAV_MAX_ATTEMPTS = 3
 
 
 def _parse_content_range_total(content_range: str) -> Optional[int]:
@@ -93,6 +107,11 @@ def _http_error_message(exc: Exception, *, base_url: str) -> str:
         )
     if isinstance(exc, httpx.TimeoutException):
         return f"访问 NAS WebDAV 超时（{base_url}）。请检查网络或稍后重试。"
+    if isinstance(exc, (httpx.ReadError, httpx.WriteError, httpx.RemoteProtocolError)):
+        return (
+            f"访问 NAS WebDAV 连接中断（{base_url}）。"
+            "请确认 NAS 未休眠、WebDAV 服务稳定，或在网络空闲时重试迁移。"
+        )
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code if exc.response is not None else "?"
         return f"NAS WebDAV 返回 HTTP {status}（{base_url}）"
@@ -136,31 +155,70 @@ class NasWebDavStorage(FileStorageBackend):
             return f"{self.base_url}/{encoded}"
         return f"{self.base_url}/"
 
-    def _auth_kwargs(self) -> Dict[str, Any]:
-        return {"auth": self._auth, "timeout": 60.0}
-
     @asynccontextmanager
     async def _client(self) -> AsyncIterator[httpx.AsyncClient]:
-        if self.verify_ssl:
-            yield get_http_client()
-            return
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(60.0, connect=15.0),
+            timeout=_NAS_WEBDAV_TIMEOUT,
             follow_redirects=True,
-            verify=False,
+            verify=self.verify_ssl,
         ) as client:
             yield client
 
-    async def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
-        try:
-            async with self._client() as client:
-                return await client.request(method, url, **kwargs, **self._auth_kwargs())
-        except ValidationError:
-            raise
-        except Exception as exc:
-            raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+    def _request_kwargs(self) -> Dict[str, Any]:
+        return {"auth": self._auth, "timeout": _NAS_WEBDAV_TIMEOUT}
 
-    async def _ensure_parent_collections(self, object_key: str) -> None:
+    async def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        last_exc: Optional[Exception] = None
+        for attempt in range(_NAS_WEBDAV_MAX_ATTEMPTS):
+            try:
+                async with self._client() as client:
+                    return await client.request(
+                        method, url, **kwargs, **self._request_kwargs()
+                    )
+            except ValidationError:
+                raise
+            except _NAS_WEBDAV_RETRYABLE as exc:
+                last_exc = exc
+                if attempt + 1 < _NAS_WEBDAV_MAX_ATTEMPTS:
+                    await asyncio.sleep(float(attempt + 1))
+                    continue
+                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+            except Exception as exc:
+                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+        if last_exc is not None:
+            raise ValidationError(_http_error_message(last_exc, base_url=self.base_url)) from last_exc
+        raise ValidationError(f"访问 NAS WebDAV 失败（{self.base_url}）")
+
+    async def _request_on_client(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        url: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """同一 TCP 连接上连续 MKCOL/PUT，减轻部分 NAS 对频繁短连接上传的 ReadError。"""
+        last_exc: Optional[Exception] = None
+        for attempt in range(_NAS_WEBDAV_MAX_ATTEMPTS):
+            try:
+                return await client.request(method, url, **kwargs, **self._request_kwargs())
+            except _NAS_WEBDAV_RETRYABLE as exc:
+                last_exc = exc
+                if attempt + 1 < _NAS_WEBDAV_MAX_ATTEMPTS:
+                    await asyncio.sleep(float(attempt + 1))
+                    continue
+                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+            except Exception as exc:
+                raise ValidationError(_http_error_message(exc, base_url=self.base_url)) from exc
+        if last_exc is not None:
+            raise ValidationError(_http_error_message(last_exc, base_url=self.base_url)) from last_exc
+        raise ValidationError(f"访问 NAS WebDAV 失败（{self.base_url}）")
+
+    async def _ensure_parent_collections(
+        self,
+        object_key: str,
+        *,
+        client: httpx.AsyncClient,
+    ) -> None:
         """按未编码路径段递归 MKCOL，避免对已编码路径再次 quote。"""
         relative = build_nas_webdav_relative_key(self.root_path, object_key)
         parts = _raw_path_segments(relative)
@@ -172,7 +230,7 @@ class NasWebDavStorage(FileStorageBackend):
         for part in dir_parts:
             built.append(part)
             coll_href = base + "/".join(quote(p, safe="") for p in built) + "/"
-            resp = await self._request("MKCOL", coll_href)
+            resp = await self._request_on_client(client, "MKCOL", coll_href)
             if resp.status_code in (201, 405, 301, 302, 307, 308, 409):
                 continue
             if resp.status_code >= 400:
@@ -183,12 +241,19 @@ class NasWebDavStorage(FileStorageBackend):
 
     async def put(self, key: str, data: bytes, content_type: Optional[str] = None) -> None:
         href = self.object_href(key)
-        await self._ensure_parent_collections(key)
         headers: Dict[str, str] = {}
         ct = (content_type or "").strip()
         if ct:
             headers["Content-Type"] = ct
-        resp = await self._request("PUT", href, content=data, headers=headers or None)
+        async with self._client() as client:
+            await self._ensure_parent_collections(key, client=client)
+            resp = await self._request_on_client(
+                client,
+                "PUT",
+                href,
+                content=data,
+                headers=headers or None,
+            )
         if resp.status_code not in (200, 201, 204):
             raise ValidationError(
                 f"WebDAV 上传失败 HTTP {resp.status_code}（{href}）{(resp.text or '')[:200]}"
@@ -198,14 +263,21 @@ class NasWebDavStorage(FileStorageBackend):
         if not os.path.isfile(local_path):
             raise ValidationError(f"本地文件不存在: {local_path}")
         href = self.object_href(key)
-        await self._ensure_parent_collections(key)
         headers: Dict[str, str] = {}
         ct = (content_type or "").strip()
         if ct:
             headers["Content-Type"] = ct
         with open(local_path, "rb") as fh:
             body = fh.read()
-        resp = await self._request("PUT", href, content=body, headers=headers or None)
+        async with self._client() as client:
+            await self._ensure_parent_collections(key, client=client)
+            resp = await self._request_on_client(
+                client,
+                "PUT",
+                href,
+                content=body,
+                headers=headers or None,
+            )
         if resp.status_code not in (200, 201, 204):
             raise ValidationError(
                 f"WebDAV 上传失败 HTTP {resp.status_code}（{href}）{(resp.text or '')[:200]}"
@@ -319,7 +391,7 @@ async def probe_nas_webdav_storage(
             )
     if not write_probe:
         return {"message": "WebDAV 连接成功（只读探测）"}
-    probe_key = "_riveredge_probe/writable.txt"
+    probe_key = _NAS_WEBDAV_WRITE_PROBE_KEY
     body = b"riveredge-nas-webdav-probe"
     await storage.put(probe_key, body, content_type="text/plain")
     if not await storage.exists(probe_key):

@@ -100,17 +100,23 @@ def apply_snapshot_to_line_dict(
     *,
     fill_spec_if_empty: bool = True,
 ) -> Dict[str, Any]:
-    """将快照写入行 dict（create/update/push 共用）；快照为 None 的字段不覆盖调用方已填值。"""
-    if snapshot.partner_material_code is not None:
-        line["partner_material_code"] = snapshot.partner_material_code
-    if snapshot.partner_material_name is not None:
-        line["partner_material_name"] = snapshot.partner_material_name
-    if snapshot.material_model is not None:
-        line["material_model"] = snapshot.material_model
-    if fill_spec_if_empty and snapshot.material_spec:
-        existing = str(line.get("material_spec") or "").strip()
-        if not existing:
-            line["material_spec"] = snapshot.material_spec
+    """将快照写入行 dict（create/update/push 共用）。
+
+    规格/型号恒以物料主数据为准，覆盖请求体或 Excel 带入的行内值（禁止手改规格）。
+    伙伴料号/品名仍仅补空，下推/取单已带值须保留。
+    ``fill_spec_if_empty`` 保留参数以兼容旧调用方（已不再影响规格/型号）。
+    """
+    del fill_spec_if_empty
+    line["material_spec"] = snapshot.material_spec
+    line["material_model"] = snapshot.material_model
+    for key, snap_val in (
+        ("partner_material_code", snapshot.partner_material_code),
+        ("partner_material_name", snapshot.partner_material_name),
+    ):
+        if not str(snap_val or "").strip():
+            continue
+        if not str(line.get(key) or "").strip():
+            line[key] = snap_val
     return line
 
 

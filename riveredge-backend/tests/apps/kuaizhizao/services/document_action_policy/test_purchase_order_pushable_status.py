@@ -95,6 +95,18 @@ def test_draft_order_with_downstream_cannot_delete():
     assert caps.delete.reason == "purchase_order.delete.has_downstream"
 
 
+def test_revoke_allowed_when_only_draft_change_counts_as_delete_downstream():
+    order = SimpleNamespace(status="CONFIRMED", review_status="APPROVED", supplier_id=101)
+    caps = derive_purchase_order_capabilities(
+        order,
+        has_items=True,
+        has_downstream=True,
+        has_revoke_blocking_downstream=False,
+    )
+    assert caps.revoke_approval.allowed is True
+    assert caps.delete.allowed is False
+
+
 def test_draft_order_without_downstream_can_delete():
     order = SimpleNamespace(status="DRAFT", review_status="PENDING", supplier_id=101)
     caps = derive_purchase_order_capabilities(

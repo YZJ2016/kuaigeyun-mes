@@ -4,11 +4,18 @@ import pytest
 
 from core.services.file.storage.nas_webdav_storage import (
     NasWebDavStorage,
+    _NAS_WEBDAV_WRITE_PROBE_KEY,
     _parse_content_range_total,
     _parse_dav_getcontentlength,
     build_nas_webdav_relative_key,
 )
 from infra.exceptions.exceptions import ValidationError
+
+
+def test_nas_webdav_write_probe_matches_upload_depth():
+    parts = _NAS_WEBDAV_WRITE_PROBE_KEY.split("/")
+    assert len(parts) >= 4
+    assert parts[0] == "_riveredge_probe"
 
 
 def test_build_nas_webdav_relative_key_root_and_key():
@@ -59,3 +66,24 @@ def test_nas_webdav_requires_credentials():
                 "root_path": "/",
             }
         )
+
+
+def test_nas_webdav_defaults_verify_ssl_off():
+    storage = NasWebDavStorage(
+        {
+            "base_url": "https://nas.example:5006/dav",
+            "username": "erp",
+            "password": "secret",
+            "root_path": "/",
+        }
+    )
+    assert storage.verify_ssl is False
+    storage_on = NasWebDavStorage(
+        {
+            "base_url": "https://nas.example:5006/dav",
+            "username": "erp",
+            "password": "secret",
+            "verify_ssl": True,
+        }
+    )
+    assert storage_on.verify_ssl is True

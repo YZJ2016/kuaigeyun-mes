@@ -160,12 +160,11 @@ class PartnerMaterialPriceResolver:
         partner_id: int,
         material_id: int,
     ) -> tuple[Optional[Decimal], Optional[Decimal]]:
-        """返回 (未税单价, 税率%)。采购订单行单价已是未税。"""
+        """返回 (未税单价, 税率%)。按订单 price_type 剥税后与价本/物料默认价出口一致。"""
         if side == "sales":
             return await cls._trend.get_latest_sales_exclusive_unit_price(
                 tenant_id, material_id, partner_id
             )
-        price = await cls._trend.get_latest_purchase_unit_price(
+        return await cls._trend.get_latest_purchase_exclusive_unit_price(
             tenant_id, material_id, partner_id
         )
-        return price, None

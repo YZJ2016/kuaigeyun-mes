@@ -231,7 +231,6 @@ def test_build_kingdee_production_picking_model_picker_operator_write_key():
     assert model["bizdept_number"] == "Org-00015"
 
 
-@pytest.mark.skip(reason="依赖上游 line_unit_qty_by_item_id 参数（本次未摘取对应 push service 改动）")
 def test_build_kingdee_production_picking_model_uses_line_unit_plan_not_kg_alias():
     """行单位须吃 dual-qty 计划（如 kg），禁止 builtin 别名 004。"""
     from apps.kuaiconnect.services.document_push.kingdee_production_picking_push_service import (

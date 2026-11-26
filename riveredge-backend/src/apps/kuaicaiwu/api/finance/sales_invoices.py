@@ -268,10 +268,33 @@ async def create_sales_invoice(
             partner_bank_info=data.partner_bank_info,
             partner_address_phone=data.partner_address_phone,
         )
+        from apps.kuaicaiwu.services.invoice_settlement_guard import (
+            assert_settlement_mode_items_consistency,
+        )
+        from apps.kuaicaiwu.config.finance_settlement_contract import (
+            SETTLEMENT_MODE_DETAIL,
+        )
+        from apps.kuaicaiwu.models.invoice import InvoiceItem
+        from apps.kuaicaiwu.services.invoice_settlement_policy import (
+            assert_invoice_settlement_mode_allowed,
+        )
+
+        settlement_mode = await assert_invoice_settlement_mode_allowed(
+            tenant_id, data.settlement_mode
+        )
+        detail_items = data.detail_items or []
+        assert_settlement_mode_items_consistency(
+            settlement_mode,
+            [row.model_dump() for row in detail_items],
+        )
+        if settlement_mode == SETTLEMENT_MODE_DETAIL and not detail_items:
+            raise BusinessLogicError("明细销售发票须提供 detail_items")
+
         create_payload = {
             "tenant_id": tenant_id,
             "invoice_code": code,
             "category": "OUT",
+            "settlement_mode": settlement_mode,
             "invoice_number": data.invoice_number,
             "invoice_date": data.invoice_date,
             "tax_period": tax_period_from_date(data.invoice_date),
@@ -296,7 +319,15 @@ async def create_sales_invoice(
         apply_create_audit(create_payload, current_user)
         async with in_transaction():
             invoice = await Invoice.create(**create_payload)
-            if pull_preview and data.source_type and data.source_id:
+            if settlement_mode == SETTLEMENT_MODE_DETAIL:
+                for row in detail_items:
+                    await InvoiceItem.create(tenant_id=tenant_id, invoice_id=invoice.id, **row.model_dump())
+            if (
+                settlement_mode != SETTLEMENT_MODE_DETAIL
+                and pull_preview
+                and data.source_type
+                and data.source_id
+            ):
                 await sales_invoice_service.create_pull_relation(
                     tenant_id=tenant_id,
                     source_type=str(data.source_type).strip(),
@@ -346,6 +377,7 @@ async def list_sales_invoices(
     customer_name: Optional[str] = Query(None),
     invoice_number: Optional[str] = Query(None),
     review_status: Optional[str] = None,
+    settlement_mode: Optional[str] = Query(None, description="summary|detail"),
     created_start_date: Optional[str] = Query(None),
     created_end_date: Optional[str] = Query(None),
     updated_start_date: Optional[str] = Query(None),
@@ -364,6 +396,8 @@ async def list_sales_invoices(
         query = query.filter(status=status)
     if customer_id:
         query = query.filter(partner_id=customer_id)
+    if settlement_mode:
+        query = query.filter(settlement_mode=str(settlement_mode).strip())
 
     doc_date_start = start_date.isoformat() if start_date else None
     doc_date_end = end_date.isoformat() if end_date else None

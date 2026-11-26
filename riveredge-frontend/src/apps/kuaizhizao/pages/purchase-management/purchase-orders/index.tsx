@@ -1024,7 +1024,7 @@ const PurchaseOrdersPage: React.FC = () => {
             material_id: mat?.id,
             material_code: mat?.mainCode || mat?.code || materialCode,
             material_name: mat?.name || '',
-            material_spec: mat?.specification || spec,
+            material_spec: mat?.specification ?? '',
             unit: mat?.baseUnit || unit || '件',
             ordered_quantity: quantity || 1,
             unit_price: price,
@@ -3835,6 +3835,12 @@ const PurchaseOrdersPage: React.FC = () => {
           data.department_name,
         ),
       );
+      if (!data.department_id || !String(data.department_name ?? '').trim()) {
+        messageApi.error(
+          t('app.kuaizhizao.purchaseOrder.form.departmentRequired', '请选择部门'),
+        );
+        return false;
+      }
       // 处理附件
       const formAttachments = data.attachments || [];
       data.attachments = formAttachments.map((f: any) => {
@@ -4585,6 +4591,11 @@ const PurchaseOrdersPage: React.FC = () => {
                 <PurchaseDepartmentFormField
                   options={departmentOptions}
                   loading={departmentOptionsLoading}
+                  required
+                  requiredMessage={t(
+                    'app.kuaizhizao.purchaseOrder.form.departmentRequired',
+                    '请选择部门',
+                  )}
                 />
               </Col>
             </Row>

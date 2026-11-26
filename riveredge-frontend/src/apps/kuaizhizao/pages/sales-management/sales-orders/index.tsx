@@ -110,7 +110,7 @@ import {
   partnerSettlementTermsSelectOptions,
 } from '../../../../master-data/utils/partner-static-labels';
 import { PaymentMethodWithMixFormItems } from '../../../components/PaymentMethodWithMixFormItems';
-import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { getBusinessConfig, quantizeNumericByPlaces } from '../../../../../services/businessConfig';
 import {
   buildRevenueLedgerRecognitionOptions,
   orgFinanceRevenueDefault,
@@ -280,6 +280,8 @@ import {
   SalesOrderItem,
   SalesOrderStatus,
   ReviewStatus,
+  resolveDefaultPushQuantity,
+  resolveWorkOrderDefaultPushQuantity,
   type SalesOrderListParams,
   type PushPreviewResponse,
 } from '../../../services/sales-order';
@@ -2111,7 +2113,10 @@ const SalesOrdersPage: React.FC = () => {
           rows.forEach((row) => {
             const itemId = Number((row as any).item_id);
             if (!Number.isFinite(itemId) || itemId <= 0) return;
-            const defaultQty = Number((row as any).max_push_quantity ?? row.quantity ?? 0);
+            const defaultQty =
+              res?.target_type === 'work_order'
+                ? resolveWorkOrderDefaultPushQuantity(row as any)
+                : resolveDefaultPushQuantity(row as any);
             if (Number.isFinite(defaultQty) && defaultQty > 0) {
               ids.push(itemId);
             }
@@ -2251,7 +2256,7 @@ const SalesOrdersPage: React.FC = () => {
           return;
         }
         const bomPayload = buildDirectPushBomPayload(workOrderBomParams);
-        await pushPreviewAction.doPush({
+        const woPushRes = await pushPreviewAction.doPush({
           push_mode: workOrderPushMode,
           work_order_granularity: workOrderGranularity,
           selected_item_ids: selectedIds,
@@ -2260,6 +2265,25 @@ const SalesOrdersPage: React.FC = () => {
           selected_item_remarks: selectedItemRemarks,
           ...bomPayload,
         });
+        messageApi.success(t('app.kuaizhizao.salesOrder.workOrderCreated'));
+        setPushPreviewOpen(false);
+        setPushPreviewData(null);
+        setPushPreviewAction(null);
+        setWorkOrderSelectedItemIds([]);
+        setWorkOrderPushQuantities({});
+        setWorkOrderSelectedWorkCenters({});
+        setWorkOrderPushMode('draft');
+        setWorkOrderGranularity('grouped');
+        pushPreviewAction.onSuccess?.();
+        const woDocs = (woPushRes?.target_documents ?? []).filter(
+          (d: { type?: string; id?: number }) => d?.type === 'work_order' && Number(d?.id) > 0,
+        );
+        if (workOrderPushMode === 'draft' && woDocs.length === 1) {
+          navigate(`/apps/kuaizhizao/production-execution/work-orders/${woDocs[0].id}/edit`);
+        } else if (workOrderPushMode === 'draft' && woDocs.length > 1) {
+          navigate('/apps/kuaizhizao/production-execution/work-orders');
+        }
+        return;
       } else if (pushPreviewData.target_type === 'shipment_notice') {
         const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
         const rowById = new Map<number, any>();
@@ -2524,8 +2548,6 @@ const SalesOrdersPage: React.FC = () => {
       } else if (pushPreviewData.target_type === 'demand_computation') {
         messageApi.success(t('app.kuaizhizao.salesOrder.demandComputationCreated'));
         invalidateMenuBadge();
-      } else if (pushPreviewData.target_type === 'work_order') {
-        messageApi.success(t('app.kuaizhizao.salesOrder.workOrderCreated'));
       }
       pushPreviewAction.onSuccess();
       setPushPreviewOpen(false);
@@ -3485,13 +3507,14 @@ const SalesOrdersPage: React.FC = () => {
           0;
         if (priceTypeForm === 'tax_inclusive' && unitPrice > 0) {
           unitPrice = convertUnitPriceByPriceType(unitPrice, taxR, 'tax_exclusive', 'tax_inclusive');
+          unitPrice = quantizeNumericByPlaces(unitPrice, priceDecimals);
         }
 
         return {
           material_id: material?.id,
           material_code: material?.mainCode || material?.code || materialCode,
           material_name: material?.name || '',
-          material_spec: material?.specification || spec,
+          material_spec: material?.specification ?? '',
           material_unit: material?.baseUnit || unit,
           required_quantity: quantity,
           unit_price: unitPrice,
@@ -6952,8 +6975,30 @@ const SalesOrdersPage: React.FC = () => {
                     align: 'right' as const,
                     render: (val: unknown) => formatQuantity(val),
                   },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const, render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const, render: formatQuantity },
+                  {
+                    title: (
+                      <Tooltip title={t('app.kuaizhizao.salesOrder.colPushedQtyTip')}>
+                        {t('app.kuaizhizao.salesOrder.colPushedQty')}
+                      </Tooltip>
+                    ),
+                    dataIndex: 'pushed_quantity',
+                    key: 'pushed_quantity',
+                    width: 90,
+                    align: 'right' as const,
+                    render: formatQuantity,
+                  },
+                  {
+                    title: (
+                      <Tooltip title={t('app.kuaizhizao.salesOrder.colPushableQtyTipWorkOrder')}>
+                        {t('app.kuaizhizao.salesOrder.colPushableQty')}
+                      </Tooltip>
+                    ),
+                    dataIndex: 'max_push_quantity',
+                    key: 'max_push_quantity',
+                    width: 90,
+                    align: 'right' as const,
+                    render: formatQuantity,
+                  },
                   {
                     title: t('app.kuaizhizao.salesOrder.workCenter'),
                     dataIndex: 'work_center_id',

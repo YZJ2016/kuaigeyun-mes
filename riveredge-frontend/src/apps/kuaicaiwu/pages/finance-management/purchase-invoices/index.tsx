@@ -85,6 +85,7 @@ import {
   initPullReceiptLineSelection,
   reconcilePullReceiptLinesForHeaderAmount,
   sumPullReceiptLineAmounts,
+  buildPurchaseDetailItemsFromPullLines,
   type PullReceiptFinanceDetailLine,
 } from '../../../../kuaizhizao/utils/pullReceiptFinanceLines';
 import { formatDateTime, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
@@ -102,6 +103,9 @@ import { TaxRatePercentInput } from '../../../../kuaizhizao/components/document-
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { useQuery } from '@tanstack/react-query';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { orgFinanceInvoiceSettlementMode } from '../../../../../utils/documentLedgerRecognition';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
 
@@ -153,6 +157,15 @@ const PurchaseInvoiceList: React.FC = () => {
   const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
   const [pullReceiptSelectedIds, setPullReceiptSelectedIds] = useState<number[]>([]);
   const [pullReceiptLineAmounts, setPullReceiptLineAmounts] = useState<Record<number, number>>({});
+  const { data: financeBusinessConfig } = useQuery({
+    queryKey: ['businessConfigFinanceInvoiceSettlement'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const tenantInvoiceSettlementMode = useMemo(
+    () => orgFinanceInvoiceSettlementMode(financeBusinessConfig),
+    [financeBusinessConfig],
+  );
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
   const [pullForm] = Form.useForm();
   const [createForm] = Form.useForm();
@@ -345,6 +358,7 @@ const PurchaseInvoiceList: React.FC = () => {
       );
 
       const data: PurchaseInvoiceCreateData = {
+        settlement_mode: tenantInvoiceSettlementMode,
         supplier_id: values.supplier_id,
         supplier_name: supplierOptions.find((o) => o.value === values.supplier_id)?.label || '',
         invoice_number: values.invoice_number,
@@ -849,7 +863,10 @@ const PurchaseInvoiceList: React.FC = () => {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
     }
+    const useDetailSettlement =
+      tenantInvoiceSettlementMode === 'detail' && pullReceiptLineSelectEnabled;
     let pullReceiptLines: PurchaseInvoiceCreateData['pull_receipt_lines'];
+    let detailItems: PurchaseInvoiceCreateData['detail_items'];
     if (pullReceiptLineSelectEnabled) {
       if (pullReceiptSelectedIds.length === 0) {
         messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
@@ -881,7 +898,27 @@ const PurchaseInvoiceList: React.FC = () => {
           }
         }
       }
-      pullReceiptLines = reconciled.payload;
+      if (useDetailSettlement) {
+        const fallbackDocId = pullPreviewSourceIds[0];
+        const fallbackType =
+          pullPreviewKind === 'outsource_order_receipt'
+            ? 'outsource_order_receipt'
+            : 'purchase_receipt';
+        detailItems = buildPurchaseDetailItemsFromPullLines(
+          reconciled.selectedItemIds,
+          reconciled.amounts,
+          detailLines,
+          taxRate,
+          fallbackType,
+          Number(fallbackDocId || 0),
+        );
+        if (!detailItems.length) {
+          messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
+          return false;
+        }
+      } else {
+        pullReceiptLines = reconciled.payload;
+      }
     }
     const sourceLabel =
       pullPreviewKind === 'purchase_order'
@@ -921,6 +958,7 @@ const PurchaseInvoiceList: React.FC = () => {
     setPullSubmitting(true);
     try {
       await purchaseInvoiceService.create({
+        settlement_mode: tenantInvoiceSettlementMode,
         purchase_order_id: pullPreviewData.purchase_order_id ?? undefined,
         purchase_order_code: pullPreviewData.purchase_order_code ?? undefined,
         payable_id:
@@ -967,7 +1005,8 @@ const PurchaseInvoiceList: React.FC = () => {
         status: '未审核',
         review_status: '草稿',
         attachments: normalizeDocumentAttachments(values.attachments),
-        pull_receipt_lines: pullReceiptLines,
+        pull_receipt_lines: useDetailSettlement ? undefined : pullReceiptLines,
+        detail_items: detailItems,
         ...(pullPartnerStatementIdsRef.current.length
           ? { partner_statement_ids: pullPartnerStatementIdsRef.current }
           : {}),
@@ -1040,6 +1079,23 @@ const PurchaseInvoiceList: React.FC = () => {
             }
           />
         ),
+      },
+      {
+        title: t(`${P}.settlementMode`),
+        dataIndex: 'settlement_mode',
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, record) => {
+          const mode = String(record.settlement_mode || 'summary');
+          const text =
+            mode === 'detail'
+              ? t(`${P}.settlementMode.detail`)
+              : t(`${P}.settlementMode.summary`);
+          return <MarkerTag variant="filled">{text}</MarkerTag>;
+        },
       },
       {
         title: t('app.kuaicaiwu.common.supplier'),
@@ -1662,7 +1718,7 @@ const PurchaseInvoiceList: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         onTableDataChange={setTableRows}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v7-billing-amount"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v8-line-settlement"
         showAdvancedSearch
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolvePurchaseInvoiceListParams(searchFormValues, sort);

@@ -24,7 +24,6 @@ from apps.kuaiconnect.services.document_push.kingdee_push_location import (
 )
 from core.services.integration.document_push_codes import (
     DEFAULT_UNIT_NUMBER,
-    apply_unit_code_map,
     load_save_api_unit_code_map,
     resolve_unit_for_push,
 )
@@ -126,6 +125,10 @@ def _compact_text(*parts: Any) -> str:
     return " ".join(str(part).strip() for part in parts if str(part or "").strip())
 
 
+def _fg_receipt_line_push_quantity(item: FinishedGoodsReceiptItem) -> Any:
+    return item.receipt_quantity or item.qualified_quantity
+
+
 async def enrich_finished_goods_header_config(
     tenant_id: int,
     receipt: FinishedGoodsReceipt,
@@ -150,6 +153,7 @@ def build_kingdee_finished_goods_receipt_model(
     cfg: Optional[Dict[str, Any]] = None,
     warehouse_number: Optional[str] = None,
     location_number_by_item_id: Optional[Dict[int, str]] = None,
+    line_unit_qty_by_item_id: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     config = cfg or {}
     template = config.get("model_template")
@@ -162,19 +166,15 @@ def build_kingdee_finished_goods_receipt_model(
         config.get("org_number") or config.get("bizorg_number") or config.get("createorg_number") or ""
     ).strip()
     bill_date = _date_string(receipt.receipt_time or receipt.created_at)
+    line_plan = line_unit_qty_by_item_id or {}
     entries: List[Dict[str, Any]] = []
-    unit_map = (
-        config.get("api_unit_code_map")
-        if isinstance(config.get("api_unit_code_map"), dict)
-        else None
-    )
     for item in items:
-        qty = _to_float(item.receipt_quantity or item.qualified_quantity)
+        planned = line_plan.get(int(item.id or 0)) or {}
+        qty = _to_float(planned.get("qty", _fg_receipt_line_push_quantity(item)))
         if qty <= 0:
             continue
-        unit_raw = str(item.material_unit or "").strip()
         unit_number = (
-            apply_unit_code_map(unit_raw, unit_map)
+            str(planned.get("unit_number") or "").strip()
             or str(config.get("unit_number") or DEFAULT_UNIT_NUMBER).strip()
             or DEFAULT_UNIT_NUMBER
         )
@@ -185,6 +185,11 @@ def build_kingdee_finished_goods_receipt_model(
             "unit_number": unit_number,
             "linetype_number": str(config.get("linetype_number") or "").strip(),
         }
+        from apps.kuaiconnect.services.document_push.kingdee_warehouse_billentry_dual_qty import (
+            apply_billentry_dual_qty_fields,
+        )
+
+        apply_billentry_dual_qty_fields(entry, planned)
         apply_kingdee_other_inbill_entry_line_fields(
             entry, config=config, org_number=org_number
         )
@@ -548,6 +553,20 @@ class KingdeeFinishedGoodsReceiptPushService:
             product_code=first_code,
             unit_hint=None,
             unit_code_map=unit_code_map,
+            allow_builtin_aliases=False,
+        )
+        from apps.kuaiconnect.services.document_push.kingdee_warehouse_billentry_dual_qty import (
+            log_billentry_dual_qty,
+            resolve_warehouse_bill_line_unit_qty,
+        )
+
+        line_unit_qty_by_item_id = await resolve_warehouse_bill_line_unit_qty(
+            tenant_id,
+            items,
+            quantity_field=_fg_receipt_line_push_quantity,
+            scene_label="成品入库",
+            unit_code_map=unit_code_map,
+            config_unit_number=str(config.get("unit_number") or "").strip() or None,
         )
         submit_path = str(config.get("submit_path") or "").strip() or IM_OTHERINBILL_BATCH_SUBMIT_PATH
         audit_path = str(config.get("audit_path") or "").strip() or IM_OTHERINBILL_BATCH_AUDIT_PATH
@@ -581,6 +600,12 @@ class KingdeeFinishedGoodsReceiptPushService:
             cfg=config,
             warehouse_number=warehouse_number,
             location_number_by_item_id=location_number_by_item_id,
+            line_unit_qty_by_item_id=line_unit_qty_by_item_id,
+        )
+        log_billentry_dual_qty(
+            doc_label="成品入库",
+            doc_code=receipt.receipt_code,
+            entries=model.get("billentry") or [],
         )
         if not (model.get("billentry") or []) and not dry_run:
             raise BusinessLogicError("成品入库单无有效明细数量，无法推送")

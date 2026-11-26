@@ -12,7 +12,7 @@
 Author: Luigi Lu
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from loguru import logger
 
 from infra.schemas.business_config import (
@@ -103,6 +103,27 @@ async def get_audit_required_map(
         raise HTTPException(status_code=500, detail=f"获取审核开关失败: {str(e)}")
 
 
+@router.get(
+    "/parameters/invoice-settlement-mode-migration-preview",
+    summary="Preview invoice settlement mode switch",
+)
+async def preview_invoice_settlement_mode_migration(
+    target_mode: str = Query(..., description="summary | detail"),
+    tenant_id: int = Depends(get_current_tenant),
+) -> dict:
+    try:
+        from apps.kuaicaiwu.services.invoice_settlement_mode_migration_service import (
+            preview_invoice_settlement_mode_migration,
+        )
+
+        return await preview_invoice_settlement_mode_migration(tenant_id, target_mode)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"发票粒度切换预览失败: {e}")
+        raise HTTPException(status_code=500, detail="发票粒度切换预览失败")
+
+
 @router.post("/parameters/update", summary="Update process parameter")
 async def update_process_parameter(
     request: ProcessParameterUpdateRequest,
@@ -116,6 +137,7 @@ async def update_process_parameter(
             category=request.category,
             parameter_key=request.parameter_key,
             value=request.value,
+            migrate_opposite_invoices=request.migrate_opposite_invoices,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -137,6 +159,7 @@ async def batch_update_process_parameters(
         return await BusinessConfigService().batch_update_process_parameters(
             tenant_id=tenant_id,
             parameters=request.parameters,
+            migrate_opposite_invoices=request.migrate_opposite_invoices,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))

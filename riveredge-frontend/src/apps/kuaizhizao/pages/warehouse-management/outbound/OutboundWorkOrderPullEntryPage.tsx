@@ -44,11 +44,13 @@ import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay
 import { fetchMaterialForUnitSelectCache } from '../../../../../components/material-unit-select';
 import {
   OutboundEntryOperatorField,
+  OutboundEntryPickDepartmentField,
   OutboundEntryRemarksSection,
   ReadOnlyFormValue,
   mapWarehouseSelectOptions,
   resolvePrimaryDefaultWarehouse,
   useOutboundOperatorSelect,
+  useOutboundPickDepartmentSelect,
 } from './outboundEntryShared';
 import { PurchaseInboundLineLocationCell } from '../inbound/PurchaseInboundLineWhCells';
 import { lineLocationSelectionRequired } from '../../../../../components/uni-wh-dropdown';
@@ -168,6 +170,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const location = useLocation();
   const { message: messageApi } = App.useApp();
   const operatorHook = useOutboundOperatorSelect();
+  const pickDepartmentHook = useOutboundPickDepartmentSelect();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const productionPickingAuditRequired = useAuditRequired('production_picking', false);
   const initRef = useRef(false);
@@ -1050,6 +1053,15 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       messageApi.warning(t('app.kuaizhizao.warehouseOutbound.entry.fillIssueQty'));
       return;
     }
+    if (!operatorHook.receiverId) {
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.requesterRequired'));
+      return;
+    }
+    const pickDept = pickDepartmentHook.toPayload();
+    if (!pickDept.pick_department_id && !pickDept.pick_department_code) {
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.pickDepartmentRequired'));
+      return;
+    }
     for (const line of activeLines) {
       if (!line.isNonBomExtra) {
         // 真源：行上待领数量（与表列一致）。禁止用 maxQuantities?? 因草稿/历史 0 会挡住小数尾差。
@@ -1173,6 +1185,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         ...(pickingTime?.isValid() ? { picking_time: toApiBusinessDocumentDateTime(pickingTime) } : {}),
         picker_id: operatorHook.receiverId,
         picker_name: operatorHook.receiverName.trim() || undefined,
+        ...pickDept,
       };
       const created = fromMaterialCall
         ? await warehouseApi.materialCall.pushProductionPicking(materialCallId, {
@@ -1334,6 +1347,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                     hook={operatorHook}
                     label={t('app.kuaizhizao.warehouseOutbound.field.picker')}
                   />
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <OutboundEntryPickDepartmentField hook={pickDepartmentHook} />
                 </Col>
               </Row>
             </Form>

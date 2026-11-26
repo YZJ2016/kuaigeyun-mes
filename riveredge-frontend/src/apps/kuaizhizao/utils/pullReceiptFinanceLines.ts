@@ -1,6 +1,7 @@
 export type PullReceiptFinanceDetailLine = {
   line_no: number;
   purchase_receipt_item_id: number;
+  purchase_receipt_id?: number;
   material_code: string;
   material_name: string;
   material_spec?: string | null;
@@ -14,6 +15,64 @@ export type PullReceiptFinanceDetailLine = {
   max_push_amount: number;
   max_push_quantity: number;
 };
+
+export type PurchaseInvoiceDetailItemPayload = {
+  item_name: string;
+  spec_model?: string | null;
+  unit?: string;
+  quantity?: number;
+  unit_price?: number;
+  amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  source_doc_type: string;
+  source_doc_id: number;
+  source_line_id: number;
+  partner_statement_line_id?: number | null;
+};
+
+export function buildPurchaseDetailItemsFromPullLines(
+  selectedItemIds: number[],
+  lineAmounts: Record<number, number>,
+  detailLines: PullReceiptFinanceDetailLine[],
+  taxRatePercent: number,
+  fallbackSourceType: string,
+  fallbackSourceDocId: number,
+): PurchaseInvoiceDetailItemPayload[] {
+  const rateDec = taxRatePercent / 100;
+  const detailById = new Map(detailLines.map((row) => [row.purchase_receipt_item_id, row]));
+  const items: PurchaseInvoiceDetailItemPayload[] = [];
+  for (const itemId of selectedItemIds) {
+    const line = detailById.get(itemId);
+    if (!line) continue;
+    const incl = Math.round((Number(lineAmounts[itemId] ?? 0) || 0) * 100) / 100;
+    if (!(incl > 0)) continue;
+    const excl = Math.round((incl / (1 + rateDec)) * 100) / 100;
+    const tax = Math.round((incl - excl) * 100) / 100;
+    const cap = Number(line.max_push_amount ?? 0);
+    const maxQty = Number(line.max_push_quantity ?? line.quantity ?? 0);
+    const qty =
+      cap > 0.0009 && maxQty > 0
+        ? Math.round((maxQty * (incl / cap)) * 10000) / 10000
+        : line.quantity;
+    const docType = line.purchase_receipt_id ? 'purchase_receipt' : fallbackSourceType;
+    const docId = line.purchase_receipt_id ?? fallbackSourceDocId;
+    items.push({
+      item_name: line.material_name,
+      spec_model: line.material_spec,
+      unit: line.unit,
+      quantity: qty,
+      unit_price: line.unit_price,
+      amount: excl,
+      tax_rate: rateDec,
+      tax_amount: tax,
+      source_doc_type: docType,
+      source_doc_id: docId,
+      source_line_id: itemId,
+    });
+  }
+  return items;
+}
 
 export function initPullReceiptLineSelection(lines: PullReceiptFinanceDetailLine[]) {
   const selectedItemIds: number[] = [];

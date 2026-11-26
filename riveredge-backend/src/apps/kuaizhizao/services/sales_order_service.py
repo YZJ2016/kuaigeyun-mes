@@ -4894,11 +4894,21 @@ class SalesOrderService:
             material_ids=material_ids,
         )
         from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_pushed_purchase_qty_by_sales_order_item,
+            batch_pushed_work_order_qty_by_sales_order_item,
             batch_remaining_fulfillable_qty_by_material,
         )
 
-        fulfill_map = await batch_remaining_fulfillable_qty_by_material(
-            tenant_id, {sales_order_id: items}
+        fulfill_map, purchase_by_item, wo_by_item = await asyncio.gather(
+            batch_remaining_fulfillable_qty_by_material(
+                tenant_id, {sales_order_id: items}
+            ),
+            batch_pushed_purchase_qty_by_sales_order_item(
+                tenant_id, {sales_order_id: items}
+            ),
+            batch_pushed_work_order_qty_by_sales_order_item(
+                tenant_id, {sales_order_id: items}
+            ),
         )
         remaining_by_material = fulfill_map.get(sales_order_id) or {}
         remaining_cursor = dict(remaining_by_material)
@@ -4907,8 +4917,14 @@ class SalesOrderService:
             item_id = int(getattr(it, "id", 0) or 0)
             mid = int(getattr(it, "material_id", 0) or 0)
             order_qty = Decimal(str(it.order_quantity or 0))
+            line_rem = max(
+                Decimal("0"),
+                order_qty
+                - purchase_by_item.get(item_id, Decimal("0"))
+                - wo_by_item.get(item_id, Decimal("0")),
+            )
             remain = remaining_cursor.get(mid, Decimal("0"))
-            allowed = min(order_qty, remain) if remain > 0 else Decimal("0")
+            allowed = min(line_rem, remain) if line_rem > 0 and remain > 0 else Decimal("0")
             max_by_item[item_id] = allowed if allowed > 0 else Decimal("0")
             if mid > 0 and allowed > 0:
                 remaining_cursor[mid] = remain - allowed
@@ -5063,9 +5079,12 @@ class SalesOrderService:
                     f"不能超过订单数量 {order_qty}"
                 )
             if use_qty > max_qty:
+                line_pushed = purchase_by_item.get(
+                    item_id, Decimal("0")
+                ) + wo_by_item.get(item_id, Decimal("0"))
                 raise BusinessLogicError(
                     f"物料 {it.material_code or it.material_name or item_id} 本次下推数量 {use_qty} "
-                    f"超过可下推剩余数量 {max_qty}（已下推 {pushed_by_material.get(material_id, Decimal('0'))}）"
+                    f"超过可下推剩余数量 {max_qty}（本行已转采购+工单 {line_pushed}）"
                 )
             if material_id > 0:
                 selected_by_material[material_id] = selected_by_material.get(material_id, Decimal("0")) + use_qty
@@ -5589,11 +5608,21 @@ class SalesOrderService:
             material_ids=material_ids,
         )
         from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_pushed_purchase_qty_by_sales_order_item,
+            batch_pushed_work_order_qty_by_sales_order_item,
             batch_remaining_fulfillable_qty_by_material,
         )
 
-        fulfill_map = await batch_remaining_fulfillable_qty_by_material(
-            tenant_id, {sales_order_id: items}
+        fulfill_map, purchase_by_item, wo_by_item = await asyncio.gather(
+            batch_remaining_fulfillable_qty_by_material(
+                tenant_id, {sales_order_id: items}
+            ),
+            batch_pushed_purchase_qty_by_sales_order_item(
+                tenant_id, {sales_order_id: items}
+            ),
+            batch_pushed_work_order_qty_by_sales_order_item(
+                tenant_id, {sales_order_id: items}
+            ),
         )
         remaining_cursor: Dict[int, Decimal] = dict(
             fulfill_map.get(sales_order_id) or {}
@@ -5604,8 +5633,12 @@ class SalesOrderService:
                 continue
             item_id = int(getattr(it, "id", 0) or 0)
             mid = int(getattr(it, "material_id", 0) or 0)
+            pushed_work_order = wo_by_item.get(item_id, Decimal("0"))
+            pushed_purchase = purchase_by_item.get(item_id, Decimal("0"))
+            pushed_line = pushed_work_order + pushed_purchase
+            line_rem = max(Decimal("0"), qty - pushed_line)
             remain = remaining_cursor.get(mid, Decimal("0"))
-            max_qty = min(qty, remain) if remain > 0 else Decimal("0")
+            max_qty = min(line_rem, remain) if line_rem > 0 and remain > 0 else Decimal("0")
             if mid > 0 and max_qty > 0:
                 remaining_cursor[mid] = remain - max_qty
             source_type = await get_material_source_type(tenant_id, it.material_id)
@@ -5631,7 +5664,9 @@ class SalesOrderService:
                     "material_code": material_code,
                     "material_name": material_name,
                     "quantity": float(qty),
-                    "pushed_quantity": float(pushed_by_material.get(mid, Decimal("0"))),
+                    "pushed_quantity": float(pushed_line),
+                    "pushed_work_order_quantity": float(pushed_work_order),
+                    "pushed_purchase_quantity": float(pushed_purchase),
                     "max_push_quantity": float(max_qty),
                     "on_hand_quantity": on_hand_qty,
                     "available_quantity": available_qty,

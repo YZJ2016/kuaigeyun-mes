@@ -130,6 +130,15 @@ async def _load_binding_context(
             if str(item.get("connection_code") or "").strip():
                 config["connection_code"] = str(item.get("connection_code")).strip()
     action_apis = _action_apis_from_targets(targets)
+    for item in targets:
+        uuid = str(item.get("save_api_uuid") or "").strip()
+        actions = item.get("trigger_actions") or []
+        if not uuid or not isinstance(actions, list):
+            continue
+        for action in actions:
+            slot = str(action or "").strip()
+            if slot == "update" and not str(action_apis.get("update") or "").strip():
+                action_apis["update"] = uuid
     confirm_uuid = str(action_apis.get("confirm") or "").strip()
     if confirm_uuid:
         config["save_api_uuid"] = confirm_uuid

@@ -317,17 +317,51 @@ class RoleService:
         
         # 获取搜索结果的角色对象
         roles = search_result["items"]
-        
+
+        role_ids = [role.id for role in roles]
+        members_by_role_id: dict[int, list[str]] = {rid: [] for rid in role_ids}
+        user_count_by_role_id: dict[int, int] = {rid: 0 for rid in role_ids}
+
+        if role_ids:
+            user_role_rows = await UserRole.filter(role_id__in=role_ids).values_list(
+                "role_id", "user_id"
+            )
+            for role_id, _user_id in user_role_rows:
+                user_count_by_role_id[role_id] = user_count_by_role_id.get(role_id, 0) + 1
+
+            distinct_user_ids = list({user_id for _, user_id in user_role_rows})
+            if distinct_user_ids:
+                users = await User.filter(
+                    id__in=distinct_user_ids,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).only("id", "full_name", "username")
+                user_label_by_id: dict[int, list[str]] = {}
+                for user in users:
+                    labels: list[str] = []
+                    full_name = (user.full_name or "").strip()
+                    if full_name:
+                        labels.append(full_name)
+                    username = (user.username or "").strip()
+                    if username and username != full_name:
+                        labels.append(username)
+                    if labels:
+                        user_label_by_id[user.id] = labels
+
+                for role_id, user_id in user_role_rows:
+                    for label in user_label_by_id.get(user_id, []):
+                        bucket = members_by_role_id.setdefault(role_id, [])
+                        if label not in bucket:
+                            bucket.append(label)
+
         # 获取关联的权限数量和用户数量
         result = []
         for role in roles:
             # 暂时注释掉权限预加载，避免多对多关系查询问题
             # await role.fetch_related('permissions')
             permission_count = 0  # 暂时设为0
-            
-            # 获取用户数量
-            user_count = await UserRole.filter(role_id=role.id).count()
-            
+            user_count = user_count_by_role_id.get(role.id, 0)
+
             result.append({
                 "uuid": role.uuid,
                 "name": role.name,
@@ -335,10 +369,12 @@ class RoleService:
                 "description": role.description,
                 "role_type": role.role_type,
                 "external_partner_type": role.external_partner_type,
+                "functional_domain": role.functional_domain,
                 "is_system": role.is_system,
                 "is_active": role.is_active,
                 "permission_count": permission_count,
                 "user_count": user_count,
+                "member_search_labels": members_by_role_id.get(role.id, []),
                 "created_at": role.created_at,
                 "updated_at": role.updated_at,
             })

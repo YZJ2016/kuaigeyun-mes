@@ -659,8 +659,20 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
           <Table<SalesOrderItem>
             size="small"
             tableLayout="fixed"
-            style={{ minWidth: 1680 }}
+            style={{ minWidth: 1808 }}
             columns={[
+              {
+                title: t('app.kuaizhizao.salesOrder.customerOrderNo'),
+                dataIndex: 'customer_order_no',
+                width: 128,
+                ellipsis: true,
+                render: (_: unknown, record: SalesOrderItem) => {
+                  const lineNo = String(record.customer_order_no ?? '').trim();
+                  const headerNo = String(order.customer_order_no ?? '').trim();
+                  const text = lineNo || headerNo;
+                  return text || '—';
+                },
+              },
               { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
               { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200,
                 render: (val: string, record: SalesOrderItem) => (

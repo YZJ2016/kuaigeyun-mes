@@ -262,6 +262,7 @@ import {
   listSalesOrderWorkOrderPullLines,
   previewPushSalesOrderToWorkOrder,
   pushSalesOrderToWorkOrder,
+  resolveWorkOrderDefaultPushQuantity,
   type SalesOrderWorkOrderPullLine,
 } from '../../../services/sales-order'
 import { listSalesForecasts } from '../../../services/sales-forecast'
@@ -3656,7 +3657,7 @@ const WorkOrdersPage: React.FC = () => {
         ;(res.items || []).forEach((row: any) => {
           const itemId = Number(row.item_id)
           if (!Number.isFinite(itemId) || itemId <= 0) return
-          const defaultQty = Number(row.max_push_quantity ?? row.quantity ?? 0)
+          const defaultQty = resolveWorkOrderDefaultPushQuantity(row)
           qtyMap[itemId] = defaultQty > 0 ? defaultQty : 0
           bomExpandMap[itemId] = row.has_bom === true
           if (defaultQty <= 0) return
@@ -3796,6 +3797,12 @@ const WorkOrdersPage: React.FC = () => {
       resetSoPullPreview()
       actionRef.current?.reload()
       invalidateStatistics()
+      const woDocs = (res?.target_documents ?? []).filter(
+        (d) => d?.type === 'work_order' && Number(d?.id) > 0,
+      )
+      if (soPullMode === 'draft' && woDocs.length === 1) {
+        navigate(`${WORK_ORDER_LIST_PATH}/${woDocs[0].id}/edit`)
+      }
     } catch (e: any) {
       const detail = e?.response?.data?.detail
       const msg = typeof detail === 'string' ? detail : detail?.message
@@ -3823,6 +3830,7 @@ const WorkOrdersPage: React.FC = () => {
     soPullWorkCenters,
     soPullBomExpand,
     soPullBomParams,
+    navigate,
     t,
   ])
 
@@ -11522,8 +11530,28 @@ const WorkOrdersPage: React.FC = () => {
                     align: 'right',
                     render: (val: unknown) => formatQuantity(val),
                   },
-                  { title: t('app.kuaizhizao.salesOrder.colPushedQty'), dataIndex: 'pushed_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.colPushableQty'), dataIndex: 'max_push_quantity', width: 90, align: 'right', render: formatQuantity },
+                  {
+                    title: (
+                      <Tooltip title={t('app.kuaizhizao.salesOrder.colPushedQtyTip')}>
+                        {t('app.kuaizhizao.salesOrder.colPushedQty')}
+                      </Tooltip>
+                    ),
+                    dataIndex: 'pushed_quantity',
+                    width: 90,
+                    align: 'right',
+                    render: formatQuantity,
+                  },
+                  {
+                    title: (
+                      <Tooltip title={t('app.kuaizhizao.salesOrder.colPushableQtyTipWorkOrder')}>
+                        {t('app.kuaizhizao.salesOrder.colPushableQty')}
+                      </Tooltip>
+                    ),
+                    dataIndex: 'max_push_quantity',
+                    width: 90,
+                    align: 'right',
+                    render: formatQuantity,
+                  },
                   {
                     title: (
                       <Tooltip title={t('app.kuaizhizao.salesOrder.colBomExpandChildrenTip')}>

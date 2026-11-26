@@ -28,6 +28,16 @@ class GlBookSettings(BaseModel):
     require_transfer_before_close = fields.BooleanField(
         default=False, description="结账前须执行必跑转账/摊销"
     )
+    invoice_settlement_mode_default = fields.CharField(
+        max_length=16,
+        default="summary",
+        description="默认发票结算粒度 summary|detail",
+    )
+    statement_line_granularity = fields.CharField(
+        max_length=20,
+        default="material_line",
+        description="往来对账明细粒度 material_line",
+    )
     initialized = fields.BooleanField(default=False, description="是否已结束初始化/开账")
     current_year = fields.IntField(null=True, description="当前会计年度")
     current_month = fields.IntField(null=True, description="当前会计月份")

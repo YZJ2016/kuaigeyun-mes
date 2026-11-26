@@ -174,6 +174,87 @@ def _line_statement_amount(ln: Dict[str, Any]) -> Decimal:
     return _line_doc_amount(ln)
 
 
+def collapse_material_lines_to_document_lines(
+    lines: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """物料粒度行合并为单据头展示行（列表按单号一行，展开再看明细）。"""
+    from apps.kuaicaiwu.config.finance_settlement_contract import (
+        PARTNER_STATEMENT_LINE_KIND_MATERIAL,
+    )
+
+    if not lines:
+        return []
+    if not any(
+        str(ln.get("line_kind") or "").strip() == PARTNER_STATEMENT_LINE_KIND_MATERIAL
+        for ln in lines
+    ):
+        return [dict(ln) for ln in lines]
+
+    groups: Dict[Tuple[str, int], Dict[str, Any]] = {}
+    order: List[Tuple[str, int]] = []
+    passthrough: List[Dict[str, Any]] = []
+
+    material_field_keys = frozenset(
+        {
+            "material_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "unit",
+            "quantity",
+            "source_line_id",
+            "line_kind",
+            "invoice_occupied_amount",
+            "invoiceable_amount",
+        }
+    )
+
+    for ln in lines:
+        if str(ln.get("line_kind") or "").strip() != PARTNER_STATEMENT_LINE_KIND_MATERIAL:
+            passthrough.append(dict(ln))
+            continue
+        key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
+        if not key:
+            passthrough.append(dict(ln))
+            continue
+        stmt = _line_statement_amount(ln)
+        if key not in groups:
+            base = {
+                k: v
+                for k, v in ln.items()
+                if k not in material_field_keys
+            }
+            base["statement_amount"] = 0.0
+            base["prior_stated_amount"] = 0.0
+            base["remaining_amount"] = 0.0
+            base["debit"] = 0.0
+            base["credit"] = 0.0
+            groups[key] = base
+            order.append(key)
+        row = groups[key]
+        row["statement_amount"] = float(_q_money(Decimal(str(row["statement_amount"])) + stmt))
+        row["prior_stated_amount"] = float(
+            _q_money(
+                Decimal(str(row.get("prior_stated_amount") or 0))
+                + _q_money(ln.get("prior_stated_amount"))
+            )
+        )
+        row["remaining_amount"] = float(
+            _q_money(
+                Decimal(str(row.get("remaining_amount") or 0))
+                + _q_money(ln.get("remaining_amount"))
+            )
+        )
+        is_debit = _q_money(ln.get("debit", 0)) > _q_money(ln.get("credit", 0))
+        if is_debit:
+            row["debit"] = float(_q_money(Decimal(str(row.get("debit") or 0)) + stmt))
+        else:
+            row["credit"] = float(_q_money(Decimal(str(row.get("credit") or 0)) + stmt))
+
+    collapsed = passthrough + [groups[k] for k in order]
+    return collapsed
+
+
 def _line_is_debit_side(ln: Dict[str, Any]) -> bool:
     return _q_money(ln.get("debit", 0)) > 0
 
@@ -824,7 +905,10 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             if exclude_statement_id is not None and int(stmt.id) == int(exclude_statement_id):
                 continue
             details = stmt.transaction_details or {}
-            for ln in details.get("lines") or []:
+            stored = details.get("document_lines")
+            if not stored:
+                stored = collapse_material_lines_to_document_lines(details.get("lines") or [])
+            for ln in stored:
                 key = _line_doc_key(ln.get("doc_type"), ln.get("doc_id"))
                 if not key:
                     continue
@@ -951,6 +1035,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         supports_ledger_modes = partner_default_statement or self._lines_support_statement_ledger(
             lines
         )
+        from apps.kuaicaiwu.services.partner_statement_line_service import (
+            PartnerStatementLineService,
+        )
+
+        line_svc = PartnerStatementLineService()
+        material_lines = await line_svc.expand_preview_lines_to_material_lines(
+            tenant_id, lines, self
+        )
         return {
             "partner_id": partner_id,
             "partner_name": partner["name"],
@@ -965,7 +1057,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 "credit_total": float(credit_total),
                 "closing_balance": float(closing),
             },
-            "lines": lines,
+            "lines": material_lines,
+            "document_lines": lines,
             "partner_snapshot": partner,
             "excluded_from_period": excluded_from_period,
             # 仅提示：同月可有多张对账单；是否可生成看 lines 是否仍有未纳入单据
@@ -1055,17 +1148,26 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         code = await self._generate_statement_code(tenant_id)
         company_name = preview["company_name"]
         summary = dict(preview["summary"])
-        lines = list(preview.get("lines") or [])
+        document_lines = list(preview.get("document_lines") or [])
+        if not document_lines:
+            document_lines = collapse_material_lines_to_document_lines(
+                list(preview.get("lines") or [])
+            )
         overrides = self._build_line_amount_override_map(line_amounts)
         if line_amounts is not None and not overrides:
             raise BusinessLogicError("请至少勾选一行对账明细")
+        workflow_lines = document_lines
         if overrides:
             prior_map = await self._load_prior_stated_amounts(tenant_id, partner_id, partner_type)
-            lines = self._apply_line_amount_overrides_to_preview_lines(lines, prior_map, overrides)
-            if not lines:
+            workflow_lines = self._apply_line_amount_overrides_to_preview_lines(
+                document_lines, prior_map, overrides
+            )
+            if not workflow_lines:
                 raise BusinessLogicError("对账明细不能为空")
             opening = _q_money(summary["opening_balance"])
-            debit_total, credit_total, closing, lines = self._apply_running_balance(opening, lines)
+            debit_total, credit_total, closing, workflow_lines = self._apply_running_balance(
+                opening, workflow_lines
+            )
             summary = {
                 "opening_balance": float(opening),
                 "debit_total": float(debit_total),
@@ -1074,7 +1176,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             }
         details = {
             "summary": summary,
-            "lines": lines,
+            "document_lines": workflow_lines,
             "partner_snapshot": preview["partner_snapshot"],
             "balance_label": preview["balance_label"],
             "period_label": period_label,
@@ -1087,12 +1189,25 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         # 明细已是月结业务源单，或客商默认按月结：允许立即/按发票；否则强制立即立账
         allows_ledger_modes = await self._partner_uses_statement_ledger(
             tenant_id, partner_id, partner_type
-        ) or self._lines_support_statement_ledger(lines)
+        ) or self._lines_support_statement_ledger(workflow_lines)
         if not allows_ledger_modes:
             mode = "immediate"
 
         user_info = await self.get_user_info(created_by)
-        return await PartnerStatement.create(
+        from apps.kuaicaiwu.services.partner_statement_line_service import (
+            PartnerStatementLineService,
+        )
+        from apps.kuaicaiwu.config.finance_settlement_contract import (
+            STATEMENT_LINE_GRANULARITY_MATERIAL,
+        )
+
+        line_svc = PartnerStatementLineService()
+        material_lines = await line_svc.expand_preview_lines_to_material_lines(
+            tenant_id, workflow_lines, self
+        )
+        details["lines"] = material_lines
+
+        obj = await PartnerStatement.create(
             tenant_id=tenant_id,
             statement_code=code,
             partner_id=partner_id,
@@ -1110,12 +1225,17 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             company_name=company_name,
             notes=notes,
             attachments=attachments,
+            statement_line_granularity=STATEMENT_LINE_GRANULARITY_MATERIAL,
             ledger_posting_mode=mode,
             created_by=created_by,
             created_by_name=user_info["name"],
             updated_by=created_by,
             updated_by_name=user_info["name"],
         )
+        await line_svc.replace_statement_lines(
+            tenant_id, obj, material_lines, amount_basis=basis, is_read_only=False
+        )
+        return obj
 
     async def list_statements(
         self,
@@ -1990,13 +2110,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
     def _line_amount_inputs_from_stored_lines(
         lines: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        inputs: List[Dict[str, Any]] = []
-        for ln in lines:
+        by_key: Dict[Tuple[str, int], Dict[str, Any]] = {}
+        for ln in collapse_material_lines_to_document_lines(lines):
             if int(ln.get("tree_level") or 0) > 0:
                 continue
             doc_id = ln.get("doc_id")
             doc_type = ln.get("doc_type")
-            if doc_id is None or not doc_type:
+            key = _line_doc_key(doc_type, doc_id)
+            if not key:
                 continue
             raw = ln.get("statement_amount")
             if raw is None:
@@ -2010,14 +2131,16 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             amount = _q_money(raw)
             if amount <= 0:
                 continue
-            inputs.append(
-                {
+            prev = by_key.get(key)
+            if prev is None:
+                by_key[key] = {
                     "doc_type": doc_type,
                     "doc_id": int(doc_id),
                     "statement_amount": float(amount),
                 }
-            )
-        return inputs
+            else:
+                prev["statement_amount"] = float(_q_money(prev["statement_amount"]) + amount)
+        return list(by_key.values())
 
     async def update_statement_header(
         self,
@@ -2055,7 +2178,11 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         self._ensure_statement_content_editable(obj)
         basis = parse_statement_amount_basis(amount_basis)
         details = dict(obj.transaction_details or {})
-        current_lines = list(details.get("lines") or [])
+        current_lines = list(details.get("document_lines") or [])
+        if not current_lines:
+            current_lines = collapse_material_lines_to_document_lines(
+                list(details.get("lines") or [])
+            )
         if not current_lines:
             raise BusinessLogicError("对账单无明细行")
         line_amounts = self._line_amount_inputs_from_stored_lines(current_lines)
@@ -2081,7 +2208,11 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             obj.end_date,
             basis,
         )
-        preview_lines = list(preview.get("lines") or [])
+        preview_doc_lines = list(preview.get("document_lines") or [])
+        if not preview_doc_lines:
+            preview_doc_lines = collapse_material_lines_to_document_lines(
+                list(preview.get("lines") or [])
+            )
         prior_map = await self._load_prior_stated_amounts(
             tenant_id,
             obj.partner_id,
@@ -2090,7 +2221,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         )
         overrides = self._build_line_amount_override_map(line_amounts)
         rebuilt = self._apply_line_amount_overrides_to_preview_lines(
-            preview_lines, prior_map, overrides
+            preview_doc_lines, prior_map, overrides
         )
         if not rebuilt:
             raise BusinessLogicError("刷新后无有效对账明细，请检查期间与勾选")
@@ -2117,7 +2248,16 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "credit_total": float(credit_total),
             "closing_balance": float(closing),
         }
-        details["lines"] = lines
+        from apps.kuaicaiwu.services.partner_statement_line_service import (
+            PartnerStatementLineService,
+        )
+
+        line_svc = PartnerStatementLineService()
+        material_lines = await line_svc.expand_preview_lines_to_material_lines(
+            tenant_id, lines, self
+        )
+        details["document_lines"] = lines
+        details["lines"] = material_lines
         details["summary"] = summary
         details["amount_basis"] = basis
         obj.transaction_details = details
@@ -2128,6 +2268,10 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         operator = await User.filter(id=user_id).first()
         apply_update_audit(obj, operator)
         await obj.save()
+        read_only = str(obj.review_status or "") in ("已审核", "approved", "APPROVED")
+        await line_svc.replace_statement_lines(
+            tenant_id, obj, material_lines, amount_basis=basis, is_read_only=read_only
+        )
         return obj, warnings
 
     async def update_statement_lines(
@@ -2140,7 +2284,11 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         obj = await self.get_statement(tenant_id, statement_id)
         self._ensure_statement_content_editable(obj)
         details = dict(obj.transaction_details or {})
-        current_lines = list(details.get("lines") or [])
+        current_lines = list(details.get("document_lines") or [])
+        if not current_lines:
+            current_lines = collapse_material_lines_to_document_lines(
+                list(details.get("lines") or [])
+            )
         if not current_lines:
             raise BusinessLogicError("对账单无明细行")
         prior_map = await self._load_prior_stated_amounts(
@@ -2168,7 +2316,17 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             "credit_total": float(credit_total),
             "closing_balance": float(closing),
         }
-        details["lines"] = lines
+        basis = str(details.get("amount_basis") or "tax_inclusive")
+        from apps.kuaicaiwu.services.partner_statement_line_service import (
+            PartnerStatementLineService,
+        )
+
+        line_svc = PartnerStatementLineService()
+        material_lines = await line_svc.expand_preview_lines_to_material_lines(
+            tenant_id, lines, self
+        )
+        details["document_lines"] = lines
+        details["lines"] = material_lines
         details["summary"] = summary
         obj.transaction_details = details
         obj.debit_total = debit_total
@@ -2177,6 +2335,10 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         operator = await User.filter(id=user_id).first()
         apply_update_audit(obj, operator)
         await obj.save()
+        read_only = str(obj.review_status or "") in ("已审核", "approved", "APPROVED")
+        await line_svc.replace_statement_lines(
+            tenant_id, obj, material_lines, amount_basis=basis, is_read_only=read_only
+        )
         if obj.status in ("Draft", "Disputed"):
             return await self.confirm_business_statement(tenant_id, statement_id, user_id)
         return await self.get_statement(tenant_id, statement_id)
@@ -2194,6 +2356,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
     _OUTSOURCE_RECEIPT_DOC_TYPES = frozenset({
         "outsource_material_receipt", "委外收货", "outsource_receipt",
     })
+    _SALES_DELIVERY_DOC_TYPES = frozenset({
+        "sales_delivery", "销售出库", "sales_deliveries",
+    })
 
     def _normalize_inbound_doc_type(self, doc_type: str) -> str:
         normalized = (doc_type or "").strip()
@@ -2201,18 +2366,74 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             return "purchase_receipt"
         if normalized in self._OUTSOURCE_RECEIPT_DOC_TYPES:
             return "outsource_material_receipt"
+        if normalized in self._SALES_DELIVERY_DOC_TYPES:
+            return "sales_delivery"
         raise ValidationError(
-            "doc_type 仅支持 purchase_receipt/采购入库 或 outsource_material_receipt/委外收货"
+            "doc_type 仅支持 purchase_receipt/采购入库、"
+            "outsource_material_receipt/委外收货 或 sales_delivery/销售出库"
         )
 
     async def get_statement_line_detail(
         self, tenant_id: int, doc_type: str, doc_id: int
     ) -> Dict[str, Any]:
-        """返回采购入库或委外收货明细行（含质检字段），供对账单入库明细弹窗。"""
+        """返回采购入库、销售出库或委外收货明细行（含质检字段），供对账单明细展开与弹窗。"""
         kind = self._normalize_inbound_doc_type(doc_type)
         if kind == "purchase_receipt":
             return await self._build_purchase_receipt_line_detail(tenant_id, doc_id)
+        if kind == "sales_delivery":
+            return await self._build_sales_delivery_line_detail(tenant_id, doc_id)
         return await self._build_outsource_receipt_line_detail(tenant_id, doc_id)
+
+    async def _build_sales_delivery_line_detail(
+        self, tenant_id: int, delivery_id: int
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+        from apps.kuaizhizao.constants.price_type import normalize_price_type
+        from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
+
+        delivery = await SalesDelivery.get_or_none(
+            tenant_id=tenant_id, id=delivery_id, deleted_at__isnull=True
+        )
+        if not delivery:
+            raise NotFoundError(f"销售出库单不存在: {delivery_id}")
+        price_type = normalize_price_type(getattr(delivery, "price_type", None))
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id, delivery_id=delivery_id, deleted_at__isnull=True
+        ).order_by("id").all()
+        detail_items: List[Dict[str, Any]] = []
+        for item in items:
+            qty = float(item.delivery_quantity or 0)
+            unit_price = float(item.unit_price or 0)
+            tax_rate = float(getattr(item, "tax_rate", 0) or 0)
+            line_amount = float(
+                stored_sales_line_amount(
+                    qty,
+                    unit_price,
+                    tax_rate,
+                    price_type,
+                    is_gift=bool(getattr(item, "is_gift", False)),
+                )
+            )
+            detail_items.append({
+                "id": item.id,
+                "source_line_id": item.id,
+                "material_id": item.material_id,
+                "material_code": item.material_code,
+                "material_name": item.material_name,
+                "material_spec": getattr(item, "material_spec", None),
+                "unit": item.material_unit,
+                "quantity": qty,
+                "unit_price": unit_price,
+                "amount": line_amount,
+            })
+        return {
+            "doc_type": "sales_delivery",
+            "doc_id": delivery.id,
+            "doc_code": delivery.delivery_code,
+            "partner_name": delivery.customer_name,
+            "items": detail_items,
+        }
 
     async def _build_purchase_receipt_line_detail(
         self, tenant_id: int, receipt_id: int
@@ -2254,6 +2475,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             if insp is not None and getattr(insp, "inspection_quantity", None) is not None:
                 insp_qty = float(insp.inspection_quantity)
             detail_items.append({
+                "id": item.id,
+                "source_line_id": item.id,
+                "material_id": item.material_id,
                 "material_code": item.material_code,
                 "material_name": item.material_name,
                 "material_spec": item.material_spec,

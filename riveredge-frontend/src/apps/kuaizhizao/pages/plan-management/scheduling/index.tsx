@@ -203,7 +203,7 @@ function pickVisualSchedulingConstraints(constraints: SchedulingConstraints): Sc
   };
 }
 
-const SCHEDULING_FULLSCREEN_TIP_SESSION_KEY = 'kuaizhizao.scheduling.fullscreen.tip.tour.v3.shown';
+const SCHEDULING_FULLSCREEN_TIP_STORAGE_KEY = 'kuaizhizao.scheduling.fullscreen.tip.tour.v5.shown';
 
 function applyWorkOrderDateUpdates(
   list: WorkOrderForGantt[],
@@ -647,11 +647,20 @@ const SchedulingPage: React.FC = () => {
     if (filterWorkOrderIds?.length) setSelectedRowKeys(filterWorkOrderIds);
   }, [filterWorkOrderIds]);
 
+  const dismissFullscreenTour = useCallback(() => {
+    setFullscreenTourOpen(false);
+    try {
+      localStorage.setItem(SCHEDULING_FULLSCREEN_TIP_STORAGE_KEY, '1');
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
     let attempts = 0;
     try {
-      if (sessionStorage.getItem(SCHEDULING_FULLSCREEN_TIP_SESSION_KEY) === '1') return undefined;
+      if (localStorage.getItem(SCHEDULING_FULLSCREEN_TIP_STORAGE_KEY) === '1') return undefined;
       timer = setInterval(() => {
         attempts += 1;
         const el = document.querySelector('.uni-tabs-fullscreen-button');
@@ -3018,19 +3027,26 @@ const SchedulingPage: React.FC = () => {
     <ListPageTemplate>
       <Tour
         open={fullscreenTourOpen}
-        onClose={() => {
-          setFullscreenTourOpen(false);
-          try {
-            sessionStorage.setItem(SCHEDULING_FULLSCREEN_TIP_SESSION_KEY, '1');
-          } catch {
-            // ignore
-          }
-        }}
+        onClose={dismissFullscreenTour}
         placement="left"
         steps={[
           {
-            title: t('app.kuaizhizao.scheduling.tour.fullscreenTitle'),
-            description: t('app.kuaizhizao.scheduling.tour.fullscreenDescription'),
+            title: (
+              <Space size={8} wrap>
+                <Tag color="red" variant="filled" style={{ margin: 0 }}>
+                  NEW
+                </Tag>
+                <span>{t('app.kuaizhizao.scheduling.tour.fullscreenTitle')}</span>
+              </Space>
+            ),
+            description: (
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <span>{t('app.kuaizhizao.scheduling.tour.fullscreenDescription')}</span>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('app.kuaizhizao.scheduling.tour.dismissHint')}
+                </Typography.Text>
+              </Space>
+            ),
             target: () => document.querySelector('.uni-tabs-fullscreen-button') as HTMLElement,
           },
         ]}

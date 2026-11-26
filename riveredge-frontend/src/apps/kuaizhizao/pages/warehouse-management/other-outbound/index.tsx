@@ -389,14 +389,14 @@ function flattenDepartmentTree(items: DepartmentTreeItem[]): DepartmentTreeItem[
   return out;
 }
 
+const OTHER_OUTBOUND_PICKER_USER_PAGE_SIZE = 50;
+
 function OtherOutboundUserPickField({
   name,
   nameField,
   label,
   placeholder,
   required,
-  userList,
-  loading,
   operatorNumberField,
   departmentOptions,
 }: {
@@ -405,14 +405,57 @@ function OtherOutboundUserPickField({
   label: string;
   placeholder: string;
   required?: boolean;
-  userList: User[];
-  loading: boolean;
   operatorNumberField?: string;
   departmentOptions?: Array<{ value: number; label: string; code?: string }>;
 }) {
   const form = AntForm.useFormInstance();
   const pickedId = AntForm.useWatch(name, form);
   const pickedName = AntForm.useWatch(nameField, form);
+  const [userList, setUserList] = useState<User[]>([]);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+
+  const loadPickerUsers = useCallback(async (keyword = '') => {
+    setUserSearchLoading(true);
+    try {
+      const res = await searchUserDisplay({
+        page: 1,
+        page_size: OTHER_OUTBOUND_PICKER_USER_PAGE_SIZE,
+        is_active: true,
+        keyword: keyword.trim() || undefined,
+      });
+      setUserList(displayItemsToUsers(res.items || []));
+    } catch {
+      setUserList([]);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  }, []);
+
+  const pickerSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const debouncedLoadPickerUsers = useCallback((keyword: string) => {
+    if (pickerSearchTimerRef.current) {
+      clearTimeout(pickerSearchTimerRef.current);
+    }
+    pickerSearchTimerRef.current = setTimeout(() => {
+      pickerSearchTimerRef.current = null;
+      void loadPickerUsers(keyword);
+    }, 300);
+  }, [loadPickerUsers]);
+
+  useEffect(
+    () => () => {
+      if (pickerSearchTimerRef.current) {
+        clearTimeout(pickerSearchTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    void loadPickerUsers('');
+  }, [loadPickerUsers]);
+
   const options = useMemo(() => {
     const base = userList.map((u) => ({
       value: Number(u.id),
@@ -442,10 +485,15 @@ function OtherOutboundUserPickField({
         <UniDropdown
           placeholder={placeholder}
           showSearch
+          filterOption={false}
           allowClear={!required}
-          loading={loading}
+          loading={userSearchLoading}
           style={{ width: '100%' }}
           options={options}
+          onOpenChange={(open) => {
+            if (open) void loadPickerUsers('');
+          }}
+          onSearch={debouncedLoadPickerUsers}
           onChange={(val, opt: { label?: React.ReactNode } | undefined) => {
             const patch: Record<string, unknown> = {
               [nameField]: typeof opt?.label === 'string' ? opt.label : undefined,
@@ -549,20 +597,13 @@ const OtherOutboundPage: React.FC = () => {
     [],
   );
   const [departmentsLoading, setDepartmentsLoading] = useState(false);
-  const [pickerUsers, setPickerUsers] = useState<User[]>([]);
-  const [pickerUsersLoading, setPickerUsersLoading] = useState(false);
-
   useEffect(() => {
     if (!createModalVisible) return;
     let cancelled = false;
     (async () => {
       setDepartmentsLoading(true);
-      setPickerUsersLoading(true);
       try {
-        const [deptRes, userRes] = await Promise.all([
-          getDepartmentTree({ is_active: true }),
-          searchUserDisplay({ page_size: 100, is_active: true }),
-        ]);
+        const deptRes = await getDepartmentTree({ is_active: true });
         if (!cancelled) {
           setDepartmentOptions(
             flattenDepartmentTree(deptRes.items || []).map((d) => ({
@@ -571,17 +612,14 @@ const OtherOutboundPage: React.FC = () => {
               code: d.code,
             })),
           );
-          setPickerUsers(displayItemsToUsers(userRes.items || []));
         }
       } catch {
         if (!cancelled) {
           setDepartmentOptions([]);
-          setPickerUsers([]);
         }
       } finally {
         if (!cancelled) {
           setDepartmentsLoading(false);
-          setPickerUsersLoading(false);
         }
       }
     })();
@@ -1773,8 +1811,13 @@ const OtherOutboundPage: React.FC = () => {
           return payload;
         });
         const updateOutboundType = String(values.outbound_type ?? '').trim();
+        if (!updateOutboundType) {
+          const msg = t('app.kuaizhizao.otherOutbound.field.outboundTypeRequired');
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
         await warehouseApi.otherOutbound.update(String(editingOutboundId), {
-          ...(updateOutboundType ? { outbound_type: updateOutboundType } : {}),
+          outbound_type: updateOutboundType,
           reason_type: standardValues.reason_type,
           warehouse_id: headerWhId,
           warehouse_name: headerWhName,
@@ -2305,25 +2348,16 @@ const OtherOutboundPage: React.FC = () => {
             <ProFormItem
               name="outbound_type"
               label={t('app.kuaizhizao.otherOutbound.field.outboundType')}
-              rules={
-                editingOutboundId == null
-                  ? [
-                      {
-                        required: true,
-                        message: t('app.kuaizhizao.otherOutbound.field.outboundTypeRequired'),
-                      },
-                    ]
-                  : []
-              }
+              rules={[
+                {
+                  required: true,
+                  message: t('app.kuaizhizao.otherOutbound.field.outboundTypeRequired'),
+                },
+              ]}
             >
               <UniDropdown
                 style={{ width: '100%' }}
-                allowClear={editingOutboundId != null}
-                placeholder={
-                  editingOutboundId != null
-                    ? t('app.kuaizhizao.otherOutbound.field.outboundTypeLegacyHint')
-                    : undefined
-                }
+                allowClear={false}
                 options={[
                   {
                     value: OTHER_OUTBOUND_TYPE_MATERIAL,
@@ -2375,8 +2409,6 @@ const OtherOutboundPage: React.FC = () => {
               label={t('app.kuaizhizao.otherOutbound.field.picker')}
               placeholder={t('app.kuaizhizao.otherOutbound.field.pickerPlaceholder')}
               required
-              userList={pickerUsers}
-              loading={pickerUsersLoading}
               operatorNumberField="picker_operator_number"
               departmentOptions={departmentOptions}
             />

@@ -18,6 +18,7 @@ import {
   getBusinessConfig,
   getBusinessConfigSchema,
   batchUpdateProcessParameters,
+  previewInvoiceSettlementModeMigration,
 } from '../../../services/businessConfig';
 import {
   PARAMETER_CATEGORIES,
@@ -500,7 +501,47 @@ const ConfigCenterPage: React.FC = () => {
 
       const bizParams = toBusinessParams(values, bizKeys);
       if (Object.keys(bizParams).length > 0) {
-        await batchUpdateProcessParameters({ parameters: bizParams });
+        let migrateOppositeInvoices = false;
+        const prevMode = bizRes?.parameters?.finance?.invoice_settlement_mode;
+        const nextMode = bizParams?.finance?.invoice_settlement_mode;
+        if (
+          nextMode != null &&
+          String(nextMode) !== String(prevMode ?? 'summary')
+        ) {
+          const preview = await previewInvoiceSettlementModeMigration(String(nextMode));
+          if (preview.needs_migration) {
+            const confirmed = await new Promise<boolean>((resolve) => {
+              getAntdModal().confirm({
+                title: t('pages.system.configCenter.invoiceSettlementMigrate.title'),
+                content: (
+                  <div>
+                    <Paragraph>
+                      {t('pages.system.configCenter.invoiceSettlementMigrate.body', {
+                        purchase: preview.purchase_opposite_count,
+                        sales: preview.sales_opposite_count,
+                      })}
+                    </Paragraph>
+                    <Paragraph type="secondary">
+                      {t('pages.system.configCenter.invoiceSettlementMigrate.hint')}
+                    </Paragraph>
+                  </div>
+                ),
+                okText: t('pages.system.configCenter.invoiceSettlementMigrate.ok'),
+                cancelText: t('common.cancel'),
+                onOk: () => resolve(true),
+                onCancel: () => resolve(false),
+              });
+            });
+            if (!confirmed) {
+              return;
+            }
+            migrateOppositeInvoices = true;
+          }
+        }
+        await batchUpdateProcessParameters({
+          parameters: bizParams,
+          migrate_opposite_invoices: migrateOppositeInvoices,
+        });
       }
 
       const stageFieldMap: Record<string, keyof import('../../../apps/kuaizhizao/services/quality-execution').QualityInspectionStageToggles> = {

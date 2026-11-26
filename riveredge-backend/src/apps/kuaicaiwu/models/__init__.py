@@ -11,6 +11,9 @@ from .cost_calculation import CostCalculation
 from .standard_cost import StandardCost
 from .settlement import SettlementRecord
 from .partner_statement import PartnerStatement
+from .partner_statement_line import PartnerStatementLine
+from .purchase_invoice_item import PurchaseInvoiceItem
+from .sales_delivery_line_finance_occupancy import SalesDeliveryLineFinanceOccupancy
 from .receipt import Receipt
 from .receipt_pull_line import ReceiptPullLine
 from .payment import Payment
@@ -63,6 +66,9 @@ __all__ = [
     "StandardCost",
     "SettlementRecord",
     "PartnerStatement",
+    "PartnerStatementLine",
+    "PurchaseInvoiceItem",
+    "SalesDeliveryLineFinanceOccupancy",
     "Receipt",
     "Payment",
     "AccountingEvent",

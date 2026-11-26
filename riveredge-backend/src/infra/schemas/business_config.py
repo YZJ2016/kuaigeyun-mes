@@ -28,6 +28,10 @@ class ProcessParameterUpdateRequest(BaseModel):
     category: str = Field(..., description="参数分类（work_order/reporting/warehouse/quality 等）")
     parameter_key: str = Field(..., description="参数键")
     value: Any = Field(..., description="参数值")
+    migrate_opposite_invoices: bool = Field(
+        default=False,
+        description="切换 invoice_settlement_mode 时同步迁移历史另一种粒度发票",
+    )
 
 
 class BatchProcessParameterUpdateRequest(BaseModel):
@@ -36,4 +40,8 @@ class BatchProcessParameterUpdateRequest(BaseModel):
     parameters: Dict[str, Dict[str, Any]] = Field(
         ...,
         description='参数配置字典，格式：{"category": {"key": value}}',
+    )
+    migrate_opposite_invoices: bool = Field(
+        default=False,
+        description="切换 invoice_settlement_mode 时同步迁移历史另一种粒度发票",
     )

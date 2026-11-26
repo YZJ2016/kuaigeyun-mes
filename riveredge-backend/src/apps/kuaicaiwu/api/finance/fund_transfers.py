@@ -48,6 +48,10 @@ class FundTransferCreate(BaseSchema):
     external_bank_name: Optional[str] = None
     external_account_number: Optional[str] = None
     currency: Optional[str] = None
+    payment_method: Optional[str] = Field(
+        None,
+        description="付款方式：转账、承兑、现金",
+    )
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
 
@@ -67,6 +71,7 @@ class FundTransferUpdate(BaseSchema):
     external_bank_name: Optional[str] = None
     external_account_number: Optional[str] = None
     currency: Optional[str] = None
+    payment_method: Optional[str] = None
     notes: Optional[str] = None
     attachments: Optional[List[dict]] = None
 
@@ -92,6 +97,7 @@ class FundTransferResponse(BaseSchema):
     external_bank_name: Optional[str] = None
     external_account_number: Optional[str] = None
     amount: Decimal
+    payment_method: str = "转账"
     currency: str
     status: str
     review_status: str = "草稿"
@@ -149,6 +155,7 @@ async def create_fund_transfer(
             currency=data.currency,
             notes=data.notes,
             attachments=data.attachments,
+            payment_method=data.payment_method,
             current_user=current_user,
         )
         return await _serialize_one(tenant_id, row.id, viewer_id=current_user.id)
@@ -323,3 +330,52 @@ async def cancel_fund_transfer(
         raise _http_exception_with_trace(404, str(exc), f"/fund-transfers/{id}/cancel", tenant_id) from exc
     except ValidationError as exc:
         raise _http_exception_with_trace(400, str(exc), f"/fund-transfers/{id}/cancel", tenant_id) from exc
+
+
+@router.get("/{id}/print", summary="Print fund transfer")
+async def print_fund_transfer(
+    id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:fund-transfer:print")),
+):
+    import base64
+
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse, JSONResponse, Response
+
+    route = f"/fund-transfers/{id}/print"
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="fund_transfer",
+            document_id=id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as exc:
+        raise _http_exception_with_trace(404, str(exc), route, tenant_id) from exc
+    except ValidationError as exc:
+        raise _http_exception_with_trace(400, str(exc), route, tenant_id) from exc
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="fund-transfer-{id}.pdf"'},
+        )
+
+    if (response_format or "json").lower() == "html":
+        return HTMLResponse(content=result.get("content") or "")
+
+    return JSONResponse(content=result)

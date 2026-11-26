@@ -243,6 +243,44 @@ _PAYMENT_APPLICATION_PRINT_STUB = {
     "is_default": True,
 }
 
+_FUND_TRANSFER_PRINT_STUB = {
+    "name": "资金调拨单",
+    "code": "FUND_TRANSFER_PRINT",
+    "type": "html",
+    "description": "快财务预置打印模板：资金调拨单（含付款方式与内外部账户字段）",
+    "content": build_a4_document(
+        title="资金调拨单",
+        info_items=[
+            ("调拨单号", "transfer_code"),
+            ("调拨日期", "transfer_date"),
+            ("调拨类型", "transfer_type_label"),
+            ("付款方式", "payment_method"),
+            ("调拨金额", "amount"),
+            ("币种", "currency"),
+            ("调出账户", "from_account_label"),
+            ("调入账户", "to_account_label"),
+            ("外部户名", "external_account_name"),
+            ("外部开户行", "external_bank_name"),
+            ("外部账号", "external_account_number"),
+            ("状态", "status"),
+            ("审核状态", "review_status"),
+        ],
+        table_head="",
+        table_row="",
+        sign_labels=("制单人", "审核人", "确认人"),
+        notes_expr="notes",
+        style_css=PRINT_STYLE_A4_PLAIN,
+    ),
+    "config": {
+        "document_type": "fund_transfer",
+        "engine": "jinja2",
+        "strict_variables": False,
+        "theme": "plain_bw",
+    },
+    "is_active": True,
+    "is_default": True,
+}
+
 KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
     make_preset(name="报价单", code="QUOTATION_PRINT", document_type="quotation"),
     make_preset(name="销售合同", code="SALES_CONTRACT_PRINT", document_type="sales_contract"),
@@ -285,4 +323,5 @@ KUAIZHIZAO_PRESET_PRINT_TEMPLATES = [
     _EIGHT_D_REPORT_PRINT_STUB,
     _PAYMENT_APPLICATION_PRINT_STUB,
     _FINANCE_PAYMENT_PRINT_STUB,
+    _FUND_TRANSFER_PRINT_STUB,
 ]

@@ -856,7 +856,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
             material_id: mat?.id,
             material_code: mat?.mainCode || mat?.code || materialCode,
             material_name: mat?.name || '',
-            material_spec: mat?.specification || spec,
+            material_spec: mat?.specification ?? '',
             unit: mat?.baseUnit || unit || '件',
             quantity: quantity || 1,
             suggested_unit_price: suggestedPrice,
@@ -1887,6 +1887,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
         } else if (manualCodeOverride) {
           requisitionCode = userCode;
         }
+        const flowExtras = documentFlowSubmitExtrasRef.current;
+        // 销售订单取单/直推：表单里有 source_*，但提交体曾漏传，只带 documentFlow* →
+        // 头表来源空、仅靠关联；列表下推进度若只认 source 会显示为未下推。
+        const flowSoId = Number(flowExtras?.documentFlowSalesOrderId ?? 0);
+        const isSoBuyPush =
+          String(flowExtras?.documentFlowSourceType ?? '').trim() === 'sales_order_buy_push';
+        let sourceType = String(values.source_type ?? '').trim();
+        let sourceId = Number(values.source_id ?? 0);
+        let sourceCode = String(values.source_code ?? '').trim();
+        if (isSoBuyPush) {
+          if (!sourceType) sourceType = 'sales_order';
+          if (!(sourceId > 0) && flowSoId > 0) sourceId = flowSoId;
+        }
         const created = await createPurchaseRequisition({
           requisition_code: requisitionCode || undefined,
           order_type: String(values.order_type ?? '标准采购').trim() || '标准采购',
@@ -1901,7 +1914,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
           notes: values.notes,
           attachments: normalizeDocumentAttachments(values.attachments),
           items: itemsPayload,
+          ...(sourceType ? { source_type: sourceType } : {}),
+          ...(sourceId > 0 ? { source_id: sourceId } : {}),
+          ...(sourceCode ? { source_code: sourceCode } : {}),
+          ...(flowExtras ?? {}),
         });
+        if (flowExtras) {
+          documentFlowSubmitExtrasRef.current = null;
+        }
         requisitionId = created.id;
         if (!shouldSubmit) {
           messageApi.success(t('common.createSuccess'));

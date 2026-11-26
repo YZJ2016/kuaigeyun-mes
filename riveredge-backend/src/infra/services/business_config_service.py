@@ -112,6 +112,15 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
         fin["auto_generate_payable_from_purchase_invoice"] = True
     elif pay in ("on_receipt", "manual", "on_partner_statement"):
         fin["auto_generate_payable_from_purchase_invoice"] = False
+    from apps.kuaicaiwu.config.finance_settlement_contract import (
+        SETTLEMENT_MODE_SUMMARY,
+        SETTLEMENT_MODES,
+    )
+
+    inv_mode = str(fin.get("invoice_settlement_mode") or SETTLEMENT_MODE_SUMMARY).strip().lower()
+    if inv_mode not in SETTLEMENT_MODES:
+        inv_mode = SETTLEMENT_MODE_SUMMARY
+    fin["invoice_settlement_mode"] = inv_mode
     return fin
 
 from infra.models.tenant import Tenant
@@ -364,6 +373,19 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             {
                 "value": "mixed",
                 "labelKey": "pages.system.configCenter.param.finance_revenue_recognition_opt_mixed",
+            },
+        ],
+    },
+    "parameters.finance.invoice_settlement_mode": {
+        "type": "select",
+        "options": [
+            {
+                "value": "summary",
+                "labelKey": "pages.system.configCenter.param.finance_invoice_settlement_mode_opt_summary",
+            },
+            {
+                "value": "detail",
+                "labelKey": "pages.system.configCenter.param.finance_invoice_settlement_mode_opt_detail",
             },
         ],
     },
@@ -656,6 +678,7 @@ PARAMETER_KEYS = {
     "parameters.finance.auto_write_off_precision_limit",
     "parameters.finance.revenue_recognition",
     "parameters.finance.payable_recognition",
+    "parameters.finance.invoice_settlement_mode",
     "parameters.finance.auto_generate_receivable_from_sales_invoice",
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
     "parameters.finance.auto_apply_supplier_prepayment_to_payable",
@@ -769,6 +792,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.finance.auto_write_off_precision_limit",
     "parameters.finance.revenue_recognition",
     "parameters.finance.payable_recognition",
+    "parameters.finance.invoice_settlement_mode",
     "parameters.finance.auto_generate_receivable_from_sales_invoice",
     "parameters.finance.auto_generate_payable_from_purchase_invoice",
     "parameters.finance.auto_apply_supplier_prepayment_to_payable",
@@ -1421,6 +1445,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "auto_write_off_precision_limit": 0,
         "revenue_recognition": "on_shipment",
         "payable_recognition": "on_receipt",
+        "invoice_settlement_mode": "summary",
         "auto_generate_receivable_from_sales_invoice": False,
         "auto_generate_payable_from_purchase_invoice": False,
         "auto_apply_supplier_prepayment_to_payable": False,
@@ -2292,6 +2317,8 @@ class BusinessConfigService:
         category: str,
         parameter_key: str,
         value: Any,
+        *,
+        migrate_opposite_invoices: bool = False,
     ) -> Dict[str, Any]:
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
@@ -2309,6 +2336,16 @@ class BusinessConfigService:
             value,
             merged_category_params=merged_cat if category == "quality" else None,
         )
+        if category == "finance" and parameter_key == "invoice_settlement_mode":
+            from apps.kuaicaiwu.services.invoice_settlement_mode_migration_service import (
+                validate_or_migrate_settlement_mode_change,
+            )
+
+            await validate_or_migrate_settlement_mode_change(
+                tenant_id,
+                value,
+                migrate_opposite_invoices=migrate_opposite_invoices,
+            )
 
         business_config["parameters"][category][parameter_key] = value
         if category == "master_data":
@@ -2342,6 +2379,8 @@ class BusinessConfigService:
         self,
         tenant_id: int,
         parameters: Dict[str, Dict[str, Any]],
+        *,
+        migrate_opposite_invoices: bool = False,
     ) -> Dict[str, Any]:
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
@@ -2351,6 +2390,16 @@ class BusinessConfigService:
         business_config = settings.get("business_config", {})
         business_config.setdefault("parameters", {})
         for category, params in parameters.items():
+            if category == "finance" and params and "invoice_settlement_mode" in params:
+                from apps.kuaicaiwu.services.invoice_settlement_mode_migration_service import (
+                    validate_or_migrate_settlement_mode_change,
+                )
+
+                await validate_or_migrate_settlement_mode_change(
+                    tenant_id,
+                    params["invoice_settlement_mode"],
+                    migrate_opposite_invoices=migrate_opposite_invoices,
+                )
             current = dict(business_config["parameters"].get(category) or {})
             for parameter_key, value in (params or {}).items():
                 preview = dict(current)

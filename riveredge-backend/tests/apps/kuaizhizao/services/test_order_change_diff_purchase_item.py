@@ -48,3 +48,15 @@ def test_diff_purchase_item_no_change_raises():
             after_delivery_date="2026-11-01",
             after_aux_quantity=Decimal("2"),
         )
+
+
+def test_diff_purchase_item_rejects_aux_when_source_disabled():
+    src = _source_item(aux_quantity=None)
+    with pytest.raises(BusinessLogicError, match="未启用副数量"):
+        diff_purchase_item(
+            src,
+            after_quantity=Decimal("10"),
+            after_unit_price=Decimal("5"),
+            after_delivery_date="2026-11-01",
+            after_aux_quantity=Decimal("3"),
+        )

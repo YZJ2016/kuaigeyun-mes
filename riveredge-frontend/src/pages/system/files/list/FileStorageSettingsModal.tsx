@@ -50,6 +50,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
     percent: number;
     migrated: number;
     failed: number;
+    skipped: number;
     totalHint: number;
     targetBucket?: string;
     failureSamples: Array<{ uuid: string; reason: string }>;
@@ -158,6 +159,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
       percent: 0,
       migrated: 0,
       failed: 0,
+      skipped: 0,
       totalHint: 0,
       failureSamples: [],
     });
@@ -182,6 +184,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
       let done = false;
       let totalMigrated = 0;
       let totalFailed = 0;
+      let totalSkipped = 0;
       let initialTotal = 0;
       let targetBucket = '';
       const allFailures: Array<{ uuid: string; reason: string }> = [];
@@ -204,8 +207,12 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
         }
         totalMigrated += result.migrated;
         totalFailed += result.failed;
+        totalSkipped += result.skipped ?? 0;
         allFailures.push(...(result.failures || []));
-        const processedApprox = Math.min(initialTotal, totalMigrated + totalFailed);
+        const processedApprox = Math.min(
+          initialTotal,
+          totalMigrated + totalFailed + totalSkipped,
+        );
         let percent =
           initialTotal > 0 ? Math.min(99, Math.round((processedApprox / initialTotal) * 100)) : 0;
         if (result.done) percent = 100;
@@ -213,6 +220,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
           percent,
           migrated: totalMigrated,
           failed: totalFailed,
+          skipped: totalSkipped,
           totalHint: initialTotal,
           targetBucket: targetBucket || undefined,
           failureSamples: allFailures.slice(0, 8),
@@ -395,6 +403,7 @@ const FileStorageSettingsModal: React.FC<FileStorageSettingsModalProps> = ({
               {t('pages.system.files.storageMigrateProgress', {
                 migrated: migrateProgress.migrated,
                 failed: migrateProgress.failed,
+                skipped: migrateProgress.skipped,
                 total: migrateProgress.totalHint,
               })}
             </Typography.Text>

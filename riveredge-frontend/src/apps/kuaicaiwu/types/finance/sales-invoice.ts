@@ -14,6 +14,7 @@ export interface SalesInvoice {
   total_amount: number;
   status: string;
   review_status: string;
+  settlement_mode?: 'summary' | 'detail' | string;
   notes?: string;
   created_at: string;
   updated_at?: string;
@@ -46,4 +47,5 @@ export interface SalesInvoiceListParams {
   updated_end_date?: string;
   sort_field?: string;
   sort_order?: 'asc' | 'desc';
+  settlement_mode?: 'summary' | 'detail' | '';
 }

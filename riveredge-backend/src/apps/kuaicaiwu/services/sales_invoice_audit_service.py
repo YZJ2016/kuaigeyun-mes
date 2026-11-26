@@ -187,13 +187,20 @@ class SalesInvoiceAuditService:
             )
         out = result if result is not None else await _write()
         if not rejection_reason:
+            from apps.kuaicaiwu.config.finance_settlement_contract import SETTLEMENT_MODE_DETAIL
+            from apps.kuaicaiwu.models.invoice import Invoice
+            from apps.kuaicaiwu.services.sales_invoice_detail_occupancy import (
+                record_detail_sales_invoice_occupancy_on_approve,
+            )
+
+            invoice_row = await Invoice.get(tenant_id=tenant_id, id=invoice_id)
+            if str(invoice_row.settlement_mode or "") == SETTLEMENT_MODE_DETAIL:
+                await record_detail_sales_invoice_occupancy_on_approve(tenant_id, invoice_id)
             from apps.kuaicaiwu.models.receivable import Receivable
             from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
             from apps.kuaicaiwu.services.sales_invoice_receivable_auto import (
                 maybe_auto_generate_receivable_for_sales_invoice,
             )
-
-            invoice_row = await Invoice.get(tenant_id=tenant_id, id=invoice_id)
             auto_receivable_id, _ = await maybe_auto_generate_receivable_for_sales_invoice(
                 tenant_id=tenant_id,
                 invoice=invoice_row,

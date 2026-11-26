@@ -13,9 +13,12 @@ from core.services.integration.document_push_codes import (
 )
 
 
-def test_apply_unit_code_map_builtin_piece():
-    assert apply_unit_code_map("个") == "006"
-    assert apply_unit_code_map("kg") == "004"
+def test_apply_unit_code_map_passthrough_without_map():
+    # 默认不套内置别名，pcs/kg 保持单位管理原 code
+    assert apply_unit_code_map("pcs") == "pcs"
+    assert apply_unit_code_map("kg") == "kg"
+    assert apply_unit_code_map("个") == "个"
+    assert apply_unit_code_map("个", use_builtin_aliases=True) == "006"
 
 
 def test_apply_unit_code_map_can_disable_builtin():

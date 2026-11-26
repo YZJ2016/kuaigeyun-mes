@@ -723,8 +723,13 @@ class DocumentPushService:
         else:
             # target_profile=* 或未传：读业务配置多目标列表
             profiles = await self._load_configured_targets(tenant_id, source_type)
+            profiles = [p for p in profiles if (source_type, p) in SUPPORTED_PROFILES]
+            if not profiles:
+                # 配置里混入了其它单据 profile（如 material_batch 即时库存）时回退
+                profiles = [
+                    p for st, p in sorted(SUPPORTED_PROFILES) if st == source_type
+                ]
             if not profiles and single == MULTI_PROFILE_TOKEN:
-                # * 但未配置：该 source 下全部已注册 profile
                 profiles = [
                     p for st, p in sorted(SUPPORTED_PROFILES) if st == source_type
                 ]

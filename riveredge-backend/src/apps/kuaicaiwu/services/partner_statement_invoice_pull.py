@@ -82,7 +82,10 @@ def extract_statement_source_doc_ids(transaction_details: Any, doc_type: str) ->
     for ln in lines:
         if not isinstance(ln, dict):
             continue
-        if str(ln.get("doc_type") or "").strip() != want:
+        line_doc_type = str(ln.get("doc_type") or ln.get("doc_type_label") or "").strip()
+        src_dt = str(ln.get("source_doc_type") or "").strip()
+        mapped_src = STATEMENT_DOC_TYPE_TO_PULL_SOURCE_TYPE.get(want, "")
+        if line_doc_type != want and not (src_dt and src_dt in (mapped_src, want)):
             continue
         if int(ln.get("tree_level") or 0) != 0:
             continue
@@ -93,7 +96,7 @@ def extract_statement_source_doc_ids(transaction_details: Any, doc_type: str) ->
         if amt <= 0:
             continue
         try:
-            doc_id = int(ln.get("doc_id"))
+            doc_id = int(ln.get("doc_id") or ln.get("source_doc_id") or 0)
         except (TypeError, ValueError):
             continue
         if doc_id <= 0 or doc_id in seen:

@@ -25,7 +25,6 @@ from apps.kuaiconnect.services.document_push.kingdee_other_outbound_push_service
 )
 from core.services.integration.document_push_codes import (
     DEFAULT_UNIT_NUMBER,
-    apply_unit_code_map,
     load_save_api_unit_code_map,
     resolve_unit_for_push,
 )
@@ -80,6 +79,87 @@ TARGET_PROFILE = "kingdee_im_otheroutbill"
 SOURCE_TYPE = "production_picking"
 PUSHABLE_STATUSES = frozenset({"已领料", "已确认", "picked", "confirmed", "COMPLETED", "POSTED"})
 PUSH_DISABLED_MESSAGE = "金蝶生产领料推送未启用"
+
+
+def choose_production_pick_department_code(
+    document_code: Optional[str],
+    synced_codes: List[str],
+) -> Optional[str]:
+    """领用部门：单据上的编码若已在成功外推中出现则沿用，否则用该领料人唯一已同步部门。"""
+    doc = str(document_code or "").strip()
+    seen: List[str] = []
+    known: set[str] = set()
+    for raw in synced_codes:
+        code = str(raw or "").strip()
+        if not code or code in known:
+            continue
+        known.add(code)
+        seen.append(code)
+    if doc and doc in known:
+        return doc
+    if len(seen) == 1:
+        return seen[0]
+    return doc or None
+
+
+async def resolve_synced_production_pick_department(
+    tenant_id: int,
+    *,
+    picker_id: Optional[int],
+    workshop_id: Optional[int] = None,
+    exclude_picking_id: Optional[int] = None,
+) -> Optional[tuple]:
+    """该领料人已落金蝶关联的生产领料领用部门。多个且车间对不上时不选取。"""
+    uid = int(picker_id or 0)
+    if uid <= 0:
+        return None
+    linked_ids = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type=SOURCE_TYPE,
+        target_type=TARGET_TYPE,
+    ).values_list("source_id", flat=True)
+    ids = [int(i) for i in linked_ids if int(i or 0) > 0]
+    if exclude_picking_id:
+        ids = [i for i in ids if i != int(exclude_picking_id)]
+    if not ids:
+        return None
+    rows = await ProductionPicking.filter(
+        tenant_id=tenant_id,
+        id__in=ids,
+        picker_id=uid,
+        deleted_at__isnull=True,
+    )
+    coded = [row for row in rows if str(row.pick_department_code or "").strip()]
+    if not coded:
+        return None
+    pool = coded
+    if workshop_id and int(workshop_id) > 0:
+        same_workshop = [
+            row for row in coded if int(row.workshop_id or 0) == int(workshop_id)
+        ]
+        workshop_codes = {
+            str(row.pick_department_code or "").strip() for row in same_workshop
+        }
+        workshop_codes.discard("")
+        if len(workshop_codes) == 1:
+            pool = same_workshop
+    chosen = choose_production_pick_department_code(
+        None,
+        [str(row.pick_department_code or "") for row in pool],
+    )
+    if not chosen:
+        return None
+    matched = [
+        row for row in pool if str(row.pick_department_code or "").strip() == chosen
+    ]
+    if not matched:
+        return None
+    source = max(matched, key=lambda row: int(row.id or 0))
+    return (
+        int(source.pick_department_id) if source.pick_department_id else None,
+        chosen,
+        str(source.pick_department_name or "").strip() or None,
+    )
 
 
 def production_picking_push_skip_reason(
@@ -145,15 +225,53 @@ async def enrich_production_picking_header_config(
         picker_id,
         explicit=None,
     )
+    document_dept = str(getattr(picking, "pick_department_code", None) or "").strip()
+    doc_pickdept = document_dept or None
+    if picker_id:
+        synced = await resolve_synced_production_pick_department(
+            tenant_id,
+            picker_id=picker_id,
+            workshop_id=int(getattr(picking, "workshop_id", None) or 0) or None,
+            exclude_picking_id=int(getattr(picking, "id", None) or 0) or None,
+        )
+        synced_code = synced[1] if synced else None
+        chosen = choose_production_pick_department_code(
+            document_dept,
+            [synced_code] if synced_code else [],
+        )
+        if chosen:
+            doc_pickdept = chosen
+        if (
+            synced
+            and chosen
+            and chosen != document_dept
+            and isinstance(picking, ProductionPicking)
+            and int(getattr(picking, "id", None) or 0) > 0
+        ):
+            dept_id, dept_code, dept_name = synced
+            picking.pick_department_id = dept_id
+            picking.pick_department_code = dept_code
+            picking.pick_department_name = dept_name
+            await ProductionPicking.filter(
+                tenant_id=tenant_id,
+                id=int(picking.id),
+            ).update(
+                pick_department_id=dept_id,
+                pick_department_code=dept_code,
+                pick_department_name=dept_name,
+            )
     return await enrich_pick_header_config(
         tenant_id,
         acting_user_id=acting_user_id,
         picker_user_id=picker_id,
         config=config,
         doc_picker_operator=doc_picker,
-        doc_pickdept=str(getattr(picking, "pick_department_code", None) or "").strip()
-        or None,
+        doc_pickdept=doc_pickdept,
     )
+
+
+def _picking_line_push_quantity(item: ProductionPickingItem) -> Any:
+    return item.picked_quantity or item.required_quantity
 
 
 def build_kingdee_production_picking_model(
@@ -163,6 +281,7 @@ def build_kingdee_production_picking_model(
     cfg: Optional[Dict[str, Any]] = None,
     warehouse_numbers: Optional[Dict[int, Optional[str]]] = None,
     location_number_by_item_id: Optional[Dict[int, str]] = None,
+    line_unit_qty_by_item_id: Optional[Dict[int, Dict[str, Any]]] = None,
     invtype_by_item_id: Optional[Dict[int, str]] = None,
 ) -> Dict[str, Any]:
     config = cfg or {}
@@ -177,21 +296,18 @@ def build_kingdee_production_picking_model(
     ).strip()
     bill_date = _date_string(picking.picking_time or picking.created_at)
     wh_map = warehouse_numbers or {}
+    line_plan = line_unit_qty_by_item_id or {}
     invtype_map = invtype_by_item_id or {}
 
     entries: List[Dict[str, Any]] = []
-    unit_map = (
-        config.get("api_unit_code_map")
-        if isinstance(config.get("api_unit_code_map"), dict)
-        else None
-    )
     for item in items:
-        qty = _to_float(item.picked_quantity or item.required_quantity)
+        planned = line_plan.get(int(item.id or 0)) or {}
+        qty = _to_float(planned.get("qty", _picking_line_push_quantity(item)))
         if qty <= 0:
             continue
-        unit_raw = str(item.material_unit or "").strip()
+        # 库存单位真源：resolve_warehouse_bill_line_unit_qty（禁 builtin kg→004）
         unit_number = (
-            apply_unit_code_map(unit_raw, unit_map)
+            str(planned.get("unit_number") or "").strip()
             or str(config.get("unit_number") or DEFAULT_UNIT_NUMBER).strip()
             or DEFAULT_UNIT_NUMBER
         )
@@ -203,6 +319,11 @@ def build_kingdee_production_picking_model(
             "unit_number": unit_number,
             "linetype_number": str(config.get("linetype_number") or "").strip(),
         }
+        from apps.kuaiconnect.services.document_push.kingdee_warehouse_billentry_dual_qty import (
+            apply_billentry_dual_qty_fields,
+        )
+
+        apply_billentry_dual_qty_fields(entry, planned)
         if line_wh:
             entry["warehouse_number"] = line_wh
         location_number = kingdee_location_number_for_item(
@@ -390,9 +511,14 @@ class KingdeeProductionPickingPushService:
 
         if relation is not None:
             status = str(getattr(picking, "status", None) or "").strip()
+            draft = False
+            if not relation_branch_should_batch_update(status):
+                draft = await self._linked_kingdee_bill_is_draft(
+                    tenant_id, config, relation
+                )
             try:
-                if relation_branch_should_batch_update(status):
-                    return await self.batch_update_linked_kingdee_bill(
+                if relation_branch_should_batch_update(status) or draft:
+                    updated = await self.batch_update_linked_kingdee_bill(
                         tenant_id=tenant_id,
                         picking=picking,
                         items=list(items),
@@ -401,6 +527,8 @@ class KingdeeProductionPickingPushService:
                         config=config,
                         dry_run=dry_run,
                     )
+                    if not draft:
+                        return updated
                 return await self._kingdee_submit_audit_only(
                     tenant_id=tenant_id,
                     config=config,
@@ -437,6 +565,38 @@ class KingdeeProductionPickingPushService:
             if bool(config.get("fail_on_error", False)):
                 raise BusinessLogicError(f"推送金蝶生产领料失败：{exc}")
             return {"success": False, "message": str(exc)}
+
+    async def _linked_kingdee_bill_is_draft(
+        self,
+        tenant_id: int,
+        config: Dict[str, Any],
+        relation: DocumentRelation,
+    ) -> bool:
+        """已关联但金蝶仍是暂存时，须先 batchUpdate 写回领用部门/领用人，再提交。"""
+        bill_no = str(relation.target_code or "").strip()
+        if not bill_no:
+            return False
+        from core.services.integration.kingdee_cosmic_push_adapter import (
+            normalize_kingdee_im_billstatus,
+            query_kingdee_cosmic_bill_by_billno,
+        )
+
+        pipeline = DocumentPushPipeline()
+        connection = await pipeline._resolve_connection(
+            tenant_id,
+            connector_type="kingdee_cosmic",
+            config=config,
+        )
+        form_id = str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID
+        row = await query_kingdee_cosmic_bill_by_billno(
+            connection,
+            form_id=form_id,
+            bill_no=bill_no,
+            timeout=float(config.get("timeout") or 30.0),
+        )
+        if not row:
+            return False
+        return normalize_kingdee_im_billstatus(row.get("billstatus")) == "A"
 
     async def get_push_config(self, tenant_id: int) -> Dict[str, Any]:
         biz_config = await BusinessConfigService().get_business_config(tenant_id)
@@ -609,6 +769,20 @@ class KingdeeProductionPickingPushService:
             product_code=first_code,
             unit_hint=None,
             unit_code_map=unit_code_map,
+            allow_builtin_aliases=False,
+        )
+        from apps.kuaiconnect.services.document_push.kingdee_warehouse_billentry_dual_qty import (
+            log_billentry_dual_qty,
+            resolve_warehouse_bill_line_unit_qty,
+        )
+
+        line_unit_qty_by_item_id = await resolve_warehouse_bill_line_unit_qty(
+            tenant_id,
+            items,
+            quantity_field=_picking_line_push_quantity,
+            scene_label="生产领料",
+            unit_code_map=unit_code_map,
+            config_unit_number=str(config.get("unit_number") or "").strip() or None,
         )
         # 误配的 batchAudit 纠正为 billbatchAudit（与销售出库 finalize 对齐）
         raw_audit = str(config.get("audit_path") or "").strip().lower().replace("_", "")
@@ -663,7 +837,13 @@ class KingdeeProductionPickingPushService:
             cfg=config,
             warehouse_numbers=wh_numbers,
             location_number_by_item_id=location_number_by_item_id,
+            line_unit_qty_by_item_id=line_unit_qty_by_item_id,
             invtype_by_item_id=invtype_by_item_id,
+        )
+        log_billentry_dual_qty(
+            doc_label="生产领料",
+            doc_code=picking.picking_code,
+            entries=model.get("billentry") or [],
         )
         if not dry_run:
             validate_kingdee_other_outbound_header(model)

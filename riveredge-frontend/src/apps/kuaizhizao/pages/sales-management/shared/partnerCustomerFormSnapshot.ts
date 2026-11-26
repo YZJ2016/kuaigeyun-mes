@@ -49,6 +49,10 @@ function contactPickValue(contact: string, phone?: string): string {
   return `${contact}\u0000${String(phone ?? '').trim()}`;
 }
 
+function contactPersonOf(row: Record<string, unknown>): string | undefined {
+  return textOf(row, 'contactPerson') ?? textOf(row, 'contact_person');
+}
+
 /** 选客户后默认带出：联系人明细第一条。 */
 export function resolveCustomerContactFieldsFromPartner(
   customer: CustomerLike,
@@ -56,7 +60,7 @@ export function resolveCustomerContactFieldsFromPartner(
   const row = contactRows(customer)[0];
   if (!row) return {};
   const r = asRecord(row);
-  const contact = textOf(r, 'contactPerson');
+  const contact = contactPersonOf(r);
   const phone = textOf(r, 'phone');
   return {
     ...(contact != null ? { customer_contact: contact } : {}),
@@ -65,6 +69,7 @@ export function resolveCustomerContactFieldsFromPartner(
 }
 
 export type CustomerContactPickOption = {
+  /** 表单内唯一键（姓名与电话组合；写入单据时仍用 contact 姓名） */
   value: string;
   contact: string;
   label: string;
@@ -82,13 +87,14 @@ export function buildCustomerContactPickOptions(customer: CustomerLike): Custome
   const out: CustomerContactPickOption[] = [];
   for (const row of contactRows(customer)) {
     const r = asRecord(row);
-    const contact = textOf(r, 'contactPerson');
+    const contact = contactPersonOf(r);
     if (!contact) continue;
     const phone = textOf(r, 'phone');
     out.push({
       value: contactPickValue(contact, phone),
       contact,
-      label: phone ? `${contact} ${phone}` : contact,
+      /** 下拉与选中态仅展示姓名；电话由独立的「联系电话」字段展示（对齐采购） */
+      label: contact,
       phone,
     });
   }

@@ -954,6 +954,23 @@ const SalesInvoicesPage: React.FC = () => {
         ),
       },
       {
+        title: t(`${P}.settlementMode`),
+        dataIndex: 'settlement_mode',
+        width: 96,
+        minWidth: 96,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        render: (_, record) => {
+          const mode = String(record.settlement_mode || 'summary');
+          const text =
+            mode === 'detail'
+              ? t(`${P}.settlementMode.detail`)
+              : t(`${P}.settlementMode.summary`);
+          return <MarkerTag variant="filled">{text}</MarkerTag>;
+        },
+      },
+      {
         title: t('app.kuaicaiwu.common.customer'),
         dataIndex: 'customer_name',
         hideInTable: true,
@@ -1465,7 +1482,7 @@ const SalesInvoicesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v4"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v6-line-settlement"
         showAdvancedSearch
         showCreateButton={false}
         createButtonText={t(`${P}.createTitle`)}

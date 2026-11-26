@@ -51,14 +51,23 @@ function calcDelta(row: OrderChangeItem): number {
   );
 }
 
+function normAuxQuantityValue(v: number | null | undefined): number | null {
+  if (v == null || Number.isNaN(Number(v))) return null;
+  return Number(v);
+}
+
 function auxQuantityChanged(before?: number | null, after?: number | null): boolean {
-  const norm = (v: number | null | undefined) =>
-    v == null || Number.isNaN(Number(v)) ? null : Number(v);
-  const b = norm(before);
-  const a = norm(after);
+  const b = normAuxQuantityValue(before ?? undefined);
+  const a = normAuxQuantityValue(after ?? undefined);
   if (b === a) return false;
   if (b == null && a == null) return false;
   return b !== a;
+}
+
+/** 采购变更：副数量仅当原单行已启用（变更前有副数量）时可编辑 */
+function purchaseChangeLineAuxEditable(row: OrderChangeItem): boolean {
+  if (row.change_type === 'LINE_ADD') return false;
+  return normAuxQuantityValue(row.before_aux_quantity ?? undefined) != null;
 }
 
 /** 与后端 diff_sales_item / diff_purchase_item 一致：按 before/after 推断变更维度 */
@@ -70,7 +79,10 @@ function inferLineChangeTypes(row: OrderChangeItem): string[] {
   if (Number(row.after_quantity ?? 0) !== Number(row.before_quantity ?? 0)) {
     changes.push('QUANTITY');
   }
-  if (auxQuantityChanged(row.before_aux_quantity, row.after_aux_quantity)) {
+  if (
+    purchaseChangeLineAuxEditable(row) &&
+    auxQuantityChanged(row.before_aux_quantity, row.after_aux_quantity)
+  ) {
     changes.push('AUX_QUANTITY');
   }
   if (Number(row.after_unit_price ?? 0) !== Number(row.before_unit_price ?? 0)) {
@@ -106,6 +118,12 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
     const next = items.map((row, i) => {
       if (i !== index) return row;
       const merged = { ...row, ...patch };
+      if (
+        pricing?.side === 'purchase' &&
+        !purchaseChangeLineAuxEditable(merged)
+      ) {
+        merged.after_aux_quantity = null;
+      }
       const inferredType =
         merged.change_type === 'LINE_ADD' || merged.change_type === 'LINE_CANCEL'
           ? merged.change_type
@@ -129,6 +147,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
     updateItem(index, {
       change_type: 'LINE_CANCEL',
       after_quantity: 0,
+      after_aux_quantity: row.before_aux_quantity ?? null,
       after_unit_price: row.before_unit_price,
       after_delivery_date: row.before_delivery_date,
     });
@@ -307,6 +326,9 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
               render: (v: number | null | undefined, row: OrderChangeItem, index: number) => {
                 if (!editable || row.change_type === 'LINE_CANCEL') {
                   return v == null ? '-' : v;
+                }
+                if (!purchaseChangeLineAuxEditable(row)) {
+                  return '—';
                 }
                 return (
                   <InputNumber

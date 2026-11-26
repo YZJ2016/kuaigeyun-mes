@@ -8,13 +8,12 @@ from loguru import logger
 
 # 默认计量单位：金蝶 FNumber（常见账套「个」= 006）
 DEFAULT_UNIT_NUMBER = "006"
+# 仅目录/接口映射都未命中时的展示名兜底；目录已同步的编码（含字面量 kg）不得再经此改写
 BUILTIN_UNIT_ALIASES: Dict[str, str] = {
     "个": "006",
     "pcs": "006",
     "Pcs": "006",
     "PCS": "006",
-    "kg": "004",
-    "KG": "004",
 }
 
 # Save 接口 source_type_conversion_map 中视为「单位」的 field_name（大小写不敏感）
@@ -97,49 +96,48 @@ def _map_lookup(raw: str, mapping: Dict[str, Any]) -> Optional[str]:
     return val or None
 
 
-def _iter_unit_refs(*refs: Any) -> Iterable[str]:
-    seen: set[str] = set()
-    for ref in refs:
-        text = str(ref or "").strip()
-        if not text:
-            continue
-        key = text.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        yield text
-
-
 def apply_unit_code_map(
     unit: str,
     unit_code_map: Optional[Dict[str, Any]] = None,
     *,
-    use_builtin_aliases: bool = True,
+    use_builtin_aliases: bool = False,
 ) -> str:
-    """接口单位 map + 内置别名 → 目标系统单位编码。不再读取 BusinessConfig。
-
-    use_builtin_aliases=True 时与原实现相同（内置别名可被接口 map 覆盖）。
-    分录双单位解析传 False，避免目录未命中时把字面量单位改写成内置编码。
-    """
+    """接口单位 map（可选内置别名）→ 目标系统单位编码。不再读取 BusinessConfig。"""
     raw = str(unit or "").strip()
     if not raw:
         return ""
-    if not use_builtin_aliases:
-        if isinstance(unit_code_map, dict) and unit_code_map:
-            api_hit = _map_lookup(raw, unit_code_map)
-            if api_hit:
-                return api_hit
-        return raw
-    mapping: Dict[str, Any] = dict(BUILTIN_UNIT_ALIASES)
     if isinstance(unit_code_map, dict) and unit_code_map:
-        mapping.update(unit_code_map)
-    if raw in mapping:
-        return str(mapping.get(raw) or "").strip() or raw
-    lowered = {str(k).strip().lower(): v for k, v in mapping.items() if str(k).strip()}
-    hit = lowered.get(raw.lower())
-    if hit is not None:
-        return str(hit or "").strip() or raw
+        api_hit = _map_lookup(raw, unit_code_map)
+        if api_hit:
+            return api_hit
+    if use_builtin_aliases:
+        builtin_hit = _map_lookup(raw, BUILTIN_UNIT_ALIASES)
+        if builtin_hit:
+            return builtin_hit
     return raw
+
+
+async def lookup_unit_catalog_code(tenant_id: int, unit_ref: str) -> Optional[str]:
+    """单位编码或名称 → 目录 code；未命中返回 None（不回落原串）。"""
+    raw = str(unit_ref or "").strip()
+    if not raw:
+        return None
+    try:
+        from apps.master_data.models.unit import MaterialUnit
+
+        unit = await MaterialUnit.filter(
+            tenant_id=tenant_id, code=raw, deleted_at__isnull=True
+        ).first()
+        if unit:
+            return str(unit.code).strip() or None
+        unit = await MaterialUnit.filter(
+            tenant_id=tenant_id, name=raw, deleted_at__isnull=True
+        ).first()
+        if unit:
+            return str(unit.code).strip() or None
+    except Exception as exc:
+        logger.warning("lookup unit catalog code failed ref={} err={}", raw, exc)
+    return None
 
 
 async def resolve_unit_catalog_code(tenant_id: int, unit_ref: str) -> Optional[str]:
@@ -172,27 +170,17 @@ async def resolve_material_base_unit(tenant_id: int, product_code: Optional[str]
     return None
 
 
-async def lookup_unit_catalog_code(tenant_id: int, unit_ref: str) -> Optional[str]:
-    """单位编码或名称 → 目录 code；未命中返回 None（不回落原串）。"""
-    raw = str(unit_ref or "").strip()
-    if not raw:
-        return None
-    try:
-        from apps.master_data.models.unit import MaterialUnit
-
-        unit = await MaterialUnit.filter(
-            tenant_id=tenant_id, code=raw, deleted_at__isnull=True
-        ).first()
-        if unit:
-            return str(unit.code).strip() or None
-        unit = await MaterialUnit.filter(
-            tenant_id=tenant_id, name=raw, deleted_at__isnull=True
-        ).first()
-        if unit:
-            return str(unit.code).strip() or None
-    except Exception as exc:
-        logger.warning("lookup unit catalog code failed ref={} err={}", raw, exc)
-    return None
+def _iter_unit_refs(*refs: Any) -> Iterable[str]:
+    seen: set[str] = set()
+    for ref in refs:
+        text = str(ref or "").strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        yield text
 
 
 async def resolve_push_unit_number(
@@ -200,12 +188,16 @@ async def resolve_push_unit_number(
     *,
     unit_refs: Sequence[Any],
     unit_code_map: Optional[Dict[str, Any]] = None,
-    allow_builtin_aliases: bool = True,
+    allow_builtin_aliases: bool = False,
 ) -> str:
     """按优先级解析推送单位编码。
 
-    目录命中用目录 code。未命中再走接口 map，最后才是可选内置别名或原串。
-    不改 resolve_unit_for_push：已有推送仍走原函数。
+    真相链：
+    1. MaterialUnit 目录（code / name）命中 → 用目录 code，**禁止**再套 BUILTIN
+    2. Save 接口 source_type_conversion_map
+    3. （仅显式开启时）BUILTIN_UNIT_ALIASES（不含 kg→004）
+    4. 原串透传
+    5. DEFAULT_UNIT_NUMBER
     """
     refs = list(_iter_unit_refs(*unit_refs))
     for ref in refs:
@@ -230,17 +222,17 @@ async def resolve_unit_for_push(
     unit_hint: Optional[str] = None,
     base_unit_hint: Optional[str] = None,
     unit_code_map: Optional[Dict[str, Any]] = None,
-    allow_builtin_aliases: bool = True,
+    allow_builtin_aliases: bool = False,
 ) -> Dict[str, str]:
     """解析推送用单位编码。
 
     真相链（禁止读 BusinessConfig 单位键）：
     业务单据 unit_hint / 物料主数据 MaterialUnit.code
     → Save 接口 source_type_conversion_map 单位条目
-    →（可选）BUILTIN_UNIT_ALIASES
+    →（显式开启时）BUILTIN_UNIT_ALIASES
     → DEFAULT_UNIT_NUMBER
 
-    目录已命中的编码（例如同步下来的字面量 ``kg``）不得再被别名改写成 ``004``。
+    默认透传目录/行单位（如 ``kg``）；禁止隐式别名改写。
     """
     hint = str(unit_hint or "").strip()
     if not hint:

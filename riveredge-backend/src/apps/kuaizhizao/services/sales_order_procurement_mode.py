@@ -7,6 +7,7 @@ from typing import Any, List, Optional
 
 from apps.kuaizhizao.services.sales_order_purchase_push import (
     _is_purchase_order_doc_type,
+    _is_purchase_requisition_doc_type,
     _is_sales_order_source,
     require_purchase_requisition_for_tenant,
 )
@@ -25,45 +26,11 @@ def normalize_procurement_fulfillment_mode(raw: Any) -> Optional[str]:
 
 async def infer_procurement_fulfillment_mode(tenant_id: int, sales_order_id: int) -> Optional[str]:
     """历史单：存在 SO 来源采购申请则请购轨，否则存在直推采购订单则直采轨。"""
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
-    from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
-
     oid = int(sales_order_id or 0)
     if oid <= 0:
         return None
-
-    pr_count, po_count = await asyncio.gather(
-        PurchaseRequisition.filter(
-            tenant_id=tenant_id,
-            source_id=oid,
-            deleted_at__isnull=True,
-        ).count(),
-        PurchaseOrder.filter(
-            tenant_id=tenant_id,
-            source_id=oid,
-            deleted_at__isnull=True,
-        ).count(),
-    )
-    has_pr = False
-    if pr_count > 0:
-        prs = await PurchaseRequisition.filter(
-            tenant_id=tenant_id, source_id=oid, deleted_at__isnull=True
-        ).only("source_type")
-        has_pr = any(_is_sales_order_source(pr.source_type) for pr in prs)
-    has_po = False
-    if po_count > 0:
-        pos = await PurchaseOrder.filter(
-            tenant_id=tenant_id, source_id=oid, deleted_at__isnull=True
-        ).only("source_type")
-        has_po = any(_is_sales_order_source(po.source_type) for po in pos)
-
-    if has_pr and not has_po:
-        return PROCUREMENT_MODE_REQUISITION
-    if has_po and not has_pr:
-        return PROCUREMENT_MODE_ORDER
-    if has_pr and has_po:
-        return PROCUREMENT_MODE_REQUISITION
-    return None
+    inferred = await _batch_infer_procurement_fulfillment_mode(tenant_id, [oid])
+    return inferred.get(oid)
 
 
 async def batch_resolve_procurement_fulfillment_mode(
@@ -98,21 +65,28 @@ async def _batch_infer_procurement_fulfillment_mode(
     tenant_id: int,
     sales_order_ids: List[int],
 ) -> dict[int, Optional[str]]:
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
 
     if not sales_order_ids:
         return {}
-    pr_rows = await PurchaseRequisition.filter(
-        tenant_id=tenant_id,
-        source_id__in=sales_order_ids,
-        deleted_at__isnull=True,
-    ).values_list("source_id", "source_type")
-    po_rows = await PurchaseOrder.filter(
-        tenant_id=tenant_id,
-        source_id__in=sales_order_ids,
-        deleted_at__isnull=True,
-    ).values_list("source_id", "source_type")
+    pr_rows, po_rows, rels = await asyncio.gather(
+        PurchaseRequisition.filter(
+            tenant_id=tenant_id,
+            source_id__in=sales_order_ids,
+            deleted_at__isnull=True,
+        ).values_list("source_id", "source_type"),
+        PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            source_id__in=sales_order_ids,
+            deleted_at__isnull=True,
+        ).values_list("source_id", "source_type"),
+        DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_id__in=sales_order_ids,
+        ).all(),
+    )
     has_pr: set[int] = set()
     has_po: set[int] = set()
     for oid, st in pr_rows:
@@ -121,6 +95,49 @@ async def _batch_infer_procurement_fulfillment_mode(
     for oid, st in po_rows:
         if _is_sales_order_source(st):
             has_po.add(int(oid))
+
+    # source_id 未回填时，仍认单据关联上的存活下游（finalize 会写 relation + 锁路径）
+    rel_pr_by_order: dict[int, set[int]] = {}
+    rel_po_by_order: dict[int, set[int]] = {}
+    for rel in rels:
+        if not _is_sales_order_source(rel.source_type):
+            continue
+        oid = int(rel.source_id or 0)
+        tid = int(rel.target_id or 0)
+        if oid <= 0 or tid <= 0:
+            continue
+        if _is_purchase_requisition_doc_type(rel.target_type):
+            rel_pr_by_order.setdefault(oid, set()).add(tid)
+        elif _is_purchase_order_doc_type(rel.target_type):
+            rel_po_by_order.setdefault(oid, set()).add(tid)
+
+    rel_pr_ids = {tid for ids in rel_pr_by_order.values() for tid in ids}
+    rel_po_ids = {tid for ids in rel_po_by_order.values() for tid in ids}
+    alive_pr: set[int] = set()
+    alive_po: set[int] = set()
+    if rel_pr_ids:
+        alive_pr = set(
+            await PurchaseRequisition.filter(
+                tenant_id=tenant_id,
+                id__in=list(rel_pr_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+    if rel_po_ids:
+        alive_po = set(
+            await PurchaseOrder.filter(
+                tenant_id=tenant_id,
+                id__in=list(rel_po_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+    for oid, tids in rel_pr_by_order.items():
+        if tids & alive_pr:
+            has_pr.add(oid)
+    for oid, tids in rel_po_by_order.items():
+        if tids & alive_po:
+            has_po.add(oid)
+
     out: dict[int, Optional[str]] = {}
     for oid in sales_order_ids:
         pr = int(oid) in has_pr
@@ -210,18 +227,61 @@ async def list_sales_order_purchase_downstream_codes(
     out: dict[int, List[str]] = {int(oid): [] for oid in sales_order_ids}
     normalized = normalize_procurement_fulfillment_mode(mode)
 
+    rels = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_id__in=sales_order_ids,
+    ).all()
+
     if normalized != PROCUREMENT_MODE_ORDER:
         prs = await PurchaseRequisition.filter(
             tenant_id=tenant_id,
             source_id__in=sales_order_ids,
             deleted_at__isnull=True,
         ).all()
+        live_pr_ids = {int(pr.id) for pr in prs}
         for pr in prs:
             if not _is_sales_order_source(pr.source_type):
                 continue
             oid = int(pr.source_id or 0)
             code = str(pr.requisition_code or "").strip()
             if oid in out and code:
+                out[oid].append(code)
+
+        # 头表 source 未回填时，仍认 SO→采购申请单据关联（与直推采购订单对称）
+        rel_pr_targets = {
+            int(rel.target_id or 0)
+            for rel in rels
+            if _is_sales_order_source(rel.source_type)
+            and _is_purchase_requisition_doc_type(rel.target_type)
+            and int(rel.target_id or 0) > 0
+        }
+        extra_pr_ids = rel_pr_targets - live_pr_ids
+        alive_extra: set[int] = set()
+        code_by_pr_id: dict[int, str] = {
+            int(pr.id): str(pr.requisition_code or "").strip() for pr in prs
+        }
+        if extra_pr_ids:
+            extra_prs = await PurchaseRequisition.filter(
+                tenant_id=tenant_id,
+                id__in=list(extra_pr_ids),
+                deleted_at__isnull=True,
+            ).all()
+            for pr in extra_prs:
+                alive_extra.add(int(pr.id))
+                code_by_pr_id[int(pr.id)] = str(pr.requisition_code or "").strip()
+        for rel in rels:
+            if not _is_sales_order_source(rel.source_type):
+                continue
+            if not _is_purchase_requisition_doc_type(rel.target_type):
+                continue
+            oid = int(rel.source_id or 0)
+            tid = int(rel.target_id or 0)
+            if oid not in out or tid <= 0:
+                continue
+            if tid not in live_pr_ids and tid not in alive_extra:
+                continue
+            code = str(rel.target_code or "").strip() or code_by_pr_id.get(tid, "")
+            if code and code not in out[oid]:
                 out[oid].append(code)
 
     if normalized != PROCUREMENT_MODE_REQUISITION:
@@ -238,10 +298,6 @@ async def list_sales_order_purchase_downstream_codes(
             if oid in out and code:
                 out[oid].append(code)
 
-        rels = await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_id__in=sales_order_ids,
-        ).all()
         live_po_ids = {int(po.id) for po in pos}
         for rel in rels:
             if not _is_sales_order_source(rel.source_type):

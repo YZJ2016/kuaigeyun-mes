@@ -195,6 +195,7 @@ function UserPickField({
   userList,
   loading,
   departmentOptions,
+  required,
 }: {
   name: string;
   nameField: string;
@@ -203,6 +204,7 @@ function UserPickField({
   userList: User[];
   loading: boolean;
   departmentOptions?: Array<{ value: number; label: string; code?: string }>;
+  required?: boolean;
 }) {
   const { t } = useTranslation();
   const form = AntForm.useFormInstance();
@@ -232,6 +234,16 @@ function UserPickField({
       <ProFormItem
         name={name}
         label={label}
+        rules={
+          required
+            ? [
+                {
+                  required: true,
+                  message: t('app.kuaizhizao.warehouseOutbound.msg.requesterRequired'),
+                },
+              ]
+            : undefined
+        }
         normalize={(v) =>
           v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined
         }
@@ -1444,8 +1456,8 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
             material_id: materialId,
             material_code: String(row.material_code ?? ''),
             material_name: String(row.material_name ?? ''),
-            material_spec: specFromRow || specFromMat || undefined,
-            material_model: modelFromRow || modelFromMat || undefined,
+            material_spec: specFromMat || undefined,
+            material_model: modelFromMat || undefined,
             material_unit: unit,
             work_order_id: woId > 0 ? woId : undefined,
             work_order_code: woCode || undefined,
@@ -1626,12 +1638,19 @@ export const ProductionPickingCreateModal: React.FC<ProductionPickingCreateModal
             userList={users}
             loading={usersLoading}
             departmentOptions={departmentOptions}
+            required
           />
         </Col>
         <Col span={12}>
           <ProFormItem
             name="pick_department_id"
             label={t('app.kuaizhizao.warehouseOutbound.field.pickDepartment')}
+            rules={[
+              {
+                required: true,
+                message: t('app.kuaizhizao.warehouseOutbound.msg.pickDepartmentRequired'),
+              },
+            ]}
           >
             <UniDropdown
               placeholder={t('app.kuaizhizao.warehouseOutbound.field.pickDepartmentPlaceholder')}

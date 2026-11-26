@@ -532,6 +532,21 @@ export function resolveDefaultPushQuantity(row: {
   return Number.isFinite(maxQty) && maxQty > 0 ? maxQty : 0;
 }
 
+/** 销售订单下推工单：本次默认取「建议生产」（可下推减现存量），为 0 时仍取可下推上限。 */
+export function resolveWorkOrderDefaultPushQuantity(row: {
+  suggested_make_quantity?: number | null;
+  max_push_quantity?: number | null;
+  base_push_quantity?: number | null;
+}): number {
+  const maxQty = Number(row.max_push_quantity ?? 0);
+  const suggested = Number(row.suggested_make_quantity);
+  if (Number.isFinite(suggested) && suggested > 0) {
+    if (Number.isFinite(maxQty) && maxQty > 0) return Math.min(suggested, maxQty);
+    return suggested;
+  }
+  return resolveDefaultPushQuantity(row);
+}
+
 export interface PushPreviewResponse {
   target_type: string;
   summary: string;

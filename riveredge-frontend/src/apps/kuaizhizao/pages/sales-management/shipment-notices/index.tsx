@@ -1831,7 +1831,7 @@ const ShipmentNoticesPage: React.FC = () => {
         notice_quantity: Number(row[1]) || 1,
         unit_price: Number(row[2]) || 0,
         material_name: mat?.name || String(row[3] || ''),
-        material_spec: mat?.specification || String(row[4] || ''),
+        material_spec: mat?.specification ?? '',
         material_unit,
       };
     });

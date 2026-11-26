@@ -1052,6 +1052,7 @@ class FileService:
                 next_cursor=0,
                 done=leftover_done,
                 migrated=leftover_migrated,
+                skipped=0,
                 failed=leftover_failed,
                 failures=failures,
                 phase="leftover_tiers" if not leftover_done else "originals",
@@ -1095,7 +1096,7 @@ class FileService:
                 abs_path, corrected = FileService.resolve_physical_file_path(tenant_id, row.file_path)
                 source_key = corrected or row.file_path
                 if not abs_path:
-                    failed += 1
+                    skipped += 1
                     failures.append({
                         "uuid": str(row.uuid),
                         "reason": (
@@ -1151,6 +1152,7 @@ class FileService:
                 next_cursor=next_cursor,
                 done=False,
                 migrated=migrated,
+                skipped=skipped,
                 failed=failed,
                 failures=failures,
                 phase="originals",
@@ -1183,6 +1185,7 @@ class FileService:
             next_cursor=next_cursor,
             done=leftover_done,
             migrated=migrated,
+            skipped=skipped,
             failed=failed,
             failures=failures,
             phase="leftover_tiers" if not leftover_done else "originals",

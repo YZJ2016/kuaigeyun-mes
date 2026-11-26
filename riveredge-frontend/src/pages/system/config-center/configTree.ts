@@ -691,6 +691,24 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
         { value: 'manual', labelKey: 'pages.system.configCenter.param.finance_payable_recognition_opt_manual' },
       ],
     },
+    {
+      key: 'finance.invoice_settlement_mode',
+      nameKey: 'pages.system.configCenter.param.finance_invoice_settlement_mode',
+      descriptionKey: 'pages.system.configCenter.param.finance_invoice_settlement_mode_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.finance.invoice_settlement_mode',
+      type: 'select',
+      selectOptions: [
+        {
+          value: 'summary',
+          labelKey: 'pages.system.configCenter.param.finance_invoice_settlement_mode_opt_summary',
+        },
+        {
+          value: 'detail',
+          labelKey: 'pages.system.configCenter.param.finance_invoice_settlement_mode_opt_detail',
+        },
+      ],
+    },
   ],
   }),
   MASTER_DATA_PARAMETER_CATEGORY,

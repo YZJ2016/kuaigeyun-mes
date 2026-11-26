@@ -12964,7 +12964,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 else None
             )
             if normalized_pay is None and po_upstream is not None:
-                normalized_pay = coerce_partner_payment_method_code(
+                normalized_pay = normalize_purchase_receipt_pay_mode(
                     getattr(po_upstream, "payment_method_code", None)
                 )
             receipt_dict["pay_mode"] = normalized_pay
@@ -21815,6 +21815,25 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             header_dump = outbound_data.model_dump(
                 exclude_unset=True, exclude={"items", "outbound_code"}
             )
+            from apps.kuaizhizao.constants.other_outbound_type import (
+                load_and_assert_other_outbound_type_materials,
+                normalize_other_outbound_type,
+            )
+
+            if "outbound_type" in header_dump:
+                header_dump["outbound_type"] = normalize_other_outbound_type(
+                    header_dump["outbound_type"]
+                )
+                existing_items = await OtherOutboundItem.filter(
+                    tenant_id=tenant_id,
+                    outbound_id=outbound_id,
+                ).all()
+                line_mids = [int(it.material_id) for it in existing_items if int(it.material_id or 0) > 0]
+                await load_and_assert_other_outbound_type_materials(
+                    tenant_id,
+                    header_dump["outbound_type"],
+                    line_mids,
+                )
             if header_dump:
                 header_dump["updated_by"] = updated_by
                 header_dump["updated_by_name"] = user_info["name"]
@@ -21944,12 +21963,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
 
             outbound_row = await OtherOutbound.get(tenant_id=tenant_id, id=outbound_id)
             eff_outbound_type = str(getattr(outbound_row, "outbound_type", None) or "").strip()
-            if eff_outbound_type:
-                from apps.kuaizhizao.constants.other_outbound_type import (
-                    load_and_assert_other_outbound_type_materials,
-                    normalize_other_outbound_type,
-                )
-
+            if eff_outbound_type and "outbound_type" not in header_dump:
                 line_mids = [
                     int(it.material_id)
                     for it in await OtherOutboundItem.filter(

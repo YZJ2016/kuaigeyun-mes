@@ -6616,7 +6616,6 @@ async def list_replenishment_suggestions(
         created_end_date=created_end_date,
         updated_start_date=updated_start_date,
         updated_end_date=updated_end_date,
-        current_user=current_user,
     )
     return {"items": items, "total": total}
 

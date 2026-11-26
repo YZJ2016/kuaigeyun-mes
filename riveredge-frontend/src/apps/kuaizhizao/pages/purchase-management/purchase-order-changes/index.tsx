@@ -99,6 +99,10 @@ import {
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+  renderDocumentLineMaterialsPreview,
+} from '../../sales-management/shared/documentLineMaterialsPreview';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
@@ -306,16 +310,21 @@ const PurchaseOrderChangesPage: React.FC = () => {
     }
     const shouldCommit = commitAfterSaveRef.current;
     commitAfterSaveRef.current = false;
-    await updatePurchaseOrderChange(editingId, payload);
-    reloadTable();
-    if (shouldCommit) {
+    try {
+      await updatePurchaseOrderChange(editingId, payload);
+      reloadTable();
+      if (shouldCommit) {
+        setFormSaving(false);
+        await runSubmitWithPreview(editingId);
+        return;
+      }
+      message.success(t('common.updateSuccess'));
+      leavePurchaseOrderChangeFormPage();
+    } catch (error: unknown) {
+      message.error(getApiErrorMessage(error, t('common.operationFailed')));
+    } finally {
       setFormSaving(false);
-      await runSubmitWithPreview(editingId);
-      return;
     }
-    message.success(t('common.updateSuccess'));
-    setFormSaving(false);
-    leavePurchaseOrderChangeFormPage();
   };
 
   const createChangeFromPurchaseOrder = useCallback(
@@ -363,7 +372,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
           keyword: keyword.trim() || undefined,
           pullable_only: isPullableScope(scope),
           pull_target: 'purchase_order_change',
-          include_items: false,
+          include_items: true,
           view: 'options',
         });
         const rows = (result.data || []).filter(
@@ -396,6 +405,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
         dataIndex: 'supplier_name',
         ellipsis: true,
         render: (value: string) => value || '-',
+      },
+      {
+        title: t('app.kuaizhizao.common.colLineMaterials'),
+        ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+        render: (_, record) => renderDocumentLineMaterialsPreview(record.items, t),
       },
       {
         title: t('components.uniPullQuery.documentDateColumn'),
@@ -479,6 +493,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const runSubmitWithPreview = async (id: number) => {
     setPendingSubmitId(id);
+    setImpactData(null);
     setImpactLoading(true);
     setImpactOpen(true);
     try {

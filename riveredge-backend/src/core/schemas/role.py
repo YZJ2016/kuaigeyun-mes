@@ -165,6 +165,10 @@ class RoleListItem(BaseModel):
     is_active: bool = Field(..., description="是否启用")
     permission_count: int = Field(..., description="关联的权限数量")
     user_count: int = Field(..., description="关联的用户数量")
+    member_search_labels: List[str] = Field(
+        default_factory=list,
+        description="关联用户的姓名与账号，供角色列表按人员关键词过滤",
+    )
     created_at: datetime = Field(..., description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)

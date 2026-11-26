@@ -57,6 +57,11 @@ class Invoice(BaseModel):
     )
     verification_date = fields.DateField(null=True, description="认证日期(进项)")
 
+    settlement_mode = fields.CharField(
+        max_length=16,
+        default="summary",
+        description="结算粒度 summary 汇总 | detail 明细",
+    )
     source_document_code = fields.CharField(max_length=100, null=True, description="来源单据号")
     attachment_uuid = fields.CharField(max_length=36, null=True, description="发票文件ID")
     description = fields.TextField(null=True, description="备注")
@@ -102,6 +107,11 @@ class InvoiceItem(BaseModel):
     amount = fields.DecimalField(max_digits=16, decimal_places=4, description="金额(不含税)")
     tax_rate = fields.DecimalField(max_digits=6, decimal_places=4, description="税率")
     tax_amount = fields.DecimalField(max_digits=16, decimal_places=4, description="税额")
+
+    source_doc_type = fields.CharField(max_length=50, null=True, description="源单类型")
+    source_doc_id = fields.IntField(null=True, description="源单ID")
+    source_line_id = fields.IntField(null=True, description="源单物料行ID")
+    partner_statement_line_id = fields.IntField(null=True, description="对账单行ID")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

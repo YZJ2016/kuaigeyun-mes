@@ -138,6 +138,18 @@ def _target_would_auto_push_on_action(
     mode = str(target.get("push_mode") or "auto").strip()
     if mode == "manual":
         return False
+    # action_apis 已按用途拆行时（confirm/update/withdraw/…），只允许对应动作触发该行。
+    # 否则确认出库会把 update/withdraw/delete 五行全推一遍：首行 batchAdd 成功后，
+    # 其余行走补提交/审核，金蝶已审核再审即报「必须为已提交才能审核」，并撤回本地出库。
+    action_apis = target.get("action_apis")
+    if isinstance(action_apis, dict) and action_apis:
+        api_actions = {
+            str(key).strip().lower()
+            for key in action_apis.keys()
+            if str(key or "").strip()
+        }
+        if api_actions:
+            return act in api_actions
     owned = target.get("trigger_actions")
     if isinstance(owned, list) and owned:
         owned_actions = [str(item).strip().lower() for item in owned if str(item or "").strip()]
@@ -283,11 +295,15 @@ async def maybe_silent_push_after_audit(
 
     svc = document_push_service()
     failures: List[str] = []
+    pushed_profiles: set[str] = set()
     with sync_run_trigger_kind(SYNC_TRIGGER_KIND_TRIGGER):
         for target in targets:
             if not _target_would_auto_push_on_action(target, act=act, binding_triggers=triggers):
                 continue
             profile = str(target.get("target_profile") or "").strip()
+            # 同一 profile 多行（误把 revoke API 也标成 push）时只推一次，避免首推成功后补审撞状态。
+            if profile and profile in pushed_profiles:
+                continue
             try:
                 result = await svc.push(
                     tenant_id=tenant_id,
@@ -300,7 +316,7 @@ async def maybe_silent_push_after_audit(
                 failure = _push_failure_text(result)
                 if failure:
                     logger.warning(
-                        "无感外推失败 tenant_id={} entity_type={} entity_id={} profile={} err={}",
+                        "无感外推失败 tenant_id=%s entity_type=%s entity_id=%s profile=%s err=%s",
                         tenant_id,
                         entity_type,
                         entity_id,
@@ -308,9 +324,11 @@ async def maybe_silent_push_after_audit(
                         failure,
                     )
                     failures.append(failure)
+                elif profile:
+                    pushed_profiles.add(profile)
             except Exception as exc:
                 logger.warning(
-                    "无感外推失败 tenant_id={} entity_type={} entity_id={} profile={} err={}",
+                    "无感外推失败 tenant_id=%s entity_type=%s entity_id=%s profile=%s err=%s",
                     tenant_id,
                     entity_type,
                     entity_id,

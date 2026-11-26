@@ -28,12 +28,14 @@ _PURCHASE_ORDER_TREND_FIELDS = (
     "order_date",
     "supplier_id",
     "supplier_name",
+    "price_type",
 )
 _PURCHASE_ITEM_TREND_FIELDS = (
     "id",
     "order_id",
     "unit_price",
     "ordered_quantity",
+    "tax_rate",
 )
 
 
@@ -130,13 +132,58 @@ class PartnerMaterialPriceTrendService:
         material_id: int,
         supplier_id: int,
     ) -> Optional[Decimal]:
-        trend = await self.get_purchase_price_trend(
-            tenant_id, material_id, supplier_id, limit=1
+        exclusive, _tax = await self.get_latest_purchase_exclusive_unit_price(
+            tenant_id, material_id, supplier_id
         )
-        if not trend.history_items:
-            return None
-        price = trend.history_items[0].unit_price
-        return price if price and price > 0 else None
+        return exclusive
+
+    async def get_latest_purchase_exclusive_unit_price(
+        self,
+        tenant_id: int,
+        material_id: int,
+        supplier_id: int,
+    ) -> tuple[Optional[Decimal], Optional[Decimal]]:
+        """取价用：返回（未税单价, 行税率%）。趋势图仍展示订单录入价。"""
+        from apps.master_data.services.partner_material_price_defaults import (
+            normalize_stored_unit_price_to_exclusive,
+        )
+
+        order_rows: List[Dict[str, Any]] = await PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            supplier_id=supplier_id,
+            status__in=LEGACY_AUDITED_VALUES,
+            deleted_at__isnull=True,
+        ).order_by("-order_date", "-id").limit(_PURCHASE_ORDER_SCAN).values(*_PURCHASE_ORDER_TREND_FIELDS)
+        if not order_rows:
+            return None, None
+
+        order_map = {row["id"]: row for row in order_rows}
+        item_rows: List[Dict[str, Any]] = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            order_id__in=list(order_map.keys()),
+            deleted_at__isnull=True,
+        ).values(*_PURCHASE_ITEM_TREND_FIELDS)
+        if not item_rows:
+            return None, None
+
+        ranked: List[tuple] = []
+        for item in item_rows:
+            order = order_map.get(item["order_id"])
+            if order is None:
+                continue
+            ranked.append((order["order_date"], order["id"], item, order))
+        if not ranked:
+            return None, None
+        ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
+        _order_date, _order_id, item, order = ranked[0]
+        raw_price = Decimal(str(item.get("unit_price") or 0))
+        if raw_price <= 0:
+            return None, None
+        tax_rate = Decimal(str(item.get("tax_rate") or 0))
+        price_type = order.get("price_type") or "tax_inclusive"
+        exclusive = normalize_stored_unit_price_to_exclusive(raw_price, tax_rate, price_type)
+        return exclusive, tax_rate if tax_rate > 0 else None
 
     async def get_sales_price_trend(
         self,

@@ -20,6 +20,7 @@ export interface PurchaseInvoice {
     reviewer_name?: string;
     review_time?: string;
     review_status: string;
+    settlement_mode?: 'summary' | 'detail' | string;
     review_remarks?: string;
     payable_id?: number;
     payable_code?: string;
@@ -50,9 +51,26 @@ export interface PurchaseInvoiceListParams {
     updated_end_date?: string;
     sort_field?: string;
     sort_order?: 'asc' | 'desc';
+    settlement_mode?: 'summary' | 'detail' | '';
+}
+
+export interface PurchaseInvoiceDetailItemCreate {
+    item_name: string;
+    spec_model?: string | null;
+    unit?: string;
+    quantity?: number;
+    unit_price?: number;
+    amount: number;
+    tax_rate: number;
+    tax_amount: number;
+    source_doc_type: string;
+    source_doc_id: number;
+    source_line_id: number;
+    partner_statement_line_id?: number | null;
 }
 
 export interface PurchaseInvoiceCreateData {
+    settlement_mode?: 'summary' | 'detail';
     invoice_code?: string;
     purchase_order_id?: number | null;
     purchase_order_code?: string | null;
@@ -77,6 +95,7 @@ export interface PurchaseInvoiceCreateData {
     source_id?: number;
     source_ids?: number[];
     pull_receipt_lines?: { purchase_receipt_item_id: number; amount: number }[];
+    detail_items?: PurchaseInvoiceDetailItemCreate[];
     concurrent_settlement?: {
         enabled: boolean;
         total_amount: number;

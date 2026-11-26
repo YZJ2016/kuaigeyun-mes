@@ -20,13 +20,16 @@ import { resolveStackedSecondaryLinkedDocument } from '../../apps/kuaizhizao/uti
 const DOC_FOLDER_COPY_ICON_COLOR = '#d48806';
 
 /**
- * 次行（标识行：单号 / 编码 + 复制 + 徽章）测量锚点。
- *
- * 主行可省略号截断，次行不能——单号被截断就失去了标识意义。因此列宽的下界由次行的
- * 固有宽度决定，UniTable 按此类名实测（配套 CSS 令其 max-content，宽度不随列宽变化，
- * 测量因此不会自反馈）。
+ * 次行（单号 / 编码 + 复制 + 徽章）测量锚点：UniTable 用 scrollWidth 估 primaryFlex 列宽下界。
+ * 展示层列宽不足时主行、次行均省略号截断（title 悬停看全文），禁止压邻列。
  */
 export const UNI_TABLE_STACKED_IDENTITY_CLASS = 'uni-table-stacked-identity';
+/** 堆叠主列根容器：配合 uni-table.less 裁剪，禁止长文案压邻列 */
+export const UNI_TABLE_STACKED_PRIMARY_CELL_CLASS = 'uni-table-stacked-primary-cell';
+export const UNI_TABLE_STACKED_PRIMARY_LINE_CLASS = 'uni-table-stacked-primary-line';
+export const UNI_TABLE_STACKED_SECONDARY_LINE_CLASS = 'uni-table-stacked-secondary-line';
+export const UNI_TABLE_STACKED_PRIMARY_TEXT_CLASS = 'uni-table-stacked-primary-text';
+export const UNI_TABLE_STACKED_SECONDARY_TEXT_CLASS = 'uni-table-stacked-secondary-text';
 
 /** 堆叠主列默认列属性（与 uniTableLayoutEngine.resolveLayoutPlan 配对） */
 export const UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS = {
@@ -200,9 +203,23 @@ export function UniTableStackedPrimaryCell({
       : { flex: '1 1 auto', width: '100%' }),
   };
 
+  const secondaryTextEllipsisStyle: React.CSSProperties = {
+    ...secondaryLineStyle,
+    minWidth: 0,
+    flex: '1 1 auto',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
+    <div
+      className={UNI_TABLE_STACKED_PRIMARY_CELL_CLASS}
+      style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0, maxWidth: '100%', width: '100%' }}
+    >
       <div
+        className={UNI_TABLE_STACKED_PRIMARY_LINE_CLASS}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -212,24 +229,31 @@ export function UniTableStackedPrimaryCell({
           minWidth: 0,
           minHeight: primaryRowHeight,
           width: '100%',
+          overflow: 'hidden',
         }}
       >
         {primaryBadge ? <UniTableStackedLineBadge>{primaryBadge}</UniTableStackedLineBadge> : null}
-        {primaryContent ?? (
-          <span title={primaryText} style={primaryTextStyle}>
-            {primaryText}
-          </span>
-        )}
+        <span
+          className={UNI_TABLE_STACKED_PRIMARY_TEXT_CLASS}
+          title={primaryText}
+          style={primaryTextStyle}
+        >
+          {primaryContent ?? primaryText}
+        </span>
         {primaryExtra}
       </div>
       <div
-        className={UNI_TABLE_STACKED_IDENTITY_CLASS}
+        className={`${UNI_TABLE_STACKED_SECONDARY_LINE_CLASS} ${UNI_TABLE_STACKED_IDENTITY_CLASS}`}
         style={{
           display: 'flex',
           alignItems: 'center',
           columnGap: rowGap,
           marginTop: 1,
           flexWrap: 'nowrap',
+          minWidth: 0,
+          maxWidth: '100%',
+          width: '100%',
+          overflow: 'hidden',
         }}
       >
         {secondaryBadge ? <UniTableStackedLineBadge>{secondaryBadge}</UniTableStackedLineBadge> : null}
@@ -239,7 +263,7 @@ export function UniTableStackedPrimaryCell({
             documentId={linkedDoc.documentId}
             code={linkedDoc.code}
             copyable={secondaryCopyable}
-            ellipsis={false}
+            ellipsis
             style={secondaryLineStyle}
           />
         ) : onSecondaryClick && secondaryText !== '-' ? (
@@ -248,14 +272,18 @@ export function UniTableStackedPrimaryCell({
               e.stopPropagation();
               onSecondaryClick();
             }}
-            style={secondaryLineStyle}
+            className={UNI_TABLE_STACKED_SECONDARY_TEXT_CLASS}
+            title={secondaryText}
+            style={secondaryTextEllipsisStyle}
           >
             {secondaryText}
           </Typography.Link>
         ) : (
           <Typography.Text
             {...(uniformText ? {} : { type: 'secondary' as const })}
-            style={secondaryLineStyle}
+            className={UNI_TABLE_STACKED_SECONDARY_TEXT_CLASS}
+            title={secondaryText}
+            style={secondaryTextEllipsisStyle}
           >
             {secondaryText}
           </Typography.Text>
@@ -401,7 +429,10 @@ export function MaterialStackedCell({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0, maxWidth: '100%' }}>
+    <div
+      className={UNI_TABLE_STACKED_PRIMARY_CELL_CLASS}
+      style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0, maxWidth: '100%', width: '100%' }}
+    >
       <div
         style={{
           display: 'flex',
@@ -415,6 +446,7 @@ export function MaterialStackedCell({
         }}
       >
         <span
+          className={UNI_TABLE_STACKED_PRIMARY_TEXT_CLASS}
           title={name}
           style={{
             margin: 0,

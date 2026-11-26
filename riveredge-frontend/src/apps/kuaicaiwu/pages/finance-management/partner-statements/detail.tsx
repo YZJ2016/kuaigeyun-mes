@@ -50,6 +50,7 @@ import {
   patchLineStatementAmount,
   previewLineKey,
   recalcPartnerStatementLines,
+  resolvePartnerStatementTableLines,
 } from '../../../utils/partnerStatementAmountUtils';
 import { usePartnerStatementLineColumns } from '../../../utils/partnerStatementLineColumns';
 import { useFinanceVoucherDetail } from '../../../components/FinanceVoucherDetailProvider';
@@ -175,7 +176,7 @@ const PartnerStatementDetailPage: React.FC = () => {
     const opening = Number(
       statement.transaction_details?.summary?.opening_balance ?? statement.opening_balance ?? 0,
     );
-    const srcLines = statement.transaction_details?.lines || [];
+    const srcLines = resolvePartnerStatementTableLines(statement.transaction_details);
     const recalc = recalcPartnerStatementLines(opening, srcLines);
     setLocalLines(recalc.lines);
     setLocalSummary({

@@ -3532,8 +3532,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         if (!identity && !markerGroup) return
         let requiredPx = 0
         if (identity) {
-          // 标识行右缘相对单元格左缘：天然含左内边距与树形缩进
-          requiredPx = identity.getBoundingClientRect().right - cell.getBoundingClientRect().left
+          const cellLeft = cell.getBoundingClientRect().left
+          const visibleRight = identity.getBoundingClientRect().right - cellLeft
+          // scrollWidth：省略号展示时仍保留全文固有宽，供 primaryFlex 列宽下界实测
+          const intrinsicPx = identity.scrollWidth + Math.max(0, identity.getBoundingClientRect().left - cellLeft)
+          requiredPx = Math.max(visibleRight, intrinsicPx)
         } else if (markerGroup) {
           // overflow:hidden 下 scrollWidth 仍为徽章组固有宽
           requiredPx =

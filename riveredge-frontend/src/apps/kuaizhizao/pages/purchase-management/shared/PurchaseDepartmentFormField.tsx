@@ -91,6 +91,8 @@ type PurchaseDepartmentFormFieldProps = {
   name?: string;
   disabled?: boolean;
   required?: boolean;
+  /** 覆盖默认 common.required 文案 */
+  requiredMessage?: string;
   options: PurchaseDepartmentOption[];
   loading?: boolean;
 };
@@ -100,10 +102,13 @@ export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldPr
   name = 'department_id',
   disabled,
   required = false,
+  requiredMessage,
   options,
   loading,
 }) => {
   const { t } = useTranslation();
+  const departmentRequiredMsg =
+    requiredMessage ?? t('app.kuaizhizao.purchaseOrder.form.departmentRequired', '请选择部门');
 
   return (
     <ProFormSelect
@@ -111,7 +116,7 @@ export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldPr
       label={t('app.kuaizhizao.purchase.field.department')}
       options={options}
       disabled={disabled}
-      rules={required ? [{ required: true, message: t('common.required') }] : undefined}
+      rules={required ? [{ required: true, message: departmentRequiredMsg }] : undefined}
       fieldProps={{
         showSearch: true,
         optionFilterProp: 'label',

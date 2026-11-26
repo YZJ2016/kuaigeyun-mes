@@ -15,8 +15,10 @@ import { warehouseApi as masterWarehouseApi } from '../../../../master-data/serv
 import {
   mapWarehouseSelectOptions,
   OutboundEntryOperatorField,
+  OutboundEntryPickDepartmentField,
   type WarehouseSelectOption,
   useOutboundOperatorSelect,
+  useOutboundPickDepartmentSelect,
 } from './outboundEntryShared';
 import OutboundSerialPickerField from './OutboundSerialPickerField';
 import {
@@ -106,6 +108,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const { message: messageApi } = App.useApp();
   const operatorHook = useOutboundOperatorSelect();
+  const pickDepartmentHook = useOutboundPickDepartmentSelect(open);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<OutboundEditDetail | null>(null);
@@ -449,6 +452,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
             id: rawPickerId != null && Number(rawPickerId) > 0 ? Number(rawPickerId) : undefined,
             name: String(merged.picker_name ?? '').trim() || undefined,
           });
+          pickDepartmentHook.restoreFromDetail(merged);
           setPickingWarehouseOptions(whOptions);
           const meta = await loadConfirmPreviewMaterialMeta(mapLinesForMaterialMeta(merged.items || []));
           if (cancelled) return;
@@ -553,6 +557,15 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
       messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noEditableLines'));
       return;
     }
+    if (!operatorHook.receiverId) {
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.requesterRequired'));
+      return;
+    }
+    const pickDept = pickDepartmentHook.toPayload();
+    if (!pickDept.pick_department_id && !pickDept.pick_department_code) {
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.pickDepartmentRequired'));
+      return;
+    }
     const mappedItems = items
       .filter((it) => it.id != null)
       .map((it) => {
@@ -643,6 +656,7 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
           : {}),
         picker_id: operatorHook.receiverId,
         picker_name: operatorHook.receiverName.trim() || undefined,
+        ...pickDept,
         items: mappedItems,
       });
       messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.pickingEditSaved'));
@@ -1079,6 +1093,9 @@ export const OutboundHubEditModal: React.FC<OutboundHubEditModalProps> = ({
               hook={operatorHook}
               label={t('app.kuaizhizao.warehouseOutbound.field.picker')}
             />
+          </Col>
+          <Col span={8}>
+            <OutboundEntryPickDepartmentField hook={pickDepartmentHook} />
           </Col>
         </Row>
       ) : null}

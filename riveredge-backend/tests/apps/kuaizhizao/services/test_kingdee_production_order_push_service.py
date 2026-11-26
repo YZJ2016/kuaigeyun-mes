@@ -156,7 +156,8 @@ def test_build_kingdee_production_order_model_applies_unit_code_map_via_cfg():
 def test_apply_unit_code_map():
     assert apply_unit_code_map("kg", {"kg": "004", "台": "001"}) == "004"
     assert apply_unit_code_map("004", {}) == "004"
-    assert apply_unit_code_map("个", {}) == "006"
+    assert apply_unit_code_map("个", {}) == "个"
+    assert apply_unit_code_map("个", use_builtin_aliases=True) == "006"
 
     assert (
         work_order_push_skip_reason(

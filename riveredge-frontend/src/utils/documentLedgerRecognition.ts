@@ -149,3 +149,11 @@ export function orgFinancePayableDefault(businessConfig: { parameters?: { financ
   const raw = businessConfig?.parameters?.finance?.payable_recognition;
   return typeof raw === 'string' && raw.trim() ? raw.trim() : 'on_receipt';
 }
+
+/** 组织唯一发票开立粒度：summary | detail（系统参数 finance.invoice_settlement_mode） */
+export function orgFinanceInvoiceSettlementMode(
+  businessConfig: { parameters?: { finance?: Record<string, unknown> } } | undefined,
+): 'summary' | 'detail' {
+  const raw = businessConfig?.parameters?.finance?.invoice_settlement_mode;
+  return raw === 'detail' ? 'detail' : 'summary';
+}

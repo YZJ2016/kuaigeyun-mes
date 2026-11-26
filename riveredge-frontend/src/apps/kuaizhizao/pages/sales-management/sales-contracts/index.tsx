@@ -839,7 +839,7 @@ const SalesContractsPage: React.FC = () => {
             material_id: material?.id,
             material_code: material?.mainCode ?? (material as any)?.code ?? materialCode,
             material_name: material?.name ?? '',
-            material_spec: material?.specification ?? spec,
+            material_spec: material?.specification ?? '',
             material_unit: material?.baseUnit ?? unit,
             contract_quantity: quantity || 1,
             unit_price: unitPrice,

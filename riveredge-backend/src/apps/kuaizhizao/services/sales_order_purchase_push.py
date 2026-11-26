@@ -32,6 +32,11 @@ def _is_purchase_order_doc_type(doc_type: Any) -> bool:
     return raw in {"purchase_order", "purchaseorder"}
 
 
+def _is_purchase_requisition_doc_type(doc_type: Any) -> bool:
+    raw = str(doc_type or "").strip().lower().replace("-", "_")
+    return raw in {"purchase_requisition", "purchaserequisition"}
+
+
 def _add_po_item_qty(
     result: Dict[int, Dict[int, Decimal]],
     sales_order_id: int,
@@ -61,11 +66,16 @@ async def batch_pushed_purchase_requisition_qty_by_material(
     tenant_id: int,
     sales_order_ids: List[int],
 ) -> Dict[int, Dict[int, Decimal]]:
-    """order_id → material_id → 已占用（仅 SO→采购申请）。"""
+    """order_id → material_id → 已占用（仅 SO→采购申请）。
+
+    认头表 ``source_type=sales_order``；头表来源未回填时，仍认单据关联上的存活采购申请
+    （与直推采购订单占用对称），避免下推进度漏计。
+    """
     result: Dict[int, Dict[int, Decimal]] = {int(oid): {} for oid in sales_order_ids}
     if not sales_order_ids:
         return result
 
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
     from apps.kuaizhizao.models.purchase_requisition import (
         PurchaseRequisition,
         PurchaseRequisitionItem,
@@ -77,13 +87,47 @@ async def batch_pushed_purchase_requisition_qty_by_material(
         deleted_at__isnull=True,
     ).all()
     pr_ids_by_order: Dict[int, List[int]] = {}
+    counted_pr_ids: set[int] = set()
     for pr in prs:
         if not _is_sales_order_source(pr.source_type):
             continue
         oid = int(pr.source_id or 0)
         if oid not in result:
             continue
-        pr_ids_by_order.setdefault(oid, []).append(int(pr.id))
+        pid = int(pr.id)
+        pr_ids_by_order.setdefault(oid, []).append(pid)
+        counted_pr_ids.add(pid)
+
+    rels = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_id__in=sales_order_ids,
+    ).all()
+    rel_pr_by_order: Dict[int, set[int]] = {}
+    for rel in rels:
+        if not _is_sales_order_source(rel.source_type):
+            continue
+        if not _is_purchase_requisition_doc_type(rel.target_type):
+            continue
+        oid = int(rel.source_id or 0)
+        tid = int(rel.target_id or 0)
+        if oid not in result or tid <= 0 or tid in counted_pr_ids:
+            continue
+        rel_pr_by_order.setdefault(oid, set()).add(tid)
+
+    rel_pr_ids = {pid for ids in rel_pr_by_order.values() for pid in ids}
+    if rel_pr_ids:
+        alive_rel_prs = set(
+            await PurchaseRequisition.filter(
+                tenant_id=tenant_id,
+                id__in=list(rel_pr_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+        for oid, tids in rel_pr_by_order.items():
+            for tid in tids:
+                if tid in alive_rel_prs:
+                    pr_ids_by_order.setdefault(oid, []).append(int(tid))
+                    counted_pr_ids.add(int(tid))
 
     all_pr_ids = [pid for ids in pr_ids_by_order.values() for pid in ids]
     if not all_pr_ids:
@@ -639,8 +683,6 @@ async def batch_sales_order_fulfillment_push_summary(
 
         buy_total = buy_eligible_qty.get(oid, Decimal("0"))
         make_total = make_eligible_qty.get(oid, Decimal("0"))
-        eligible = buy_total + make_total
-        pushed_total = purchase_pushed + wo_pushed
         if buy_total > 0:
             purchase_ratio = float(
                 min(Decimal("100"), (purchase_pushed / buy_total) * Decimal("100"))
@@ -651,9 +693,37 @@ async def batch_sales_order_fulfillment_push_summary(
             wo_ratio = float(min(Decimal("100"), (wo_pushed / make_total) * Decimal("100")))
         else:
             wo_ratio = 0.0
-        if eligible > 0:
+        # 综合进度：按行计一次需下推量，行内外购+工单占用 capped 于行量，避免可采又可制物料分母翻倍
+        fulfillment_eligible = Decimal("0")
+        fulfillment_pushed = Decimal("0")
+        for it in items_by_order.get(oid) or []:
+            line_id = int(getattr(it, "id", 0) or 0)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            material = material_by_id.get(mid)
+            if not material:
+                continue
+            line_qty = Decimal(str(getattr(it, "order_quantity", 0) or 0))
+            if line_qty <= 0:
+                continue
+            buy_ok = material_is_buy_eligible(material)
+            make_ok = material_is_production_eligible(material)
+            if not buy_ok and not make_ok:
+                continue
+            fulfillment_eligible += line_qty
+            line_purchase = Decimal("0")
+            if buy_ok:
+                if mode == PROCUREMENT_MODE_ORDER:
+                    line_purchase = pushed_po.get(line_id, Decimal("0"))
+                else:
+                    line_purchase = pushed_pr.get(line_id, Decimal("0"))
+            line_wo = pushed_wo.get(line_id, Decimal("0")) if make_ok else Decimal("0")
+            fulfillment_pushed += min(line_qty, line_purchase + line_wo)
+        if fulfillment_eligible > 0:
             fulfillment_ratio = float(
-                min(Decimal("100"), (pushed_total / eligible) * Decimal("100"))
+                min(
+                    Decimal("100"),
+                    (fulfillment_pushed / fulfillment_eligible) * Decimal("100"),
+                )
             )
         else:
             fulfillment_ratio = 0.0
@@ -1471,8 +1541,14 @@ async def _list_sales_order_buy_pull_lines(
     )
     if sales_order_id is not None:
         so_query = so_query.filter(id=int(sales_order_id))
+    # 须带出履单路径字段；漏掉会导致已锁请购轨的销售订单仍出现在直采取单里
     orders = await so_query.only(
-        "id", "order_code", "status", "customer_name", "order_date"
+        "id",
+        "order_code",
+        "status",
+        "customer_name",
+        "order_date",
+        "procurement_fulfillment_mode",
     )
     if not orders:
         return {"data": [], "total": 0}
@@ -1680,9 +1756,16 @@ async def _list_sales_orders_for_buy_pull(
     keyword: Optional[str] = None,
     pullable_only: bool = True,
     block_when_require_pr: bool,
+    purchase_pull_track: Optional[str] = None,
 ) -> Dict[str, Any]:
     from apps.kuaizhizao.models.sales_order import SalesOrder
     from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+    from apps.kuaizhizao.services.sales_order_procurement_mode import (
+        PROCUREMENT_MODE_ORDER,
+        PROCUREMENT_MODE_REQUISITION,
+        batch_resolve_procurement_fulfillment_mode,
+        normalize_procurement_fulfillment_mode,
+    )
     from tortoise.expressions import Q
 
     if block_when_require_pr and await require_purchase_requisition_for_tenant(tenant_id):
@@ -1708,6 +1791,23 @@ async def _list_sales_orders_for_buy_pull(
         normalized = normalize_status(raw)
         if normalized in (DemandStatus.AUDITED.value, DemandStatus.CONFIRMED.value) or raw in LEGACY_AUDITED_VALUES:
             audited.append(order)
+    if not audited:
+        return {"data": [], "total": 0, "success": True}
+
+    mode_by_order = await batch_resolve_procurement_fulfillment_mode(tenant_id, audited)
+    track = normalize_procurement_fulfillment_mode(purchase_pull_track)
+    if track == PROCUREMENT_MODE_ORDER:
+        audited = [
+            o
+            for o in audited
+            if mode_by_order.get(int(o.id)) != PROCUREMENT_MODE_REQUISITION
+        ]
+    elif track == PROCUREMENT_MODE_REQUISITION:
+        audited = [
+            o
+            for o in audited
+            if mode_by_order.get(int(o.id)) != PROCUREMENT_MODE_ORDER
+        ]
     if not audited:
         return {"data": [], "total": 0, "success": True}
 
@@ -1756,6 +1856,7 @@ async def list_sales_orders_for_purchase_order_pull(
         keyword=keyword,
         pullable_only=pullable_only,
         block_when_require_pr=True,
+        purchase_pull_track="purchase_order",
     )
 
 
@@ -1775,4 +1876,5 @@ async def list_sales_orders_for_purchase_requisition_pull(
         keyword=keyword,
         pullable_only=pullable_only,
         block_when_require_pr=False,
+        purchase_pull_track="purchase_requisition",
     )

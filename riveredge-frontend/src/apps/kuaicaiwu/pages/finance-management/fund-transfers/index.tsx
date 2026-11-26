@@ -53,18 +53,32 @@ import { bankAccountService, type BankAccount } from '../../../services/finance/
 import {
   FUND_TRANSFER_RESOURCE,
   fundTransferService,
+  FUND_TRANSFER_PAYMENT_METHODS,
   type FundTransfer,
+  type FundTransferCreateData,
+  type FundTransferPaymentMethod,
   type FundTransferType,
 } from '../../../services/finance/fund-transfer';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { formatCurrencyAmount } from '../../../../../utils/format';
 import { pickSearchString } from '../../../../../utils/tableQueryKey';
+import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 
 const P = 'app.kuaicaiwu.fundTransfer';
 const FUND_TRANSFER_ENTITY = 'fund_transfer';
+
+const FUND_TRANSFER_TYPE_BY_LABEL: Record<string, FundTransferType> = {
+  内部互转: 'internal',
+  调出至外部: 'external_out',
+  自外部调入: 'external_in',
+};
 
 const isReviewApproved = (row: FundTransfer) => {
   const raw = String(row.review_status || '').trim();
@@ -285,6 +299,93 @@ const FundTransfersPage: React.FC = () => {
     [t],
   );
 
+  const paymentMethodOptions = useMemo(
+    () =>
+      FUND_TRANSFER_PAYMENT_METHODS.map((value) => ({
+        value,
+        label: t(
+          value === '转账'
+            ? `${P}.paymentMethod.transfer`
+            : value === '承兑'
+              ? `${P}.paymentMethod.acceptance`
+              : `${P}.paymentMethod.cash`,
+        ),
+      })),
+    [t],
+  );
+
+  const fundTransferImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'transferDate',
+            required: true,
+            labelKey: `${P}.field.date`,
+            aliases: ['调拨日期', '日期'],
+          },
+          {
+            field: 'transferType',
+            required: true,
+            labelKey: `${P}.field.transferType`,
+            aliases: ['调拨类型', '类型'],
+          },
+          {
+            field: 'paymentMethod',
+            required: true,
+            labelKey: `${P}.field.paymentMethod`,
+            aliases: ['付款方式', '支付方式'],
+          },
+          {
+            field: 'amount',
+            required: true,
+            labelKey: `${P}.field.amount`,
+            aliases: ['调拨金额', '金额'],
+          },
+          {
+            field: 'fromAccount',
+            labelKey: `${P}.field.fromAccount`,
+            aliases: ['调出账户', '调出账户编码'],
+          },
+          {
+            field: 'toAccount',
+            labelKey: `${P}.field.toAccount`,
+            aliases: ['调入账户', '调入账户编码'],
+          },
+          {
+            field: 'externalAccountName',
+            labelKey: `${P}.field.externalAccountName`,
+            aliases: ['外部户名'],
+          },
+          {
+            field: 'externalBankName',
+            labelKey: `${P}.field.externalBankName`,
+            aliases: ['外部开户行', '开户行'],
+          },
+          {
+            field: 'externalAccountNumber',
+            labelKey: `${P}.field.externalAccountNumber`,
+            aliases: ['外部账号', '账号'],
+          },
+          { field: 'notes', labelKey: 'common.remark', aliases: ['备注'] },
+        ],
+        [
+          t(`${P}.importExample.transferDate`),
+          t(`${P}.importExample.transferType`),
+          t(`${P}.importExample.paymentMethod`),
+          t(`${P}.importExample.amount`),
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+        ],
+      ),
+    [t],
+  );
+
   const openCreate = useCallback(() => {
     setEditing(null);
     setCreateSeed(undefined);
@@ -312,6 +413,7 @@ const FundTransfersPage: React.FC = () => {
       external_account_name: row.external_account_name,
       external_bank_name: row.external_bank_name,
       external_account_number: row.external_account_number,
+      payment_method: (row.payment_method as FundTransferPaymentMethod) || '转账',
       notes: row.notes,
       transfer_date: dayjs(),
     });
@@ -509,6 +611,15 @@ const FundTransfersPage: React.FC = () => {
             render: (_, r) => r.to_account_name || r.external_account_name || '—',
           },
           {
+            title: t(`${P}.col.paymentMethod`),
+            dataIndex: 'payment_method',
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            hideInSearch: true,
+            render: (_, r) => r.payment_method || '—',
+          },
+          {
             title: t(`${P}.col.amount`),
             dataIndex: 'amount',
             valueType: 'money',
@@ -659,6 +770,7 @@ const FundTransfersPage: React.FC = () => {
       external_account_name: pickSearchString(values, 'external_account_name'),
       external_bank_name: pickSearchString(values, 'external_bank_name'),
       external_account_number: pickSearchString(values, 'external_account_number'),
+      payment_method: String(values.payment_method || '转账') as FundTransferPaymentMethod,
       notes: pickSearchString(values, 'notes'),
       attachments: normalizeDocumentAttachments(
         values.attachments as Parameters<typeof normalizeDocumentAttachments>[0],
@@ -700,6 +812,7 @@ const FundTransfersPage: React.FC = () => {
     return {
       transfer_date: dayjs(),
       transfer_type: 'internal' as FundTransferType,
+      payment_method: '转账' as FundTransferPaymentMethod,
     };
   }, [createSeed, editing]);
 
@@ -710,7 +823,7 @@ const FundTransfersPage: React.FC = () => {
         headerTitle={t(`${P}.pageTitle`)}
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.fund-transfers.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.fund-transfers.list-v3"
         columns={columns}
         showAdvancedSearch
         pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
@@ -723,32 +836,138 @@ const FundTransfersPage: React.FC = () => {
         }}
         createButtonText={t(`${P}.createTitle`)}
         showCreateButton={false}
+        onCreate={openCreate}
+        permissionResource={FUND_TRANSFER_RESOURCE}
+        toolBarActionsBeforeCreate={[
+          <UniPullCreateToolbar
+            key="create-fund-transfer"
+            compactKey="create-fund-transfer"
+            createIcon={<PlusOutlined />}
+            createLabel={t(`${P}.createTitle`)}
+            onCreate={openCreate}
+            menuItems={[
+              {
+                key: 'copy-selected',
+                label: t(`${P}.copySelectedCreate`),
+                disabled: selectedRecordsForBatch.length !== 1,
+                onClick: openCopySelected,
+              },
+            ]}
+          />,
+        ]}
         showDeleteButton={perms.canDelete}
         deleteButtonText={t('common.delete')}
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t(`${P}.batchDeleteConfirm`, { count })}
-        toolBarRender={() =>
-          perms.canCreate
-            ? [
-                <UniPullCreateToolbar
-                  key="create-fund-transfer"
-                  compactKey="create-fund-transfer"
-                  createIcon={<PlusOutlined />}
-                  createLabel={t(`${P}.createTitle`)}
-                  onCreate={openCreate}
-                  menuItems={[
-                    {
-                      key: 'copy-selected',
-                      label: t(`${P}.copySelectedCreate`),
-                      disabled: selectedRecordsForBatch.length !== 1,
-                      onClick: openCopySelected,
-                    },
-                  ]}
-                />,
-              ]
-            : []
-        }
+        showImportButton={perms.canAction?.('import') ?? false}
+        importHeaders={fundTransferImportTemplate.importHeaders}
+        importExampleRow={fundTransferImportTemplate.importExampleRow}
+        importColumnOptions={fundTransferImportTemplate.importColumnOptions}
+        importFieldMap={fundTransferImportTemplate.importHeaderMap}
+        onImport={async (data) => {
+          if (!data || data.length < 2) {
+            messageApi.warning(t('app.kuaicaiwu.common.importEmpty'));
+            return;
+          }
+          const headers = (data[0] || []).map((h: unknown) => String(h || '').trim());
+          const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+            headers,
+            fundTransferImportTemplate.importHeaderMap,
+          );
+          if (
+            headerIndexMap.transferDate === undefined
+            || headerIndexMap.transferType === undefined
+            || headerIndexMap.paymentMethod === undefined
+            || headerIndexMap.amount === undefined
+          ) {
+            messageApi.error(t(`${P}.importHeaderError`));
+            return;
+          }
+          const resolveAccountId = (codeOrName: string | undefined) => {
+            const key = String(codeOrName || '').trim();
+            if (!key) return undefined;
+            const acc = bankAccounts.find(
+              (a) => a.account_code === key || a.account_name === key,
+            );
+            return acc?.id;
+          };
+          const trimCell = (val: unknown) => String(val ?? '').trim() || undefined;
+          const importRows = data.slice(2).filter((row: unknown[]) =>
+            row?.some((c) => c != null && String(c).trim() !== ''),
+          );
+          const items: FundTransferCreateData[] = [];
+          for (const row of importRows) {
+            const transferDate = formatDateTime(
+              row[headerIndexMap.transferDate],
+              'YYYY-MM-DD',
+            );
+            const typeLabel = String(row[headerIndexMap.transferType] ?? '').trim();
+            const transferType =
+              FUND_TRANSFER_TYPE_BY_LABEL[typeLabel]
+              || (['internal', 'external_out', 'external_in'].includes(typeLabel)
+                ? (typeLabel as FundTransferType)
+                : undefined);
+            const paymentMethod = String(row[headerIndexMap.paymentMethod] ?? '').trim() as FundTransferPaymentMethod;
+            const amount = Number(row[headerIndexMap.amount]);
+            if (!transferDate || !transferType || !paymentMethod || !(amount > 0)) continue;
+            if (!FUND_TRANSFER_PAYMENT_METHODS.includes(paymentMethod)) continue;
+            const fromId = resolveAccountId(
+              headerIndexMap.fromAccount !== undefined
+                ? String(row[headerIndexMap.fromAccount] ?? '')
+                : '',
+            );
+            const toId = resolveAccountId(
+              headerIndexMap.toAccount !== undefined
+                ? String(row[headerIndexMap.toAccount] ?? '')
+                : '',
+            );
+            items.push({
+              transfer_date: transferDate,
+              transfer_type: transferType,
+              payment_method: paymentMethod,
+              amount,
+              from_bank_account_id: fromId,
+              to_bank_account_id: toId,
+              external_account_name:
+                headerIndexMap.externalAccountName !== undefined
+                  ? trimCell(row[headerIndexMap.externalAccountName])
+                  : undefined,
+              external_bank_name:
+                headerIndexMap.externalBankName !== undefined
+                  ? trimCell(row[headerIndexMap.externalBankName])
+                  : undefined,
+              external_account_number:
+                headerIndexMap.externalAccountNumber !== undefined
+                  ? trimCell(row[headerIndexMap.externalAccountNumber])
+                  : undefined,
+              notes:
+                headerIndexMap.notes !== undefined && row[headerIndexMap.notes]
+                  ? String(row[headerIndexMap.notes]).trim() || undefined
+                  : undefined,
+            });
+          }
+          if (items.length === 0) {
+            messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
+            return;
+          }
+          const result = await importInChunksViaPerItemCreate({
+            items,
+            createOne: (item) => fundTransferService.create(item),
+            title: t(`${P}.importTitle`),
+            chunkSize: 50,
+            concurrency: 4,
+          });
+          if (result.successCount > 0) {
+            messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
+            actionRef.current?.reload();
+          }
+          if (result.failureCount > 0) {
+            messageApi.warning(
+              t('app.kuaicaiwu.common.importPartialFail', { count: result.failureCount }),
+            );
+          }
+        }}
         toolBarActions={[
           <UniBatchMenuButton
             key="fund-transfer-submit"
@@ -763,18 +982,14 @@ const FundTransfersPage: React.FC = () => {
             buttonText={t('components.uniAction.audit')}
           />,
         ]}
-        toolBarActionsAfterDelete={
-          batchMenuItems.length
-            ? [
-                <UniBatchMenuButton
-                  key="fund-transfer-batch"
-                  selectedRowKeys={selectedRowKeys}
-                  buttonText={t('components.uniBatch.batchActions')}
-                  menuItems={batchMenuItems}
-                />,
-              ]
-            : undefined
-        }
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="fund-transfer-batch"
+            selectedRowKeys={selectedRowKeys}
+            buttonText={t('components.uniBatch.batchActions')}
+            menuItems={batchMenuItems}
+          />,
+        ]}
         request={async (params, sort, _filter, searchFormValues) => {
           const { current, pageSize } = params;
           const range = searchFormValues?.transfer_date_range as [string, string] | undefined;
@@ -847,6 +1062,14 @@ const FundTransfersPage: React.FC = () => {
               min={0.01}
               rules={[{ required: true }]}
               fieldProps={{ precision: 2, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="payment_method"
+              label={t(`${P}.field.paymentMethod`)}
+              rules={[{ required: true }]}
+              options={paymentMethodOptions}
             />
           </Col>
           <ProFormDependency name={['transfer_type']}>
@@ -1042,6 +1265,9 @@ const FundTransfersPage: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label={t(`${P}.col.transferType`)}>
               {transferTypeLabel(detailRecord.transfer_type, t)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t(`${P}.col.paymentMethod`)}>
+              {detailRecord.payment_method || '—'}
             </Descriptions.Item>
             <Descriptions.Item label={t(`${P}.col.amount`)}>
               {formatCurrencyAmount(detailRecord.amount)} {detailRecord.currency}

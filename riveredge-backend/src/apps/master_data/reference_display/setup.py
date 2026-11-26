@@ -113,11 +113,11 @@ def _supplier_display_row(entity: Any) -> dict[str, Any]:
     """
     from apps.master_data.services.supply_chain_service import (
         _partner_addresses_for_response,
-        _partner_contacts_for_response,
+        _partner_contacts_stored_only,
     )
 
     contact = _partner_primary_contact_fields(entity)
-    contact_rows = _partner_contacts_for_response(entity)
+    contact_rows = _partner_contacts_stored_only(entity)
     address_rows = _partner_addresses_for_response(entity)
     return _row(
         id=int(entity.id),

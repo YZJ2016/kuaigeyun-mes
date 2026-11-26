@@ -45,6 +45,8 @@ export interface Role {
   tenant_id: number;
   permission_count?: number;
   user_count?: number;
+  /** 关联用户姓名/账号，用于角色列表按人员搜索 */
+  member_search_labels?: string[];
   permissions?: Permission[];
   created_at: string;
   updated_at: string;

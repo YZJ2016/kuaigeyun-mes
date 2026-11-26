@@ -185,7 +185,7 @@ async def get_role_list(
     Args:
         page: 页码
         page_size: 每页数量
-        keyword: 关键词搜索（搜索角色名称、代码、描述）
+        keyword: 关键词搜索（搜索角色名称、代码、描述；列表项另含关联用户姓名/账号供前端过滤）
         is_active: 是否启用筛选
         is_system: 是否系统角色筛选
         current_user: 当前用户（依赖注入）
