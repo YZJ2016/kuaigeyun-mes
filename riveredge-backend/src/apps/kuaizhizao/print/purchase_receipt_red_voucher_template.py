@@ -147,6 +147,7 @@ PURCHASE_RECEIPT_RED_VOUCHER_HTML = """\
     <div class="box">制单：<span class="name">{{ created_by_name or "" }}</span></div>
   </div>
 </div>
+<!--purchase_receipt_red_voucher_v10-->
 """
 
 

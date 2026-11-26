@@ -21,6 +21,7 @@ def _work_order():
     return SimpleNamespace(
         id=7,
         status="draft",
+        review_status=None,
         code="WO-1",
         name="测试工单",
         product_id=3,

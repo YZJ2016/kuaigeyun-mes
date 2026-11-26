@@ -32,8 +32,16 @@ def test_draft_update_delete_submit():
 def test_pending_withdraw_delete():
     caps = derive_sales_forecast_capabilities(_f(status="PENDING_REVIEW"))
     assert caps.withdraw_submit.allowed
-    assert caps.delete.allowed
+    assert not caps.delete.allowed
+    assert caps.delete.reason == "sales_forecast.delete.not_allowed"
     assert not caps.submit.allowed
+
+    unsubmitted_caps = derive_sales_forecast_capabilities(
+        _f(status="PENDING_REVIEW"),
+        review_submitted=False,
+    )
+    assert unsubmitted_caps.delete.allowed
+    assert not unsubmitted_caps.withdraw_submit.allowed
 
 
 def test_audited_push():

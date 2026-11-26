@@ -16,8 +16,16 @@ def test_draft_sales_order_with_downstream_cannot_delete():
 
 def test_submitted_sales_order_without_downstream_can_delete():
     order = SimpleNamespace(status="已提交", review_status="APPROVED")
-    caps = derive_sales_order_capabilities(order, has_downstream_documents=False)
-    assert caps.delete.allowed is True
+    strict_caps = derive_sales_order_capabilities(order, has_downstream_documents=False)
+    assert strict_caps.delete.allowed is False
+    assert strict_caps.delete.reason == "sales_order.delete.not_allowed"
+
+    unsubmitted_caps = derive_sales_order_capabilities(
+        order,
+        has_downstream_documents=False,
+        review_submitted=False,
+    )
+    assert unsubmitted_caps.delete.allowed is True
 
 
 def test_audited_sales_order_cannot_delete():
