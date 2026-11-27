@@ -14,7 +14,7 @@ import {
 import {
   FILE_PRIVATE_FILES_GROUP_KEY,
   isPrivateFileCategory,
-} from '../core/constants/fileUploadCategories';
+} from '../constants/fileUploadCategories';
 
 export interface FileRequestOptions {
   /** 文件管理页对保密文件的写操作须传 true；单据等业务上传不传 */

@@ -442,20 +442,29 @@ class PayableService(AppBaseService[Payable]):
 
             return await self.get_payable_by_id(tenant_id, payable_id)
 
-    async def approve_payable(self, tenant_id: int, payable_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> PayableResponse:
-        """审核应付单（有流程时先关审批任务，再写回单据）。"""
+    async def approve_payable(
+        self,
+        tenant_id: int,
+        payable_id: int,
+        approved_by: int,
+        rejection_reason: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
+    ) -> PayableResponse:
+        """审核应付单（有流程时先关审批任务，再写回单据；is_auto_approve 跳过人工审批门禁）。"""
         from apps.kuaicaiwu.services.finance_audit_workflow import (
             assert_finance_pending_approval_flow,
         )
         from core.services.approval.uni_audit_service import UniAuditService
 
-        await assert_finance_pending_approval_flow(
-            tenant_id=tenant_id,
-            doc_id=payable_id,
-            node_key="payable",
-            doc_label="应付单",
-            verb="驳回" if rejection_reason else "审核",
-        )
+        if not is_auto_approve:
+            await assert_finance_pending_approval_flow(
+                tenant_id=tenant_id,
+                doc_id=payable_id,
+                node_key="payable",
+                doc_label="应付单",
+                verb="驳回" if rejection_reason else "审核",
+            )
 
         async def _do_approve() -> PayableResponse:
             async with in_transaction():
@@ -477,6 +486,9 @@ class PayableService(AppBaseService[Payable]):
                     updated_by_name=approver_name,
                 )
                 return await self.get_payable_by_id(tenant_id, payable_id)
+
+        if is_auto_approve:
+            return await _do_approve()
 
         if rejection_reason:
             result = await UniAuditService.reject_with_flow_fallback(
@@ -1412,20 +1424,29 @@ class ReceivableService(AppBaseService[Receivable]):
 
             return await self.get_receivable_by_id(tenant_id, receivable_id)
 
-    async def approve_receivable(self, tenant_id: int, receivable_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> ReceivableResponse:
-        """审核应收单（有流程时先关审批任务，再写回单据）。"""
+    async def approve_receivable(
+        self,
+        tenant_id: int,
+        receivable_id: int,
+        approved_by: int,
+        rejection_reason: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
+    ) -> ReceivableResponse:
+        """审核应收单（有流程时先关审批任务，再写回单据；is_auto_approve 跳过人工审批门禁）。"""
         from apps.kuaicaiwu.services.finance_audit_workflow import (
             assert_finance_pending_approval_flow,
         )
         from core.services.approval.uni_audit_service import UniAuditService
 
-        await assert_finance_pending_approval_flow(
-            tenant_id=tenant_id,
-            doc_id=receivable_id,
-            node_key="receivable",
-            doc_label="应收单",
-            verb="驳回" if rejection_reason else "审核",
-        )
+        if not is_auto_approve:
+            await assert_finance_pending_approval_flow(
+                tenant_id=tenant_id,
+                doc_id=receivable_id,
+                node_key="receivable",
+                doc_label="应收单",
+                verb="驳回" if rejection_reason else "审核",
+            )
 
         async def _do_approve() -> ReceivableResponse:
             async with in_transaction():
@@ -1447,6 +1468,9 @@ class ReceivableService(AppBaseService[Receivable]):
                     updated_by_name=approver_name,
                 )
                 return await self.get_receivable_by_id(tenant_id, receivable_id)
+
+        if is_auto_approve:
+            return await _do_approve()
 
         if rejection_reason:
             result = await UniAuditService.reject_with_flow_fallback(

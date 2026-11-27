@@ -149,6 +149,19 @@ REWRITE_SPECS: tuple[RewriteDocSpec, ...] = (
         optional_datetime_fields=("planned_start_date", "planned_end_date"),
     ),
     RewriteDocSpec(
+        doc_type="outsource_order",
+        label="工序委外单",
+        model_path="apps.kuaizhizao.models.outsource_order:OutsourceOrder",
+        code_field="code",
+        date_fields=(),
+        optional_datetime_fields=(
+            "planned_start_date",
+            "planned_end_date",
+            "actual_start_date",
+            "actual_end_date",
+        ),
+    ),
+    RewriteDocSpec(
         doc_type="outsource_material_issue",
         label="委外发料",
         model_path="apps.kuaizhizao.models.outsource_work_order:OutsourceMaterialIssue",

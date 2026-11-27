@@ -1,12 +1,16 @@
 {
   "antd": "^6.4.4",
-  "scanned_files": 2939,
-  "pattern_types": 1,
-  "total_hits": 6,
+  "scanned_files": 2941,
+  "pattern_types": 3,
+  "total_hits": 9,
   "by_severity": {
     "med": {
       "hits": 6,
       "patterns": 1
+    },
+    "high": {
+      "hits": 3,
+      "patterns": 2
     }
   },
   "rows": [
@@ -38,9 +42,46 @@
           "snippet": "addonAfter=\"%\""
         }
       ]
+    },
+    {
+      "api": "Space direction → orientation",
+      "component": "Space",
+      "severity": "high",
+      "hits": 2,
+      "files": 2,
+      "samples": [
+        {
+          "file": "src/pages/system/roles-permissions/components/RoleMemberSearchHint.tsx",
+          "line": 32,
+          "snippet": "<Space direction=\"vertical\" size={10} style={{ width: '100%' }}>"
+        },
+        {
+          "file": "src/apps/kuaizhizao/pages/plan-management/scheduling/index.tsx",
+          "line": 3043,
+          "snippet": "<Space direction=\"vertical\" size={8} style={{ width: '100%' }}>"
+        }
+      ]
+    },
+    {
+      "api": "size=\"middle\" → \"medium\"",
+      "component": "size enum",
+      "severity": "high",
+      "hits": 1,
+      "files": 1,
+      "samples": [
+        {
+          "file": "src/apps/kuaizhizao/pages/warehouse-management/other-inbound/index.tsx",
+          "line": 1209,
+          "snippet": "size=\"middle\""
+        }
+      ]
     }
   ],
   "top_files": [
+    {
+      "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
+      "approx_hits": 2
+    },
     {
       "file": "src/apps/kuaizhizao/components/PaymentMethodWithMixFormItems.tsx",
       "approx_hits": 2
@@ -50,8 +91,16 @@
       "approx_hits": 2
     },
     {
-      "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
-      "approx_hits": 2
+      "file": "src/pages/system/roles-permissions/components/RoleMemberSearchHint.tsx",
+      "approx_hits": 1
+    },
+    {
+      "file": "src/apps/kuaizhizao/pages/plan-management/scheduling/index.tsx",
+      "approx_hits": 1
+    },
+    {
+      "file": "src/apps/kuaizhizao/pages/warehouse-management/other-inbound/index.tsx",
+      "approx_hits": 1
     }
   ],
   "migration_ref": "https://ant.design/docs/react/migration-v6"

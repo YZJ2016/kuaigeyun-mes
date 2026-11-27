@@ -5,7 +5,7 @@
  */
 
 import { apiRequest } from './api';
-import { queryClient } from '../queryClient';
+import { queryClient } from '../config/queryClient';
 import { buildSiteSettingQueryKey, SITE_SETTING_QUERY_ROOT } from '../config/sessionQueries';
 import { getTenantId } from '../utils/auth';
 

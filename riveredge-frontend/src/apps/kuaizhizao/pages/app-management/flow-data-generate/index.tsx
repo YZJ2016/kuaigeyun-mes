@@ -54,6 +54,7 @@ import { listSalesOrders } from '../../../services/sales-order';
 import { listSalesForecasts } from '../../../services/sales-forecast';
 import {
   executeFlowGenerate,
+  DEFAULT_FULL_CHAIN_SCENARIOS,
   FLOW_SCENARIO_OPTIONS,
   FlowGenerateExecuteError,
   getFlowOperatorDefaults,
@@ -76,17 +77,20 @@ import {
 import EquipmentOpsGeneratePanel from './EquipmentOpsGeneratePanel';
 
 const STEP_OPTIONS = [
-  { key: 'demand_computation', required: true },
+  { key: 'demand_computation', required: false },
+  { key: 'direct_purchase', required: false },
   { key: 'purchase', required: false },
   { key: 'incoming_inspection', required: false },
   { key: 'outsource', required: false },
   { key: 'inventory_topup', required: false },
   { key: 'production_picking', required: false },
   { key: 'reporting', required: false },
+  { key: 'process_outsource', required: false },
   { key: 'process_inspection', required: false },
   { key: 'finished_goods_inspection', required: false },
   { key: 'finished_goods_receipt', required: false },
   { key: 'shipment_delivery', required: false },
+  { key: 'finance_settlement', required: false },
 ] as const;
 
 const OPERATOR_MODE_VALUES: StepOperatorMode[] = [
@@ -504,7 +508,7 @@ export default function FlowDataGeneratePage() {
     const values = await form.validateFields();
     const scenarioKeys: string[] = Array.isArray(values.scenarios)
       ? values.scenarios.map(String)
-      : FLOW_SCENARIO_OPTIONS.map((s) => s.key);
+      : [...DEFAULT_FULL_CHAIN_SCENARIOS];
     if (scenarioKeys.length === 0) {
       throw new Error(t('app.kuaizhizao.flowDataGenerate.scenariosRequired'));
     }
@@ -1026,14 +1030,30 @@ export default function FlowDataGeneratePage() {
             <Form
               form={form}
               layout="vertical"
-              onValuesChange={(changed) => {
+              onValuesChange={(changed, allValues) => {
                 if ('flow_end_at' in changed || 'sim_mode' in changed) {
                   setEstimatedFinishAt(null);
+                }
+                if ('scenarios' in changed && Array.isArray(changed.scenarios)) {
+                  const next = changed.scenarios.map(String);
+                  const prev = Array.isArray(allValues.scenarios)
+                    ? allValues.scenarios.map(String)
+                    : [];
+                  if (next.includes('mrp_push') && next.includes('direct_purchase')) {
+                    const last = next[next.length - 1];
+                    const filtered =
+                      last === 'direct_purchase'
+                        ? next.filter((k) => k !== 'mrp_push')
+                        : next.filter((k) => k !== 'direct_purchase');
+                    if (filtered.length !== prev.length || filtered.some((k, i) => k !== prev[i])) {
+                      form.setFieldValue('scenarios', filtered);
+                    }
+                  }
                 }
               }}
               initialValues={{
                 sim_mode: 'real' as FlowSimMode,
-                scenarios: FLOW_SCENARIO_OPTIONS.map((s) => s.key),
+                scenarios: [...DEFAULT_FULL_CHAIN_SCENARIOS],
                 default_min_minutes: 5,
                 default_max_minutes: 30,
                 use_work_schedule: true,
@@ -1089,6 +1109,7 @@ export default function FlowDataGeneratePage() {
                       options={FLOW_SCENARIO_OPTIONS.map((s) => ({
                         value: s.key,
                         label: t(s.labelKey),
+                        disabled: s.key === 'direct_purchase' && sourceType === 'sales_forecast',
                       }))}
                     />
                   </Form.Item>

@@ -55,7 +55,7 @@ for path in (ROOT / "components/uni-table").rglob("*"):
 ssot_paths = [
     ROOT / "components/uni-table",
     ROOT / "components/uni-table-detail",
-    ROOT / "global.less",
+    ROOT / "styles/global.less",
     ROOT / "utils/uniTableLayoutColumns.ts",
 ]
 for base in ssot_paths:
@@ -70,7 +70,7 @@ for base in ssot_paths:
             HIGH.append(f"{path}: forbidden JS style.scrollbarGutter assignment")
 
 # global.less：不得写 uni-table mode overflow；不得对 ant-table 强制 overflow-x
-global_less = ROOT / "global.less"
+global_less = ROOT / "styles/global.less"
 if global_less.exists():
     code = strip_comments(global_less.read_text(encoding="utf-8"))
     if re.search(

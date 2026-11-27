@@ -3,9 +3,31 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+_silent_push_suppressed: ContextVar[bool] = ContextVar(
+    "document_push_silent_suppressed",
+    default=False,
+)
+
+
+def is_silent_push_suppressed() -> bool:
+    """当前协程上下文是否屏蔽外部无感外推与出库前金蝶可用量预检（如运维流程造数）。"""
+    return bool(_silent_push_suppressed.get())
+
+
+@contextmanager
+def suppress_silent_push():
+    """在上下文内屏蔽无感外推及关联外部可用量预检，防止演示造数污染外部 ERP。"""
+    token = _silent_push_suppressed.set(True)
+    try:
+        yield
+    finally:
+        _silent_push_suppressed.reset(token)
 
 _ENTITY_SOURCE_TYPE: Dict[str, str] = {
     "sales_order": "sales_order",
@@ -157,8 +179,33 @@ def _target_would_auto_push_on_action(
     return bool(binding_triggers and act in binding_triggers)
 
 
+async def list_active_silent_push_entity_types(tenant_id: int) -> List[str]:
+    """只读：列出当前租户配置了自动无感外推的单据类型（用于造数预检提示）。"""
+    from apps.common.optional_pro import pro_orm_ready
+
+    if not pro_orm_ready("kuaiconnect"):
+        return []
+    active: List[str] = []
+    for entity_type in _ENTITY_SOURCE_TYPE:
+        row = await _load_binding_row(entity_type, tenant_id)
+        if not row:
+            continue
+        triggers, targets = _normalize_push_targets_readonly(entity_type, row)
+        if not triggers or not targets:
+            continue
+        if any(
+            _target_would_auto_push_on_action(target, act=act, binding_triggers=triggers)
+            for act in triggers
+            for target in targets
+        ):
+            active.append(entity_type)
+    return active
+
+
 async def silent_push_would_run_on_confirm(tenant_id: int, entity_type: str) -> bool:
     """只读：确认动作是否会触发至少一次自动无感外推（与 maybe_silent_push 门禁一致，不写库）。"""
+    if is_silent_push_suppressed():
+        return False
     act = "confirm"
     if not _ENTITY_SOURCE_TYPE.get(entity_type):
         return False
@@ -186,6 +233,8 @@ async def maybe_silent_push_after_audit(
     entity_id: int,
     action: str,
 ) -> Optional[str]:
+    if is_silent_push_suppressed():
+        return None
     act = str(action or "").strip().lower()
     source_type = _ENTITY_SOURCE_TYPE.get(entity_type)
     if not source_type or int(entity_id or 0) <= 0:

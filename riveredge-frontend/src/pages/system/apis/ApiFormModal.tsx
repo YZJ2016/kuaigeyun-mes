@@ -14,7 +14,7 @@ import {
 } from '@ant-design/pro-components';
 import { Col, Row, Tabs } from 'antd';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { API_INTERFACE_TYPE_OPTIONS } from '../../../configs/apiLibraryContract';
+import { API_INTERFACE_TYPE_OPTIONS } from '../../../config/apiLibraryContract';
 import { getAPIRelatedDocumentOptions } from '../../../services/apiManagement';
 import { OutboundFieldMappingEditor } from './OutboundFieldMappingEditor';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';

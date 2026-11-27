@@ -103,16 +103,19 @@ def map_steps_for_scenarios(
             enabled_keys.update(defn.step_keys)
     all_keys = {
         "demand_computation",
+        "direct_purchase",
         "purchase",
         "incoming_inspection",
         "outsource",
         "inventory_topup",
         "production_picking",
         "reporting",
+        "process_outsource",
         "process_inspection",
         "finished_goods_inspection",
         "finished_goods_receipt",
         "shipment_delivery",
+        "finance_settlement",
     }
     return {key: key in enabled_keys for key in all_keys}
 

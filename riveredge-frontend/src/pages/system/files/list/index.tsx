@@ -78,7 +78,7 @@ import {
   isUserFolderCategory,
   isVirtualFileTreeKey,
   resolveFileUploadCategoryDisplayName,
-} from '../../../../core/constants/fileUploadCategories';
+} from '../../../../constants/fileUploadCategories';
 import {
   getPrivateVaultStatus,
   isPrivateVaultUnlocked,

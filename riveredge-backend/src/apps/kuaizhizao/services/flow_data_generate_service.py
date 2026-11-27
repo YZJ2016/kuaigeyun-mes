@@ -58,31 +58,37 @@ class FlowGenerateFailedError(BusinessLogicError):
 
 STEP_KEYS = (
     "demand_computation",
+    "direct_purchase",
     "purchase",
     "incoming_inspection",
     "outsource",
     "inventory_topup",
     "production_picking",
     "reporting",
+    "process_outsource",
     "process_inspection",
     "finished_goods_inspection",
     "finished_goods_receipt",
     "shipment_delivery",
+    "finance_settlement",
 )
 
 # 各步骤默认从这些预设角色码中随机取激活用户（按序尝试）
 STEP_DEFAULT_ROLE_CODES: dict[str, tuple[str, ...]] = {
     "demand_computation": ("PRODUCTION_MANAGER", "SALES_MANAGER"),
+    "direct_purchase": ("PURCHASE_PERSON", "PURCHASE_MANAGER", "SALES_MANAGER"),
     "purchase": ("PURCHASE_PERSON", "PURCHASE_MANAGER"),
     "incoming_inspection": ("QUALITY_OPERATOR", "QUALITY_MANAGER"),
     "outsource": ("WAREHOUSE_OPERATOR", "PURCHASE_PERSON"),
     "inventory_topup": ("WAREHOUSE_OPERATOR",),
     "production_picking": ("WAREHOUSE_OPERATOR",),
     "reporting": ("PRODUCTION_STAFF", "PRODUCTION_MANAGER"),
+    "process_outsource": ("WAREHOUSE_OPERATOR", "PURCHASE_PERSON"),
     "process_inspection": ("QUALITY_OPERATOR", "QUALITY_MANAGER"),
     "finished_goods_inspection": ("QUALITY_OPERATOR", "QUALITY_MANAGER"),
     "finished_goods_receipt": ("WAREHOUSE_OPERATOR",),
     "shipment_delivery": ("WAREHOUSE_OPERATOR", "SALES_PERSON"),
+    "finance_settlement": ("FINANCE_OPERATOR", "FINANCE_MANAGER"),
 }
 
 DEFAULT_INTERVAL_MIN = 300
@@ -447,6 +453,7 @@ class FlowDataGenerateService:
         items: list[dict[str, Any]] = []
         for row in rows:
             pushed = bool(getattr(row, "planning_pushed_to_computation", False))
+            proc_mode = getattr(row, "procurement_fulfillment_mode", None)
             items.append(
                 {
                     "id": int(row.id),
@@ -456,6 +463,7 @@ class FlowDataGenerateService:
                     "status": row.status,
                     "order_date": str(row.order_date) if row.order_date else None,
                     "planning_pushed_to_computation": pushed,
+                    "procurement_fulfillment_mode": proc_mode,
                     "eligible": not pushed,
                     "block_reason": (
                         "已下推需求计算，请选择未下推的销售订单" if pushed else None
@@ -852,7 +860,6 @@ class FlowDataGenerateService:
                 await SalesForecastItem.filter(
                     tenant_id=tenant_id,
                     forecast_id=int(doc.id),
-                    deleted_at__isnull=True,
                 )
                 .order_by("id")
                 .all()
@@ -1216,8 +1223,10 @@ class FlowDataGenerateService:
         self,
         tenant_id: int,
         req: FlowGenerateRequest,
+        *,
+        operator_id: Optional[int] = None,
     ) -> dict[str, Any]:
-        """执行前数据预检：仓库/行物料/工艺/BOM/供应商/开关/操作人池；硬拦进 errors。"""
+        """执行前数据预检：仓库/行物料/工艺/BOM/供应商/开关/操作人池/部门与外推；硬拦进 errors。"""
         mode_meta = apply_mode_gates(req)
         scenarios = resolve_scenario_ids(req.scenarios)
         req.steps = map_steps_for_scenarios(scenarios, base_steps=req.steps)
@@ -1247,7 +1256,6 @@ class FlowDataGenerateService:
                 await SalesForecastItem.filter(
                     tenant_id=tenant_id,
                     forecast_id=doc_id,
-                    deleted_at__isnull=True,
                 )
                 .order_by("id")
                 .all()
@@ -1504,6 +1512,34 @@ class FlowDataGenerateService:
                     f"{'、'.join(c.get('blockers') or ['未就绪'])}"
                 )
 
+        # 场景互斥校验：MRP 需求计算与销售外购直推采购二选一
+        if "mrp_push" in scenarios and "direct_purchase" in scenarios:
+            errors.append("「需求计算与下推」与「销售外购直推采购」互斥，请二选一")
+            _add_block("CONFLICTING_SCENARIOS")
+        if "direct_purchase" in scenarios and source != "sales_order":
+            errors.append("「销售外购直推采购」仅支持销售订单来源，不支持销售预测")
+            _add_block("DIRECT_PURCHASE_SOURCE_INVALID")
+
+        # 销售外购直推场景：检查是否存在可直推的外购明细
+        if enabled.get("direct_purchase", False) and source == "sales_order":
+            from apps.kuaizhizao.services.sales_order_purchase_push import (
+                collect_sales_order_buy_push_lines,
+            )
+
+            buy_lines, _ = await collect_sales_order_buy_push_lines(
+                tenant_id, doc_id, list(line_rows)
+            )
+            pushable_buy = [
+                row
+                for row in buy_lines
+                if Decimal(str(row.get("max_push_quantity") or 0)) > 0
+            ]
+            if not pushable_buy:
+                errors.append("销售订单无可直推的外购明细（请确认行物料来源为采购件且未全部下推）")
+                _add_block("NO_DIRECT_PURCHASE_LINES")
+            else:
+                has_buy_lines = True
+
         # 自动下推工单开关（与 push_all 真门禁对齐）
         if enabled.get("demand_computation", True):
             biz = BusinessConfigService()
@@ -1523,7 +1559,7 @@ class FlowDataGenerateService:
                 _add_block("AUTO_WO_DISABLED")
 
         # 采购：组织须有启用供应商池
-        if enabled.get("purchase", True) and has_buy_lines:
+        if (enabled.get("purchase", True) or enabled.get("direct_purchase", False)) and has_buy_lines:
             supplier_count = await Supplier.filter(
                 tenant_id=tenant_id,
                 is_active=True,
@@ -1533,12 +1569,19 @@ class FlowDataGenerateService:
                 errors.append("组织下无启用供应商，无法执行采购造数")
                 _add_block("NO_SUPPLIER_POOL")
 
-        # 操作人池：random_* 空池硬拦
+        # 操作人池：random_* 空池硬拦，并缓存解析出的候选池供部门/权限前置校验
+        probed_pools: dict[str, list[int]] = {}
         for key in STEP_KEYS:
             if not enabled.get(key, True):
                 continue
             cfg = req.step_operators.get(key) or StepOperatorConfig()
             mode = cfg.normalized_mode()
+            if mode == "fixed" and cfg.user_id:
+                probed_pools[key] = [int(cfg.user_id)]
+                continue
+            if mode == "current" and operator_id and int(operator_id) > 0:
+                probed_pools[key] = [int(operator_id)]
+                continue
             if mode not in (
                 "random_role",
                 "random_department",
@@ -1548,11 +1591,75 @@ class FlowDataGenerateService:
             pool, reason = await self._probe_random_operator_pool(
                 tenant_id=tenant_id, step_key=key, cfg=cfg
             )
+            probed_pools[key] = list(pool or [])
             if not pool:
                 errors.append(
                     f"步骤 {key} 操作人池为空（{reason or mode}），禁止回退当前用户后执行"
                 )
                 _add_block("EMPTY_OPERATOR_POOL")
+
+        # 采购订单提交强门禁：校验下推/采购操作人具备真实所属部门
+        if (enabled.get("purchase", True) or enabled.get("direct_purchase", False)) and has_buy_lines:
+            po_creator_key = (
+                "direct_purchase"
+                if enabled.get("direct_purchase", False)
+                else "demand_computation"
+            )
+            candidate_uids: list[int] = list(probed_pools.get(po_creator_key) or [])
+            if not candidate_uids:
+                candidate_uids = list(probed_pools.get("purchase") or [])
+            if not candidate_uids and operator_id and int(operator_id) > 0:
+                candidate_uids = [int(operator_id)]
+            if candidate_uids:
+                has_valid_dept = await self._any_user_has_valid_department(
+                    tenant_id, candidate_uids
+                )
+                if not has_valid_dept:
+                    errors.append(
+                        f"步骤 {po_creator_key} 候选操作人未维护所属部门，下推采购订单提交审核将被部门必填门禁拦截"
+                    )
+                    _add_block("NO_PURCHASE_DEPARTMENT")
+
+        # 生产领料确认门禁：校验领料操作人是否具备确认角色与所属部门
+        if enabled.get("production_picking", True):
+            pick_uids = list(probed_pools.get("production_picking") or [])
+            if not pick_uids and operator_id and int(operator_id) > 0:
+                pick_uids = [int(operator_id)]
+            if pick_uids:
+                from apps.kuaizhizao.services.warehouse_service import (
+                    ProductionPickingService,
+                )
+
+                pick_svc = ProductionPickingService()
+                allowed_any = False
+                for uid in pick_uids[:10]:
+                    ok_role, _, _ = await pick_svc.can_user_confirm_picking(
+                        tenant_id, int(uid)
+                    )
+                    if ok_role:
+                        allowed_any = True
+                        break
+                if not allowed_any:
+                    errors.append(
+                        "步骤 production_picking 候选操作人不满足领料确认角色策略（默认需仓库角色）"
+                    )
+                    _add_block("PICKING_CONFIRM_ROLE_DENIED")
+                if not await self._any_user_has_valid_department(tenant_id, pick_uids):
+                    warnings.append(
+                        "步骤 production_picking 候选操作人未维护所属部门：若工单也无生产部门，确认领料将被领用部门门禁拦截"
+                    )
+
+        # 外部 ERP 无感外推隔离提示（执行期自动通过 ContextVar 屏蔽外推与金蝶预检）
+        from core.services.integration.document_push_silent import (
+            list_active_silent_push_entity_types,
+        )
+
+        active_push_types = await list_active_silent_push_entity_types(tenant_id)
+        if active_push_types:
+            warnings.append(
+                f"当前租户已开启外部自动外推（{', '.join(active_push_types)}）；"
+                "造数执行期将自动屏蔽无感外推与金蝶可用量预检，防止演示单据推送至外部 ERP。"
+            )
 
         if enabled.get("incoming_inspection", True):
             warnings.append(
@@ -1661,6 +1768,37 @@ class FlowDataGenerateService:
             "force_simple_when_unset": bool(mode_meta.get("force_simple_when_unset")),
         }
 
+    async def _any_user_has_valid_department(
+        self, tenant_id: int, user_ids: list[int]
+    ) -> bool:
+        """检查候选用户中是否至少有一人关联了有效部门。"""
+        from core.models.department import Department
+        from infra.models.user import User
+
+        uids = sorted({int(x) for x in user_ids if int(x or 0) > 0})
+        if not uids:
+            return False
+        users = await User.filter(
+            id__in=uids, deleted_at__isnull=True
+        ).only("id", "department_id").all()
+        dept_ids = sorted(
+            {
+                int(getattr(u, "department_id", 0) or 0)
+                for u in users
+                if int(getattr(u, "department_id", 0) or 0) > 0
+            }
+        )
+        if not dept_ids:
+            return False
+        return (
+            await Department.filter(
+                tenant_id=tenant_id,
+                id__in=dept_ids,
+                deleted_at__isnull=True,
+            ).count()
+            > 0
+        )
+
     async def _probe_random_operator_pool(
         self,
         *,
@@ -1720,7 +1858,6 @@ class FlowDataGenerateService:
                 await SalesForecastItem.filter(
                     tenant_id=tenant_id,
                     forecast_id=doc_id,
-                    deleted_at__isnull=True,
                 )
                 .order_by("id")
                 .all()
@@ -1906,6 +2043,10 @@ class FlowDataGenerateService:
         scenarios = resolve_scenario_ids(req.scenarios)
         req.scenarios = list(scenarios)
         req.steps = map_steps_for_scenarios(scenarios, base_steps=req.steps)
+        if "mrp_push" in scenarios and "direct_purchase" in scenarios:
+            raise BusinessLogicError("「需求计算与下推」与「销售外购直推采购」互斥，请二选一")
+        if "direct_purchase" in scenarios and req.normalized_source() != "sales_order":
+            raise BusinessLogicError("「销售外购直推采购」仅支持销售订单来源，不支持销售预测")
 
         resume_id = str(req.resume_run_id or "").strip() or None
         run_id = resume_id or str(uuid.uuid4())
@@ -2020,205 +2161,321 @@ class FlowDataGenerateService:
             )
 
         current_scenario: Optional[str] = None
-        try:
-            computation_id: Optional[int] = None
-            work_orders: list[dict[str, Any]] = []
-            purchase_orders: list[dict[str, Any]] = []
+        from core.services.integration.document_push_silent import suppress_silent_push
 
-            # 1) 需求计算（场景 mrp_push；未含该场景时须续跑或仅跑不依赖下推的段）
-            skip_demand = bool(checkpoint and checkpoint.computation_id)
-            if skip_demand:
-                current_scenario = "mrp_push"
-                computation_id = int(checkpoint.computation_id)  # type: ignore[arg-type]
-                demand_id = checkpoint.demand_id
-                skipped_count += 1
-                outsource_notes.append(f"跳过需求计算（沿用 computation #{computation_id}）")
-                await self._emit_progress(
-                    progress_cb, 8, scenario_phase_message("mrp_push", "跳过需求计算")
-                )
-            elif enabled.get("demand_computation", True):
-                current_scenario = "mrp_push"
-                await self._emit_progress(
-                    progress_cb, 8, scenario_phase_message("mrp_push", "需求计算")
-                )
-                if source == "sales_forecast":
-                    computation_id, demand_id = await self._step_push_and_execute_computation_from_forecast(
-                        tenant_id=tenant_id,
-                        operator_id=ops["demand_computation"],
-                        sales_forecast_id=doc_id,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
+        try:
+            with suppress_silent_push():
+                computation_id: Optional[int] = None
+                work_orders: list[dict[str, Any]] = []
+                purchase_orders: list[dict[str, Any]] = []
+
+                # 1) 需求计算（mrp_push）或销售外购直推采购（direct_purchase）
+                skip_demand = bool(checkpoint and checkpoint.computation_id)
+                if enabled.get("direct_purchase", False):
+                    current_scenario = "direct_purchase"
+                    await self._emit_progress(
+                        progress_cb,
+                        12,
+                        scenario_phase_message("direct_purchase", "销售外购直推采购"),
                     )
-                else:
-                    computation_id, demand_id = await self._step_push_and_execute_computation(
+                    dp_result = await self._step_direct_purchase_from_sales_order(
                         tenant_id=tenant_id,
-                        operator_id=ops["demand_computation"],
+                        operator_id=ops.get("direct_purchase", ops.get("purchase", operator_id)),
                         sales_order_id=doc_id,
                         planner=planner,
                         timeline=timeline,
                         step_results=step_results,
                         run_id=run_id,
                     )
-            else:
-                needs_upstream = any(
-                    enabled.get(k, False)
-                    for k in (
-                        "purchase",
-                        "incoming_inspection",
-                        "outsource",
-                        "inventory_topup",
-                        "production_picking",
-                        "reporting",
-                        "process_inspection",
-                        "finished_goods_inspection",
-                        "finished_goods_receipt",
-                    )
-                )
-                if needs_upstream:
-                    raise BusinessLogicError(
-                        "当前场景未含「需求计算与下推」(mrp_push)。"
-                        "请勾选该场景，或使用「继续未完成」从已有 run_id 续跑。"
-                    )
-                computation_id = 0
-                demand_id = None
-                outsource_notes.append("场景未含 mrp_push，跳过需求计算与下推")
-
-            # 2) 一键下推工单 + 采购单（续跑优先从需求计算下推关系恢复）
-            owos: list[dict[str, Any]] = []
-            if computation_id and computation_id > 0:
-                current_scenario = "mrp_push"
-                if checkpoint and checkpoint.computation_id == computation_id:
-                    (
-                        work_orders,
-                        purchase_orders,
-                        owos,
-                    ) = await self._load_docs_from_computation_push(
-                        tenant_id, computation_id
-                    )
-
-                if work_orders or purchase_orders or owos:
-                    skipped_count += 1
-                    outsource_notes.append(
-                        f"跳过下推（已有工单 {len(work_orders)} / 采购 {len(purchase_orders)}）"
-                    )
-                    await self._emit_progress(
-                        progress_cb, 18, scenario_phase_message("mrp_push", "跳过下推")
-                    )
-                else:
-                    await self._emit_progress(
-                        progress_cb, 18, scenario_phase_message("mrp_push", "下推工单与采购单")
-                    )
-                    # mrp_push 或入库场景任一选中即下推 PO；入库确认仅看 purchase 开关
-                    enable_purchase_push = (
-                        "mrp_push" in scenarios
-                        or "purchase_inbound" in scenarios
-                        or bool(enabled.get("purchase"))
-                    )
-                    push_results = await self._step_push_orders(
-                        tenant_id=tenant_id,
-                        operator_id=ops.get("demand_computation", operator_id),
-                        computation_id=computation_id,
-                        planner=planner,
-                        timeline=timeline,
-                        step_results=step_results,
-                        run_id=run_id,
-                        enable_purchase=enable_purchase_push,
-                    )
-                    work_orders = await self._enrich_work_orders_product_id(
-                        tenant_id, push_results.get("work_orders") or []
-                    )
-                    purchase_orders = push_results.get("purchase_orders") or []
-                    for warn in push_results.get("push_warnings") or []:
+                    purchase_orders = dp_result.get("purchase_orders") or []
+                    for warn in dp_result.get("notes") or []:
                         outsource_notes.append(str(warn))
-                    owos = push_results.get("outsource_work_orders") or []
+                    computation_id = 0
+                    demand_id = None
+                elif skip_demand:
+                    current_scenario = "mrp_push"
+                    computation_id = int(checkpoint.computation_id)  # type: ignore[arg-type]
+                    demand_id = checkpoint.demand_id
+                    skipped_count += 1
+                    outsource_notes.append(f"跳过需求计算（沿用 computation #{computation_id}）")
+                    await self._emit_progress(
+                        progress_cb, 8, scenario_phase_message("mrp_push", "跳过需求计算")
+                    )
+                elif enabled.get("demand_computation", True):
+                    current_scenario = "mrp_push"
+                    await self._emit_progress(
+                        progress_cb, 8, scenario_phase_message("mrp_push", "需求计算")
+                    )
+                    if source == "sales_forecast":
+                        computation_id, demand_id = await self._step_push_and_execute_computation_from_forecast(
+                            tenant_id=tenant_id,
+                            operator_id=ops["demand_computation"],
+                            sales_forecast_id=doc_id,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    else:
+                        computation_id, demand_id = await self._step_push_and_execute_computation(
+                            tenant_id=tenant_id,
+                            operator_id=ops["demand_computation"],
+                            sales_order_id=doc_id,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                else:
+                    needs_upstream = any(
+                        enabled.get(k, False)
+                        for k in (
+                            "purchase",
+                            "incoming_inspection",
+                            "outsource",
+                            "inventory_topup",
+                            "production_picking",
+                            "reporting",
+                            "process_outsource",
+                            "process_inspection",
+                            "finished_goods_inspection",
+                            "finished_goods_receipt",
+                        )
+                    )
+                    if needs_upstream:
+                        raise BusinessLogicError(
+                            "当前场景未含「需求计算与下推」(mrp_push)或「销售外购直推采购」(direct_purchase)。"
+                            "请勾选前置场景，或使用「继续未完成」从已有 run_id 续跑。"
+                        )
+                    computation_id = 0
+                    demand_id = None
+                    outsource_notes.append("场景未含 mrp_push，跳过需求计算与下推")
 
-            item_phase = True
-            timeline_rewrite_from = len(timeline)
+                # 2) 一键下推工单 + 采购单（续跑优先从需求计算下推关系恢复）
+                owos: list[dict[str, Any]] = []
+                if computation_id and computation_id > 0:
+                    current_scenario = "mrp_push"
+                    if checkpoint and checkpoint.computation_id == computation_id:
+                        (
+                            work_orders,
+                            purchase_orders,
+                            owos,
+                        ) = await self._load_docs_from_computation_push(
+                            tenant_id, computation_id
+                        )
 
-            # 2b) 委外：下达 → 补库 → 发料 → 收货
-            if enabled.get("outsource", True) and owos:
-                current_scenario = "owo_fulfill"
-                pending_owos: list[dict[str, Any]] = []
-                for owo in owos:
-                    owo_id = int(owo.get("id") or 0)
-                    if owo_id <= 0:
+                    if work_orders or purchase_orders or owos:
+                        skipped_count += 1
+                        outsource_notes.append(
+                            f"跳过下推（已有工单 {len(work_orders)} / 采购 {len(purchase_orders)}）"
+                        )
+                        await self._emit_progress(
+                            progress_cb, 18, scenario_phase_message("mrp_push", "跳过下推")
+                        )
+                    else:
+                        await self._emit_progress(
+                            progress_cb, 18, scenario_phase_message("mrp_push", "下推工单与采购单")
+                        )
+                        # mrp_push 或入库场景任一选中即下推 PO；入库确认仅看 purchase 开关
+                        enable_purchase_push = (
+                            "mrp_push" in scenarios
+                            or "purchase_inbound" in scenarios
+                            or bool(enabled.get("purchase"))
+                        )
+                        push_results = await self._step_push_orders(
+                            tenant_id=tenant_id,
+                            operator_id=ops.get("demand_computation", operator_id),
+                            computation_id=computation_id,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                            enable_purchase=enable_purchase_push,
+                        )
+                        work_orders = await self._enrich_work_orders_product_id(
+                            tenant_id, push_results.get("work_orders") or []
+                        )
+                        purchase_orders = push_results.get("purchase_orders") or []
+                        for warn in push_results.get("push_warnings") or []:
+                            outsource_notes.append(str(warn))
+                        owos = push_results.get("outsource_work_orders") or []
+
+                item_phase = True
+                timeline_rewrite_from = len(timeline)
+
+                # 2b) 委外：下达 → 补库 → 发料 → 收货
+                if enabled.get("outsource", True) and owos:
+                    current_scenario = "owo_fulfill"
+                    pending_owos: list[dict[str, Any]] = []
+                    for owo in owos:
+                        owo_id = int(owo.get("id") or 0)
+                        if owo_id <= 0:
+                            continue
+                        if await self._is_outsource_fulfilled(tenant_id, owo_id):
+                            skipped_count += 1
+                            continue
+                        pending_owos.append(owo)
+                    if pending_owos:
+                        await self._emit_progress(
+                            progress_cb,
+                            24,
+                            scenario_phase_message("owo_fulfill", "委外发料收货"),
+                        )
+                        await self._step_outsource_fulfillment(
+                            tenant_id=tenant_id,
+                            operator_id=ops["outsource"],
+                            outsource_work_orders=pending_owos,
+                            warehouse=warehouse,
+                            planner=planner,
+                            timeline=timeline,
+                            step_results=step_results,
+                            run_id=run_id,
+                        )
+                    else:
+                        outsource_notes.append(
+                            f"跳过委外收发（{len(owos)} 张已收齐）"
+                        )
+
+                # 3) 采购：仅处理仍需入库的 PO
+                if enabled.get("purchase", True) and purchase_orders:
+                    current_scenario = "purchase_inbound"
+                    pending_pos: list[dict[str, Any]] = []
+                    for po in purchase_orders:
+                        po_id = int(po.get("id") or 0)
+                        if po_id <= 0:
+                            continue
+                        if await self._purchase_order_needs_inbound(tenant_id, po_id):
+                            pending_pos.append(po)
+                        else:
+                            skipped_count += 1
+                    if not pending_pos:
+                        outsource_notes.append("跳过采购入库（订单已全部入库）")
+                        await self._emit_progress(
+                            progress_cb,
+                            28,
+                            scenario_phase_message("purchase_inbound", "跳过采购入库"),
+                        )
+                    else:
+                        await self._emit_progress(
+                            progress_cb,
+                            28,
+                            scenario_phase_message("purchase_inbound", "采购审核与入库"),
+                        )
+                        approved_pos = await self._step_approve_purchase_orders(
+                            tenant_id=tenant_id,
+                            operator_id=ops["purchase"],
+                            purchase_orders=pending_pos,
+                            step_results=step_results,
+                        )
+                        if approved_pos:
+                            if enabled.get("incoming_inspection", True):
+                                await self._step_incoming_inspection(
+                                    tenant_id=tenant_id,
+                                    operator_id=ops["incoming_inspection"],
+                                    purchase_orders=approved_pos,
+                                    warehouse=warehouse,
+                                    planner=planner,
+                                    timeline=timeline,
+                                    step_results=step_results,
+                                    run_id=run_id,
+                                    allow_skip_iqc=bool(req.allow_skip_iqc),
+                                )
+                            else:
+                                await self._step_purchase_direct_receipt(
+                                    tenant_id=tenant_id,
+                                    operator_id=ops["purchase"],
+                                    purchase_orders=approved_pos,
+                                    warehouse=warehouse,
+                                    planner=planner,
+                                    timeline=timeline,
+                                    step_results=step_results,
+                                    run_id=run_id,
+                                )
+
+                # 4) 生产链：跳过已完成工单
+                selected_mids = req.selected_material_id_set()
+                complete_wos = self._filter_work_orders_for_complete(work_orders, selected_mids)
+                if selected_mids is not None:
+                    outsource_notes.append(
+                        f"工单自选：候选 {len(complete_wos)}/{len(work_orders)} 张"
+                        f"（物料 {sorted(selected_mids)}）"
+                    )
+                pending_wos: list[dict[str, Any]] = []
+                for wo in complete_wos:
+                    wo_id = int(wo.get("id") or 0)
+                    if wo_id <= 0:
                         continue
-                    if await self._is_outsource_fulfilled(tenant_id, owo_id):
+                    if await self._is_work_order_chain_complete(
+                        tenant_id, wo_id, enabled, checkpoint
+                    ):
                         skipped_count += 1
                         continue
-                    pending_owos.append(owo)
-                if pending_owos:
+                    pending_wos.append(wo)
+                completed_wo_count = len(complete_wos)
+                if pending_wos:
+                    current_scenario = "wo_complete"
                     await self._emit_progress(
-                        progress_cb,
-                        24,
-                        scenario_phase_message("owo_fulfill", "委外发料收货"),
+                        progress_cb, 35, scenario_phase_message("wo_complete", "生产链完工")
                     )
-                    await self._step_outsource_fulfillment(
+                    await self._complete_work_orders_production_chain(
                         tenant_id=tenant_id,
-                        operator_id=ops["outsource"],
-                        outsource_work_orders=pending_owos,
+                        ops=ops,
+                        reporting_pool=reporting_pool,
+                        reporting_cfg=reporting_cfg,
+                        batch_cfg=req.reporting_batches.clamp(),
+                        parallel_group_range=req.parallel_group_range(),
+                        enabled=enabled,
+                        work_orders=pending_wos,
                         warehouse=warehouse,
                         planner=planner,
                         timeline=timeline,
                         step_results=step_results,
                         run_id=run_id,
+                        parallel=bool(req.parallel_work_orders),
+                        progress_cb=progress_cb,
                     )
-                else:
+                elif complete_wos:
                     outsource_notes.append(
-                        f"跳过委外收发（{len(owos)} 张已收齐）"
+                        f"跳过生产链（{len(complete_wos)} 张工单已完成）"
+                    )
+                    await self._emit_progress(
+                        progress_cb, 80, scenario_phase_message("wo_complete", "跳过生产链")
                     )
 
-            # 3) 采购：仅处理仍需入库的 PO
-            if enabled.get("purchase", True) and purchase_orders:
-                current_scenario = "purchase_inbound"
-                pending_pos: list[dict[str, Any]] = []
-                for po in purchase_orders:
-                    po_id = int(po.get("id") or 0)
-                    if po_id <= 0:
-                        continue
-                    if await self._purchase_order_needs_inbound(tenant_id, po_id):
-                        pending_pos.append(po)
-                    else:
-                        skipped_count += 1
-                if not pending_pos:
-                    outsource_notes.append("跳过采购入库（订单已全部入库）")
-                    await self._emit_progress(
-                        progress_cb,
-                        28,
-                        scenario_phase_message("purchase_inbound", "跳过采购入库"),
-                    )
-                else:
-                    await self._emit_progress(
-                        progress_cb,
-                        28,
-                        scenario_phase_message("purchase_inbound", "采购审核与入库"),
-                    )
-                    approved_pos = await self._step_approve_purchase_orders(
+                # 5) 发货 / 出库
+                if enabled.get("shipment_delivery", True):
+                    current_scenario = "ship"
+                    if await self._is_shipment_done(
                         tenant_id=tenant_id,
-                        operator_id=ops["purchase"],
-                        purchase_orders=pending_pos,
-                        step_results=step_results,
-                    )
-                    if approved_pos:
-                        if enabled.get("incoming_inspection", True):
-                            await self._step_incoming_inspection(
+                        source=source,
+                        doc_id=doc_id,
+                        checkpoint=checkpoint,
+                    ):
+                        skipped_count += 1
+                        outsource_notes.append("跳过发货出库（已出库）")
+                        await self._emit_progress(
+                            progress_cb, 85, scenario_phase_message("ship", "跳过发货出库")
+                        )
+                    else:
+                        await self._emit_progress(
+                            progress_cb, 85, scenario_phase_message("ship", "发货出库")
+                        )
+                        if source == "sales_forecast":
+                            await self._step_shipment_delivery_from_forecast(
                                 tenant_id=tenant_id,
-                                operator_id=ops["incoming_inspection"],
-                                purchase_orders=approved_pos,
+                                operator_id=ops["shipment_delivery"],
+                                sales_forecast_id=doc_id,
                                 warehouse=warehouse,
                                 planner=planner,
                                 timeline=timeline,
                                 step_results=step_results,
                                 run_id=run_id,
-                                allow_skip_iqc=bool(req.allow_skip_iqc),
                             )
                         else:
-                            await self._step_purchase_direct_receipt(
+                            await self._step_shipment_delivery(
                                 tenant_id=tenant_id,
-                                operator_id=ops["purchase"],
-                                purchase_orders=approved_pos,
+                                operator_id=ops["shipment_delivery"],
+                                sales_order_id=doc_id,
                                 warehouse=warehouse,
                                 planner=planner,
                                 timeline=timeline,
@@ -2226,115 +2483,43 @@ class FlowDataGenerateService:
                                 run_id=run_id,
                             )
 
-            # 4) 生产链：跳过已完成工单
-            selected_mids = req.selected_material_id_set()
-            complete_wos = self._filter_work_orders_for_complete(work_orders, selected_mids)
-            if selected_mids is not None:
-                outsource_notes.append(
-                    f"工单自选：候选 {len(complete_wos)}/{len(work_orders)} 张"
-                    f"（物料 {sorted(selected_mids)}）"
-                )
-            pending_wos: list[dict[str, Any]] = []
-            for wo in complete_wos:
-                wo_id = int(wo.get("id") or 0)
-                if wo_id <= 0:
-                    continue
-                if await self._is_work_order_chain_complete(
-                    tenant_id, wo_id, enabled, checkpoint
-                ):
-                    skipped_count += 1
-                    continue
-                pending_wos.append(wo)
-            completed_wo_count = len(complete_wos)
-            if pending_wos:
-                current_scenario = "wo_complete"
-                await self._emit_progress(
-                    progress_cb, 35, scenario_phase_message("wo_complete", "生产链完工")
-                )
-                await self._complete_work_orders_production_chain(
-                    tenant_id=tenant_id,
-                    ops=ops,
-                    reporting_pool=reporting_pool,
-                    reporting_cfg=reporting_cfg,
-                    batch_cfg=req.reporting_batches.clamp(),
-                    parallel_group_range=req.parallel_group_range(),
-                    enabled=enabled,
-                    work_orders=pending_wos,
-                    warehouse=warehouse,
-                    planner=planner,
-                    timeline=timeline,
-                    step_results=step_results,
-                    run_id=run_id,
-                    parallel=bool(req.parallel_work_orders),
-                    progress_cb=progress_cb,
-                )
-            elif complete_wos:
-                outsource_notes.append(
-                    f"跳过生产链（{len(complete_wos)} 张工单已完成）"
-                )
-                await self._emit_progress(
-                    progress_cb, 80, scenario_phase_message("wo_complete", "跳过生产链")
-                )
-
-            # 5) 发货 / 出库
-            if enabled.get("shipment_delivery", True):
-                current_scenario = "ship"
-                if await self._is_shipment_done(
-                    tenant_id=tenant_id,
-                    source=source,
-                    doc_id=doc_id,
-                    checkpoint=checkpoint,
-                ):
-                    skipped_count += 1
-                    outsource_notes.append("跳过发货出库（已出库）")
+                # 6) 轻财务结算（应付/付款 + 应收/收款）
+                if enabled.get("finance_settlement", False):
+                    current_scenario = "finance_settlement"
                     await self._emit_progress(
-                        progress_cb, 88, scenario_phase_message("ship", "跳过发货出库")
+                        progress_cb,
+                        90,
+                        scenario_phase_message("finance_settlement", "财务应收应付结算"),
                     )
-                else:
-                    await self._emit_progress(
-                        progress_cb, 88, scenario_phase_message("ship", "发货出库")
+                    fin_notes = await self._step_finance_settlement(
+                        tenant_id=tenant_id,
+                        operator_id=ops.get("finance_settlement", operator_id),
+                        timeline=timeline,
+                        checkpoint=checkpoint,
+                        planner=planner,
+                        step_results=step_results,
+                        run_id=run_id,
                     )
-                    if source == "sales_forecast":
-                        await self._step_shipment_delivery_from_forecast(
-                            tenant_id=tenant_id,
-                            operator_id=ops["shipment_delivery"],
-                            sales_forecast_id=doc_id,
-                            warehouse=warehouse,
-                            planner=planner,
-                            timeline=timeline,
-                            step_results=step_results,
-                            run_id=run_id,
-                        )
-                    else:
-                        await self._step_shipment_delivery(
-                            tenant_id=tenant_id,
-                            operator_id=ops["shipment_delivery"],
-                            sales_order_id=doc_id,
-                            warehouse=warehouse,
-                            planner=planner,
-                            timeline=timeline,
-                            step_results=step_results,
-                            run_id=run_id,
-                        )
+                    outsource_notes.extend(fin_notes)
 
-            # 真实模式：纠偏系统戳/单号日期，保留业务日；填数模式才全量压时刻
-            preserve_dates = normalize_sim_mode(req.sim_mode) == "real"
-            await self._emit_progress(
-                progress_cb,
-                94,
-                "纠偏单号日期与操作日志"
-                if preserve_dates
-                else "改写业务时间与操作日志",
-            )
-            new_timeline = timeline[timeline_rewrite_from:]
-            if new_timeline:
-                await self._rewrite_timeline(
-                    tenant_id,
-                    new_timeline,
-                    preserve_business_dates=preserve_dates,
+                # 真实模式：纠偏系统戳/单号日期，保留业务日；填数模式才全量压时刻
+                preserve_dates = normalize_sim_mode(req.sim_mode) == "real"
+                await self._emit_progress(
+                    progress_cb,
+                    94,
+                    "纠偏单号日期与操作日志"
+                    if preserve_dates
+                    else "改写业务时间与操作日志",
                 )
-                await self._align_operation_logs(new_timeline)
-            await self._emit_progress(progress_cb, 100, "完成")
+                new_timeline = timeline[timeline_rewrite_from:]
+                if new_timeline:
+                    await self._rewrite_timeline(
+                        tenant_id,
+                        new_timeline,
+                        preserve_business_dates=preserve_dates,
+                    )
+                    await self._align_operation_logs(new_timeline)
+                await self._emit_progress(progress_cb, 100, "完成")
 
         except FlowGenerateFailedError:
             raise
@@ -2419,8 +2604,10 @@ class FlowDataGenerateService:
         mapping = {
             "demand_computation": "demand_computation",
             "work_order": "demand_computation",
+            "purchase_requisition": "direct_purchase",
             "purchase_order": "demand_computation",
             "outsource_work_order": "demand_computation",
+            "outsource_order": "process_outsource",
             "outsource_material_issue": "outsource",
             "outsource_material_receipt": "outsource",
             "incoming_inspection": "incoming_inspection",
@@ -2434,6 +2621,10 @@ class FlowDataGenerateService:
             "semi_finished_goods_receipt": "finished_goods_receipt",
             "shipment_notice": "shipment_delivery",
             "sales_delivery": "shipment_delivery",
+            "payable": "finance_settlement",
+            "receivable": "finance_settlement",
+            "payment": "finance_settlement",
+            "receipt": "finance_settlement",
         }
         return mapping.get(dtype, dtype or "unknown")
 
@@ -2788,6 +2979,14 @@ class FlowDataGenerateService:
                     batch_cfg=batch_cfg,
                     parallel_group_range=parallel_group_range,
                     work_order_id=wo_id,
+                    warehouse=warehouse,
+                    outsource_operator_id=ops.get(
+                        "process_outsource", ops.get("outsource", ops["reporting"])
+                    ),
+                    enable_process_outsource=bool(
+                        enabled.get("process_outsource", True)
+                        or enabled.get("outsource", True)
+                    ),
                     planner=planner,
                     timeline=timeline,
                     step_results=step_results,
@@ -3028,6 +3227,30 @@ class FlowDataGenerateService:
             )
 
             model = SemiFinishedGoodsReceipt
+        elif dtype == "purchase_requisition":
+            from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+
+            model = PurchaseRequisition
+        elif dtype == "outsource_order":
+            from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+
+            model = OutsourceOrder
+        elif dtype == "payable":
+            from apps.kuaicaiwu.models.payable import Payable
+
+            model = Payable
+        elif dtype == "receivable":
+            from apps.kuaicaiwu.models.receivable import Receivable
+
+            model = Receivable
+        elif dtype == "payment":
+            from apps.kuaicaiwu.models.payment import Payment
+
+            model = Payment
+        elif dtype == "receipt":
+            from apps.kuaicaiwu.models.receipt import Receipt
+
+            model = Receipt
         if model is None:
             return
         await model.filter(tenant_id=tenant_id, id=doc_id, deleted_at__isnull=True).update(
@@ -3612,16 +3835,19 @@ class FlowDataGenerateService:
         labels = [
             ("demand_computation", "需求计算"),
             ("demand_computation", "生产工单"),
+            ("direct_purchase", "外购直推采购"),
             ("purchase", "采购订单"),
             ("incoming_inspection", "来料检验/入库"),
             ("outsource", "委外发料/收货"),
             ("inventory_topup", "缺料补库"),
             ("production_picking", "生产领料"),
             ("reporting", "工序报工"),
+            ("process_outsource", "工序委外"),
             ("process_inspection", "过程检验"),
             ("finished_goods_inspection", "成品检验"),
             ("finished_goods_receipt", "成品入库"),
             ("shipment_delivery", "发货/出库"),
+            ("finance_settlement", "财务结算"),
         ]
         out: list[tuple[str, str]] = []
         for key, label in labels:
@@ -3640,10 +3866,14 @@ class FlowDataGenerateService:
     ) -> list[str]:
         warnings: list[str] = []
         label = "销售预测" if source_type == "sales_forecast" else "销售订单"
-        if getattr(doc, "planning_pushed_to_computation", False):
+        if getattr(doc, "planning_pushed_to_computation", False) and not enabled.get(
+            "direct_purchase", False
+        ):
             warnings.append(f"该{label}已下推需求计算，执行将被拒绝")
-        if not enabled.get("demand_computation", True):
-            warnings.append("需求计算不可关闭")
+        if not enabled.get("demand_computation", True) and not enabled.get(
+            "direct_purchase", False
+        ):
+            warnings.append("需求计算未开启（未勾选外购直推或续跑时将无法下推下游）")
         if enabled.get("reporting", True):
             warnings.append(
                 "同工序多批报工用步骤间隔；跨工序按流转（须完上道/可跳转）与标准工时推进时刻"
@@ -4128,6 +4358,7 @@ class FlowDataGenerateService:
                 order_id=order_id,
                 approve_data=PurchaseOrderApprove(approved=True),
                 approved_by=operator_id,
+                is_auto_approve=True,
             )
         except Exception as exc:
             if self._is_already_done_error(exc):
@@ -4623,6 +4854,8 @@ class FlowDataGenerateService:
                                 material_name=str(line.material_name or "") or None,
                                 material_unit=str(line.unit or "个") or "个",
                                 inbound_quantity=float(need),
+                                warehouse_id=warehouse["id"],
+                                warehouse_name=warehouse["name"],
                             )
                         )
                     batch_lines.append(
@@ -5131,6 +5364,8 @@ class FlowDataGenerateService:
                     material_name=str(getattr(item, "material_name", "") or "") or None,
                     material_unit=str(getattr(item, "material_unit", "") or "个") or "个",
                     inbound_quantity=float(need),
+                    warehouse_id=warehouse["id"],
+                    warehouse_name=warehouse["name"],
                 )
             )
         if not shortage_items:
@@ -5248,6 +5483,9 @@ class FlowDataGenerateService:
         batch_cfg: Optional[ReportingBatchConfig] = None,
         parallel_group_range: Optional[tuple[int, int]] = None,
         work_order_id: int,
+        warehouse: Optional[dict[str, Any]] = None,
+        outsource_operator_id: Optional[int] = None,
+        enable_process_outsource: bool = True,
         planner: TimelinePlanner,
         timeline: list[TimelineEntry],
         step_results: list[dict[str, Any]],
@@ -5331,6 +5569,24 @@ class FlowDataGenerateService:
                     reporting_cfg=reporting_interval,
                 )
                 planner.advance_capped(gap)
+
+            # 工序委外：若本道工序为委外工序或已有有效工序委外单，则按真实工序委外链路履约，不重复内部报工
+            if enable_process_outsource:
+                handled_oo = await self._fulfill_operation_outsource_orders(
+                    tenant_id=tenant_id,
+                    operator_id=int(outsource_operator_id or operator_id),
+                    work_order=wo,
+                    wo_op=op,
+                    quantity=qty,
+                    warehouse=warehouse,
+                    planner=planner,
+                    timeline=timeline,
+                    step_results=step_results,
+                    run_id=run_id,
+                )
+                if handled_oo:
+                    prev_op_meta = op_meta
+                    continue
 
             if use_op_assigned:
                 rotating = await self._workers_for_work_order_operation(
@@ -5678,6 +5934,776 @@ class FlowDataGenerateService:
             run_id=run_id,
             label="销售出库(预测)",
         )
+
+    async def _step_direct_purchase_from_sales_order(
+        self,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        sales_order_id: int,
+        planner: TimelinePlanner,
+        timeline: list[TimelineEntry],
+        step_results: list[dict[str, Any]],
+        run_id: str,
+    ) -> dict[str, Any]:
+        """销售订单外购直推采购：按租户/订单履单模式走直推 PO 或 PR→审核→转 PO。"""
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisitionItem
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+        from apps.kuaizhizao.schemas.purchase_requisition import (
+            ConvertToPurchaseOrderRequest,
+        )
+        from apps.kuaizhizao.services.purchase_requisition_service import (
+            PurchaseRequisitionService,
+        )
+        from apps.kuaizhizao.services.sales_order_procurement_mode import (
+            PROCUREMENT_MODE_REQUISITION,
+            resolve_procurement_fulfillment_mode,
+        )
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            require_purchase_requisition_for_tenant,
+        )
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+        from apps.master_data.models.supplier import Supplier
+
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise BusinessLogicError(f"销售订单不存在: {sales_order_id}")
+
+        so_svc = SalesOrderService()
+        mode = await resolve_procurement_fulfillment_mode(tenant_id, order)
+        use_pr = (
+            mode == PROCUREMENT_MODE_REQUISITION
+            or await require_purchase_requisition_for_tenant(tenant_id)
+        )
+        purchase_orders: list[dict[str, Any]] = []
+        notes: list[str] = []
+
+        if use_pr:
+            pr_res = await so_svc.push_sales_order_to_purchase_requisition(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                created_by=operator_id,
+            )
+            target = pr_res.get("target_document") or {}
+            pr_id = int(target.get("id") or 0)
+            pr_code = str(target.get("code") or pr_id)
+            if pr_id <= 0:
+                raise BusinessLogicError("销售订单外购直推未能生成采购申请")
+            issued = planner.next("direct_purchase")
+            await self._record_step(
+                tenant_id=tenant_id,
+                operator_id=operator_id,
+                run_id=run_id,
+                step_key="direct_purchase",
+                doc_type="purchase_requisition",
+                doc_id=pr_id,
+                doc_code=pr_code,
+                label="采购申请(外购直推)",
+                issued_at=issued,
+                timeline=timeline,
+                step_results=step_results,
+            )
+            pr_svc = PurchaseRequisitionService()
+            try:
+                await pr_svc.submit_requisition(
+                    tenant_id=tenant_id,
+                    requisition_id=pr_id,
+                    submitted_by=operator_id,
+                )
+            except Exception as exc:
+                if not self._is_already_done_error(exc):
+                    raise BusinessLogicError(
+                        f"采购申请 {pr_code} 提交审核失败: {exc}"
+                    ) from exc
+            try:
+                await pr_svc.approve_requisition(
+                    tenant_id=tenant_id,
+                    requisition_id=pr_id,
+                    approved=True,
+                    approved_by=operator_id,
+                    is_auto_approve=True,
+                )
+            except Exception as exc:
+                if not self._is_already_done_error(exc):
+                    raise BusinessLogicError(
+                        f"采购申请 {pr_code} 审核失败: {exc}"
+                    ) from exc
+
+            pr_items = await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id, requisition_id=pr_id
+            ).order_by("id").all()
+            item_ids = [int(i.id) for i in pr_items if int(i.id or 0) > 0]
+            fallback_supplier = await Supplier.filter(
+                tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+            ).order_by("id").first()
+            convert_res = await pr_svc.convert_to_purchase_order(
+                tenant_id=tenant_id,
+                requisition_id=pr_id,
+                data=ConvertToPurchaseOrderRequest(
+                    item_ids=item_ids,
+                    supplier_id=int(fallback_supplier.id) if fallback_supplier else None,
+                    supplier_name=str(fallback_supplier.name) if fallback_supplier else None,
+                ),
+                created_by=operator_id,
+            )
+            raw_pos = convert_res.get("purchase_orders") or []
+            if not raw_pos and convert_res.get("purchase_order_id"):
+                raw_pos = [
+                    {
+                        "id": convert_res.get("purchase_order_id"),
+                        "code": convert_res.get("purchase_order_code"),
+                    }
+                ]
+            for row in raw_pos:
+                po_id = int(row.get("id") or 0)
+                if po_id <= 0:
+                    continue
+                po_code = str(row.get("order_code") or row.get("code") or po_id)
+                purchase_orders.append({"id": po_id, "order_code": po_code, "code": po_code})
+            notes.append(f"外购直推走请购轨：{pr_code} → {len(purchase_orders)} 张采购订单")
+        else:
+            po_res = await so_svc.push_sales_order_to_purchase_order(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                created_by=operator_id,
+            )
+            fallback_supplier = await Supplier.filter(
+                tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+            ).order_by("id").first()
+            for doc in po_res.get("target_documents") or []:
+                po_id = int(doc.get("id") or 0)
+                if po_id <= 0:
+                    continue
+                po_code = str(doc.get("code") or po_id)
+                po_row = await PurchaseOrder.get_or_none(
+                    tenant_id=tenant_id, id=po_id, deleted_at__isnull=True
+                )
+                if (
+                    po_row
+                    and int(getattr(po_row, "supplier_id", 0) or 0) <= 0
+                    and fallback_supplier
+                ):
+                    po_row.supplier_id = int(fallback_supplier.id)
+                    po_row.supplier_name = str(fallback_supplier.name)
+                    await po_row.save(update_fields=["supplier_id", "supplier_name", "updated_at"])
+                purchase_orders.append({"id": po_id, "order_code": po_code, "code": po_code})
+            notes.append(f"外购直推走直采轨：生成 {len(purchase_orders)} 张采购订单")
+
+        for po in purchase_orders:
+            issued = planner.next("direct_purchase")
+            await self._record_step(
+                tenant_id=tenant_id,
+                operator_id=operator_id,
+                run_id=run_id,
+                step_key="direct_purchase",
+                doc_type="purchase_order",
+                doc_id=int(po["id"]),
+                doc_code=str(po["order_code"]),
+                label="采购订单(外购直推)",
+                issued_at=issued,
+                timeline=timeline,
+                step_results=step_results,
+            )
+        return {"purchase_orders": purchase_orders, "notes": notes}
+
+    async def _fulfill_operation_outsource_orders(
+        self,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        work_order: Any,
+        wo_op: Any,
+        quantity: Decimal,
+        warehouse: Optional[dict[str, Any]],
+        planner: TimelinePlanner,
+        timeline: list[TimelineEntry],
+        step_results: list[dict[str, Any]],
+        run_id: str,
+    ) -> bool:
+        """工序委外闭环：若本道为委外工序或已有有效工序委外单，执行建单/下达→发料→收货→完工。"""
+        from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+        from apps.kuaizhizao.schemas.outsource_order import OutsourceOrderRegisterReceipt
+        from apps.kuaizhizao.schemas.outsource_work_order import (
+            OutsourceMaterialIssueBatchCreate,
+            OutsourceMaterialIssueLineCreate,
+        )
+        from apps.kuaizhizao.schemas.warehouse import (
+            OtherInboundCreate,
+            OtherInboundItemCreate,
+        )
+        from apps.kuaizhizao.services.outsource_order_issue_bridge import (
+            OutsourceOrderIssueBridge,
+        )
+        from apps.kuaizhizao.services.outsource_service import OutsourceService
+        from apps.kuaizhizao.services.warehouse_service import OtherInboundService
+        from apps.master_data.models.supplier import Supplier
+
+        wo_id = int(getattr(work_order, "id", 0) or 0)
+        wo_op_id = int(getattr(wo_op, "id", 0) or 0)
+        if wo_id <= 0 or wo_op_id <= 0:
+            return False
+
+        outsource_kind = str(getattr(wo_op, "outsource_kind", None) or "none").strip().lower()
+        orders = await OutsourceOrder.filter(
+            tenant_id=tenant_id,
+            work_order_id=wo_id,
+            work_order_operation_id=wo_op_id,
+            deleted_at__isnull=True,
+        ).exclude(status="cancelled").order_by("id").all()
+
+        if outsource_kind not in ("planned", "ad_hoc") and not orders:
+            return False
+
+        oo_svc = OutsourceService()
+        bridge = OutsourceOrderIssueBridge()
+        inbound_svc = OtherInboundService()
+        op_name = str(getattr(wo_op, "operation_name", None) or f"工序#{wo_op_id}")
+
+        if not orders:
+            supplier_id = int(getattr(wo_op, "default_outsource_supplier_id", 0) or 0)
+            if supplier_id <= 0:
+                sup = await Supplier.filter(
+                    tenant_id=tenant_id, is_active=True, deleted_at__isnull=True
+                ).order_by("id").first()
+                if not sup:
+                    raise BusinessLogicError(
+                        f"工序委外 {op_name} 未配置委外供应商且组织下无启用供应商"
+                    )
+                supplier_id = int(sup.id)
+            created_oo = await oo_svc.create_outsource_order_from_work_order(
+                tenant_id=tenant_id,
+                work_order_id=wo_id,
+                work_order_operation_id=wo_op_id,
+                supplier_id=supplier_id,
+                outsource_quantity=quantity,
+                created_by=operator_id,
+            )
+            oo_row = await OutsourceOrder.get_or_none(
+                tenant_id=tenant_id, id=int(created_oo.id), deleted_at__isnull=True
+            )
+            if oo_row:
+                orders = [oo_row]
+
+        for oo in orders:
+            oo_id = int(oo.id)
+            oo_code = str(oo.code or oo_id)
+            st = str(oo.status or "").strip()
+            if st == "draft":
+                await oo_svc.release_outsource_order(
+                    tenant_id=tenant_id,
+                    outsource_order_id=oo_id,
+                    updated_by=operator_id,
+                )
+                await oo.refresh_from_db()
+                st = str(oo.status or "").strip()
+
+            if st == "released" and warehouse:
+                try:
+                    preview = await bridge.get_issue_preview(tenant_id, oo_id)
+                    shortage_items: list[OtherInboundItemCreate] = []
+                    batch_lines: list[OutsourceMaterialIssueLineCreate] = []
+                    for line in preview.lines or []:
+                        pending = Decimal(str(line.pending_quantity or 0))
+                        if pending <= 0:
+                            continue
+                        available = Decimal(str(line.available_quantity or 0))
+                        need = pending - available
+                        if need > 0:
+                            shortage_items.append(
+                                OtherInboundItemCreate(
+                                    material_id=int(line.material_id),
+                                    material_code=str(line.material_code or "") or None,
+                                    material_name=str(line.material_name or "") or None,
+                                    material_unit=str(line.unit or "个") or "个",
+                                    inbound_quantity=float(need),
+                                    warehouse_id=warehouse["id"],
+                                    warehouse_name=warehouse["name"],
+                                )
+                            )
+                        batch_lines.append(
+                            OutsourceMaterialIssueLineCreate(
+                                material_id=int(line.material_id),
+                                material_code=str(line.material_code or ""),
+                                material_name=str(line.material_name or ""),
+                                quantity=pending,
+                                unit=str(line.unit or "个"),
+                                warehouse_id=warehouse["id"],
+                                warehouse_name=warehouse["name"],
+                            )
+                        )
+                    if shortage_items:
+                        inbound = await inbound_svc.create_other_inbound(
+                            tenant_id=tenant_id,
+                            inbound_data=OtherInboundCreate(
+                                reason_type="其他",
+                                warehouse_id=warehouse["id"],
+                                warehouse_name=warehouse["name"],
+                                items=shortage_items,
+                            ),
+                            created_by=operator_id,
+                        )
+                        await inbound_svc.confirm_inbound(
+                            tenant_id=tenant_id,
+                            inbound_id=int(inbound.id),
+                            confirmed_by=operator_id,
+                        )
+                        topup_at = planner.next("process_outsource")
+                        await self._record_step(
+                            tenant_id=tenant_id,
+                            operator_id=operator_id,
+                            run_id=run_id,
+                            step_key="process_outsource",
+                            doc_type="other_inbound",
+                            doc_id=int(inbound.id),
+                            doc_code=str(getattr(inbound, "inbound_code", None) or inbound.id),
+                            label=f"工序委外补库-{oo_code}",
+                            issued_at=topup_at,
+                            timeline=timeline,
+                            step_results=step_results,
+                            work_order_id=wo_id,
+                        )
+                    if batch_lines:
+                        issue_at = planner.next("process_outsource")
+                        batch = await bridge.create_issues_batch(
+                            tenant_id,
+                            oo_id,
+                            OutsourceMaterialIssueBatchCreate(
+                                outsource_order_id=oo_id,
+                                outsource_order_code=oo_code,
+                                warehouse_id=warehouse["id"],
+                                warehouse_name=warehouse["name"],
+                                issued_at=issue_at,
+                                issued_by=operator_id,
+                                lines=batch_lines,
+                            ),
+                            operator_id,
+                        )
+                        for issue in batch.issues or []:
+                            await self._record_step(
+                                tenant_id=tenant_id,
+                                operator_id=operator_id,
+                                run_id=run_id,
+                                step_key="process_outsource",
+                                doc_type="outsource_material_issue",
+                                doc_id=int(issue.id),
+                                doc_code=str(issue.code or issue.id),
+                                label=f"工序委外发料-{oo_code}",
+                                issued_at=issue_at,
+                                timeline=timeline,
+                                step_results=step_results,
+                                work_order_id=wo_id,
+                            )
+                except Exception as exc:
+                    logger.info("process outsource issue skip {}: {}", oo_code, exc)
+
+            await oo.refresh_from_db()
+            pending_recv = max(
+                Decimal("0"),
+                Decimal(str(oo.outsource_quantity or 0))
+                - Decimal(str(oo.received_quantity or 0)),
+            )
+            if pending_recv > 0:
+                await oo_svc.register_outsource_order_receipt(
+                    tenant_id=tenant_id,
+                    outsource_order_id=oo_id,
+                    receipt_data=OutsourceOrderRegisterReceipt(
+                        received_quantity=pending_recv,
+                        qualified_quantity=pending_recv,
+                        unqualified_quantity=Decimal("0"),
+                    ),
+                    updated_by=operator_id,
+                )
+                await oo.refresh_from_db()
+
+            if str(oo.status or "").strip() == "in_progress":
+                await oo_svc.complete_outsource_order(
+                    tenant_id=tenant_id,
+                    outsource_order_id=oo_id,
+                    updated_by=operator_id,
+                )
+
+            issued = planner.next("process_outsource")
+            await self._record_step(
+                tenant_id=tenant_id,
+                operator_id=operator_id,
+                run_id=run_id,
+                step_key="process_outsource",
+                doc_type="outsource_order",
+                doc_id=oo_id,
+                doc_code=oo_code,
+                label=f"工序委外-{op_name}",
+                issued_at=issued,
+                timeline=timeline,
+                step_results=step_results,
+                note=f"qty={oo.outsource_quantity}",
+                work_order_id=wo_id,
+            )
+        return True
+
+    async def _step_finance_settlement(
+        self,
+        *,
+        tenant_id: int,
+        operator_id: int,
+        timeline: list[TimelineEntry],
+        checkpoint: Optional[FlowResumeCheckpoint],
+        planner: TimelinePlanner,
+        step_results: list[dict[str, Any]],
+        run_id: str,
+    ) -> list[str]:
+        """轻财务结算闭环：按本轮采购入库生成/审核应付并付款，按销售出库生成/审核应收并收款。"""
+        from apps.kuaicaiwu.models.payable import Payable
+        from apps.kuaicaiwu.models.payment import Payment
+        from apps.kuaicaiwu.models.receipt import Receipt
+        from apps.kuaicaiwu.models.receivable import Receivable
+        from apps.kuaicaiwu.schemas.finance import (
+            PayableCreate,
+            PaymentRecordCreate,
+            ReceiptRecordCreate,
+            ReceivableCreate,
+        )
+        from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+        from apps.kuaicaiwu.services.finance_integration_hooks import (
+            link_finance_document_relation,
+        )
+        from apps.kuaicaiwu.services.finance_service import (
+            PayableService,
+            ReceivableService,
+        )
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            purchase_receipt_settlement_gross_async,
+        )
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+        from core.utils.amount_precision import quantize_business_amount
+        from core.utils.timezone_utils import to_site_date
+        from infra.services.business_config_service import BusinessConfigService
+
+        notes: list[str] = []
+        biz = BusinessConfigService()
+        all_entries = list(checkpoint.entries if checkpoint else []) + list(timeline)
+        pr_ids = sorted(
+            {
+                int(e.doc_id)
+                for e in all_entries
+                if e.doc_type == "purchase_receipt" and int(e.doc_id or 0) > 0
+            }
+        )
+        sd_ids = sorted(
+            {
+                int(e.doc_id)
+                for e in all_entries
+                if e.doc_type == "sales_delivery" and int(e.doc_id or 0) > 0
+            }
+        )
+
+        # 1) 采购入库 → 应付单 → 付款单
+        if pr_ids:
+            if not await biz.check_node_enabled(tenant_id, "payable"):
+                notes.append("财务结算：应付账款节点未启用，跳过应付/付款")
+            else:
+                payable_svc = PayableService()
+                for rid in pr_ids:
+                    receipt_row = await PurchaseReceipt.get_or_none(
+                        tenant_id=tenant_id, id=rid, deleted_at__isnull=True
+                    )
+                    if not receipt_row or int(getattr(receipt_row, "supplier_id", 0) or 0) <= 0:
+                        continue
+                    payable_row = await Payable.filter(
+                        tenant_id=tenant_id,
+                        source_id=rid,
+                        source_type__in=["采购入库", "purchase_receipt"],
+                        deleted_at__isnull=True,
+                    ).order_by("-id").first()
+                    if not payable_row:
+                        gross = await purchase_receipt_settlement_gross_async(
+                            tenant_id, receipt_row
+                        )
+                        if Decimal(str(gross or 0)) <= 0:
+                            notes.append(
+                                f"采购入库 {receipt_row.receipt_code} 结算金额为 0，跳过生成应付单"
+                            )
+                            continue
+                        issued_py = planner.next("finance_settlement")
+                        biz_date = to_site_date(issued_py)
+                        due_date = await resolve_partner_due_date(
+                            tenant_id,
+                            "supplier",
+                            int(receipt_row.supplier_id),
+                            biz_date,
+                        )
+                        money_total = quantize_business_amount(Decimal(str(gross)), 2)
+                        created_py = await payable_svc.create_payable(
+                            tenant_id=tenant_id,
+                            payable_data=PayableCreate(
+                                source_type="采购入库",
+                                source_id=rid,
+                                source_code=str(receipt_row.receipt_code),
+                                supplier_id=int(receipt_row.supplier_id),
+                                supplier_name=str(receipt_row.supplier_name or ""),
+                                total_amount=money_total,
+                                paid_amount=Decimal("0"),
+                                remaining_amount=money_total,
+                                due_date=due_date,
+                                business_date=biz_date,
+                                status="未付款",
+                                notes=f"流程造数由采购入库单 {receipt_row.receipt_code} 生成",
+                            ),
+                            created_by=operator_id,
+                        )
+                        try:
+                            await link_finance_document_relation(
+                                tenant_id=tenant_id,
+                                source_type="purchase_receipt",
+                                source_id=rid,
+                                source_code=str(receipt_row.receipt_code),
+                                target_type="payable",
+                                target_id=int(created_py.id),
+                                target_code=getattr(created_py, "payable_code", None),
+                                relation_desc="采购入库生成应付单",
+                                created_by=operator_id,
+                            )
+                        except Exception as exc:
+                            logger.info("link payable relation skip: {}", exc)
+                        payable_row = await Payable.get_or_none(
+                            tenant_id=tenant_id, id=int(created_py.id)
+                        )
+                    else:
+                        issued_py = planner.next("finance_settlement")
+
+                    if not payable_row:
+                        continue
+
+                    rs = str(getattr(payable_row, "review_status", None) or "").strip()
+                    if rs in ("草稿", "draft", "驳回", "rejected", "已驳回"):
+                        await payable_svc.submit_payable(
+                            tenant_id=tenant_id,
+                            payable_id=int(payable_row.id),
+                            submitted_by=operator_id,
+                        )
+                        await payable_row.refresh_from_db()
+                        rs = str(getattr(payable_row, "review_status", None) or "").strip()
+                    if rs in ("待审核", "pending_review", "PENDING_REVIEW", "pending_approval", "已提交"):
+                        await payable_svc.approve_payable(
+                            tenant_id=tenant_id,
+                            payable_id=int(payable_row.id),
+                            approved_by=operator_id,
+                            is_auto_approve=True,
+                        )
+                        await payable_row.refresh_from_db()
+
+                    await self._record_step(
+                        tenant_id=tenant_id,
+                        operator_id=operator_id,
+                        run_id=run_id,
+                        step_key="finance_settlement",
+                        doc_type="payable",
+                        doc_id=int(payable_row.id),
+                        doc_code=str(payable_row.payable_code),
+                        label="应付单",
+                        issued_at=issued_py,
+                        timeline=timeline,
+                        step_results=step_results,
+                    )
+
+                    rem = Decimal(str(getattr(payable_row, "remaining_amount", 0) or 0))
+                    if rem > 0 and str(payable_row.status or "").strip() != "已结清":
+                        issued_pm = planner.next("finance_settlement")
+                        before_max = await Payment.filter(
+                            tenant_id=tenant_id, supplier_id=int(payable_row.supplier_id)
+                        ).order_by("-id").first()
+                        before_id = int(before_max.id) if before_max else 0
+                        await payable_svc.record_payment(
+                            tenant_id=tenant_id,
+                            payable_id=int(payable_row.id),
+                            payment_data=PaymentRecordCreate(
+                                payable_id=int(payable_row.id),
+                                payment_amount=rem,
+                                payment_date=to_site_date(issued_pm),
+                                payment_method="银行转账",
+                                notes=f"流程造数核销 {payable_row.payable_code}",
+                            ),
+                            recorded_by=operator_id,
+                        )
+                        pm_row = await Payment.filter(
+                            tenant_id=tenant_id,
+                            supplier_id=int(payable_row.supplier_id),
+                            id__gt=before_id,
+                        ).order_by("-id").first()
+                        if pm_row:
+                            await self._record_step(
+                                tenant_id=tenant_id,
+                                operator_id=operator_id,
+                                run_id=run_id,
+                                step_key="finance_settlement",
+                                doc_type="payment",
+                                doc_id=int(pm_row.id),
+                                doc_code=str(pm_row.payment_code),
+                                label="付款单",
+                                issued_at=issued_pm,
+                                timeline=timeline,
+                                step_results=step_results,
+                            )
+
+        # 2) 销售出库 → 应收单 → 收款单
+        if sd_ids:
+            if not await biz.check_node_enabled(tenant_id, "receivable"):
+                notes.append("财务结算：应收账款节点未启用，跳过应收/收款")
+            else:
+                receivable_svc = ReceivableService()
+                for did in sd_ids:
+                    delivery_row = await SalesDelivery.get_or_none(
+                        tenant_id=tenant_id, id=did, deleted_at__isnull=True
+                    )
+                    if not delivery_row or int(getattr(delivery_row, "customer_id", 0) or 0) <= 0:
+                        continue
+                    receivable_row = await Receivable.filter(
+                        tenant_id=tenant_id,
+                        source_id=did,
+                        source_type__in=["销售出库", "sales_delivery"],
+                        deleted_at__isnull=True,
+                    ).order_by("-id").first()
+                    if not receivable_row:
+                        total_amt = Decimal(str(getattr(delivery_row, "total_amount", 0) or 0))
+                        if total_amt <= 0:
+                            d_items = await SalesDeliveryItem.filter(
+                                tenant_id=tenant_id, delivery_id=did
+                            ).all()
+                            total_amt = sum(
+                                (Decimal(str(getattr(it, "total_amount", 0) or 0)) for it in d_items),
+                                Decimal("0"),
+                            )
+                        if total_amt <= 0:
+                            notes.append(
+                                f"销售出库 {delivery_row.delivery_code} 金额为 0，跳过生成应收单"
+                            )
+                            continue
+                        issued_rc = planner.next("finance_settlement")
+                        biz_date = to_site_date(issued_rc)
+                        due_date = await resolve_partner_due_date(
+                            tenant_id,
+                            "customer",
+                            int(delivery_row.customer_id),
+                            biz_date,
+                        )
+                        money_total = quantize_business_amount(total_amt, 2)
+                        created_rc = await receivable_svc.create_receivable(
+                            tenant_id=tenant_id,
+                            receivable_data=ReceivableCreate(
+                                source_type="销售出库",
+                                source_id=did,
+                                source_code=str(delivery_row.delivery_code),
+                                customer_id=int(delivery_row.customer_id),
+                                customer_name=str(delivery_row.customer_name or ""),
+                                total_amount=money_total,
+                                received_amount=Decimal("0"),
+                                remaining_amount=money_total,
+                                due_date=due_date,
+                                business_date=biz_date,
+                                status="未收款",
+                                notes=f"流程造数由销售出库单 {delivery_row.delivery_code} 生成",
+                            ),
+                            created_by=operator_id,
+                        )
+                        try:
+                            await link_finance_document_relation(
+                                tenant_id=tenant_id,
+                                source_type="sales_delivery",
+                                source_id=did,
+                                source_code=str(delivery_row.delivery_code),
+                                target_type="receivable",
+                                target_id=int(created_rc.id),
+                                target_code=getattr(created_rc, "receivable_code", None),
+                                relation_desc="销售出库生成应收单",
+                                created_by=operator_id,
+                            )
+                        except Exception as exc:
+                            logger.info("link receivable relation skip: {}", exc)
+                        receivable_row = await Receivable.get_or_none(
+                            tenant_id=tenant_id, id=int(created_rc.id)
+                        )
+                    else:
+                        issued_rc = planner.next("finance_settlement")
+
+                    if not receivable_row:
+                        continue
+
+                    rs = str(getattr(receivable_row, "review_status", None) or "").strip()
+                    if rs in ("草稿", "draft", "驳回", "rejected", "已驳回"):
+                        await receivable_svc.submit_receivable(
+                            tenant_id=tenant_id,
+                            receivable_id=int(receivable_row.id),
+                            submitted_by=operator_id,
+                        )
+                        await receivable_row.refresh_from_db()
+                        rs = str(getattr(receivable_row, "review_status", None) or "").strip()
+                    if rs in ("待审核", "pending_review", "PENDING_REVIEW", "pending_approval", "已提交"):
+                        await receivable_svc.approve_receivable(
+                            tenant_id=tenant_id,
+                            receivable_id=int(receivable_row.id),
+                            approved_by=operator_id,
+                            is_auto_approve=True,
+                        )
+                        await receivable_row.refresh_from_db()
+
+                    await self._record_step(
+                        tenant_id=tenant_id,
+                        operator_id=operator_id,
+                        run_id=run_id,
+                        step_key="finance_settlement",
+                        doc_type="receivable",
+                        doc_id=int(receivable_row.id),
+                        doc_code=str(receivable_row.receivable_code),
+                        label="应收单",
+                        issued_at=issued_rc,
+                        timeline=timeline,
+                        step_results=step_results,
+                    )
+
+                    rem = Decimal(str(getattr(receivable_row, "remaining_amount", 0) or 0))
+                    if rem > 0 and str(receivable_row.status or "").strip() != "已结清":
+                        issued_re = planner.next("finance_settlement")
+                        before_max = await Receipt.filter(
+                            tenant_id=tenant_id, customer_id=int(receivable_row.customer_id)
+                        ).order_by("-id").first()
+                        before_id = int(before_max.id) if before_max else 0
+                        await receivable_svc.record_receipt(
+                            tenant_id=tenant_id,
+                            receivable_id=int(receivable_row.id),
+                            receipt_data=ReceiptRecordCreate(
+                                receivable_id=int(receivable_row.id),
+                                receipt_amount=rem,
+                                receipt_date=to_site_date(issued_re),
+                                receipt_method="银行转账",
+                                notes=f"流程造数核销 {receivable_row.receivable_code}",
+                            ),
+                            recorded_by=operator_id,
+                        )
+                        re_row = await Receipt.filter(
+                            tenant_id=tenant_id,
+                            customer_id=int(receivable_row.customer_id),
+                            id__gt=before_id,
+                        ).order_by("-id").first()
+                        if re_row:
+                            await self._record_step(
+                                tenant_id=tenant_id,
+                                operator_id=operator_id,
+                                run_id=run_id,
+                                step_key="finance_settlement",
+                                doc_type="receipt",
+                                doc_id=int(re_row.id),
+                                doc_code=str(re_row.receipt_code),
+                                label="收款单",
+                                issued_at=issued_re,
+                                timeline=timeline,
+                                step_results=step_results,
+                            )
+
+        return notes
 
 
 def parse_intervals(raw: Optional[dict[str, Any]]) -> dict[str, IntervalConfig]:

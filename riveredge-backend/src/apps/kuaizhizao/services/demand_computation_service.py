@@ -7513,6 +7513,32 @@ class DemandComputationService(AppBaseService):
                 today, computation_id, supplier_id, existing_count
             )
     
+    @staticmethod
+    async def _resolve_purchase_order_department_from_users(
+        tenant_id: int,
+        *user_ids: Any,
+    ) -> tuple[Optional[int], Optional[str]]:
+        """按候选用户顺序解析真实所属部门（用于下推采购单写入申请部门；无部门返回 (None, None)）。"""
+        from core.models.department import Department
+
+        seen: set[int] = set()
+        for raw_uid in user_ids:
+            uid = int(raw_uid or 0)
+            if uid <= 0 or uid in seen:
+                continue
+            seen.add(uid)
+            u = await User.get_or_none(id=uid, deleted_at__isnull=True)
+            did = int(getattr(u, "department_id", 0) or 0) if u else 0
+            if did <= 0:
+                continue
+            dept = await Department.get_or_none(
+                tenant_id=tenant_id, id=did, deleted_at__isnull=True
+            )
+            dname = str(getattr(dept, "name", None) or "").strip() if dept else ""
+            if dept and dname:
+                return int(dept.id), dname
+        return None, None
+
     async def _create_purchase_order_from_item(
         self,
         tenant_id: int,
@@ -7615,6 +7641,15 @@ class DemandComputationService(AppBaseService):
             elif created_by:
                 order_data["buyer_id"] = int(created_by)
                 order_data["buyer_name"] = operator_name_from_user(user) or None
+            # 申请部门：按采购员 → 下推人所属真实部门带出（无部门则留空交提交门禁拦截）
+            _dept_id, _dept_name = await self._resolve_purchase_order_department_from_users(
+                tenant_id,
+                order_data.get("buyer_id"),
+                created_by,
+            )
+            if _dept_id and _dept_name:
+                order_data["department_id"] = _dept_id
+                order_data["department_name"] = _dept_name
             apply_create_audit(order_data, user)
             purchase_order = await PurchaseOrder.create(**order_data)
             
@@ -8070,6 +8105,14 @@ class DemandComputationService(AppBaseService):
             elif created_by:
                 order_data["buyer_id"] = int(created_by)
                 order_data["buyer_name"] = operator_name_from_user(user) or None
+            _dept_id, _dept_name = await self._resolve_purchase_order_department_from_users(
+                tenant_id,
+                order_data.get("buyer_id"),
+                created_by,
+            )
+            if _dept_id and _dept_name:
+                order_data["department_id"] = _dept_id
+                order_data["department_name"] = _dept_name
             if attachments:
                 order_data["attachments"] = attachments
             apply_create_audit(order_data, user)

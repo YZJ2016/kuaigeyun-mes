@@ -22,6 +22,7 @@ export interface FlowEligibleOrder {
   status?: string;
   order_date?: string | null;
   planning_pushed_to_computation?: boolean;
+  procurement_fulfillment_mode?: string | null;
   eligible?: boolean;
   block_reason?: string | null;
 }
@@ -99,11 +100,25 @@ export interface FlowGeneratePayload {
 
 export type FlowSimMode = 'real' | 'fill';
 
+export const DEFAULT_FULL_CHAIN_SCENARIOS = [
+  'mrp_push',
+  'purchase_inbound',
+  'owo_fulfill',
+  'wo_complete',
+  'ship',
+  'finance_settlement',
+] as const;
+
 export const FLOW_SCENARIO_OPTIONS = [
   {
     key: 'mrp_push',
     labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.mrp_push',
     stepKeys: ['demand_computation'] as const,
+  },
+  {
+    key: 'direct_purchase',
+    labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.direct_purchase',
+    stepKeys: ['direct_purchase'] as const,
   },
   {
     key: 'purchase_inbound',
@@ -122,6 +137,7 @@ export const FLOW_SCENARIO_OPTIONS = [
       'inventory_topup',
       'production_picking',
       'reporting',
+      'process_outsource',
       'process_inspection',
       'finished_goods_inspection',
       'finished_goods_receipt',
@@ -132,22 +148,30 @@ export const FLOW_SCENARIO_OPTIONS = [
     labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.ship',
     stepKeys: ['shipment_delivery'] as const,
   },
+  {
+    key: 'finance_settlement',
+    labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.finance_settlement',
+    stepKeys: ['finance_settlement'] as const,
+  },
 ] as const;
 
 /** 场景 → 步骤开关（前端真源，与后端 SCENARIO_DEFS 对齐） */
 export function stepsFromScenarios(scenarioKeys: string[]): Record<string, boolean> {
   const all = [
     'demand_computation',
+    'direct_purchase',
     'purchase',
     'incoming_inspection',
     'outsource',
     'inventory_topup',
     'production_picking',
     'reporting',
+    'process_outsource',
     'process_inspection',
     'finished_goods_inspection',
     'finished_goods_receipt',
     'shipment_delivery',
+    'finance_settlement',
   ] as const;
   const enabled = new Set<string>();
   for (const key of scenarioKeys) {

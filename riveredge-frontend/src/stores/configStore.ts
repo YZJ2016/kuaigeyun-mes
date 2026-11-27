@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { updateSiteSetting } from '../services/siteSetting';
 import { getTenantId } from '../utils/auth';
-import { queryClient } from '../queryClient';
+import { queryClient } from '../config/queryClient';
 import {
   buildSiteSettingQueryKey,
   fetchSiteSettingRecord,

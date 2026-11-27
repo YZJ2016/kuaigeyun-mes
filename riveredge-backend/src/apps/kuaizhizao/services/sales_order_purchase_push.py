@@ -1152,6 +1152,19 @@ async def push_to_purchase_requisition(
         selected_item_ids=selected_item_ids,
         selected_quantities=selected_quantities,
     )
+    if not int(getattr(req_data, "department_id", 0) or 0) and created_by:
+        from core.models.department import Department
+        from infra.models.user import User
+
+        _u = await User.get_or_none(id=int(created_by), deleted_at__isnull=True)
+        _did = int(getattr(_u, "department_id", 0) or 0) if _u else 0
+        if _did > 0:
+            _dept = await Department.get_or_none(
+                tenant_id=tenant_id, id=_did, deleted_at__isnull=True
+            )
+            if _dept and str(getattr(_dept, "name", None) or "").strip():
+                req_data.department_id = int(_dept.id)
+                req_data.department_name = str(_dept.name).strip()
 
     req = await PurchaseRequisitionService().create_requisition(
         tenant_id=tenant_id,
@@ -1469,8 +1482,30 @@ async def push_to_purchase_order(
 
     purchase_service = PurchaseService()
     target_documents: List[Dict[str, Any]] = []
+    default_dept_id: Optional[int] = None
+    default_dept_name: Optional[str] = None
+    if created_by:
+        from core.models.department import Department
+        from infra.models.user import User
+
+        _u = await User.get_or_none(id=int(created_by), deleted_at__isnull=True)
+        _did = int(getattr(_u, "department_id", 0) or 0) if _u else 0
+        if _did > 0:
+            _dept = await Department.get_or_none(
+                tenant_id=tenant_id, id=_did, deleted_at__isnull=True
+            )
+            if _dept and str(getattr(_dept, "name", None) or "").strip():
+                default_dept_id = int(_dept.id)
+                default_dept_name = str(_dept.name).strip()
 
     for po_create in plans:
+        if (
+            default_dept_id
+            and default_dept_name
+            and not int(getattr(po_create, "department_id", 0) or 0)
+        ):
+            po_create.department_id = default_dept_id
+            po_create.department_name = default_dept_name
         po = await purchase_service.create_purchase_order(
             tenant_id=tenant_id,
             order_data=po_create,

@@ -8,7 +8,7 @@ import {
   resolveSessionTenantScope,
 } from '../config/sessionQueries';
 import { syncStoredTenantId } from './auth';
-import { queryClient } from '../queryClient';
+import { queryClient } from '../config/queryClient';
 import { useGlobalStore } from '../stores/globalStore';
 import { buildRestoredUserFromStorage } from './restoredUser';
 import { resolveIsInfraSuperAdminSession } from './infraSuperAdminSession';

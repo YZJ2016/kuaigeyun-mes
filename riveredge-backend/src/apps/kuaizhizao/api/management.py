@@ -452,7 +452,11 @@ async def precheck_flow_generate(
 ) -> dict[str, Any]:
     _assert_admin_gate(auth, action="使用流程造数")
     try:
-        return await FlowDataGenerateService().precheck(tenant_id, _to_flow_request(body))
+        return await FlowDataGenerateService().precheck(
+            tenant_id,
+            _to_flow_request(body),
+            operator_id=getattr(auth, "user_id", None),
+        )
     except (NotFoundError, BusinessLogicError, ValidationError, ValueError) as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 

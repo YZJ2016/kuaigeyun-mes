@@ -1,21 +1,21 @@
-import './polyfills'
+import './config/polyfills'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { signalAppBootStarted } from './utils/bootSignal'
 import App from './app'
-import './global.less'
+import './styles/global.less'
 import './styles/theme-plain.less'
 import { useGlobalStore } from './stores/globalStore'
-import { queryClient } from './queryClient'
+import { queryClient } from './config/queryClient'
 import { purgeLegacyGlobalStoreUser, seedCurrentUserFromAuthStorage } from './utils/restoredUser'
 import { isRequestCancellation } from './utils/requestCancellation'
 import {
   clearStaleChunkReloadFlag,
   installStaleChunkReloadHandlers,
 } from './utils/staleChunkReload'
-import './initSpinIndicator'
+import './utils/initSpinIndicator'
 import './config/dayjs'
 
 installStaleChunkReloadHandlers()

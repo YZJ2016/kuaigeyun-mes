@@ -10,7 +10,7 @@ import { isKuaireportSharedBrowsePath } from './kuaireportSharedPath';
 import { useConfigStore } from '../stores/configStore';
 import { resolveThemeFromCloud, useThemeStore } from '../stores/themeStore';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
-import { queryClient } from '../queryClient';
+import { queryClient } from '../config/queryClient';
 import {
   buildSiteSettingQueryKey,
   buildUserPreferenceQueryKey,

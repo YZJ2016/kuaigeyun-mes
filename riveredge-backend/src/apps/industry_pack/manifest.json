@@ -8,7 +8,7 @@
   "market_category": "industry",
   "is_pro": false,
   "hide_from_application_center": true,
-  "entry_point": "../apps/industry-pack/index.tsx",
+  "entry_point": "../apps/menu-entry-shell/index.tsx",
   "route_path": "/apps/industry-pack",
   "sort_order": 290,
   "menu_config": {

@@ -10,18 +10,18 @@
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { setNavigateRef } from './utils/navigation';
+import { setNavigateRef } from '../utils/navigation';
 import { App as AntdApp, ConfigProvider, Spin } from 'antd';
-import { AntdAppBridge } from './utils/antdAppApis';
-import PageSkeleton, { PageSkeletonProps } from './components/page-skeleton';
-import { PageLoadingFullscreen } from './components/page-loading-lottie';
-import { GLOBAL_SPIN_INDICATOR } from './initSpinIndicator';
+import { AntdAppBridge } from '../utils/antdAppApis';
+import PageSkeleton, { PageSkeletonProps } from '../components/page-skeleton';
+import { PageLoadingFullscreen } from '../components/page-loading-lottie';
+import { GLOBAL_SPIN_INDICATOR } from '../utils/initSpinIndicator';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import zhTW from 'antd/locale/zh_TW';
 import jaJP from 'antd/locale/ja_JP';
 import viVN from 'antd/locale/vi_VN';
-import loLA from './locales/antd/lo_LA';
+import loLA from '../locales/antd/lo_LA';
 import {
   getToken,
   clearAuth,
@@ -31,30 +31,30 @@ import {
   getTenantId,
   isTokenExpired,
   getTokenRemainingTime,
-} from './utils/auth';
-import { resolveIsInfraSuperAdminSession } from './utils/infraSuperAdminSession';
-import { getSessionCurrentUser } from './utils/sessionCurrentUser';
-import { buildRestoredUserFromStorage, seedCurrentUserFromAuthStorage } from './utils/restoredUser';
-import { isEquivalentCurrentUser } from './utils/currentUserSnapshot';
-import { CURRENT_USER_QUERY_ROOT } from './config/sessionQueries';
-import { queryClient } from './queryClient';
-import { refreshAccessTokenDetailed } from './utils/tokenRefresh';
-import { prefetchAvatarUrl } from './utils/avatar';
-import { FORM_LAYOUT } from './components/layout-templates/constants';
-import { resolveUiFontFamily } from './constants/fonts';
-import { useGlobalStore } from './stores';
-import { syncLanguageFromPreferences } from './config/i18n';
-import { useAppShellReady } from './hooks/useAppShellReady';
-import { useCurrentUserQuery } from './hooks/useCurrentUserQuery';
-import { useCurrentUser } from './hooks/useCurrentUser';
-import { useSiteSettingQuery } from './hooks/useSiteSettingQuery';
-import { useUserPreferenceQuery } from './hooks/useUserPreferenceQuery';
-import { useConfigStore } from './stores/configStore';
-import { useUserPreferenceStore } from './stores/userPreferenceStore';
-import { getPlatformSettingsPublic } from './services/platformSettings';
-import { applyFavicon } from './utils/favicon';
-import { applySearchEngineIndexing } from './utils/searchEngineIndexing';
-import { useThemeStore } from './stores/themeStore';
+} from '../utils/auth';
+import { resolveIsInfraSuperAdminSession } from '../utils/infraSuperAdminSession';
+import { getSessionCurrentUser } from '../utils/sessionCurrentUser';
+import { buildRestoredUserFromStorage, seedCurrentUserFromAuthStorage } from '../utils/restoredUser';
+import { isEquivalentCurrentUser } from '../utils/currentUserSnapshot';
+import { CURRENT_USER_QUERY_ROOT } from '../config/sessionQueries';
+import { queryClient } from '../config/queryClient';
+import { refreshAccessTokenDetailed } from '../utils/tokenRefresh';
+import { prefetchAvatarUrl } from '../utils/avatar';
+import { FORM_LAYOUT } from '../components/layout-templates/constants';
+import { resolveUiFontFamily } from '../constants/fonts';
+import { useGlobalStore } from '../stores';
+import { syncLanguageFromPreferences } from '../config/i18n';
+import { useAppShellReady } from '../hooks/useAppShellReady';
+import { useCurrentUserQuery } from '../hooks/useCurrentUserQuery';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useSiteSettingQuery } from '../hooks/useSiteSettingQuery';
+import { useUserPreferenceQuery } from '../hooks/useUserPreferenceQuery';
+import { useConfigStore } from '../stores/configStore';
+import { useUserPreferenceStore } from '../stores/userPreferenceStore';
+import { getPlatformSettingsPublic } from '../services/platformSettings';
+import { applyFavicon } from '../utils/favicon';
+import { applySearchEngineIndexing } from '../utils/searchEngineIndexing';
+import { useThemeStore } from '../stores/themeStore';
 import {
   ACTIVITY_STORAGE_KEY,
   updateLastActivity,
@@ -62,21 +62,21 @@ import {
   hasPendingRequests,
   bumpLastActivityBy,
   syncMemoryActivityFromStorage,
-} from './utils/activityUtils';
-import { useTouchScreen } from './hooks/useTouchScreen';
-import { initDocumentStatusCache } from './services/enums';
-import { isStaticLikePathname, isTenantEntryPathname, resolveTenantDomainFromUrl } from './utils/tenantDomainAccess';
-import { isPlatformAdminLoginPathname, isPlatformInfraPath, isPlatformInfraPublicPath } from './utils/platformScope';
-import { isKuaireportSharedBrowsePath } from './utils/kuaireportSharedPath';
-import { redirectAfterLogout } from './utils/loginEntry';
+} from '../utils/activityUtils';
+import { useTouchScreen } from '../hooks/useTouchScreen';
+import { initDocumentStatusCache } from '../services/enums';
+import { isStaticLikePathname, isTenantEntryPathname, resolveTenantDomainFromUrl } from '../utils/tenantDomainAccess';
+import { isPlatformAdminLoginPathname, isPlatformInfraPath, isPlatformInfraPublicPath } from '../utils/platformScope';
+import { isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
+import { redirectAfterLogout } from '../utils/loginEntry';
 import {
   isTenantSubscriptionExpired,
   TENANT_EXPIRED_MESSAGE,
-} from './utils/tenantAccess';
+} from '../utils/tenantAccess';
 // 使用 routes 中的路由配置
-import MainRoutes from './routes';
-import { AiContextProvider } from './contexts/AiContext';
-import ErrorBoundary from './components/error-boundary';
+import MainRoutes from '../routes';
+import { AiContextProvider } from '../contexts/AiContext';
+import ErrorBoundary from '../components/error-boundary';
 
 // 权限守卫组件（memo 阻断上层频繁重渲染的级联）
 const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {

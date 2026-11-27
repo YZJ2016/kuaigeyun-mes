@@ -6,7 +6,7 @@
  * 登录成功后 window.location.href 跳转主应用。
  */
 
-import './initSpinIndicator';
+import './utils/initSpinIndicator';
 import './pages/login/index.less';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';

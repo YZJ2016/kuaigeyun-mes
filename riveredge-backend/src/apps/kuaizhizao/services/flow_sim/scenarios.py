@@ -7,10 +7,12 @@ from typing import Literal, Optional, Sequence
 
 ScenarioId = Literal[
     "mrp_push",
+    "direct_purchase",
     "purchase_inbound",
     "wo_complete",
     "owo_fulfill",
     "ship",
+    "finance_settlement",
 ]
 
 FULL_CHAIN_SCENARIOS: tuple[ScenarioId, ...] = (
@@ -19,6 +21,14 @@ FULL_CHAIN_SCENARIOS: tuple[ScenarioId, ...] = (
     "owo_fulfill",
     "wo_complete",
     "ship",
+    "finance_settlement",
+)
+
+DIRECT_PURCHASE_SCENARIOS: tuple[ScenarioId, ...] = (
+    "direct_purchase",
+    "purchase_inbound",
+    "ship",
+    "finance_settlement",
 )
 
 
@@ -37,6 +47,11 @@ SCENARIO_DEFS: dict[ScenarioId, ScenarioDef] = {
         # 下推采购单由引擎在本场景内 enable_purchase_push，不复用 purchase 入库开关
         step_keys=("demand_computation",),
     ),
+    "direct_purchase": ScenarioDef(
+        id="direct_purchase",
+        label="销售外购直推采购",
+        step_keys=("direct_purchase",),
+    ),
     "purchase_inbound": ScenarioDef(
         id="purchase_inbound",
         label="采购审核入库",
@@ -54,6 +69,7 @@ SCENARIO_DEFS: dict[ScenarioId, ScenarioDef] = {
             "inventory_topup",
             "production_picking",
             "reporting",
+            "process_outsource",
             "process_inspection",
             "finished_goods_inspection",
             "finished_goods_receipt",
@@ -63,6 +79,11 @@ SCENARIO_DEFS: dict[ScenarioId, ScenarioDef] = {
         id="ship",
         label="发货出库",
         step_keys=("shipment_delivery",),
+    ),
+    "finance_settlement": ScenarioDef(
+        id="finance_settlement",
+        label="财务结算（应收应付/收付款）",
+        step_keys=("finance_settlement",),
     ),
 }
 

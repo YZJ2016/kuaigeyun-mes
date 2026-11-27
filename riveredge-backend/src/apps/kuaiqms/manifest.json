@@ -7,7 +7,7 @@
   "author": "StarTech",
   "market_category": "base",
   "is_pro": false,
-  "entry_point": "../apps/kuaiqms/index.tsx",
+  "entry_point": "../apps/menu-entry-shell/index.tsx",
   "route_path": "/apps/kuaiqms",
   "sort_order": 132,
   "dependencies": {

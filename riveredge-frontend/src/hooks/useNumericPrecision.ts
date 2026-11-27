@@ -7,7 +7,7 @@ import {
   type NumericPrecisionKind,
   type NumericPrecisionSettings,
 } from '../services/businessConfig';
-import { queryClient } from '../queryClient';
+import { queryClient } from '../config/queryClient';
 
 export const NUMERIC_PRECISION_QUERY_KEY = ['businessConfigNumericPrecision'] as const;
 

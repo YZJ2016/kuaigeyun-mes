@@ -4,7 +4,7 @@ import {
   getTenantBackendHome,
   TENANT_BACKEND_HOME_QUERY_KEY,
 } from '../services/menu';
-import { queryClient } from '../queryClient';
+import { queryClient } from '../config/queryClient';
 import { getTenantId, getToken } from './auth';
 import { getDefaultTenantHomePath, getPersistedConfigs, resolveEffectiveHomePath, useConfigStore } from '../stores/configStore';
 
