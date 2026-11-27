@@ -181,7 +181,7 @@ async def withdraw_other_expense_application_submit(
     application_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_permission_codes("kuaicaiwu:other-expense-application:revoke")),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:other-expense-application:submit")),
 ):
     try:
         return await _svc.withdraw_application_submit(tenant_id, application_id, current_user.id)

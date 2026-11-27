@@ -399,10 +399,10 @@ class OtherExpenseApplicationService(AppBaseService[OtherExpenseApplication]):
         )
         if not head:
             raise NotFoundError(f"其他费用支出申请不存在: {application_id}")
-        assert_other_expense_application_capability(head, "submit")
         raw = str(head.review_status or "").strip()
         if raw == "SUBMITTED":
             return await self.get_by_id(tenant_id, application_id)
+        assert_other_expense_application_capability(head, "submit")
         user = await self.get_user_info(user_id)
         head.review_status = "SUBMITTED"
         head.status = "Draft"
@@ -543,25 +543,88 @@ class OtherExpenseApplicationService(AppBaseService[OtherExpenseApplication]):
         )
         if not head:
             raise NotFoundError(f"其他费用支出申请不存在: {application_id}")
+        assert_other_expense_application_capability(
+            head, "approve" if approved else "reject"
+        )
+        audit_required = await self._config.check_audit_required(
+            tenant_id, "other_expense_application"
+        )
         if not is_auto_approve:
+            from core.services.approval.audit_flow_guard import (
+                assert_pending_approval_instance,
+            )
+
+            await assert_pending_approval_instance(
+                tenant_id=tenant_id,
+                entity_type="other_expense_application",
+                entity_id=application_id,
+                audit_required=audit_required,
+                doc_label="其他费用支出申请",
+                verb="审核" if approved else "驳回",
+            )
+
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        async def _do_decide() -> OtherExpenseApplicationResponse:
+            row = await OtherExpenseApplication.get_or_none(
+                tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"其他费用支出申请不存在: {application_id}")
+            user = await self.get_user_info(operator_id)
+            row.reviewer_id = operator_id
+            row.reviewer_name = user["name"]
+            row.review_time = resolve_business_datetime()
+            row.review_remarks = review_remarks
             if approved:
-                assert_other_expense_application_capability(head, "approve")
+                row.review_status = "已审核"
+                row.status = "Approved"
             else:
-                assert_other_expense_application_capability(head, "reject")
-        user = await self.get_user_info(operator_id)
+                row.review_status = "已驳回"
+                row.status = "Rejected"
+            row.updated_by = operator_id
+            row.updated_by_name = user["name"]
+            await row.save()
+            return await self.get_by_id(tenant_id, application_id)
+
+        sync_after_flow = False
+        if audit_required and operator_id and not is_auto_approve:
+            from core.services.approval.audit_flow_guard import (
+                get_approval_gate_status,
+                should_sync_doc_after_flow_completed,
+            )
+
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type="other_expense_application",
+                entity_id=application_id,
+            )
+            sync_after_flow = should_sync_doc_after_flow_completed(
+                gate, approve=approved
+            )
+
+        if is_auto_approve or not operator_id or sync_after_flow:
+            return await _do_decide()
+
         if approved:
-            head.review_status = "已审核"
-            head.status = "Approved"
+            result = await UniAuditService.approve_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="other_expense_application",
+                entity_id=application_id,
+                approver_id=operator_id,
+                flow_approve=_do_decide,
+            )
         else:
-            head.review_status = "已驳回"
-            head.status = "Rejected"
-        head.reviewer_id = operator_id
-        head.reviewer_name = user["name"]
-        head.review_time = resolve_business_datetime()
-        head.review_remarks = review_remarks
-        head.updated_by = operator_id
-        head.updated_by_name = user["name"]
-        await head.save()
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type="other_expense_application",
+                entity_id=application_id,
+                approver_id=operator_id,
+                reason=review_remarks,
+                flow_reject=lambda _reason: _do_decide(),
+            )
+        if result is not None:
+            return result
         return await self.get_by_id(tenant_id, application_id)
 
     async def withdraw_application_submit(
@@ -612,13 +675,18 @@ class OtherExpenseApplicationService(AppBaseService[OtherExpenseApplication]):
     async def revoke_application_approval(
         self, tenant_id: int, application_id: int, user_id: int
     ) -> OtherExpenseApplicationResponse:
+        """撤销审核：有流程则按流程策略重开；否则回草稿或待审核。"""
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from core.services.approval.audit_transition import (
+            resolve_revoke_to_draft_landing_phase,
+        )
+        from core.services.approval.uni_audit_service import UniAuditService
+
         head = await OtherExpenseApplication.get_or_none(
             tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
         )
         if not head:
             raise NotFoundError(f"其他费用支出申请不存在: {application_id}")
-        from apps.kuaizhizao.models.document_relation import DocumentRelation
-
         expense_rels = await DocumentRelation.filter(
             tenant_id=tenant_id,
             source_type="other_expense_application",
@@ -629,17 +697,41 @@ class OtherExpenseApplicationService(AppBaseService[OtherExpenseApplication]):
         assert_other_expense_application_capability(
             head, "revoke_approval", has_linked_expense=bool(linked)
         )
-        user = await self.get_user_info(user_id)
-        head.review_status = "草稿"
-        head.status = "Draft"
-        head.reviewer_id = None
-        head.reviewer_name = None
-        head.review_time = None
-        head.review_remarks = None
-        head.updated_by = user_id
-        head.updated_by_name = user["name"]
-        await head.save()
-        return await self.get_by_id(tenant_id, application_id)
+
+        audit_required = await self._config.check_audit_required(
+            tenant_id, "other_expense_application"
+        )
+        op_id = int(user_id)
+
+        async def _do_revoke(*, reopened: bool = False) -> OtherExpenseApplicationResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            row = await OtherExpenseApplication.get_or_none(
+                tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"其他费用支出申请不存在: {application_id}")
+            row.status = "Draft"
+            row.review_status = "待审核" if landing == "pending" else "草稿"
+            row.reviewer_id = None
+            row.reviewer_name = None
+            row.review_time = None
+            row.review_remarks = None
+            user = await self.get_user_info(op_id)
+            row.updated_by = op_id
+            row.updated_by_name = user["name"]
+            await row.save()
+            return await self.get_by_id(tenant_id, application_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="other_expense_application",
+            entity_id=application_id,
+            operator_id=op_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def allocate_push_amount_to_lines(
         self,

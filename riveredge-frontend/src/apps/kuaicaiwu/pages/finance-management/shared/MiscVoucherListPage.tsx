@@ -11,7 +11,9 @@ import {
 import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import { App, Button, Col, Descriptions, Form, Input, InputNumber, Row, Select, Space, Table, theme } from 'antd';
 import type { TableColumnsType } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
+import { useOptionalFinanceVoucherDetail } from '../../../components/FinanceVoucherDetailProvider';
 import type { FormListFieldData } from 'antd/es/form/FormList';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -373,6 +375,8 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
   const { message: messageApi, modal } = App.useApp();
   const { token } = theme.useToken();
   const linkedDetail = useLinkedDocumentDetail();
+  const navigate = useNavigate();
+  const financeVoucherDetail = useOptionalFinanceVoucherDetail();
   const actionRef = useRef<ActionType>();
   const tableRowsRef = useRef<VoucherRow[]>([]);
   const perms = useResourcePermissions(resource);
@@ -2416,7 +2420,17 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         bankAccountLabel={detailBankAccountLabel}
         documentType={auditEntityType}
         renderDocumentStatus={renderMiscDocumentStatus}
-        onOpenLinkedDocument={(type, id) => linkedDetail?.openLinkedDocumentDetail(type, id)}
+        onOpenLinkedDocument={(type, id) => {
+          if (type === 'receivable' || type === 'payable') {
+            navigate(`/apps/kuaicaiwu/finance-management/${type}s/${id}`);
+            return;
+          }
+          if ((type === 'receipt' || type === 'payment') && financeVoucherDetail) {
+            financeVoucherDetail.openFinanceVoucherDetail({ kind: type, id: Number(id) });
+            return;
+          }
+          linkedDetail?.openLinkedDocumentDetail(type, id);
+        }}
         extra={
           detailRow ? (
             <Space>
