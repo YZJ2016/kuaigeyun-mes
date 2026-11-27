@@ -12,7 +12,7 @@ when: 任何新建或大幅补全 PC 业务列表/单据页、质检/主数据/�
 
 ## 硬门禁（写第一行 JSX 之前）
 
-1. **读 Skill**：`.cursor/skills/new-document-page/SKILL.md`（全篇勾一遍，不是扫一眼）。
+1. **读 Skill**：外层根仓 `../.agents/skills/new-document-page/SKILL.md`（全篇勾一遍，不是扫一眼）。
 2. **AOCI**：`aoci_search keyword=new-document-page` 或 `keyword=UniTable` 命中 Skill 条目后再写壳。
 3. **抄样板**：同类型最近页（单据→报价单/销售合同；主数据→收支类别/固定资产类别；质检→同模块已规范列表）。
 

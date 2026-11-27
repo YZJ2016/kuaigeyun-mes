@@ -182,7 +182,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 - [README](README.md)：产品定位、核心能力、插件与终端、快速启动、推荐配置
 - [docs/部署指南.md](docs/部署指南.md)：环境准备、发布流程、运维排查
 - [fast-deploy/README.md](fast-deploy/README.md)：部署脚本参数与速查
-- [docs/上游同步台账.md](docs/上游同步台账.md)：私有 fork 上游同步台账（已评水位、取/跳过映射与本地领先修复）
+- [../docs/06.upstream-sync/台账.md](../docs/06.upstream-sync/台账.md)：私有 fork 上游同步台账（统一维护在外层根仓 `docs/06.upstream-sync/`，审计脚本在外层 `scripts/sync_upstream_audit.py`）
 
 ---
 
@@ -222,7 +222,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ## 上游同步台账（私有分叉维护）
 
-> 本 fork 的维护记录，非上游产品文档。已评水位、取/适配/跳过映射、本地领先修复与维护约定，统一维护在 **[docs/上游同步台账.md](docs/上游同步台账.md)**。
+> 本 fork 的维护记录，非上游产品文档。已评水位、取/适配/跳过映射、本地领先修复与维护约定，统一维护在外层根仓 **[../docs/06.upstream-sync/台账.md](../docs/06.upstream-sync/台账.md)**（审计脚本见外层 `../scripts/sync_upstream_audit.py`）。
 
 ---
 

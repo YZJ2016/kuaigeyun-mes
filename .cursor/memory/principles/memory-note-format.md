@@ -68,8 +68,8 @@ standard: 标准入口一句话
 
 - 文件：`riveredge-frontend/src/...` 这种完整相对根路径
 - 关联笔记：`` `features/foo.md` ``，不要只写 `[[foo]]`
-- 规则文件：``.cursor/rules/xxx.mdc``
-- 本机或 Vault 绝对路径可以附在关联里，但标准入口必须是仓库内路径
+- 规则文件：外层根仓 `.cursor/rules/xxx.mdc`（本仓内写作 `../.cursor/rules/xxx.mdc`）
+- 禁止写死任何本机盘符绝对路径（所有标准入口与关联路径均使用仓库相对路径）
 
 ## 索引必须同步
 

@@ -18,7 +18,7 @@ standard: 按改动路径选最小推送集；产物构建与源码 push 分离�
 # 代码推送分流
 
 - 写入：2026-10-10；修订：2026-11-19（dist 出库，PC Web 推送不再有构建步骤）
-- 规则真源：`.cursor/rules/build-push-aoci.mdc`
+- 规则真源：`../.cursor/rules/build-push-aoci.mdc`
 - AOCI：`principles/aoci-git-commit.md`；脚本入口：`features/fast-deploy-scripts.md`
 
 ## 何时读
@@ -40,8 +40,8 @@ standard: 按改动路径选最小推送集；产物构建与源码 push 分离�
 | `.cursor/memory/**` 记忆库 | **跳过** maintain（scope 已 exclude，不建 Entry） | `git push` | 不要 |
 | `.cursor/rules` / 说明文档 | 改了 rules 则 maintain；纯说明可跳过 | `git push` | 不要 |
 | `riveredge-frontend/src` 等 PC 前端 | 要 | `git push` | **不要**（dist 不入库，部署机部署时构建） |
-| 移动端 UI（client） | `aoci-client` | client commit | **要** H5：`build.mobile.web.sh` → 交 `web-dist` |
-| 工位需发安装包（client） | `aoci-client` | client commit | **要**：`npm run pack`（`release/` 不入库） |
+| 移动端 UI（`kuaigeyun-client/riveredge-app-mobile`） | 按需本仓 AOCI | `git push origin develop` | 仅用户要求发 H5 包时构建 |
+| 工位需发安装包（`kuaigeyun-client/riveredge-app-station`） | 按需本仓 AOCI | `git push origin develop` | 仅用户要求打包时执行（`release/` 不入库） |
 | 同时改了前端 + 后端 | 要 | 源码 commit（可含两端） | 仅移动/工位产物（若有） |
 
 ## 用户口令怎么理解
@@ -71,6 +71,5 @@ standard: 按改动路径选最小推送集；产物构建与源码 push 分离�
 
 ## 关联
 
-- `.cursor/rules/build-push-aoci.mdc`
-- `features/fast-deploy-scripts.md`
+- `../.cursor/rules/build-push-aoci.mdc`
 - `principles/aoci-git-commit.md`

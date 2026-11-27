@@ -57,5 +57,5 @@ standard: KuaioaCrudListPage + KuaioaApprovalDocService + manifest.audit kuaioa_
 
 ## 关联
 
-- `.cursor/skills/kuaioa/SKILL.md`
+- `../.agents/skills/kuaioa/SKILL.md`
 - `principles/reuse-existing-patterns.md`

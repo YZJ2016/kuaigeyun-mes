@@ -2,17 +2,17 @@
 
 供 Agent **先检索、再实现**。同类需求只允许一套标准做法；代码合入后必须在此落笔记。
 
-位置：`.cursor/memory/`（仓库内永久，随 git）。Vault 联接：`E:\AI-Memory\30-Knowledge\MES-Codebase\kuaigeyun-dev-memory`。
+位置：`.cursor/memory/`（仓库内永久，随 git）。跨仓总纲与文档索引见外层 `../AGENTS.md` 与 `../docs/00.doc-map.md`。
 
 ## Agent 读取协议（每次开发先做）
 
-MES 改代码时，**先读 Vault 图谱与变更协议**，再用本文件做功能路由。细则：`principles/mes-vault-index.md`。
+MES 改代码时，**先按总纲与总索引定位边界**，再用本文件做功能路由。细则：`principles/mes-vault-index.md`。
 
-1. Vault：`E:\AI-Memory\MEMORY.md` → `30-Knowledge/MES-Codebase/architecture-map.md` + `ai-change-protocol.md`
+1. 总纲与索引：外层 `../AGENTS.md` → `../docs/00.doc-map.md` → 本仓 `AGENTS.md`
 2. **再读本文件**：用下方「关键词路由」对上任务，不要通读全部 features。
 3. **打开命中笔记**：只读 `when` 匹配的 1～3 篇。
 4. **对齐标准入口**：按笔记里的组件 / API / 扩展点改，禁止平行第二套。
-5. **交付后回写**：复制 `features/_TEMPLATE.md` → `features/<slug>.md`，并在本文件索引表加一行。书写细则：`principles/memory-note-format.md`。
+5. **交付后按需回写**：复制 `features/_TEMPLATE.md` → `features/<slug>.md`，并在本文件索引表加一行。书写细则：`principles/memory-note-format.md`。
 
 Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`source_type`、脚本名。frontmatter 的 `keywords` 就是为这次检索准备的。
 
@@ -20,7 +20,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 
 | 任务在说… | 先读 |
 |-----------|------|
-| **新建 PC 页、新列表、新单据、脚手架、缺新建按钮、showCreateButton、没按规范** | **`principles/new-pc-page-hard-gate.md`** → **`.cursor/skills/new-document-page/SKILL.md`** → AOCI `keyword=new-document-page`；**禁止等用户口头提醒** |
+| **新建 PC 页、新列表、新单据、脚手架、缺新建按钮、showCreateButton、没按规范** | **`principles/new-pc-page-hard-gate.md`** → 外层根仓 **`../.agents/skills/new-document-page/SKILL.md`** → AOCI `keyword=new-document-page`；**禁止等用户口头提醒** |
 | 工位服务器设置、开发态工单不是设置地址、X-Station-Api-Origin | `features/station-settings-api-origin.md` |
 | 工位人脸录入、已录入账号采样、设备设置录脸、触屏专用角色 | `features/station-face-settings-manage.md` |
 | 工位指派给我、班组派工、assigned_worker_id 看不到班组工单 | `features/station-assigned-wo-includes-team.md` |
@@ -36,10 +36,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 追溯报告导出、Maximum call stack、桑基图爆栈、快制造应用加载错误 | `features/traceability-sankey-stack-overflow.md` |
 | 工位字被裁、看不清、ellipsis、中区滚不动 | `features/station-hmi-info-visibility.md` |
 | 移动端 S2 门禁、代报 assign、仓储 confirm、tokenRefresh 误登出 | `features/mobile-v2-s2-contract-fixes.md` |
-| 三仓、跨端落点、client/pro 真源、Junction | `principles/three-repo-map.md` |
-| AOCI MCP 三仓、aoci-client、aoci-pro | `features/aoci-mcp-three-repos.md` |
+| 多仓拓扑、跨端落点、kuaigeyun-client、4 PRO 真源 | `principles/three-repo-map.md` |
 | AOCI blocked orphan、gitignore pro 应用、maintain 无 candidates | `features/aoci-safe-inventory-orphan.md` |
-| 架构、调用链、D/E 边界、PC/Mobile/Station | `principles/mes-vault-index.md` → Vault `architecture-map.md` |
+| 跨仓文档、架构总索引、PC/Mobile/Station 落点 | `principles/mes-vault-index.md` → `../docs/00.doc-map.md` |
 | 即时库存同步、batch_no 非空、无批号 | `features/inventory-sync-empty-batch-no.md` |
 | 同步/推送 Hub、外推、DocumentPush、preferIds、`:sync` / `:push` | `features/sync-push-hub-master-data.md` |
 | 多单位/批号管理/库位关系同步、其他同步下拉、location-ref | `features/master-data-inbound-sync-domains.md` |
@@ -261,8 +260,6 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/kuaivision-p0-shell.md` | 快视觉 P0 壳与入站 | kuaivision | 已交付 |
 | `features/kuaivision-p2-edge.md` | 快视觉 P2 Edge 与 POC | kuaivision | 已交付 |
 | `features/kuaivision-p3-governance.md` | 快视觉 P3 样本模型运维 | kuaivision | 已交付 |
-| `features/kuaiiot-device-status-realtime.md` | 设备连接/台账状态 MQTT 无感刷新 | kuaiiot | 已交付 |
-| `features/iot-line-clear-mqtt.md` | 产线 MQTT 清零（接入/发送 + 手动/自动） | kuaiiot | 已交付 |
 | `features/code-rule-page-config-load.md` | 编码规则页面配置加载 | code-rule | 已交付 |
 | `features/equipment-factory-binding-quick-add.md` | 设备台账工厂绑定快速新增 | master-data-ui | 已交付 |
 | `features/tool-scheme-item-quick-create.md` | 工装方案快速新建保养项/维修项 | master-data-ui | 已交付 |
@@ -312,5 +309,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/kuaioa-employee-movement-recipient.md` | 入离职登记人员接收人站内通知 | kuaioa | 已交付 |
 | `features/kuaioa-living-payout-permission-split.md` | 生活费发放表与预支权限拆分 | kuaioa | 已交付 |
 | `features/gl-nonleaf-opening-residual.md` | 总账非末级残留期初与科目余额表轧卷 | kuaicaiwu | 已交付 |
+| `features/dashboard-todo-rbac-filter.md` | 工作台待办按单据 :read 权限过滤 | rbac | 已交付 |
+| `features/print-pdf-playwright-path.md` | 打印/追溯 PDF Playwright 浏览器路径 | core-print | 有效 |
+| `features/purchase-inquiry-demand-party.md` | 采购询价需方与商务条款 | kuaizhizao-purchase | 已交付 |
+| `features/purchase-inquiry-vendor-system-pdf.md` | 采购询价发布按供应商生成系统 PDF | kuaizhizao-purchase | 已交付 |
 
 Obsidian 镜像可用 wikilink，Agent 检索请用上表路径，不要只依赖 `[[...]]`。

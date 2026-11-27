@@ -37,7 +37,7 @@ standard: BE pull-lines 用 require_read_or_display；FE 筛选项/仓库用 loa
 | BE helper | `riveredge-backend/src/core/api/deps/access.py` → `require_read_or_display` |
 | FE helper | `riveredge-frontend/src/components/uni-pull-query/loadPullSourceReferenceOptions.ts` |
 | 试点壳 | `InboundQuickPullModals` / `OutboundQuickPullModals` |
-| Skill | `.cursor/skills/uni-pull-query/SKILL.md`（来源回显行） |
+| Skill | `../.agents/skills/uni-pull-query/SKILL.md`（来源回显行） |
 
 ## 扩展点
 

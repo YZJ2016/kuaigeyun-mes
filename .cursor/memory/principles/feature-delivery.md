@@ -1,5 +1,5 @@
 ---
-title: 新功能交付：迁移 + 菜单同步
+title: 新功能交付：14 位时间戳迁移 + 菜单同步 + 更新日志
 slug: feature-delivery
 status: active
 domain: principle
@@ -11,38 +11,25 @@ keywords:
   - 权限码
   - module_references
   - platformUpdateLog
-standard: 当场 upgrade + 当场 sync；用户可见改动补更新日志
+standard: 14 位时间戳迁移 + 前后端双 manifest 同步 + 仅通用更新日志；环境受限未执行须明示
 ---
 
 # 新功能交付：迁移 + 菜单同步
 
-- 写入：2026-10-03
-- 同步规则：`.cursor/rules/feature-delivery-checklist.mdc`（alwaysApply）
+- 规则真源：外层根仓 `.cursor/rules/feature-delivery-checklist.mdc`、`.cursor/rules/platform-update-log.mdc`
 - 细节以规则全文为准，本篇只作检索摘要。
-
-## 原则
-
-代码合入不等于可用。有新 model / 菜单 / 权限时，必须在本环境做完迁移和菜单同步。
 
 ## 动手前 / 交付时
 
-1. 新表：aerich 迁移 + `orm_models` 注册；Windows 用 UTF-8 跑 `aerich upgrade`
-2. 改 `manifest.json`：前后端两份一起改；当场单应用 sync，不要只说「请点菜单同步」
-3. 新权限码写入 manifest `permissions`；跨模块引用走 `module_references`
-4. 前端：路由、懒加载、zh-CN；列表导入传 `importHeaders` 等有效字段；状态列传 `statusEnum`
-5. 用户可见的功能/修复/改进：在 `platformUpdateLog.ts`（或定制 `platformUpdateLogDedicated.ts`）数组头部插一条，并写 zh-CN `pages.dashboard.updateLog.entries.{id}.*`。细则：`features/platform-update-log.md`
-6. **多端改动**：更新 `principles/three-repo-map.md` 落点行，或新 feature 并链回总表；单端内部改动可跳过
-
-## 禁止
-
-- 交付说明里默认假设用户会去点「一键同步全部」
-- 只改前端或只改后端一份 manifest
-- 用无效的整包 `importTemplate` 冒充导入模板
+1. **数据库迁移**：在 `riveredge-backend/migrations/models/` 新建 aerich 迁移并注册 `orm_models`；文件名第一段**必须为 14 位时间戳**且大于已有最大时间戳（严禁续接上游连续序号）。环境可连库时用 UTF-8 执行 `uv run aerich upgrade`；受限时须显式标注「仅写文件、未执行迁移」。
+2. **改 `manifest.json`**：前后端两份一起改；新权限码写入 `permissions`，跨模块引用声明 `module_references`；环境可用时同步目标应用 manifest，未执行须明示。
+3. **前端联调配套**：路由、懒加载、默认只改 `zh-CN`（遵循 `i18n-zh-cn-only.mdc`）；列表导入传 `importHeaders` 等有效字段；状态列传 `statusEnum`。
+4. **平台更新日志**：用户可见改动只在 `platformUpdateLog.ts` 的 `PLATFORM_UPDATE_LOG_GENERAL` 头部插一条并补 `zh-CN`（不维护域外 `platformUpdateLogDedicated.ts`）。
+5. **多端改动**：同时触及 API/PC 与 `kuaigeyun-client/` 时更新 `principles/three-repo-map.md`；单端内部改动可跳过。
 
 ## 关联
 
-- `.cursor/rules/feature-delivery-checklist.mdc`
+- `../.cursor/rules/feature-delivery-checklist.mdc`
+- `../.cursor/rules/platform-update-log.mdc`
 - `principles/three-repo-map.md`
-- `features/platform-update-log.md`
-- `features/fast-deploy-scripts.md`（`deploy.sh` 的 migrate）
 - `principles/reuse-existing-patterns.md`

@@ -53,5 +53,5 @@ standard: 列表 navigate 到 `/apps/funide-oa/quality-management/eight-d-report
 
 ## 关联
 
-- `.cursor/skills/dedicated-page-split/SKILL.md`
+- `../.agents/skills/dedicated-page-split/SKILL.md`
 - `features/platform-update-log.md`（dedicated `funide-oa-eight-d-workbench-route-r01`）

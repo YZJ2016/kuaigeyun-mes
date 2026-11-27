@@ -1,6 +1,6 @@
 # 应用分层契约
 
-> Agent 注册清单：`.cursor/skills/application-layer/SKILL.md`（优先）  
+> Agent 注册清单：外层根仓 `../.agents/skills/application-layer/SKILL.md`（优先）
 > 真源：应用中心 Tab 顺序 **基础 → 专业 → 行业 → 定制**、manifest `market_category` / `is_dedicated` / `industry_extensions`  
 > 配套：`.custom/<客户>/` 实施文档（可写客户名）；产品代码与平台更新日志禁止客户公司名
 
@@ -68,12 +68,12 @@
 - 可声明 `industry_extensions`（与行业插件共用运行时）；侧栏走自有 `menu_config`，不挂行业包壳。
 - `hide_required_app_menus: true`：启用后按 `application_uuid` 抑制 `requires_apps`（含闭包）、`industry-pack`，以及同租户其它已安装业务应用整棵侧栏；系统应用与基础设施菜单除外。依赖宿主仍安装；**定制侧栏 `menu_config.path` 须落在 `/apps/{dedicated}/...`**，页文件在定制包内；**REST / 表 / 权限码仍走宿主**（定制页 import 宿主 service、`useResourcePermissions` 用宿主 resource）。未绑定定制的租户继续使用宿主页 URL。core 不写死客户应用名。
 
-## 仓库归属（部署）
+## 仓库归属（本私有 Fork 单仓布局）
 
-| 层 | 仓库 | 组装方式 |
-|---|---|---|
-| 基础 + 行业免费场景 | 主仓 `riveredge` | 随主仓发布 |
-| 专业 | 私仓 `kuaigeyun-pro` | `PRO_ENABLED=1` → compose |
-| 定制 | 私仓 `kuaigeyun-custom` | `CUSTOM_ENABLED=1` + **`CUSTOM_PROJECTS`**（见 `projects/registry.yaml`） |
+| 层 | 落点 | 说明 |
+| --- | --- | --- |
+| 基础 + 行业免费场景 | 本仓 `kuaigeyun-mes` | 随主仓维护与发布；行业包（`spoke-wheel`/`ind-*`）保持本仓免费口径 |
+| 专业（4 PRO） | 本仓 `kuaigeyun-mes` | `kuaiai` / `kuaireport` / `kuaiiot` / `kuaivision` 已收归主仓，**不再拆独立 `kuaigeyun-pro` 仓**，以 License / 应用中心门控 |
+| 客户定制域 | 不入主仓主线 | 客户专属应用（如 `haoligo`、`haolisales`、`funide_oa`）在 `.gitignore` 排除，不混入通用主线 |
 
-禁止将定制仓全量 compose 到所有客户环境。部署脚本只组装 `CUSTOM_PROJECTS` 列出的项目；租户侧可见性由 `core_application_dedicated_bindings` 另行控制。
+租户侧可见性仍由应用中心绑定与 `core_application_dedicated_bindings` 控制；基础应用代码严禁硬编码客户名或直接 `import` 行业/定制应用。

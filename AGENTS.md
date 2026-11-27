@@ -1,3 +1,9 @@
+# kuaigeyun-mes（StarTech MES 业务主仓）
+
+> **工作区入口硬约束**：本项目**必须从外层根仓打开**，禁止直接以 `kuaigeyun-mes/` 作为工作区根。全部项目红线、跨仓文档总索引与业务 `.cursor/rules/*.mdc` 统一由外层根仓维护，请先阅读 [../AGENTS.md](../AGENTS.md) 与 [../docs/00.doc-map.md](../docs/00.doc-map.md)。
+
+---
+
 <!-- aoci:begin -->
 ## AOCI 仓库认知
 

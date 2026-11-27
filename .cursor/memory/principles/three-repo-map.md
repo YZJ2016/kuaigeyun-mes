@@ -1,73 +1,58 @@
 ---
-title: 三仓职责与跨端功能落点
+title: 多仓拓扑与跨端功能落点（私有 Fork）
 slug: three-repo-map
 status: active
 domain: principle
-when: 跨 PC/移动/工位/Pro 包改功能、分不清真源在哪仓、要补跨端对照
+when: 跨 PC/移动/工位/PRO 应用改功能、分不清真源在哪仓、要补跨端对照
 keywords:
   - kuaigeyun-client
-  - kuaigeyun-pro
-  - 三仓
+  - kuaigeyun-mes
   - 跨端
-  - Junction
+  - 仓库拓扑
   - X-Client-Channel
-  - riveredge-app
-standard: 主仓记跨端总表；client/pro 薄入口指路；AOCI 分仓不合并
+  - kuaicaiwu
+standard: 业务代码单仓聚合在 kuaigeyun-mes；工程文档在外层 startech-mes；对照仓只读
 ---
 
-# 三仓职责与跨端功能落点
+# 多仓拓扑与跨端功能落点（私有 Fork）
 
-- 写入：2026-10-07
-- Vault 图谱：`E:\AI-Memory\30-Knowledge\MES-Codebase\architecture-map.md`
-- AOCI：三仓各自索引，互不合并；正式资产按 `principles/aoci-git-commit.md` 提交
-- AOCI MCP：单进程只能绑一个 `--repo`，本机须挂三个服务——`aoci`（主仓）、`aoci-client`、`aoci-pro`；配置见用户级 `~/.cursor/mcp.json` 与各仓 `.cursor/mcp.json`（均 gitignore）
+- 跨仓总纲：`../AGENTS.md`
+- 跨仓总索引：`../docs/00.doc-map.md`
+- 本地 AOCI：仅维护本仓 `kuaigeyun-mes/.aoci/`（不与外层只读 `../kuaigeyun-aoci/` 合并或覆盖）
 
-## 三仓职责
+## 仓库职责（本私有 Fork 真实布局）
 
-| 仓库 | 路径 | 职责 |
-|------|------|------|
-| 主仓 | `D:\kuaigeyun-pro\kuaigeyun` | FastAPI + PC Web；平台契约与跨端记忆枢纽（本目录） |
-| 终端私仓 | `D:\kuaigeyun-pro\kuaigeyun-client` | Mobile / Station / TV / 小程序真源 |
-| Pro 私仓 | `D:\kuaigeyun-pro\kuaigeyun-pro` | kuaiai / kuaiiot / kuaireport 等闭源包真源 |
+| 仓库 / 路径 | Git 角色 | 职责 |
+| --- | --- | --- |
+| 外层 `../`（`startech-mes`，`main`） | 项目总控与文档仓 | `AGENTS.md`、`docs/00.doc-map.md`、`docs/01..06/`（需求/设计/Spec/运维/上游同步台账）、`scripts/`（治理与上游同步脚本） |
+| 主仓 `kuaigeyun-mes/`（`develop`） | 唯一业务实现主仓 | `riveredge-backend/`（FastAPI）、`riveredge-frontend/`（PC Web）、`kuaigeyun-client/`（移动 uni-app x + 工位 Electron 壳）、本仓内 4 个 PRO（`kuaiai`/`kuaireport`/`kuaiiot`/`kuaivision`）与免费行业包 |
+| `../kuaigeyun-aoci/`（`develop`，只读） | 上游治理对照仓 | 对照上游 AOCI 意图与 `../kuaigeyun-aoci/.cursor/skills/`，禁止合入主仓 |
+| `../kuaigeyun-dist/`（`develop`，只读） | 上游前端产物对照仓 | 对照上游已发布前端界面，禁止用于本机部署或合入主仓 |
 
-### 真源与组装
+### 本地架构真源约定
 
-- 终端：主仓 `riveredge-app/{mobile,station,tv,mini-program}` 为 Junction → client；见 `features/riveredge-app-client-junctions.md`
-- Pro 包：真源在 `kuaigeyun-pro/{backend,frontend}/apps/<app>/`；组装进主仓 `riveredge-*/src/apps/<app>` 时被主仓 gitignore，改完必须回写 Pro
-- 禁止：在主仓再拷一份终端或 Pro 源码当第二真源
+- **单仓聚合**：`kuaigeyun-client/` 与 4 个 PRO 应用均直接由 `kuaigeyun-mes/` 跟踪，**不再使用上游的 Junction / 独立 client 仓 / 独立 pro 仓模式**。
+- **财务唯一权威**：`apps.kuaicaiwu` 为财务唯一权威，严禁引入上游平行 `apps.kuaizhizao.finance`。
+- **客户定制域**：`haoligo` / `haolisales` / `funide_oa` 等不入本仓主线，保持 `.gitignore` 排除。
 
-### 记忆怎么读
+## 跨端功能落点表（核心域）
 
-1. 跨端 / 分仓不清 → **本篇**
-2. 调用链与 D/E 边界 → Vault `architecture-map.md` + `principles/mes-vault-index.md`
-3. 单功能标准入口 → 主仓 `features/<slug>.md`（下表「记忆」列）
-4. client/pro 本仓独有坑 → 各仓 `.cursor/memory/`（薄入口，不复制主仓 features）
-
-## 功能落点表（首批）
-
-路径以 D 工作区为准。未核到的格填 `-`。交付触及多端时更新对应行或新开 feature 并链回本表。
-
-| 功能 | 主仓（API / PC） | client | pro | 渠道 / 权限要点 | 记忆 |
-|------|------------------|--------|-----|-----------------|------|
-| 点检/保养方案绑定执行 | BE：`EquipmentSchemeBinding`；点检无计划层（已拆除）；保养计划设备/类型/周期取自方案；PC 点检单+保养计划页 | mobile：`spot-check-conduct` / `maintenance-execution-conduct`；station：`EquipmentStatusPanel` + 点检/保养 Modal | - | `equipment-spot-check:create` / `maintenance-plan` 执行；渠道 pc/mobile/station | `features/equip-ops-scheme-bind-clients.md` + `maintenance-plan-scheme-bind.md` + `equipment-spot-check-plan.md`（已拆除） |
-| 工位 ST2 安全与报工 | BE：`/apps/kuaizhizao/station/...`；头 `X-Station-Operator`；交班摘要见 `features/station-shift-handover-summary.md` | `riveredge-app-station/`（IPC `station:apiFetch`、FaceEngine、SharedReport）；齐套缺料预警见 `features/station-shortage-andon-call.md` | - | 渠道 `station`；文档/打印走工位鉴权路径；报工 `device_info.workstation_id` | `features/station-st2-security-contract.md` |
-| 移动端 S2 门禁 | BE 对照：报工 `:assign`、仓储 `.../confirm`（勿在移动端另写闸门语义） | `riveredge-app-mobile/`（`useResourcePermissions`、`tokenRefresh`、mes/report） | - | 渠道 `android`/`ios`/`mobile_h5`/`miniprogram` | `features/mobile-v2-s2-contract-fixes.md` |
-| API 写防护 / 渠道头 | `interactive_client_guard`、`client_channel.py`；手册 `riveredge-backend/docs/api-write-protection-ops.md` | 各端写请求带 `X-Client-Channel` | 经主仓 API，同白名单 | `pc\|station\|android\|ios\|mobile_h5\|miniprogram\|integration` | `principles/api-write-protection.md` |
-| 快数采 kuaiiot | 组装态 `riveredge-*/src/apps/kuaiiot/`（gitignore）；单测可在主仓 `tests/apps/kuaiiot/` | - | `{backend,frontend}/apps/kuaiiot/` 真源 | 权限见前后端 `manifest.json`；MES 写回走 MesGuard | `features/kuaiiot-phased-hardening.md` |
-| 主仓↔client 组装 | `riveredge-app/`（gitignore）+ Junction | `riveredge-app-{mobile,station,tv,mini-program}/`（四端源码默认一并入库，见 client `client-terminals-checkin.mdc`） | - | 部署 H5 见 fast-deploy | `features/riveredge-app-client-junctions.md` |
-| 请假回写月度考勤 | 组装态 `kuaioa` `AttendanceService.apply_leave_to_attendance`；i18n/更新日志在主仓 | - | BE/FE 真源 `kuaigeyun-pro/.../kuaioa/`；haoligo 填报表真源 `kuaigeyun-custom/.../attendance/fill.tsx` | 请假模块审批/更新权限 | `features/leave-attendance-employee-match.md` |
-| 移动 H5 构建部署 | `fast-deploy/build.mobile.web.sh`、`deploy.sh install-h5` | 构建产物 `riveredge-app-mobile/web-dist`（默认不进主仓） | - | Caddy `/mobile` | `features/fast-deploy-scripts.md` |
+| 功能 | 后端 / PC Web（本仓） | 终端（本仓 `kuaigeyun-client/`） | 渠道 / 权限要点 | 记忆 |
+| --- | --- | --- | --- | --- |
+| 点检/保养方案绑定执行 | BE：`EquipmentSchemeBinding`；PC 点检单+保养计划页 | `riveredge-app-mobile/` 点检/保养执行；`riveredge-app-station/` 设备状态面板 | `equipment-spot-check:create` / `maintenance-plan`；渠道 pc/mobile/station | `features/equip-ops-scheme-bind-clients.md` + `maintenance-plan-scheme-bind.md` |
+| 工位 ST2 安全与报工 | BE：`/apps/kuaizhizao/station/...`；头 `X-Station-Operator` | `riveredge-app-station/`（Electron 壳，业务页仍在 `riveredge-frontend/`） | 渠道 `station`；报工 `device_info.workstation_id` | `features/station-st2-security-contract.md` |
+| 移动端 S2 门禁 | BE 对照：报工 `:assign`、仓储 `.../confirm` | `riveredge-app-mobile/`（uni-app x） | 渠道 `android`/`ios`/`mobile_h5`/`miniprogram` | `features/mobile-v2-s2-contract-fixes.md` |
+| API 写防护 / 渠道头 | `interactive_client_guard`、`client_channel.py`；手册 `riveredge-backend/docs/api-write-protection-ops.md` | 各端写请求带 `X-Client-Channel` | `pc\|station\|android\|ios\|mobile_h5\|miniprogram\|integration` | `principles/api-write-protection.md` |
+| 快数采 kuaiiot | 本仓 `riveredge-{backend,frontend}/src/apps/kuaiiot/`（已收归主仓） | - | 权限见前后端 `manifest.json`；MES 写回走 MesGuard | `features/kuaiiot-phased-hardening.md` |
 
 ## 交付时回写
 
-- **多端改动**（例如改 API 且改移动/工位/Pro）：更新本表对应行，或新增/更新主仓 feature 并在本表加链
-- **单端内部改动**：不必动本表
-- 规则全文：`.cursor/rules/feature-delivery-checklist.mdc` 第 6 节
+- **多端改动**（改 API 且改 `kuaigeyun-client/`）：更新本表对应行，或新增/更新 `features/<slug>.md` 并在本表加链。
+- **单端内部改动**：不必动本表。
 
 ## 关联
 
+- `../AGENTS.md`
+- `../docs/00.doc-map.md`
 - `principles/mes-vault-index.md`
-- `principles/aoci-git-commit.md`
-- `features/riveredge-app-client-junctions.md`
-- client：`D:\kuaigeyun-pro\kuaigeyun-client\.cursor\memory\README.md`
-- pro：`D:\kuaigeyun-pro\kuaigeyun-pro\.cursor\memory\README.md`
+- `../.cursor/rules/feature-delivery-checklist.mdc`
