@@ -1632,13 +1632,15 @@ async def _dispatch_other_income(
     reason: Optional[str],
     payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
+    from apps.kuaicaiwu.services.other_income_audit_service import OtherIncomeAuditService
     from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
-    svc = OtherIncomeService()
+    svc = OtherIncomeAuditService()
     if action == "submit":
+        return await svc.commit_income(tenant_id, entity_id, user_id)
+    if action == "submit_review":
         user_ids, by_node = parse_submit_approver_selection(payload)
-        return await svc.submit_income(
+        return await svc.submit_income_for_review(
             tenant_id,
             entity_id,
             user_id,
@@ -1647,20 +1649,20 @@ async def _dispatch_other_income(
         )
     if action == "approve":
         return await svc.approve_income(
-            tenant_id, entity_id, approved=True, operator_id=user_id
+            tenant_id, entity_id, user_id, approved=True
         )
     if action == "reject":
         return await svc.approve_income(
             tenant_id,
             entity_id,
+            user_id,
             approved=False,
-            operator_id=user_id,
             review_remarks=reason or "审批驳回",
         )
     if action == "withdraw":
-        return await svc.withdraw_income_submit(tenant_id, entity_id, user_id)
+        return await svc.withdraw_income(tenant_id, entity_id, user_id)
     if action == "revoke":
-        return await svc.revoke_income_approval(tenant_id, entity_id, user_id)
+        return await svc.revoke_income(tenant_id, entity_id, user_id)
     _unsupported("other_income", action)
 
 
@@ -1673,13 +1675,15 @@ async def _dispatch_other_expense(
     reason: Optional[str],
     payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
-    from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
+    from apps.kuaicaiwu.services.other_expense_audit_service import OtherExpenseAuditService
     from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
-    svc = OtherExpenseService()
+    svc = OtherExpenseAuditService()
     if action == "submit":
+        return await svc.commit_expense(tenant_id, entity_id, user_id)
+    if action == "submit_review":
         user_ids, by_node = parse_submit_approver_selection(payload)
-        return await svc.submit_expense(
+        return await svc.submit_expense_for_review(
             tenant_id,
             entity_id,
             user_id,
@@ -1688,10 +1692,55 @@ async def _dispatch_other_expense(
         )
     if action == "approve":
         return await svc.approve_expense(
-            tenant_id, entity_id, approved=True, operator_id=user_id
+            tenant_id, entity_id, user_id, approved=True
         )
     if action == "reject":
         return await svc.approve_expense(
+            tenant_id,
+            entity_id,
+            user_id,
+            approved=False,
+            review_remarks=reason or "审批驳回",
+        )
+    if action == "withdraw":
+        return await svc.withdraw_expense(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_expense(tenant_id, entity_id, user_id)
+    _unsupported("other_expense", action)
+
+
+async def _dispatch_other_expense_application(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
+) -> Any:
+    from apps.kuaicaiwu.services.other_expense_application_service import (
+        OtherExpenseApplicationService,
+    )
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
+
+    svc = OtherExpenseApplicationService()
+    if action == "submit":
+        return await svc.commit_application(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_application_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
+    if action == "approve":
+        return await svc.approve_application(
+            tenant_id, entity_id, approved=True, operator_id=user_id
+        )
+    if action == "reject":
+        return await svc.approve_application(
             tenant_id,
             entity_id,
             approved=False,
@@ -1699,10 +1748,10 @@ async def _dispatch_other_expense(
             review_remarks=reason or "审批驳回",
         )
     if action == "withdraw":
-        return await svc.withdraw_expense_submit(tenant_id, entity_id, user_id)
+        return await svc.withdraw_application_submit(tenant_id, entity_id, user_id)
     if action == "revoke":
-        return await svc.revoke_expense_approval(tenant_id, entity_id, user_id)
-    _unsupported("other_expense", action)
+        return await svc.revoke_application_approval(tenant_id, entity_id, user_id)
+    _unsupported("other_expense_application", action)
 
 
 async def _dispatch_fund_transfer(
@@ -2040,6 +2089,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "notes_receivable": _dispatch_notes_receivable,
     "notes_payable": _dispatch_notes_payable,
     "other_expense": _dispatch_other_expense,
+    "other_expense_application": _dispatch_other_expense_application,
     "fund_transfer": _dispatch_fund_transfer,
     "partner_statement": _dispatch_partner_statement,
     "kuaioa_form_request": _dispatch_kuaioa_form_request,

@@ -40,7 +40,12 @@ def _skip_finance_source_idempotency(source_type: Optional[str], source_id: Opti
 
 from apps.kuaicaiwu.schemas.finance import (
     PayableCreate, PayableUpdate, PayableResponse, PayableListResponse,
-    PurchaseInvoiceCreate, PurchaseInvoiceUpdate, PurchaseInvoiceResponse, PurchaseInvoiceListResponse,
+    PurchaseInvoiceCreate,
+    PurchaseInvoiceUpdate,
+    PurchaseInvoiceResponse,
+    PurchaseInvoiceDetailResponse,
+    PurchaseInvoiceLineResponse,
+    PurchaseInvoiceListResponse,
     ReceivableCreate, ReceivableUpdate, ReceivableResponse, ReceivableListResponse,
     PaymentRecordCreate, ReceiptRecordCreate,
 )
@@ -749,10 +754,19 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             payload["discount_amount"] = Decimal(str(payload.get("discount_amount") or 0))
             if not getattr(invoice_data, "adjust_payable", False):
                 payload["adjust_payable"] = False
-            from apps.kuaicaiwu.services.tax.purchase_invoice_tax_service import PurchaseInvoiceTaxService
+            lpm = str(payload.get("ledger_posting_mode") or "").strip()
+            if lpm:
+                if lpm not in ("immediate", "by_invoice"):
+                    raise ValidationError("立账方式须为 immediate 或 by_invoice")
+                payload["ledger_posting_mode"] = lpm
+            else:
+                payload.pop("ledger_posting_mode", None)
+            from apps.kuaicaiwu.services.purchase_invoice_create_tax_fields import (
+                purchase_invoice_default_tax_fields,
+            )
 
-            tax_fields = await PurchaseInvoiceTaxService().apply_tax_fields_on_create(
-                tenant_id, payload["invoice_date"]
+            tax_fields = await purchase_invoice_default_tax_fields(
+                tenant_id, payload["invoice_date"], created_by=created_by
             )
             payload.update(tax_fields)
 
@@ -859,8 +873,12 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             )
         return await self.get_purchase_invoice_by_id(tenant_id, int(created_id))
 
-    async def get_purchase_invoice_by_id(self, tenant_id: int, invoice_id: int) -> PurchaseInvoiceResponse:
+    async def get_purchase_invoice_by_id(
+        self, tenant_id: int, invoice_id: int, *, viewer_id: Optional[int] = None
+    ) -> PurchaseInvoiceDetailResponse:
         """根据ID获取采购发票"""
+        from apps.kuaicaiwu.models.purchase_invoice_item import PurchaseInvoiceItem
+
         invoice = await PurchaseInvoice.get_or_none(
             tenant_id=tenant_id, id=invoice_id, deleted_at__isnull=True
         )
@@ -869,7 +887,16 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         resp = PurchaseInvoiceResponse.model_validate(invoice)
         from core.services.approval.audit_record_enricher import enrich_record
 
-        return await enrich_record(tenant_id, "purchase_invoice", resp)
+        enriched = await enrich_record(
+            tenant_id, "purchase_invoice", resp, viewer_id=viewer_id
+        )
+        line_rows = await PurchaseInvoiceItem.filter(
+            tenant_id=tenant_id,
+            purchase_invoice_id=int(invoice_id),
+            deleted_at__isnull=True,
+        ).order_by("id").all()
+        items = [PurchaseInvoiceLineResponse.model_validate(row) for row in line_rows]
+        return PurchaseInvoiceDetailResponse(**enriched.model_dump(), items=items)
 
     async def delete_purchase_invoice(self, tenant_id: int, invoice_id: int) -> None:
         """
@@ -969,6 +996,23 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 PurchaseReceiptLineFinanceOccupancyService,
             )
 
+            inv_items = await PurchaseInvoiceItem.filter(
+                tenant_id=tenant_id,
+                purchase_invoice_id=invoice_id,
+                deleted_at__isnull=True,
+            ).all()
+            affected_receipt_ids = {
+                int(r.source_doc_id)
+                for r in inv_items
+                if str(r.source_doc_type or "").strip() == "purchase_receipt"
+                and int(r.source_doc_id or 0) > 0
+            }
+            affected_batch_ids = {
+                int(r.source_doc_id or r.source_line_id or 0)
+                for r in inv_items
+                if str(r.source_doc_type or "").strip() == "outsource_order_receipt"
+                and int(r.source_doc_id or r.source_line_id or 0) > 0
+            }
             now_dt = resolve_business_datetime()
             await PurchaseInvoiceItem.filter(
                 tenant_id=tenant_id,
@@ -981,6 +1025,20 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
                 deleted_at=now_dt
             )
+            if affected_receipt_ids or affected_batch_ids:
+                from apps.kuaicaiwu.services.purchase_invoice_detail_post_approve import (
+                    refresh_outsource_order_receipt_invoice_receipt_complete,
+                    refresh_purchase_receipt_items_invoice_receipt_complete,
+                )
+
+                for rid in affected_receipt_ids:
+                    await refresh_purchase_receipt_items_invoice_receipt_complete(
+                        tenant_id, rid
+                    )
+                for bid in affected_batch_ids:
+                    await refresh_outsource_order_receipt_invoice_receipt_complete(
+                        tenant_id, bid
+                    )
 
     async def list_purchase_invoices(
         self, tenant_id: int, skip: int = 0, limit: int = 20, **filters

@@ -7,7 +7,6 @@ import type { ColumnsType } from 'antd/es/table';
 import type { TFunction } from 'i18next';
 import { formatCurrencyAmount, formatCurrencyPrice, formatQuantity } from '../../../../../utils/format';
 import { purchaseReceiptDetailUnitPriceIncl } from '../../purchase-management/shared/purchaseOrderAmounts';
-import { readPurchaseReceiptDetailLineAmounts } from './purchaseReceiptWarehouseAmounts';
 import {
   buildDocumentLineAttachmentsDrawerColumn,
   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
@@ -92,15 +91,18 @@ export type BuildInboundHubDetailLineColumnsOptions = {
   showAmount: boolean;
   /** 字段权限资源键；默认 kuaizhizao:inbound */
   fieldResource?: string;
-  /** 采购入库详情：行价税拆分与头表税率回退 */
-  purchaseHeaderTaxRate?: number | null;
   renderUnitCell: (row: InboundHubDetailLineRow) => ReactNode;
   renderLineQuantity?: (qty: unknown, unit?: string) => React.ReactNode;
 };
 
+function formatStoredLineMoney(raw: unknown): string {
+  if (raw == null || raw === '') return '—';
+  const amount = Number(raw);
+  return Number.isFinite(amount) ? formatCurrencyAmount(amount) : '—';
+}
+
 export function buildPurchaseReceiptDetailFinanceColumns(
   t: TFunction,
-  headerTaxRate?: number | null,
 ): ColumnsType<InboundHubDetailLineRow> {
   return [
     {
@@ -119,11 +121,9 @@ export function buildPurchaseReceiptDetailFinanceColumns(
       width: 72,
       align: 'right' as const,
       render: (_: unknown, row) => {
-        const amounts = readPurchaseReceiptDetailLineAmounts(row, headerTaxRate);
-        const taxPct =
-          amounts?.taxPct ??
-          (row.tax_rate != null && Number(row.tax_rate) > 0 ? Number(row.tax_rate) : 0);
-        return taxPct > 0 ? `${taxPct}%` : '—';
+        if (row.tax_rate == null || row.tax_rate === '') return '—';
+        const taxPct = Number(row.tax_rate);
+        return Number.isFinite(taxPct) ? `${taxPct}%` : '—';
       },
     },
     {
@@ -131,34 +131,21 @@ export function buildPurchaseReceiptDetailFinanceColumns(
       key: 'purchase_line_excl',
       width: 112,
       align: 'right' as const,
-      render: (_: unknown, row) => {
-        const amounts = readPurchaseReceiptDetailLineAmounts(row, headerTaxRate);
-        return amounts != null && amounts.excl > 0 ? formatCurrencyAmount(amounts.excl) : '—';
-      },
+      render: (_: unknown, row) => formatStoredLineMoney(row.total_amount),
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.taxAmount'),
       key: 'purchase_line_tax',
       width: 104,
       align: 'right' as const,
-      render: (_: unknown, row) => {
-        const amounts = readPurchaseReceiptDetailLineAmounts(row, headerTaxRate);
-        return amounts != null && (amounts.excl > 0 || amounts.tax > 0)
-          ? formatCurrencyAmount(amounts.tax)
-          : '—';
-      },
+      render: (_: unknown, row) => formatStoredLineMoney(row.tax_amount),
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.inclTotal'),
       key: 'purchase_line_incl',
       width: 112,
       align: 'right' as const,
-      render: (_: unknown, row) => {
-        const amounts = readPurchaseReceiptDetailLineAmounts(row, headerTaxRate);
-        return amounts != null && (amounts.excl > 0 || amounts.incl > 0)
-          ? formatCurrencyAmount(amounts.incl)
-          : '—';
-      },
+      render: (_: unknown, row) => formatStoredLineMoney(row.net_amount),
     },
   ];
 }
@@ -203,7 +190,6 @@ export function buildInboundHubDetailLineColumns(
     receiptType,
     trackingFlags,
     showAmount,
-    purchaseHeaderTaxRate,
     renderUnitCell,
     renderLineQuantity,
     fieldResource = KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
@@ -259,7 +245,7 @@ export function buildInboundHubDetailLineColumns(
           width: 72,
           render: (_: unknown, row) => renderUnitCell(row),
         },
-        ...buildPurchaseReceiptDetailFinanceColumns(t, purchaseHeaderTaxRate),
+        ...buildPurchaseReceiptDetailFinanceColumns(t),
         buildDocumentLineAttachmentsDrawerColumn(
           t,
           DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseReceipt,

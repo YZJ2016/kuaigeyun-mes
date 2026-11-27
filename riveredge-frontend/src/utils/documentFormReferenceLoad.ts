@@ -32,6 +32,7 @@ export const KUAIZHIZAO_DOC_HOST = {
   paymentApplication: 'kuaizhizao:payment-application',
   otherIncome: 'kuaicaiwu:other-income',
   otherExpense: 'kuaicaiwu:other-expense',
+  otherExpenseApplication: 'kuaicaiwu:other-expense-application',
   purchaseReturn: 'kuaizhizao:purchase-return',
   receiptNotice: 'kuaizhizao:receipt-notice',
   purchaseInquiry: 'kuaizhizao:purchase-inquiry',

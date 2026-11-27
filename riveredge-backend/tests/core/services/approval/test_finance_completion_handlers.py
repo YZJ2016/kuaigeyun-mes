@@ -25,6 +25,8 @@ def test_completion_handlers_cover_writeback_dependent_entities():
     assert '"payment_application": _handle_payment_application' in text
     assert '"other_income": _handle_other_income' in text
     assert '"other_expense": _handle_other_expense' in text
+    assert '"other_expense_application": _handle_other_expense_application' in text
     assert "PaymentApplicationService" in text
-    assert "OtherIncomeService" in text
-    assert "OtherExpenseService" in text
+    assert "OtherIncomeAuditService" in text
+    assert "OtherExpenseAuditService" in text
+    assert "OtherExpenseApplicationService" in text

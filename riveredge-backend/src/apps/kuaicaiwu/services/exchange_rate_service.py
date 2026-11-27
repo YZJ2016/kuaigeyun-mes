@@ -11,7 +11,7 @@ import httpx
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaicaiwu.models.gl_exchange_rate import GlExchangeRate
-from apps.kuaicaiwu.services.gl.settings_service import GlSettingsService
+from apps.kuaicaiwu.utils.base_currency import read_tenant_base_currency
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.http import get_http_client
@@ -56,8 +56,8 @@ class ExchangeRateService:
         return value
 
     async def _base_currency(self, tenant_id: int) -> str:
-        settings = await GlSettingsService().get_or_create(tenant_id)
-        return self._normalize_currency(settings.base_currency or "CNY")
+        raw = await read_tenant_base_currency(tenant_id, default="CNY")
+        return self._normalize_currency(raw)
 
     def _site_today(self) -> date:
         return to_site_date(resolve_business_datetime())

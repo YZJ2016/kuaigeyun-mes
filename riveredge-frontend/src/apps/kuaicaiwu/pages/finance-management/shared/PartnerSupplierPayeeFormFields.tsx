@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Form } from 'antd';
 import { ProFormText } from '@ant-design/pro-components';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
@@ -17,7 +17,7 @@ export type PartnerSupplierPayeeFormFieldsProps = {
   supplierFieldName: string;
   partnerSide?: 'supplier' | 'customer';
   counterpartyKindFieldName?: string;
-  allowedCounterpartyKinds?: string[];
+  allowedCounterpartyKinds?: readonly string[];
   accountNameField: string;
   bankNameField: string;
   bankAccountField: string;
@@ -30,13 +30,20 @@ export type PartnerSupplierPayeeFormFieldsProps = {
   labelAccountName?: string;
   labelBankName?: string;
   labelBankAccount?: string;
+  /** 宿主 resource，用于按 id 解析供应商 uuid 并拉收款账户 */
+  hostResource?: string;
+  required?: boolean;
 };
+
+const DEFAULT_ALLOWED_COUNTERPARTY_KINDS: readonly string[] = ['supplier'];
+
+const DEFAULT_PAYEE_HOST_RESOURCE = 'kuaicaiwu:payment';
 
 export function PartnerSupplierPayeeFormFields({
   supplierFieldName,
   partnerSide = 'supplier',
   counterpartyKindFieldName,
-  allowedCounterpartyKinds = ['supplier'],
+  allowedCounterpartyKinds = DEFAULT_ALLOWED_COUNTERPARTY_KINDS,
   accountNameField,
   bankNameField,
   bankAccountField,
@@ -45,8 +52,14 @@ export function PartnerSupplierPayeeFormFields({
   labelAccountEmpty,
   labelAccountNeedSupplier,
   labelAccountDefaultMark,
+  hostResource = DEFAULT_PAYEE_HOST_RESOURCE,
+  required = false,
 }: PartnerSupplierPayeeFormFieldsProps) {
   const form = Form.useFormInstance();
+  const allowedKindsKey = useMemo(
+    () => allowedCounterpartyKinds.join('\0'),
+    [allowedCounterpartyKinds],
+  );
   const counterpartyId = Form.useWatch(supplierFieldName, form);
   const counterpartyKind = counterpartyKindFieldName
     ? Form.useWatch(counterpartyKindFieldName, form)
@@ -80,7 +93,7 @@ export function PartnerSupplierPayeeFormFields({
         ? () => loadEmployeePayeeAccountsById(id)
         : partnerSide === 'customer'
           ? () => loadCustomerPayeeAccountsById(id)
-          : () => loadSupplierPayeeAccountsById(id);
+          : () => loadSupplierPayeeAccountsById(id, hostResource);
     loadAccounts()
       .then(({ found, accounts: rows }) => {
         if (cancelled) return;
@@ -128,11 +141,11 @@ export function PartnerSupplierPayeeFormFields({
     accountNameField,
     bankAccountField,
     bankNameField,
-    form,
-    allowedCounterpartyKinds,
+    allowedKindsKey,
     counterpartyId,
     counterpartyKind,
     counterpartyKindFieldName,
+    hostResource,
     partnerSide,
     supplierFieldName,
   ]);
@@ -165,8 +178,24 @@ export function PartnerSupplierPayeeFormFields({
     <>
       <ProFormText name={accountNameField} hidden />
       <ProFormText name={bankNameField} hidden />
-      <ProFormText name={bankAccountField} hidden />
-      <Form.Item label={labelAccountPick}>
+      <Form.Item
+        name={bankAccountField}
+        label={labelAccountPick}
+        required={required}
+        getValueProps={() => ({ value: matchedIndex >= 0 ? matchedIndex : undefined })}
+        getValueFromEvent={(value) =>
+          value == null ? undefined : accounts[Number(value)]?.bankAccount || undefined
+        }
+        rules={required ? [{
+          validator: async () => {
+            if (![accountNameField, bankNameField, bankAccountField].every(
+              (field) => String(form.getFieldValue(field) ?? '').trim(),
+            )) {
+              throw new Error(labelAccountPickPlaceholder);
+            }
+          },
+        }] : undefined}
+      >
         <UniDropdown
           allowClear
           showSearch

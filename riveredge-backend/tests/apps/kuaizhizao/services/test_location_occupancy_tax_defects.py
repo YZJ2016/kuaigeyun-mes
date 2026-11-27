@@ -687,6 +687,9 @@ async def test_semi_finished_withdraw_without_location_does_not_touch_other_bins
 
 
 class _ItemQuery:
+    def select_for_update(self):
+        return self
+
     def order_by(self, *_args):
         return self
 

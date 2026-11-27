@@ -9,6 +9,9 @@ export const financeFormGridProps = {
 export const financeColHalf = { span: 12 };
 export const financeColFull = { span: 24 };
 
+/** 财务取单预览表头：宽 Modal 下一行五列（24 栅格每列 span 4） */
+export const financeColFifth = { xs: 24, sm: 12, md: 8, lg: 6, xl: { flex: '0 0 20%', maxWidth: '20%' } };
+
 /**
  * 金额录入：用 ProFormDigit，勿用 ProFormMoney。
  * ProFormMoney 的 formatter 在输入末尾小数点时会剥掉「.」，导致无法输入小数。

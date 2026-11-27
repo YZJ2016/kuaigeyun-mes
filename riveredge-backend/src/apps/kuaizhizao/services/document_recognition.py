@@ -125,6 +125,16 @@ def should_auto_payable_on_purchase_invoice(strategy: str) -> bool:
     return coerce_payable_recognition(strategy) == "on_purchase_invoice"
 
 
+def ledger_posting_mode_from_payable_recognition(strategy: str) -> str:
+    """Excel 立账方式：按票立账 → by_invoice，其余视为已立账 immediate。"""
+    return "by_invoice" if coerce_payable_recognition(strategy) == "on_purchase_invoice" else "immediate"
+
+
+def ledger_posting_mode_from_revenue_recognition(strategy: str) -> str:
+    """销项对称：按发票确认收入 → by_invoice，其余 immediate。"""
+    return "by_invoice" if coerce_revenue_recognition(strategy) == "on_invoice" else "immediate"
+
+
 def should_auto_payable_on_purchase_return(strategy: str) -> bool:
     s = coerce_payable_recognition(strategy)
     return s not in ("manual", "on_partner_statement")

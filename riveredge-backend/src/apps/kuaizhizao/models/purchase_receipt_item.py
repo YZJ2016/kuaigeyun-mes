@@ -62,6 +62,10 @@ class PurchaseReceiptItem(
         null=True,
         description="行价税合计（财务 rollup 写回）",
     )
+    invoice_receipt_complete = fields.BooleanField(
+        default=False,
+        description="收票结束：该行可收票价税已全部占用，明细取单过滤",
+    )
     tax_rate = fields.DecimalField(
         max_digits=5,
         decimal_places=2,

@@ -24,15 +24,10 @@ async def assert_invoice_settlement_mode_allowed(
     tenant_id: int,
     requested: Optional[str],
 ) -> str:
-    """返回租户锁定粒度；客户端传入不一致时拒绝。"""
-    allowed = await get_tenant_invoice_settlement_mode(tenant_id)
+    """汇总/明细发票分菜单开立；显式传入粒度时以请求为准，未传则用系统参数默认。"""
     if requested is None:
-        return allowed
-    mode = normalize_settlement_mode(requested)
-    if mode != allowed:
-        label = "明细发票" if allowed == SETTLEMENT_MODE_DETAIL else "汇总发票"
-        raise ValidationError(f"本组织系统参数已锁定为{label}模式，不可使用另一种开立粒度")
-    return allowed
+        return await get_tenant_invoice_settlement_mode(tenant_id)
+    return normalize_settlement_mode(requested)
 
 
 async def validate_invoice_settlement_mode_change(tenant_id: int, new_mode: str) -> None:

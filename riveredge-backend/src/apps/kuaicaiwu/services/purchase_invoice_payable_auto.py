@@ -223,6 +223,16 @@ async def ensure_payable_after_purchase_invoice_approved(
     if not invoice:
         return None
 
+    from apps.kuaicaiwu.services.purchase_invoice_detail_post_approve import (
+        finalize_detail_purchase_invoice_after_approve,
+    )
+
+    await finalize_detail_purchase_invoice_after_approve(
+        tenant_id=tenant_id,
+        invoice_id=invoice_id,
+        user_id=user_id,
+    )
+
     auto_id, _ = await maybe_auto_generate_payable_for_purchase_invoice(
         tenant_id=tenant_id,
         invoice=invoice,

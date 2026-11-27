@@ -35,10 +35,21 @@ BYPASS_SETTLEMENT_IMPORT = re.compile(
 )
 
 CANONICAL_AMOUNT_FILE = "purchase-management/shared/purchaseOrderAmounts.ts"
+CANONICAL_LINE_AMOUNTS = "utils/documentLineAmounts.ts"
 CANONICAL_TEST = "purchaseOrderAmounts.test.ts"
 
 ALLOW_ITEM_AMOUNT_LINE = re.compile(
     r"purchaseStoredExclAsFormItemAmount|itemAmount\s*!=\s*null\s*\?\s*\{\s*item_amount",
+)
+
+BANNED_RECEIPT_HEADER_READ = re.compile(
+    r"\b(?:readPurchaseReceiptHeaderInclAmount|readPurchaseReceiptDetailLineAmounts)\b"
+)
+
+WAREHOUSE_RECEIPT_FORM_ONLY = "warehouse-management/inbound/PurchaseReceiptCreateModal.tsx"
+
+WAREHOUSE_READONLY_SETTLEMENT = re.compile(
+    r"\b(?:readPurchaseReceiptDetailLineAmounts|computePurchaseReceiptLineSettlementAmounts|computePurchaseReceiptFormLineAmounts)\b"
 )
 
 
@@ -73,8 +84,23 @@ def scan_file(path: Path) -> list[Finding]:
     r = rel(path)
     findings: list[Finding] = []
 
-    if CANONICAL_AMOUNT_FILE in r.replace("\\", "/"):
-        return []
+    r_norm = r.replace("\\", "/")
+
+    if CANONICAL_AMOUNT_FILE in r_norm and "function resolvePurchaseReceiptDisplayAmount" in text:
+        fn_block = text.split("function resolvePurchaseReceiptDisplayAmount", 1)[-1].split("\n\n", 1)[0]
+        if re.search(r"\bsettlement_gross\b", fn_block):
+            findings.append(
+                Finding(
+                    "high",
+                    "canonical_resolve_purchase_receipt_no_settlement_gross",
+                    r,
+                    1,
+                    "resolvePurchaseReceiptDisplayAmount 禁止读 settlement_gross",
+                )
+            )
+
+    if CANONICAL_AMOUNT_FILE in r_norm or CANONICAL_LINE_AMOUNTS in r_norm:
+        return findings
 
     for i, raw_line in enumerate(text.splitlines(), 1):
         line = raw_line.strip()
@@ -122,6 +148,31 @@ def scan_file(path: Path) -> list[Finding]:
                     r,
                     1,
                     "入库页须使用 computePurchaseReceiptLineSettlementAmounts，禁止直调 resolvePurchaseReceiptLineAmounts",
+                )
+            )
+
+    if BANNED_RECEIPT_HEADER_READ.search(text):
+        findings.append(
+            Finding(
+                "high",
+                "banned_purchase_receipt_header_recompute",
+                r,
+                1,
+                "禁止 readPurchaseReceiptHeaderInclAmount / readPurchaseReceiptDetailLineAmounts",
+            )
+        )
+
+    if "warehouse-management/" in r and WAREHOUSE_RECEIPT_FORM_ONLY not in r:
+        if WAREHOUSE_READONLY_SETTLEMENT.search(text):
+            m = WAREHOUSE_READONLY_SETTLEMENT.search(text)
+            line_no = text[: m.start()].count("\n") + 1 if m else 1
+            findings.append(
+                Finding(
+                    "high",
+                    "warehouse_readonly_no_receipt_settlement_recompute",
+                    r,
+                    line_no,
+                    "仓储只读展示只读库字段；行价税重算仅限 PurchaseReceiptCreateModal",
                 )
             )
 

@@ -14,6 +14,8 @@ const FALLBACK: Record<string, string> = {
   'purchase_invoice.pull_from_payable.purchase_return_offset': '采购退货冲减应付不可开蓝字采购发票',
   'purchase_invoice.pull_from_payable.no_lines': '应付单无可开票金额',
   'purchase_invoice.pull_from_payable.already_pulled': '应付单可开票金额已全部开票，删除未审核发票后可再次加载',
+  'purchase_invoice.pull_from_payable.partner_statement_source':
+    '来源为往来对账单的应付须在往来对账单页面创建采购发票',
 };
 
 export const payableCapabilityReasonMessage = (reason: string | undefined | null, t: TFunction): string => {

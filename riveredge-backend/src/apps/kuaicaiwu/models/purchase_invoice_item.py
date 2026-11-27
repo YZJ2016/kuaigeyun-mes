@@ -26,6 +26,7 @@ class PurchaseInvoiceItem(BaseModel):
     source_doc_id = fields.IntField(null=True, description="源单ID")
     source_line_id = fields.IntField(null=True, description="源单物料行ID")
     partner_statement_line_id = fields.IntField(null=True, description="对账单行ID")
+    invoice_number = fields.CharField(max_length=100, null=True, description="行级发票号码")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

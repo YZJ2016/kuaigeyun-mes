@@ -357,6 +357,7 @@ async def test_sales_invoice_detail_hides_line_amounts():
         amount=Decimal("25.00"),
         tax_rate=Decimal("13"),
         tax_amount=Decimal("3.25"),
+        invoice_number=None,
     )
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     obj = SimpleNamespace(

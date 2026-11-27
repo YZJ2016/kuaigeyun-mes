@@ -24,8 +24,14 @@ const PayableListPage = lazy(() => import('./pages/finance-management/payables')
 const PayableDetailPage = lazy(() => import('./pages/finance-management/payables/detail'));
 const PurchaseInvoiceListPage = lazy(() => import('./pages/finance-management/purchase-invoices'));
 const PurchaseInvoiceDetailPage = lazy(() => import('./pages/finance-management/purchase-invoices/detail'));
+const PurchaseDetailInvoiceListPage = lazy(
+  () => import('./pages/finance-management/purchase-detail-invoices'),
+);
 const SalesInvoicesPage = lazy(() => import('./pages/finance-management/sales-invoices'));
 const SalesInvoiceDetailPage = lazy(() => import('./pages/finance-management/sales-invoices/detail'));
+const SalesDetailInvoiceListPage = lazy(
+  () => import('./pages/finance-management/sales-detail-invoices'),
+);
 const ReceiptsPage = lazy(() => import('./pages/finance-management/receipts'));
 const ReceiptRefundsPage = lazy(() => import('./pages/finance-management/receipt-refunds'));
 const PaymentsPage = lazy(() => import('./pages/finance-management/payments'));
@@ -54,6 +60,9 @@ const NotesPayablePage = lazy(() => import('./pages/finance-management/notes-pay
 const PrepaymentsPage = lazy(() => import('./pages/finance-management/prepayments'));
 const OtherIncomesPage = lazy(() => import('./pages/finance-management/other-incomes'));
 const OtherExpensesPage = lazy(() => import('./pages/finance-management/other-expenses'));
+const OtherExpenseApplicationsPage = lazy(
+  () => import('./pages/finance-management/other-expense-applications'),
+);
 const FinanceMiscCategoriesPage = lazy(
   () => import('./pages/finance-management/finance-misc-categories'),
 );
@@ -97,8 +106,12 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/payables/:id" element={withPageSuspense(PayableDetailPage)} />
       <Route path="finance-management/purchase-invoices" element={withPageSuspense(PurchaseInvoiceListPage)} />
       <Route path="finance-management/purchase-invoices/:id" element={withPageSuspense(PurchaseInvoiceDetailPage)} />
+      <Route path="finance-management/purchase-detail-invoices" element={withPageSuspense(PurchaseDetailInvoiceListPage)} />
+      <Route path="finance-management/purchase-detail-invoices/:id" element={withPageSuspense(PurchaseInvoiceDetailPage)} />
       <Route path="finance-management/sales-invoices" element={withPageSuspense(SalesInvoicesPage)} />
       <Route path="finance-management/sales-invoices/:id" element={withPageSuspense(SalesInvoiceDetailPage)} />
+      <Route path="finance-management/sales-detail-invoices" element={withPageSuspense(SalesDetailInvoiceListPage)} />
+      <Route path="finance-management/sales-detail-invoices/:id" element={withPageSuspense(SalesInvoiceDetailPage)} />
       <Route path="finance-management/receipts" element={withPageSuspense(ReceiptsPage)} />
       <Route path="finance-management/receipt-refunds" element={withPageSuspense(ReceiptRefundsPage)} />
       <Route path="finance-management/payments" element={withPageSuspense(PaymentsPage)} />
@@ -119,6 +132,10 @@ const KuaicaiwuApp: React.FC = () => {
       <Route path="finance-management/prepayments" element={withPageSuspense(PrepaymentsPage)} />
       <Route path="finance-management/other-incomes" element={withPageSuspense(OtherIncomesPage)} />
       <Route path="finance-management/other-expenses" element={withPageSuspense(OtherExpensesPage)} />
+      <Route
+        path="finance-management/other-expense-applications"
+        element={withPageSuspense(OtherExpenseApplicationsPage)}
+      />
       <Route
         path="finance-management/finance-misc-categories"
         element={withPageSuspense(FinanceMiscCategoriesPage)}

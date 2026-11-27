@@ -21,6 +21,9 @@ const STAGE_NAME_KEYS: Record<string, string> = {
   已红冲: `${FL}.redFlushed`,
   未审核: `${FL}.notReviewed`,
   草稿: `${FL}.voucherDraft`,
+  待确认: `${FL}.voucherAwaitingConfirm`,
+  SUBMITTED: 'common.submitted',
+  已提交: 'common.submitted',
   已确认: `${FL}.voucherConfirmed`,
   已认证: `${FL}.verified`,
 };
@@ -305,7 +308,7 @@ export function getChineseInvoiceLifecycle(
         status: 'exception',
         subStages: [
           { key: 'rv', label: '审核', status: 'done' },
-          { key: 'inv', label: '发票', status: 'exception' },
+          { key: 'inv', label: '发票', status: 'exception' as SubStage['status'] },
         ],
       },
       t,
@@ -347,8 +350,13 @@ export function getChineseInvoiceLifecycle(
     );
   }
 
+  const reviewRaw = String(record.review_status ?? '').trim();
   const subStages: SubStage[] = [
-    { key: 'rv', label: '审核', status: reviewPending ? 'active' : 'done' },
+    {
+      key: 'rv',
+      label: '审核',
+      status: reviewDone ? 'done' : reviewPending ? 'active' : 'pending',
+    },
     { key: 'inv', label: '发票', status: 'pending' },
   ];
 
@@ -356,8 +364,12 @@ export function getChineseInvoiceLifecycle(
     return translateResult({ percent: 25, stageName: '待审核', status: 'normal', subStages }, t, subKeys);
   }
   if (!reviewDone) {
+    const draftOrSubmitted =
+      reviewRaw === 'SUBMITTED' || reviewRaw === '已提交'
+        ? 'SUBMITTED'
+        : reviewRaw || '草稿';
     return translateResult(
-      { percent: 40, stageName: String(record.review_status ?? '-'), status: 'normal', subStages },
+      { percent: 15, stageName: draftOrSubmitted, status: 'normal', subStages },
       t,
       subKeys,
     );
@@ -391,6 +403,25 @@ export function getUnifiedInvoiceLifecycle(
   return stageNameKey ? { ...result, stageName: t(stageNameKey) } : result;
 }
 
+const _VOUCHER_REVIEW_APPROVED = new Set([
+  'approved',
+  '已审核',
+  '审核通过',
+  '已通过',
+  '通过',
+]);
+
+function financeVoucherReviewApproved(record: Record<string, unknown>): boolean {
+  const phase = String(
+    (record.audit as { phase?: string } | undefined)?.phase ?? '',
+  )
+    .trim()
+    .toLowerCase();
+  if (phase === 'approved') return true;
+  const review = String(record.review_status ?? '').trim();
+  return _VOUCHER_REVIEW_APPROVED.has(review) || _VOUCHER_REVIEW_APPROVED.has(review.toLowerCase());
+}
+
 /** 收款单/付款单 Draft / Confirmed / Cancelled */
 export function getFinanceVoucherLifecycle(
   record: Record<string, unknown>,
@@ -399,6 +430,7 @@ export function getFinanceVoucherLifecycle(
   const s = String(record.status ?? '');
   const stageKeys = {
     draft: `${FL}.voucherDraft`,
+    awaitingConfirm: `${FL}.voucherAwaitingConfirm`,
     confirmed: `${FL}.voucherConfirmed`,
     voided: `${FL}.voided`,
   };
@@ -419,6 +451,23 @@ export function getFinanceVoucherLifecycle(
     );
   }
   if (s === 'Draft') {
+    // 审核已通过、尚未确认过账：执行态展示「待确认」（非待核销；核销在确认之后）
+    if (financeVoucherReviewApproved(record)) {
+      return translateResult(
+        {
+          percent: 70,
+          stageName: '待确认',
+          status: 'normal',
+          mainStages: [
+            { key: 'draft', label: '草稿', status: 'done' },
+            { key: 'awaitingConfirm', label: '待确认', status: 'active' },
+            { key: 'confirmed', label: '已确认', status: 'pending' },
+          ],
+        },
+        t,
+        stageKeys,
+      );
+    }
     return translateResult(
       {
         percent: 35,

@@ -15,6 +15,7 @@ from core.schemas.base import BaseSchema
 from apps.kuaicaiwu.constants.finance_source_types import (
     PAYABLE_SOURCE_PRICE_SETTLEMENT,
     PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT,
+    PAYABLE_SOURCE_PURCHASE_INVOICE_PRICE_ADJUST,
     PAYABLE_SOURCE_PURCHASE_RETURN,
     is_payable_red_total_source,
     payable_total_must_be_negative,
@@ -60,7 +61,11 @@ class PayableBase(BaseSchema):
                 if src == PAYABLE_SOURCE_PURCHASE_RETURN:
                     raise ValueError("采购退货红字应付金额须为负数")
                 raise ValueError("红字应付金额须为负数")
-        elif src in (PAYABLE_SOURCE_PRICE_SETTLEMENT, PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT):
+        elif src in (
+            PAYABLE_SOURCE_PRICE_SETTLEMENT,
+            PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT,
+            PAYABLE_SOURCE_PURCHASE_INVOICE_PRICE_ADJUST,
+        ):
             if amt == 0:
                 raise ValueError("应付金额不能为 0")
         elif not is_payable_red_total_source(src) and amt <= 0:
@@ -149,6 +154,7 @@ class PurchaseInvoiceItemCreate(BaseSchema):
     source_doc_id: int = Field(...)
     source_line_id: int = Field(...)
     partner_statement_line_id: Optional[int] = Field(None)
+    invoice_number: Optional[str] = Field(None, max_length=100, description="行级发票号码")
 
 
 class PurchaseInvoiceBase(BaseSchema):
@@ -165,6 +171,14 @@ class PurchaseInvoiceBase(BaseSchema):
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
     invoice_number: str = Field(..., max_length=100, description="发票号码")
     invoice_date: date = Field(..., description="发票日期")
+    settlement_closing_date: Optional[date] = Field(None, description="结账日期")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    department_name: Optional[str] = Field(None, max_length=200, description="部门名称")
+    ledger_posting_mode: Optional[str] = Field(
+        None,
+        max_length=16,
+        description="立账方式 immediate 或 by_invoice",
+    )
     invoice_type: str = Field(..., max_length=20, description="发票类型")
     tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（百分比，如 13 表示 13%）")
     invoice_amount: Decimal = Field(..., ge=0, description="未税金额")
@@ -242,6 +256,10 @@ class PurchaseInvoiceUpdate(BaseSchema):
 
     invoice_number: Optional[str] = Field(None, max_length=100, description="发票号码")
     invoice_date: Optional[date] = None
+    settlement_closing_date: Optional[date] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = Field(None, max_length=200)
+    ledger_posting_mode: Optional[str] = Field(None, max_length=16)
     invoice_type: Optional[str] = Field(None, max_length=20)
     tax_rate: Optional[Decimal] = Field(None, ge=0, le=100, description="税率（百分比）")
     invoice_amount: Optional[Decimal] = Field(None, ge=0, description="未税金额")
@@ -268,6 +286,34 @@ class PurchaseInvoiceResponse(PurchaseInvoiceBase):
 
     class Config:
         from_attributes = True
+
+
+class PurchaseInvoiceLineResponse(BaseSchema):
+    """采购发票明细行（只读详情）。"""
+
+    id: int
+    item_name: str
+    spec_model: Optional[str] = None
+    unit: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    unit_price: Optional[Decimal] = None
+    amount: Decimal
+    tax_rate: Decimal
+    tax_amount: Decimal
+    source_doc_type: Optional[str] = None
+    source_doc_id: Optional[int] = None
+    source_line_id: Optional[int] = None
+    partner_statement_line_id: Optional[int] = None
+    invoice_number: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PurchaseInvoiceDetailResponse(PurchaseInvoiceResponse):
+    """采购发票详情（含明细行）。"""
+
+    items: List[PurchaseInvoiceLineResponse] = Field(default_factory=list)
 
 
 class PurchaseInvoiceListResponse(BaseSchema):
@@ -692,6 +738,7 @@ class SalesInvoiceDetailItemCreate(BaseSchema):
     source_doc_id: int = Field(...)
     source_line_id: int = Field(...)
     partner_statement_line_id: Optional[int] = Field(None)
+    invoice_number: Optional[str] = Field(None, max_length=100, description="行级发票号码")
 
 
 class SalesInvoiceBase(BaseSchema):
@@ -707,6 +754,14 @@ class SalesInvoiceBase(BaseSchema):
     customer_name: str = Field(..., max_length=200, description="客户名称")
     invoice_number: str = Field(default="", max_length=50, description="发票号码（手工录入；草稿可为空，与库字段长度一致）")
     invoice_date: date = Field(..., description="开票日期")
+    settlement_closing_date: Optional[date] = Field(None, description="结账日期")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    department_name: Optional[str] = Field(None, max_length=200, description="部门名称")
+    ledger_posting_mode: Optional[str] = Field(
+        None,
+        max_length=16,
+        description="立账方式 immediate 已立账 | by_invoice 发票立账",
+    )
     invoice_type: str = Field("增值税专用发票", max_length=50, description="发票类型")
     tax_rate: Decimal = Field(..., ge=0, le=100, description="税率（%，必填）")
     invoice_amount: Decimal = Field(..., description="不含税金额（红字发票为负）")
@@ -779,6 +834,10 @@ class SalesInvoiceLineResponse(BaseSchema):
     source_doc_id: Optional[int] = None
     source_line_id: Optional[int] = None
     partner_statement_line_id: Optional[int] = None
+    invoice_number: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 
 class SalesInvoiceVoidRequest(BaseSchema):
@@ -1175,139 +1234,3 @@ class MiscCategoryResponse(BaseSchema):
 
     class Config:
         from_attributes = True
-
-
-# === 其他费用收入/支出 ===
-
-class OtherVoucherLineIn(BaseSchema):
-    """其他收支明细行入参"""
-    category_code: str = Field(..., max_length=50, description="收支类别编码")
-    category_name: Optional[str] = Field(None, max_length=200, description="收支类别名称（留空按编码带出）")
-    amount: Decimal = Field(..., gt=0, description="金额")
-    description: Optional[str] = Field(None, description="说明")
-    gl_account_code: Optional[str] = Field(None, max_length=20, description="会计科目编码")
-    # 其他费用支出 + 员工垫付时由服务端校验必填；收入侧忽略
-    payee_id: Optional[int] = None
-    payee_name: Optional[str] = Field(None, max_length=100)
-
-
-class RelatedPurchaseReceiptRef(BaseSchema):
-    id: int
-    code: str = Field(..., max_length=50)
-
-
-class OtherVoucherLineOut(OtherVoucherLineIn):
-    """其他收支明细行出参"""
-    id: int
-    line_no: int
-
-    class Config:
-        from_attributes = True
-
-
-class OtherVoucherCreate(BaseSchema):
-    """其他费用收入/支出创建schema"""
-    business_date: date = Field(..., description="业务日期")
-    counterparty_kind: str = Field("none", max_length=20, description="往来对象类型 none/customer/supplier/employee/other")
-    counterparty_id: Optional[int] = Field(None, description="往来对象ID")
-    counterparty_name: Optional[str] = Field(None, max_length=200, description="往来对象名称")
-    payment_method: str = Field(..., max_length=50, description="收/付款方式")
-    bank_account_id: Optional[int] = Field(None, description="收/付款账户ID")
-    bank_account: Optional[str] = Field(None, max_length=100, description="收/付款账户")
-    department_id: Optional[int] = Field(None, description="部门ID")
-    department_name: Optional[str] = Field(None, max_length=200, description="部门名称")
-    project_id: Optional[int] = Field(None, description="项目ID")
-    project_name: Optional[str] = Field(None, max_length=200, description="项目名称")
-    notes: Optional[str] = Field(None, description="备注")
-    attachments: Optional[List[dict]] = Field(None, description="附件列表")
-    related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
-    revenue_recognition: Optional[str] = Field(
-        None, max_length=32, description="立账策略（应收确认时点，仅其他费用收入）"
-    )
-    payable_recognition: Optional[str] = Field(
-        None, max_length=32, description="立账策略（应付确认时点，仅其他费用支出）"
-    )
-    lines: List[OtherVoucherLineIn] = Field(..., min_length=1, description="明细行")
-
-
-class OtherVoucherUpdate(BaseSchema):
-    """其他费用收入/支出更新schema"""
-    business_date: Optional[date] = None
-    counterparty_kind: Optional[str] = Field(None, max_length=20)
-    counterparty_id: Optional[int] = None
-    counterparty_name: Optional[str] = Field(None, max_length=200)
-    payment_method: Optional[str] = Field(None, max_length=50)
-    bank_account_id: Optional[int] = None
-    bank_account: Optional[str] = Field(None, max_length=100)
-    department_id: Optional[int] = None
-    department_name: Optional[str] = Field(None, max_length=200)
-    project_id: Optional[int] = None
-    project_name: Optional[str] = Field(None, max_length=200)
-    notes: Optional[str] = None
-    attachments: Optional[List[dict]] = None
-    related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
-    revenue_recognition: Optional[str] = Field(None, max_length=32)
-    payable_recognition: Optional[str] = Field(None, max_length=32)
-    lines: Optional[List[OtherVoucherLineIn]] = Field(None, min_length=1)
-
-
-class OtherVoucherReviewAction(BaseSchema):
-    """审核动作入参"""
-    approved: Optional[bool] = Field(None, description="是否通过（approve/reject 端点兼容字段）")
-    review_remarks: Optional[str] = Field(None, description="审核备注")
-
-
-class OtherVoucherSubmitAction(BaseSchema):
-    """提交审核入参（发起人自选审批人，与统一审核入口语义一致）"""
-    selected_approver_user_ids: Optional[List[int]] = Field(
-        None, description="提交时选定的审批人用户ID列表"
-    )
-    selected_approver_by_node: Optional[Dict[str, List[int]]] = Field(
-        None, description="按审批节点选定的审批人用户ID映射"
-    )
-
-
-class OtherVoucherResponse(BaseSchema):
-    """其他费用收入/支出响应schema（income_code/expense_code 二选一返回）"""
-    id: int
-    income_code: Optional[str] = None
-    expense_code: Optional[str] = None
-    business_date: date
-    counterparty_kind: str = "none"
-    counterparty_id: Optional[int] = None
-    counterparty_name: Optional[str] = None
-    total_amount: Decimal = Decimal("0")
-    payment_method: Optional[str] = None
-    bank_account_id: Optional[int] = None
-    bank_account: Optional[str] = None
-    status: str = "Draft"
-    reviewer_id: Optional[int] = None
-    reviewer_name: Optional[str] = None
-    review_time: Optional[datetime] = None
-    review_remarks: Optional[str] = None
-    department_id: Optional[int] = None
-    department_name: Optional[str] = None
-    project_id: Optional[int] = None
-    project_name: Optional[str] = None
-    notes: Optional[str] = None
-    attachments: Optional[List[dict]] = None
-    related_purchase_receipts: Optional[List[RelatedPurchaseReceiptRef]] = None
-    revenue_recognition: Optional[str] = None
-    payable_recognition: Optional[str] = None
-    lines: List[OtherVoucherLineOut] = []
-    capabilities: Optional[Dict[str, Any]] = None
-    created_at: datetime
-    updated_at: datetime
-    created_by_name: Optional[str] = None
-    updated_by_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class OtherVoucherListResponse(BaseSchema):
-    """其他费用收入/支出列表响应schema"""
-    items: List[OtherVoucherResponse]
-    total: int
-    skip: int
-    limit: int

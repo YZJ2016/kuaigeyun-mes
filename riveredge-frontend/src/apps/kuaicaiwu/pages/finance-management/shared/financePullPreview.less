@@ -1,0 +1,29 @@
+/* 财务取单预览：开票/入库明细表与下方填写表单的分段间距（采购/销售发票、应付等共用） */
+.finance-pull-preview-detail {
+  margin-bottom: 16px;
+}
+
+.finance-pull-preview-detail--between-form {
+  margin-top: 4px;
+  margin-bottom: 16px;
+}
+
+.finance-pull-preview-detail__title {
+  margin-top: 0 !important;
+  margin-bottom: 8px;
+}
+
+.finance-pull-preview-detail__table {
+  margin-bottom: 0;
+}
+
+.finance-pull-preview-form {
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  /* 手写 Row 栅格时收拢末行项底距，避免与 Modal 底留白叠高 */
+  > .ant-row:last-child .ant-form-item:last-child {
+    margin-bottom: 0;
+  }
+}

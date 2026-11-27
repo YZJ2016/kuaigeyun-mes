@@ -35,7 +35,9 @@ from .management_report import router as management_report_router
 from .finance_settlement import router as settlement_router
 from .finance.partner_statements import router as partner_statements_router
 from .finance.price_settlement import router as price_settlement_router
-from .finance.misc_vouchers import other_expenses_router, other_incomes_router
+from .finance.other_incomes import router as other_incomes_router
+from .finance.other_expenses import router as other_expenses_router
+from .finance.other_expense_applications import router as other_expense_applications_router
 from .finance.finance_misc_categories import router as finance_misc_categories_router
 from .document_reconciliation import router as document_reconciliation_router
 from .bank_accounts import router as bank_accounts_router
@@ -60,6 +62,7 @@ router.include_router(fund_transfers_router)
 router.include_router(sales_invoices_router)
 router.include_router(other_incomes_router)
 router.include_router(other_expenses_router)
+router.include_router(other_expense_applications_router)
 router.include_router(finance_misc_categories_router)
 
 # 注册成本核算路由

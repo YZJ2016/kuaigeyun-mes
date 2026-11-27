@@ -59,6 +59,7 @@ import {
   DOCUMENT_PROGRESS_COLUMN_DEFAULTS,
 } from '../../../../kuaizhizao/pages/sales-management/shared/DocumentPushProgressBar';
 import { receivableReceiptPushPercent, receivableInvoicePushPercent } from '../../../../kuaizhizao/pages/sales-management/shared/pushProgress';
+import { useOrgInvoiceListPath } from '../shared/FinanceInvoiceSettlementModeAlert';
 import { renderReceivableInvoiceStatusTag } from '../../../utils/financeInvoiceStatusUi';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -121,6 +122,7 @@ const ReceivableList: React.FC = () => {
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+    const salesInvoiceListPath = useOrgInvoiceListPath('sales');
     const [searchParams, setSearchParams] = useSearchParams();
     const urlAgingFilters = useMemo(() => parseFinanceAgingUrlFilters(searchParams), [searchParams]);
     const pullFromSalesOrderAction = getKuaicaiwuDocumentAction('receivable.pull_from_sales_order');
@@ -956,7 +958,7 @@ const ReceivableList: React.FC = () => {
                             key="invoice"
                             {...rowActionIssueInvoice('create')}
                             onClick={() =>
-                                navigate('/apps/kuaicaiwu/finance-management/sales-invoices', {
+                                navigate(salesInvoiceListPath, {
                                     state: { pullReceivableId: record.id },
                                 })
                             }

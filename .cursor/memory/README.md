@@ -123,7 +123,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 付款单来源单据、打印导出、FINANCE_PAYMENT_PRINT | `features/finance-payment-source-print.md` |
 | 付款凭证必传、requirePaymentVoucher、付款申请要求上传凭证 | `features/payment-require-voucher.md` |
 | 期初余额、科目余额表有期初期初页没有、应交税费 2221、非末级残留期初、rollup | `features/gl-nonleaf-opening-residual.md` |
-| 其他费用收入、其他费用支出、收支类别、other_income | `features/finance-other-misc-vouchers.md` |
+| 其他费用收入、其他费用支出、支出申请、收支类别、other_income / other_expense_application | `features/finance-other-misc-vouchers.md` |
 | 其他费用应收应付、misc_voucher_finance_bridge、确认收款付款 | `features/finance-other-misc-ar-ap-chain.md` |
 | 应付/应收审核要点两遍、流程过了单据仍待审、FinanceService | `features/finance-ar-ap-audit-writeback.md` |
 | 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |

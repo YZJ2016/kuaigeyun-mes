@@ -23,6 +23,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaicaiwu.models.gl_tax_settings",
     "apps.kuaicaiwu.models.gl_transfer_template",
     "apps.kuaicaiwu.models.invoice",
+    "apps.kuaicaiwu.models.other_expense_application",
     "apps.kuaicaiwu.models.other_voucher",
     "apps.kuaicaiwu.models.partner_statement",
     "apps.kuaicaiwu.models.partner_statement_line",

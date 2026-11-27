@@ -12,7 +12,11 @@ from loguru import logger
 from tortoise.transactions import in_transaction
 
 from apps.kuaicaiwu.schemas.finance import (
-    PurchaseInvoiceCreate, PurchaseInvoiceUpdate, PurchaseInvoiceResponse, PurchaseInvoiceListResponse,
+    PurchaseInvoiceCreate,
+    PurchaseInvoiceUpdate,
+    PurchaseInvoiceResponse,
+    PurchaseInvoiceDetailResponse,
+    PurchaseInvoiceListResponse,
 )
 from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
 from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
@@ -374,6 +378,50 @@ async def list_purchase_invoices(
 
 
 @router.get(
+    "/pull-preview",
+    summary="Preview pull purchase invoice (unified dispatch)",
+)
+async def preview_pull_purchase_invoice_unified(
+    source_type: str = Query(
+        ...,
+        description="purchase_order|purchase_receipt|payable|outsource_order_receipt",
+    ),
+    source_ids: str = Query(..., description="源单 ID，逗号分隔"),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单 ID，逗号分隔（入库/委外来自对账时必传）"
+    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+    def _parse_csv(raw: Optional[str]) -> list[int]:
+        parsed: list[int] = []
+        for part in str(raw or "").split(","):
+            part = part.strip()
+            if not part:
+                continue
+            parsed.append(int(part))
+        return parsed
+
+    ids = _parse_csv(source_ids)
+    if not ids:
+        raise _http_exception_with_trace(422, "须指定源单", "/purchase-invoices/pull-preview", tenant_id)
+    stmt_ids = parse_partner_statement_id_csv(partner_statement_ids) if partner_statement_ids else None
+    try:
+        return await purchase_invoice_pull_service.preview_pull(
+            tenant_id=tenant_id,
+            source_type=str(source_type).strip(),
+            source_ids=ids,
+            partner_statement_ids=stmt_ids,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/purchase-invoices/pull-preview", tenant_id
+        ) from exc
+
+
+@router.get(
     "/pull-candidates/purchase-orders",
     summary="List purchase order pull candidates for purchase invoice",
 )
@@ -719,7 +767,7 @@ async def preview_pull_purchase_invoice_from_payables(
         ) from exc
 
 
-@router.get("/{id}", response_model=PurchaseInvoiceResponse)
+@router.get("/{id}", response_model=PurchaseInvoiceDetailResponse)
 async def get_purchase_invoice(
     id: int,
     _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
@@ -742,7 +790,7 @@ async def update_purchase_invoice(
 ):
     """更新采购发票；已审核仅允许补全发票号码与附件。"""
     from apps.common.audit_actor import apply_update_audit
-    from apps.kuaicaiwu.services.tax.tax_period_service import tax_period_from_date
+    from apps.kuaicaiwu.utils.tax_period import tax_period_from_date
 
     invoice = await PurchaseInvoice.get_or_none(
         tenant_id=tenant_id, id=id, deleted_at__isnull=True

@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Spin, Empty, Typography, Timeline, Space } from 'antd';
+import { App, Button, Spin, Empty, Typography, Timeline, Space, Table } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { purchaseInvoiceService } from '../../../services/finance/purchase-invoice';
-import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
+import { PurchaseInvoice, PurchaseInvoiceLine } from '../../../types/finance/purchase-invoice';
+import { formatAmount } from '../../../../../utils/format';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import {
@@ -20,7 +22,33 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { formatApiErrorDetail } from '../../../../../services/api';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
+const LINE = 'app.kuaicaiwu.salesInvoice';
 const PURCHASE_INVOICE_RESOURCE = 'kuaicaiwu:purchase-invoice';
+
+function moneyCell(v: string | number | undefined | null) {
+  const n = Number(v ?? 0);
+  const abs = formatAmount(Math.abs(n));
+  return n < 0 ? `-${abs}` : abs;
+}
+
+function formatPurchaseInvoiceLedgerPostingMode(
+  mode: string | null | undefined,
+  t: (key: string) => string,
+): string {
+  return mode === 'by_invoice'
+    ? t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.byInvoice')
+    : t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.immediate');
+}
+
+function formatInvoiceLineSourceTrace(row: PurchaseInvoiceLine): string {
+  const docType = String(row.source_doc_type ?? '').trim();
+  const docId = Number(row.source_doc_id ?? 0);
+  const lineId = Number(row.source_line_id ?? 0);
+  if (!docType || docId <= 0) {
+    return '—';
+  }
+  return lineId > 0 ? `${docType} ${docId} / ${lineId}` : `${docType} ${docId}`;
+}
 
 const PurchaseInvoiceDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -28,6 +56,9 @@ const PurchaseInvoiceDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const invoiceListBase = location.pathname.includes('/purchase-detail-invoices')
+    ? '/apps/kuaicaiwu/finance-management/purchase-detail-invoices'
+    : '/apps/kuaicaiwu/finance-management/purchase-invoices';
   const [data, setData] = useState<PurchaseInvoice>();
   const [loading, setLoading] = useState(false);
   const purchaseInvoicePerms = useResourcePermissions(PURCHASE_INVOICE_RESOURCE);
@@ -79,7 +110,7 @@ const PurchaseInvoiceDetail: React.FC = () => {
         try {
           await purchaseInvoiceService.delete(Number(id));
           message.success(t('common.deleteSuccess'));
-          navigate('/apps/kuaicaiwu/finance-management/purchase-invoices');
+          navigate(invoiceListBase);
         } catch (e: unknown) {
           const err = e as { response?: { data?: { detail?: unknown } }; message?: string };
           message.error(
@@ -118,6 +149,73 @@ const PurchaseInvoiceDetail: React.FC = () => {
     </>
   ) : null;
 
+  const lineColumns: ColumnsType<PurchaseInvoiceLine> = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.invoice.line.itemName'), dataIndex: 'item_name', width: 200 },
+      { title: t('app.kuaicaiwu.invoice.line.specModel'), dataIndex: 'spec_model', width: 120 },
+      {
+        title: t('app.kuaicaiwu.invoice.line.invoiceNumber'),
+        dataIndex: 'invoice_number',
+        width: 128,
+        ellipsis: true,
+        render: (v) => {
+          const line = String(v ?? '').trim();
+          if (line) return line;
+          const header = String(data?.invoice_number ?? '').trim();
+          return header || '—';
+        },
+      },
+      { title: t('common.unit'), dataIndex: 'unit', width: 72 },
+      {
+        title: t('common.quantity'),
+        dataIndex: 'quantity',
+        width: 88,
+        align: 'right',
+        render: (v) => (v == null || v === '' ? '—' : String(v)),
+      },
+      {
+        title: t(`${LINE}.line.unitPriceExcl`),
+        dataIndex: 'unit_price',
+        width: 110,
+        align: 'right',
+        render: (v) => (v == null || v === '' ? '—' : moneyCell(v)),
+      },
+      {
+        title: t('app.kuaicaiwu.invoice.line.taxRate'),
+        dataIndex: 'tax_rate',
+        width: 72,
+        align: 'right',
+        render: (_, r) => {
+          const n = Number(r.tax_rate);
+          const pct = !Number.isFinite(n) || n <= 0 ? 0 : n < 1 ? n * 100 : n;
+          return `${pct.toFixed(2)}%`;
+        },
+      },
+      {
+        title: t(`${LINE}.line.amountExcl`),
+        dataIndex: 'amount',
+        width: 120,
+        align: 'right',
+        render: (_, r) => moneyCell(r.amount),
+      },
+      {
+        title: t('app.kuaicaiwu.invoice.line.taxAmount'),
+        dataIndex: 'tax_amount',
+        width: 100,
+        align: 'right',
+        render: (_, r) => moneyCell(r.tax_amount),
+      },
+      {
+        title: t('app.kuaicaiwu.invoice.line.sourceTrace'),
+        key: 'source_trace',
+        width: 160,
+        ellipsis: true,
+        render: (_, r) => formatInvoiceLineSourceTrace(r),
+      },
+    ],
+    [t, data?.invoice_number],
+  );
+
   const renderShell = (body: React.ReactNode) => (
     <div style={uniTabsChildPageVerticalInsetStyle()}>
       <div style={DOCUMENT_DETAIL_PAGE_HEADER_STYLE}>
@@ -154,6 +252,15 @@ const PurchaseInvoiceDetail: React.FC = () => {
           <ProDescriptions.Item label={t('app.kuaicaiwu.common.supplier')}>{data.supplier_name}</ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.col.invoiceNumber`)}>{data.invoice_number || '-'}</ProDescriptions.Item>
           <ProDescriptions.Item label={t('app.kuaicaiwu.common.invoiceDate')}>{data.invoice_date}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.settlementClosingDate`)}>
+            {data.settlement_closing_date || '—'}
+          </ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaizhizao.purchase.field.department')}>
+            {data.department_name || '—'}
+          </ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.partnerStatement.ledgerPostingMode')}>
+            {formatPurchaseInvoiceLedgerPostingMode(data.ledger_posting_mode, t)}
+          </ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.col.invoiceType`)}>{formatChineseInvoiceType(data.invoice_type, t)}</ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.col.invoiceAmount`)}>{data.invoice_amount}</ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.col.taxAmount`)}>{data.tax_amount}</ProDescriptions.Item>
@@ -187,7 +294,15 @@ const PurchaseInvoiceDetail: React.FC = () => {
       </DetailDrawerSection>
 
       <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.noLines`)} />
+        <Table<PurchaseInvoiceLine>
+          size="small"
+          rowKey="id"
+          pagination={false}
+          columns={lineColumns}
+          dataSource={data.items || []}
+          locale={{ emptyText: t(`${P}.noLines`) }}
+          scroll={{ x: 1000 }}
+        />
       </DetailDrawerSection>
 
       <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')} marginBottom={0}>

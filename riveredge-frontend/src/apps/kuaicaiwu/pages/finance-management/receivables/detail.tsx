@@ -7,6 +7,7 @@ import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecis
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable } from '../../../types/finance/receivable';
+import { useOrgInvoiceListPath } from '../shared/FinanceInvoiceSettlementModeAlert';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
@@ -41,6 +42,7 @@ const ReceivableDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const salesInvoiceListPath = useOrgInvoiceListPath('sales');
   const [data, setData] = useState<Receivable>();
   const [loading, setLoading] = useState(false);
 
@@ -101,7 +103,7 @@ const ReceivableDetail: React.FC = () => {
 
   const openInvoiceFromReceivable = () => {
     if (!data?.id) return;
-    navigate('/apps/kuaicaiwu/finance-management/sales-invoices', {
+    navigate(salesInvoiceListPath, {
       state: { pullReceivableId: data.id },
     });
   };

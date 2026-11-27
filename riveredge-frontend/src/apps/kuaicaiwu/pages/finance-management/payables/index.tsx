@@ -56,8 +56,18 @@ import {
   initPullReceiptLineSelection,
   reconcilePullReceiptLinesForHeaderAmount,
   sumPullReceiptLineAmounts,
+  pullReceiptDetailLineRowKey,
+  pullReceiptSelectedIdsAsRowKeys,
   type PullReceiptFinanceDetailLine,
 } from '../../../../kuaizhizao/utils/pullReceiptFinanceLines';
+import {
+  FINANCE_PULL_PREVIEW_DETAIL_CLASS,
+  FINANCE_PULL_PREVIEW_DETAIL_TABLE_CLASS,
+  FINANCE_PULL_PREVIEW_DETAIL_TITLE_CLASS,
+  FINANCE_PULL_PREVIEW_FORM_CLASS,
+} from '../shared/financePullPreviewLayout';
+import { useOrgInvoiceListPath } from '../shared/FinanceInvoiceSettlementModeAlert';
+import '../shared/financePullPreview.less';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
@@ -138,6 +148,7 @@ const PayableList: React.FC = () => {
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
+    const purchaseInvoiceListPath = useOrgInvoiceListPath('purchase');
     const [searchParams, setSearchParams] = useSearchParams();
     const urlAgingFilters = useMemo(() => parseFinanceAgingUrlFilters(searchParams), [searchParams]);
     const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_order');
@@ -1111,7 +1122,7 @@ const PayableList: React.FC = () => {
                             key="invoice"
                             {...rowActionIssueInvoice('create')}
                             onClick={() =>
-                                navigate('/apps/kuaicaiwu/finance-management/purchase-invoices', {
+                                navigate(purchaseInvoiceListPath, {
                                     state: { pullPayableId: record.id },
                                 })
                             }
@@ -1526,19 +1537,20 @@ const PayableList: React.FC = () => {
                             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')} />
                         )}
                         {pullPreviewKind === 'purchase_receipt' ? (
-                            <>
-                                <Typography.Paragraph strong style={{ marginTop: 16, marginBottom: 8 }}>
+                            <div className={FINANCE_PULL_PREVIEW_DETAIL_CLASS}>
+                                <Typography.Paragraph strong className={FINANCE_PULL_PREVIEW_DETAIL_TITLE_CLASS}>
                                     {t(`${P}.pull.detailTitle`)}
                                 </Typography.Paragraph>
                                 {(pullPreviewData.detail_lines?.length ?? 0) > 0 ? (
+                                    <div className={FINANCE_PULL_PREVIEW_DETAIL_TABLE_CLASS}>
                                     <Table<PullReceiptFinanceDetailLine>
                                         size="small"
                                         dataSource={pullPreviewData.detail_lines as PullReceiptFinanceDetailLine[]}
-                                        rowKey={(row) => String(row.purchase_receipt_item_id)}
+                                        rowKey={pullReceiptDetailLineRowKey}
                                         pagination={false}
                                         scroll={{ x: 980, y: 240 }}
                                         rowSelection={{
-                                            selectedRowKeys: pullReceiptSelectedIds,
+                                            selectedRowKeys: pullReceiptSelectedIdsAsRowKeys(pullReceiptSelectedIds),
                                             onChange: (keys) => {
                                                 const ids = keys.map((k) => Number(k)).filter((id) => id > 0);
                                                 setPullReceiptSelectedIds(ids);
@@ -1626,13 +1638,14 @@ const PayableList: React.FC = () => {
                                             },
                                         ]}
                                     />
+                                    </div>
                                 ) : (
                                     <Empty
                                         image={Empty.PRESENTED_IMAGE_SIMPLE}
                                         description={t(`${P}.pull.detailEmpty`)}
                                     />
                                 )}
-                            </>
+                            </div>
                         ) : null}
                         {pullPreviewData.tip ? (
                             <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
@@ -1642,6 +1655,11 @@ const PayableList: React.FC = () => {
                         {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
                             <ProForm
                                 key={`pull-payable-${pullPreviewKind}-${pullPreviewSourceIds.join('-')}`}
+                                className={
+                                    pullPreviewKind === 'purchase_receipt'
+                                        ? FINANCE_PULL_PREVIEW_FORM_CLASS
+                                        : undefined
+                                }
                                 form={pullForm}
                                 initialValues={pullFormInitialValues}
                                 submitter={false}

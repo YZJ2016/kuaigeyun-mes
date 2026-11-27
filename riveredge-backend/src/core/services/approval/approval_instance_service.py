@@ -6117,16 +6117,11 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_other_expense_application() -> None:
+                from apps.kuaicaiwu.services.other_expense_application_service import (
+                    OtherExpenseApplicationService,
+                )
+
                 if not entity_id:
-                    return
-                try:
-                    from apps.kuaizhizao.services.other_expense_application_service import (
-                        OtherExpenseApplicationService,
-                    )
-                except ImportError:
-                    logger.warning(
-                        f"其他支出申请 {entity_id} 审批回调跳过：本地无 OtherExpenseApplicationService（该实体类型已摘出）"
-                    )
                     return
                 service = OtherExpenseApplicationService()
                 if approval_instance.status == "approved":
@@ -6151,27 +6146,27 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_other_expense() -> None:
-                from apps.kuaicaiwu.services.other_expense_service import (
-                    OtherExpenseService,
+                from apps.kuaicaiwu.services.other_expense_audit_service import (
+                    OtherExpenseAuditService,
                 )
 
                 if not entity_id:
                     return
-                service = OtherExpenseService()
+                service = OtherExpenseAuditService()
                 if approval_instance.status == "approved":
                     await service.approve_expense(
                         tenant_id,
                         int(entity_id),
+                        approver_id,
                         approved=True,
-                        operator_id=approver_id,
                         is_auto_approve=True,
                     )
                 elif approval_instance.status == "rejected":
                     await service.approve_expense(
                         tenant_id,
                         int(entity_id),
+                        approver_id,
                         approved=False,
-                        operator_id=approver_id,
                         review_remarks="审批驳回",
                         is_auto_approve=True,
                     )
@@ -6180,27 +6175,27 @@ class ApprovalInstanceService:
                 )
 
             async def _handle_other_income() -> None:
-                from apps.kuaicaiwu.services.other_income_service import (
-                    OtherIncomeService,
+                from apps.kuaicaiwu.services.other_income_audit_service import (
+                    OtherIncomeAuditService,
                 )
 
                 if not entity_id:
                     return
-                service = OtherIncomeService()
+                service = OtherIncomeAuditService()
                 if approval_instance.status == "approved":
                     await service.approve_income(
                         tenant_id,
                         int(entity_id),
+                        approver_id,
                         approved=True,
-                        operator_id=approver_id,
                         is_auto_approve=True,
                     )
                 elif approval_instance.status == "rejected":
                     await service.approve_income(
                         tenant_id,
                         int(entity_id),
+                        approver_id,
                         approved=False,
-                        operator_id=approver_id,
                         review_remarks="审批驳回",
                         is_auto_approve=True,
                     )
@@ -6678,60 +6673,6 @@ class ApprovalInstanceService:
                     )
                 logger.info(
                     f"付款申请 {entity_id} 审批回调完成: {approval_instance.status}"
-                )
-
-            async def _handle_other_income() -> None:
-                from apps.kuaicaiwu.services.other_income_service import (
-                    OtherIncomeService,
-                )
-
-                service = OtherIncomeService()
-                if approval_instance.status == "approved":
-                    await service.approve_income(
-                        tenant_id,
-                        int(entity_id),
-                        approved=True,
-                        operator_id=approver_id,
-                        is_auto_approve=True,
-                    )
-                elif approval_instance.status == "rejected":
-                    await service.approve_income(
-                        tenant_id,
-                        int(entity_id),
-                        approved=False,
-                        operator_id=approver_id,
-                        review_remarks="审批驳回",
-                        is_auto_approve=True,
-                    )
-                logger.info(
-                    f"其他收入单 {entity_id} 审批回调完成: {approval_instance.status}"
-                )
-
-            async def _handle_other_expense() -> None:
-                from apps.kuaicaiwu.services.other_expense_service import (
-                    OtherExpenseService,
-                )
-
-                service = OtherExpenseService()
-                if approval_instance.status == "approved":
-                    await service.approve_expense(
-                        tenant_id,
-                        int(entity_id),
-                        approved=True,
-                        operator_id=approver_id,
-                        is_auto_approve=True,
-                    )
-                elif approval_instance.status == "rejected":
-                    await service.approve_expense(
-                        tenant_id,
-                        int(entity_id),
-                        approved=False,
-                        operator_id=approver_id,
-                        review_remarks="审批驳回",
-                        is_auto_approve=True,
-                    )
-                logger.info(
-                    f"其他支出单 {entity_id} 审批回调完成: {approval_instance.status}"
                 )
 
             async def _handle_partner_statement() -> None:

@@ -1,4 +1,6 @@
+import { supplierApi } from '../../master-data/services/supply-chain';
 import { apiRequest } from '../../../services/api';
+import { resolveReferenceDisplay } from '../../../utils/referenceDisplay';
 
 export type PartnerPayeeAccount = {
   accountName: string;
@@ -142,20 +144,30 @@ export async function loadCustomerPayeeAccountsById(
 
 export async function loadSupplierPayeeAccountsById(
   supplierId: number,
+  hostResource = 'kuaicaiwu:payment',
 ): Promise<{ found: boolean; accounts: PartnerPayeeAccount[] }> {
   const id = Number(supplierId);
   if (!Number.isFinite(id) || id <= 0) {
     return { found: false, accounts: [] };
   }
-  const res = await apiRequest<unknown>('/apps/master-data/supply-chain/suppliers', {
-    params: { limit: 1000, is_active: true },
-  });
-  const row = unwrapSupplierList(res).find((item) => Number(item.id) === id);
-  if (!row) {
+  try {
+    const items = await resolveReferenceDisplay({
+      resource: 'master-data:supply-chain:supplier',
+      recordIds: [id],
+      hostResource,
+    });
+    const uuid = items[0]?.uuid;
+    if (!uuid) {
+      return { found: false, accounts: [] };
+    }
+    const detail = await supplierApi.get(String(uuid));
+    const snakeAccounts = (detail as unknown as { settlement_accounts?: unknown })
+      .settlement_accounts;
+    return {
+      found: true,
+      accounts: readPartnerPayeeAccounts(detail.settlementAccounts ?? snakeAccounts),
+    };
+  } catch {
     return { found: false, accounts: [] };
   }
-  return {
-    found: true,
-    accounts: readPartnerPayeeAccounts(row.settlementAccounts ?? row.settlement_accounts),
-  };
 }

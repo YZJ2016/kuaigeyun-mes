@@ -102,17 +102,23 @@ class OtherExpense(BaseModel):
     )
     counterparty_id = fields.IntField(null=True, description="往来对象ID")
     counterparty_name = fields.CharField(max_length=200, null=True, description="往来对象名称")
+    counterparty_account_name = fields.CharField(max_length=200, null=True, description="对方收款户名")
+    counterparty_bank_name = fields.CharField(max_length=200, null=True, description="对方收款开户行")
+    counterparty_bank_account = fields.CharField(max_length=64, null=True, description="对方收款账号")
+    source_type = fields.CharField(max_length=50, null=True, description="来源单据类型")
+    source_id = fields.IntField(null=True, description="来源单据ID")
+    source_code = fields.CharField(max_length=50, null=True, description="来源单据号")
     total_amount = fields.DecimalField(max_digits=16, decimal_places=4, default=0, description="支出总额")
     payment_method = fields.CharField(max_length=50, description="付款方式 (银行转账/现金等)")
     bank_account_id = fields.IntField(null=True, description="出账账户ID")
     bank_account = fields.CharField(max_length=100, null=True, description="出账账户")
     status = fields.CharField(
         max_length=20, default="Draft",
-        description="状态 Draft/PendingReview/Approved/Rejected/Confirmed/Cancelled",
+        description="业务状态 Draft/Confirmed/Cancelled（审核见 review_status）",
     )
     review_status = fields.CharField(
         max_length=20, default="草稿",
-        description="审核状态镜像列（草稿/待审核/已审核/已驳回/已取消），由服务层随 status 同步",
+        description="审核状态：草稿/SUBMITTED/待审核/已审核/已驳回",
     )
     reviewer_id = fields.IntField(null=True, description="审核人ID")
     reviewer_name = fields.CharField(max_length=100, null=True, description="审核人姓名")

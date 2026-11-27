@@ -52,6 +52,17 @@ def test_extract_statement_lines_filters():
     assert extract_statement_source_doc_ids(details, "应付单") == [12]
 
 
+def test_extract_statement_lines_filters_customer_receivable():
+    details = {
+        "lines": [
+            {"doc_type": "销售出库", "doc_id": 20, "tree_level": 0, "debit": 100},
+            {"doc_type": "应收单", "doc_id": 22, "tree_level": 0, "debit": 80},
+        ]
+    }
+    assert extract_statement_source_doc_ids(details, "销售出库") == [20]
+    assert extract_statement_source_doc_ids(details, "应收单") == [22]
+
+
 def test_resolve_and_snapshot_ids_supplier_by_invoice_outsource_only():
     snap = resolve_statement_invoice_source_ids(
         partner_type="Supplier",

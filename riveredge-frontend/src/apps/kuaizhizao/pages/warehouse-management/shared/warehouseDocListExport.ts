@@ -6,6 +6,7 @@ import {
   type ExportXlsxColumn,
 } from '../../../../../utils/exportRecordsXlsx';
 import { formatAmount, formatDateTime, formatQuantity } from '../../../../../utils/format';
+import { resolvePurchaseReceiptDisplayAmount } from '../../purchase-management/shared/purchaseOrderAmounts';
 import { fetchInboundHubDetail } from '../inbound/inboundHubDetail';
 import {
   inboundReceiptTypeLabel,
@@ -159,7 +160,10 @@ export function flattenInboundHubForExport(orders: InboundHubOrder[]): Array<Rec
       doc_date: resolveInboundHubDateRaw(order),
       operator: resolveInboundHubOperator(order),
       header_total_quantity: order.total_quantity,
-      header_total_amount: order.total_amount ?? order.net_amount ?? order.settlement_gross,
+      header_total_amount:
+        order.receipt_type === 'purchase'
+          ? resolvePurchaseReceiptDisplayAmount(order)
+          : order.total_amount,
       header_notes: (order as Record<string, unknown>).notes,
       created_at: order.created_at,
       updated_at: order.updated_at,

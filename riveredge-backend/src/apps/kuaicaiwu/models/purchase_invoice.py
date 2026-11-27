@@ -37,6 +37,16 @@ class PurchaseInvoice(BaseModel):
     # 发票基本信息
     invoice_number = fields.CharField(max_length=100, description="发票号码")
     invoice_date = fields.DateField(description="发票日期")
+    settlement_closing_date = fields.DateField(
+        null=True, description="结账日期"
+    )
+    department_id = fields.IntField(null=True, description="部门ID")
+    department_name = fields.CharField(max_length=200, null=True, description="部门名称")
+    ledger_posting_mode = fields.CharField(
+        max_length=16,
+        null=True,
+        description="立账方式 immediate 已立账 | by_invoice 发票立账",
+    )
     invoice_type = fields.CharField(max_length=20, description="发票类型")
     tax_period = fields.CharField(max_length=7, null=True, description="税务属期 YYYY-MM")
     tax_rate = fields.DecimalField(max_digits=5, decimal_places=2, description="税率")

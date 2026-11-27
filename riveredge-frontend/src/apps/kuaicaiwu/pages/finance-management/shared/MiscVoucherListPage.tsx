@@ -8,67 +8,98 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Form, Input, InputNumber, Row, Select, Space, theme, type TableColumnsType } from 'antd';
-import { PrinterOutlined } from '@ant-design/icons';
+import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { App, Button, Col, Descriptions, Form, Input, InputNumber, Row, Select, Space, Table, theme } from 'antd';
+import type { TableColumnsType } from 'antd';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import type { FormListFieldData } from 'antd/es/form/FormList';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import {
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
-import {
-  MiscVoucherDetailDrawer,
-  type MiscVoucherDetailRecord,
-} from './MiscVoucherDetailDrawer';
+import { MiscVoucherDetailDrawer } from './MiscVoucherDetailDrawer';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates/constants';
 import { UniDropdown, QuickCreateModal } from '../../../../../components/uni-dropdown';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
-import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
+import {
+  UniAuditBatchMenuButton,
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { useKuaizhizaoPrintModal } from '../../../../kuaizhizao/hooks/useKuaizhizaoPrintModal';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
+import { isPendingReviewStatus } from '../../../../kuaizhizao/constants/documentStatus';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { formatCurrencyAmount } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
-import {
-  coerceFormDate,
-  formDateRangeFormItemProps,
-  toApiDateString,
-} from '../../../../../utils/formDate';
+import { coerceFormDate, toApiDateString } from '../../../../../utils/formDate';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   assertBankAccountForPaymentMethod,
   BANK_TRANSFER_PAYMENT_METHOD,
   buildMiscVoucherStatusEnum,
   formatBankAccountOptionLabel,
+  formatPaymentMethod,
   getPaymentMethodOptions,
   isEmployeeAdvancePaymentMethod,
 } from '../../../utils/financeSharedOptions';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+  openDocumentAttachment,
+  type DocumentAttachmentFile,
+} from '../../../../kuaizhizao/utils/documentAttachments';
+import { resolveAdvancePayeeName } from './PaymentAdvancePayeeField';
+import { formatPayeeAccountFields } from '../../../utils/partnerPayeeAccounts';
 import {
   UniPullQueryModal,
-  renderPullQueryDocStatus,
-  toUniPullQueryHttpParams,
   useUniPullQuery,
+  toUniPullQueryHttpParams,
+  renderPullQueryDocStatus,
   renderPullQueryEmptyValue,
   renderPullQueryOptionalText,
 } from '../../../../../components/uni-pull-query';
 import {
+  DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
   DOCUMENT_LINE_MATERIALS_KEY,
   renderDocumentLineMaterialsPreview,
+  type DocumentLineMaterialPreviewItem,
 } from '../../../../../components/document-line-materials-preview';
-import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
-import { useKuaizhizaoPrintModal } from '../../../../kuaizhizao/hooks/useKuaizhizaoPrintModal';
 import {
-  mapAttachmentsToUploadList,
-  normalizeDocumentAttachments,
-} from '../../../../kuaizhizao/utils/documentAttachments';
+  otherExpenseService,
+  type OtherExpenseApplicationPullCandidate,
+  type OtherExpensePurchaseReceiptLinkCandidate,
+  type RelatedPurchaseReceiptRef,
+} from '../../../services/finance/other-expense';
+import { otherExpenseApplicationService } from '../../../services/finance/other-expense-application';
+import { UniPullCreateToolbar, type UniPullMenuItem } from '../../../../../components/uni-pull';
+import {
+  buildUniPushMenuItem,
+  buildUniPushMenuItems,
+  buildUniPushToolbarDisabledReason,
+  UniPushToolbarButton,
+} from '../../../../../components/uni-push';
+import {
+  OTHER_EXPENSE_APPLICATION_UI_ENTRIES_ENABLED,
+  buildKuaicaiwuPullCreateMenuItems,
+  getKuaicaiwuDocumentAction,
+} from '../../../constants/documentActionRegistry';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import {
@@ -77,9 +108,11 @@ import {
   type MiscCategoryKind,
 } from '../../../services/finance/finance-misc-category';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { createListAuditPhaseColumn } from '../../../../kuaizhizao/pages/sales-management/shared/listAuditPhaseColumn';
 import { buildDocumentAuditColumns } from '../../../../kuaizhizao/pages/shared/documentAuditColumns';
 import {
   FINANCE_DOC_PINNED_STATUS_FIELD,
+  FINANCE_INVOICE_PINNED_REVIEW_FIELD,
   financeDocCodePartnerSearchColumns,
   resolveMiscVoucherListKeywordParams,
 } from '../../../utils/financeListCore';
@@ -90,30 +123,42 @@ import {
   loadUserFormReferenceOptions,
   type DocumentFormSelectOption,
 } from '../../../../../utils/documentFormReferenceLoad';
+import { ReferenceDisplayAccessError } from '../../../../../utils/referenceDisplay';
+import { useQuery } from '@tanstack/react-query';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
 import {
-  otherExpenseService,
-  type OtherExpensePurchaseReceiptLinkCandidate,
-  type RelatedPurchaseReceiptRef,
-} from '../../../services/finance/other-expense';
+  buildOtherExpensePayableLedgerRecognitionOptions,
+  buildPayableLedgerRecognitionOptions,
+  buildRevenueLedgerRecognitionOptions,
+  orgFinancePayableDefault,
+  orgFinanceRevenueDefault,
+  otherExpenseSupplierPayableRecognitionForForm,
+  payableLedgerRecognitionLabel,
+} from '../../../../../utils/documentLedgerRecognition';
+import { MiscVoucherCounterpartyPayeeSection } from './MiscVoucherCounterpartyPayeeSection';
 
 type VoucherKind = 'income' | 'expense';
-type AuditEntityType = 'other_income' | 'other_expense';
+type AuditEntityType = 'other_income' | 'other_expense' | 'other_expense_application';
+type DocumentVariant = 'default' | 'expense_application';
 
 type VoucherRow = {
   id: number;
   income_code?: string;
   expense_code?: string;
+  application_code?: string;
+  pushed_amount?: number;
+  remaining_amount?: number;
   business_date?: string;
   total_amount?: number;
   status?: string;
+  review_status?: string;
   counterparty_kind?: string;
   counterparty_id?: number | null;
   counterparty_name?: string;
   payment_method?: string;
   notes?: string;
-  review_status?: string;
-  audit?: unknown;
-  capabilities?: Record<string, { allowed: boolean }>;
+  capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
+  audit?: { phase?: string; allowed_actions?: string[]; [key: string]: unknown };
   receivable_id?: number | null;
   receivable_code?: string | null;
   receipt_id?: number | null;
@@ -122,28 +167,49 @@ type VoucherRow = {
   payable_code?: string | null;
   payment_id?: number | null;
   payment_code?: string | null;
-  department_id?: number | null;
-  department_name?: string | null;
-  attachments?: unknown[];
-  related_purchase_receipts?: RelatedPurchaseReceiptRef[] | null;
+  lines?: LineFormRow[];
 };
 
 type LineFormRow = {
   category_code?: string;
+  category_name?: string;
   amount?: number;
   description?: string;
   payee_id?: number;
   payee_name?: string;
 };
 
+function mapOtherExpenseLinePreviewItems(
+  lines: LineFormRow[] | undefined,
+): DocumentLineMaterialPreviewItem[] {
+  if (!lines?.length) return [];
+  const out: DocumentLineMaterialPreviewItem[] = [];
+  for (const line of lines) {
+    const category = String(line.category_name ?? line.category_code ?? '').trim();
+    const description = String(line.description ?? '').trim();
+    const materialName = description || category;
+    if (!materialName) continue;
+    out.push({
+      material_name: materialName,
+      material_code: category && description ? category : undefined,
+    });
+  }
+  return out;
+}
+
 type MiscVoucherListPageProps = {
   kind: VoucherKind;
+  documentVariant?: DocumentVariant;
   auditEntityType: AuditEntityType;
   resource: string;
   hostResource: string;
   menuTitleKey: string;
   i18nPrefix: string;
   columnPersistenceId: string;
+  /** 与 i18nPrefix 分设时用于新建/编辑标题与工具栏新建文案 */
+  createButtonI18nKey?: string;
+  createTitleI18nKey?: string;
+  editTitleI18nKey?: string;
   service: {
     list: (params?: Record<string, unknown>) => Promise<{ items: VoucherRow[]; total: number }>;
     get: (id: number) => Promise<VoucherRow & { lines?: LineFormRow[]; notes?: string; bank_account_id?: number; counterparty_kind?: string }>;
@@ -151,6 +217,10 @@ type MiscVoucherListPageProps = {
     update: (id: number, data: Record<string, unknown>) => Promise<unknown>;
     delete: (id: number) => Promise<unknown>;
     submit: (id: number) => Promise<unknown>;
+    commit?: (id: number) => Promise<unknown>;
+    submitForReview?: (id: number) => Promise<unknown>;
+    withdraw?: (id: number) => Promise<unknown>;
+    revoke?: (id: number) => Promise<unknown>;
     approve: (id: number) => Promise<unknown>;
     reject: (id: number) => Promise<unknown>;
     confirm: (id: number) => Promise<unknown>;
@@ -159,15 +229,27 @@ type MiscVoucherListPageProps = {
   };
 };
 
+function incomeReviewRaw(row: VoucherRow): string {
+  return String(row.review_status || '').trim();
+}
+
 function capAllowed(row: VoucherRow, action: string) {
   return row.capabilities?.[action]?.allowed === true;
 }
 
-function resolveDocCode(row: VoucherRow, codeField: 'income_code' | 'expense_code') {
+function resolveDocCode(
+  row: VoucherRow,
+  codeField: 'income_code' | 'expense_code' | 'application_code',
+) {
   return String(row[codeField] ?? '').trim();
 }
 
 const COUNTERPARTY_KINDS = ['none', 'customer', 'supplier', 'employee', 'other'] as const;
+
+/** 注册不展示的 Form 字段（如关联入库快照数组） */
+function FormValueSink(_props: { value?: unknown; onChange?: (v: unknown) => void }) {
+  return null;
+}
 
 type MiscCategoryQuickSelectProps = {
   value?: string;
@@ -273,29 +355,34 @@ const MiscCategoryQuickSelect: React.FC<MiscCategoryQuickSelectProps> = ({
   );
 };
 
-function FormValueSink(_props: { value?: unknown; onChange?: (v: unknown) => void }) {
-  return null;
-}
-
 export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
   kind,
+  documentVariant = 'default',
   auditEntityType,
   resource,
   hostResource,
   menuTitleKey,
   i18nPrefix,
   columnPersistenceId,
+  createButtonI18nKey,
+  createTitleI18nKey,
+  editTitleI18nKey,
   service,
 }) => {
   const { t } = useTranslation();
-  const { message: messageApi } = App.useApp();
+  const { message: messageApi, modal } = App.useApp();
   const { token } = theme.useToken();
   const linkedDetail = useLinkedDocumentDetail();
   const actionRef = useRef<ActionType>();
   const tableRowsRef = useRef<VoucherRow[]>([]);
   const perms = useResourcePermissions(resource);
   const miscCategoryPerms = useResourcePermissions('kuaicaiwu:finance-misc-category');
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const auditEnabled = useAuditRequired(auditEntityType, true);
+  const miscAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<VoucherRow>({ t, auditEnabled }),
+    [t, auditEnabled],
+  );
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<VoucherRow | null>(null);
@@ -308,19 +395,30 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
   const [customerOptions, setCustomerOptions] = useState<DocumentFormSelectOption[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<DocumentFormSelectOption[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<DocumentFormSelectOption[]>([]);
-  const [departmentOptions, setDepartmentOptions] = useState<DocumentFormSelectOption[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: number }>>([]);
   const formRef = useRef<ProFormInstance>();
   const pendingFormValuesRef = useRef<Record<string, unknown> | null>(null);
-  const pullReceiptSupplierIdRef = useRef<number>(0);
+  const pullReceiptSupplierIdRef = useRef<number | null>(null);
   const purchaseReceiptLinkCloseRef = useRef<(() => void) | null>(null);
-  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
-
-  const catKind: MiscCategoryKind = kind;
-  const isOtherExpenseDoc = kind === 'expense';
-  const codeField = kind === 'income' ? 'income_code' : 'expense_code';
   const attachmentCategory =
     kind === 'income' ? 'other_income_attachments' : 'other_expense_attachments';
   const nestedPullZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+
+  const catKind: MiscCategoryKind = kind;
+  const isExpenseApplication = documentVariant === 'expense_application';
+  const isOtherExpenseDoc = kind === 'expense' && !isExpenseApplication;
+  const isExpenseKind = kind === 'expense';
+  const codeField: 'income_code' | 'expense_code' | 'application_code' = isExpenseApplication
+    ? 'application_code'
+    : kind === 'income'
+      ? 'income_code'
+      : 'expense_code';
+  const pullFromApplicationAction =
+    OTHER_EXPENSE_APPLICATION_UI_ENTRIES_ENABLED &&
+    kind === 'expense' &&
+    !isExpenseApplication
+      ? getKuaicaiwuDocumentAction('other_expense.pull_from_application')
+      : null;
 
   const selectedRowsForBatch = useMemo(
     () =>
@@ -329,6 +427,11 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         .filter((row): row is VoucherRow => row != null),
     [selectedRowKeys],
   );
+
+  const selectedVoucherForToolbar = useMemo(() => {
+    if (selectedRowsForBatch.length !== 1) return null;
+    return selectedRowsForBatch[0] ?? null;
+  }, [selectedRowsForBatch]);
 
   const auditBatchHandlers = useMemo(
     () => ({
@@ -343,15 +446,192 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     actionRef.current?.reload();
   }, []);
 
-  // 其他收支为单段审核（后端无 review_status 两段式），保持非拆分分支
-  const incomeSaveSubmitSplit = false;
+  const miscAuditEntityName = t(menuTitleKey);
+  const {
+    runAction: runMiscAuditBatch,
+    auditModal: miscIncomeAuditModal,
+  } = useAuditBatchRunner<VoucherRow>({
+    permGates: perms,
+    handlers: {
+      approve: (id: number) => service.approve(id),
+      revoke: (id: number) =>
+        service.revoke ? service.revoke(id) : Promise.reject(new Error('revoke unavailable')),
+      withdraw: (id: number) =>
+        service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable')),
+    },
+    onBatchComplete: handleAuditBatchSuccess,
+    auditEntity: {
+      entityType: auditEntityType,
+      entityName: miscAuditEntityName,
+    },
+  });
+
+  const incomeSaveSubmitSplit = kind === 'income' || kind === 'expense' || isExpenseApplication;
+
+  const incomeToolbarAuditMenus = useMemo(() => {
+    if (!incomeSaveSubmitSplit) {
+      return { submitItems: [] as UniBatchMenuItem[], auditItems: [] as UniBatchMenuItem[] };
+    }
+    const selected = tableRowsRef.current.filter((row) => selectedRowKeys.includes(row.id));
+    const reviewOf = (row: VoucherRow) => incomeReviewRaw(row);
+    const allowed = (row: VoucherRow, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      records: VoucherRow[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys: records.map((row) => Number(row.id)),
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: () => {
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        },
+        message: messageApi,
+        t,
+      });
+    const submitRows = selected.filter((row) => allowed(row, 'submit'));
+    const canSubmit = Boolean(perms.canAction?.('submit'));
+    const submitDisabled = !selected.some((row) => allowed(row, 'submit'));
+    const onBatchSuccess = () => {
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    };
+    const commitFn = (id: number) => (service.commit ? service.commit(id) : service.submit(id));
+    const submitReviewFn = (id: number) =>
+      service.submitForReview
+        ? service.submitForReview(id)
+        : Promise.reject(new Error('submitForReview unavailable'));
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: () => run(submitRows, 'submit', canSubmit, commitFn),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t(`${i18nPrefix}.toolbar.withdrawSubmit`),
+          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+          onClick: () =>
+            run(
+              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+              'withdraw_submit',
+              canSubmit,
+              (id) => (service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable'))),
+            ),
+        },
+        {
+          key: 'submit-review',
+          label: t(`${i18nPrefix}.toolbar.submitReview`),
+          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+          onClick: () =>
+            run(
+              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+              'submit_review',
+              canSubmit,
+              submitReviewFn,
+              t(`${i18nPrefix}.toolbar.submitReviewNotAllowed`),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: commitFn,
+        submitReview: submitReviewFn,
+        onSuccess: onBatchSuccess,
+      },
+    );
+    const approveRows = selected.filter(
+      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('components.uniAction.audit'),
+        disabled: !selected.some(
+          (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+        ),
+        onClick: () =>
+          void runMiscAuditBatch(
+            'approve',
+            approveRows.map((row) => Number(row.id)),
+            approveRows,
+            auditEnabled,
+          ),
+      },
+      {
+        key: 'withdraw-review',
+        label: t(`${i18nPrefix}.toolbar.withdrawReview`),
+        disabled: !selected.some(
+          (row) =>
+            reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'withdraw_submit'),
+        ),
+        onClick: () =>
+          run(
+            selected.filter(
+              (row) =>
+                reviewOf(row) !== 'SUBMITTED'
+                && isPendingReviewStatus(reviewOf(row))
+                && allowed(row, 'withdraw_submit'),
+            ),
+            'withdraw_submit',
+            Boolean(perms.canAction?.('submit')),
+            (id) => (service.withdraw ? service.withdraw(id) : Promise.reject(new Error('withdraw unavailable'))),
+          ),
+      },
+      {
+        key: 'revoke',
+        label: t(`${i18nPrefix}.toolbar.revoke`),
+        disabled: !selected.some((row) => allowed(row, 'revoke_approval')),
+        onClick: () =>
+          run(
+            selected.filter((row) => allowed(row, 'revoke_approval')),
+            'revoke_approval',
+            Boolean(perms.canAction?.('revoke')),
+            (id) => (service.revoke ? service.revoke(id) : Promise.reject(new Error('revoke unavailable'))),
+          ),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [
+    incomeSaveSubmitSplit,
+    selectedRowKeys,
+    perms,
+    service,
+    messageApi,
+    t,
+    i18nPrefix,
+    runMiscAuditBatch,
+    auditEnabled,
+  ]);
+
+  const incomeReviewStatusEnum = useMemo(
+    () => ({
+      草稿: { text: t('app.kuaicaiwu.financeLifecycle.voucherDraft') },
+      SUBMITTED: { text: t('common.submitted') },
+      待审核: { text: t('app.kuaicaiwu.financeStatus.review.pending') },
+      已审核: { text: t('app.kuaicaiwu.financeStatus.review.approved') },
+      已驳回: { text: t('app.kuaicaiwu.financeStatus.review.rejected') },
+    }),
+    [t],
+  );
 
   const miscWorkflowStatuses = useMemo(() => {
-    // 收支拆开审核后：业务 status 仍是 Draft/Confirmed；审核态在 review_status。
-    // UniWorkflowActions 须以 review_status 为 statusField，禁止把业务 Draft 当草稿。
     if (incomeSaveSubmitSplit) {
       return {
-        draftStatuses: ['草稿'],
+        draftStatuses: ['草稿', 'Draft', 'SUBMITTED'],
         pendingStatuses: ['待审核'],
         approvedStatuses: ['已审核', '审核通过', '已通过', '通过'],
         rejectedStatuses: ['已驳回', '驳回'],
@@ -364,7 +644,6 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       rejectedStatuses: ['Rejected', '已驳回'],
     };
   }, [incomeSaveSubmitSplit]);
-
 
   const reloadAfterWorkflow = useCallback(
     (rowId?: number) => {
@@ -392,6 +671,19 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     [categories],
   );
 
+  const renderMiscDocumentStatus = useCallback(
+    (row: VoucherRow) => {
+      if (!incomeSaveSubmitSplit || row.status === 'Confirmed' || row.status === 'Cancelled') {
+        return renderMiscStatusTag(row.status);
+      }
+      const review = incomeReviewRaw(row) || '草稿';
+      const label =
+        incomeReviewStatusEnum[review as keyof typeof incomeReviewStatusEnum]?.text ?? review;
+      return renderDocumentStatusTag(label, review);
+    },
+    [incomeSaveSubmitSplit, incomeReviewStatusEnum, renderMiscStatusTag],
+  );
+
   const canQuickAddCategory = perms.canCreate || miscCategoryPerms.canCreate;
 
   const reloadCategories = useCallback(async () => {
@@ -402,50 +694,132 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     setCategories(Array.isArray(cats) ? cats : []);
   }, [catKind]);
 
-  const counterpartyKindOptions = useMemo(
+  const { data: financeBusinessConfig } = useQuery({
+    queryKey: ['businessConfigFinanceRecognition', kind],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const ledgerRecognitionOptions = useMemo(
     () =>
-      COUNTERPARTY_KINDS.map((value) => ({
-        value,
-        label: t(`${i18nPrefix}.counterparty.${value}`),
-      })),
-    [i18nPrefix, t],
+      kind === 'income'
+        ? buildRevenueLedgerRecognitionOptions(t)
+        : isOtherExpenseDoc
+          ? buildOtherExpensePayableLedgerRecognitionOptions(t)
+          : buildPayableLedgerRecognitionOptions(t),
+    [isOtherExpenseDoc, kind, t],
+  );
+  const orgLedgerRecognitionDefault = useMemo(() => {
+    const raw =
+      kind === 'income'
+        ? orgFinanceRevenueDefault(financeBusinessConfig)
+        : orgFinancePayableDefault(financeBusinessConfig);
+    if (isOtherExpenseDoc && kind === 'expense') {
+      return otherExpenseSupplierPayableRecognitionForForm(raw);
+    }
+    return raw;
+  }, [financeBusinessConfig, isOtherExpenseDoc, kind]);
+  const ledgerRecognitionFieldName = kind === 'income' ? 'revenue_recognition' : 'payable_recognition';
+
+  const onCounterpartyKindChange = useCallback(
+    (nextKind: string) => {
+      formRef.current?.setFieldsValue({
+        counterparty_id: undefined,
+        counterparty_name: undefined,
+        counterparty_account_name: undefined,
+        counterparty_bank_name: undefined,
+        counterparty_bank_account: undefined,
+        related_purchase_receipts: [],
+        ...(isOtherExpenseDoc
+          ? {
+              payable_recognition:
+                String(nextKind) === 'supplier' ? orgLedgerRecognitionDefault : 'manual',
+            }
+          : {}),
+      });
+      if (kind === 'expense') {
+        pullReceiptSupplierIdRef.current = null;
+        purchaseReceiptLinkCloseRef.current?.();
+      }
+    },
+    [isOtherExpenseDoc, kind, orgLedgerRecognitionDefault],
   );
 
+  const counterpartyKindOptions = useMemo(() => {
+    const kinds = isExpenseKind
+      ? COUNTERPARTY_KINDS.filter((value) => value !== 'none')
+      : [...COUNTERPARTY_KINDS];
+    return kinds.map((value) => ({
+      value,
+      label: t(`${i18nPrefix}.counterparty.${value}`),
+    }));
+  }, [i18nPrefix, isExpenseKind, t]);
+
   const loadMeta = useCallback(async () => {
-    try {
-      const [banks, cats, customers, suppliers, employees, departments] = await Promise.all([
-        bankAccountService.list({ limit: 200, is_active: true }),
-        financeMiscCategoryService.list(catKind, { is_active: true, ensure_defaults: true }),
-        loadCustomerFormReferenceList(hostResource),
-        loadSupplierFormReferenceList(hostResource),
-        loadUserFormReferenceOptions(hostResource),
-        loadDepartmentFormReferenceOptions(hostResource),
-      ]);
-      setBankAccounts(banks.data ?? []);
-      setCategories(Array.isArray(cats) ? cats : []);
+    const settled = await Promise.allSettled([
+      bankAccountService.list({ limit: 200, is_active: true }),
+      financeMiscCategoryService.list(catKind, { is_active: true, ensure_defaults: true }),
+      loadCustomerFormReferenceList(hostResource),
+      loadSupplierFormReferenceList(hostResource),
+      loadUserFormReferenceOptions(hostResource),
+      loadDepartmentFormReferenceOptions(hostResource),
+    ]);
+
+    const warnReferenceDenied = (result: PromiseSettledResult<unknown>, label: string) => {
+      if (result.status !== 'rejected') {
+        return;
+      }
+      const reason = result.reason;
+      if (reason instanceof ReferenceDisplayAccessError) {
+        messageApi.warning(
+          reason.message ||
+            t('app.kuaicaiwu.otherExpense.referenceLoadDenied', { label, defaultValue: `${label}加载被拒绝，请授予查看或回显权限` }),
+        );
+      }
+    };
+
+    const [banksR, catsR, customersR, suppliersR, employeesR, deptR] = settled;
+    warnReferenceDenied(customersR, t('app.kuaicaiwu.otherExpense.counterparty.customer', { defaultValue: '客户' }));
+    warnReferenceDenied(suppliersR, t('app.kuaicaiwu.otherExpense.counterparty.supplier', { defaultValue: '供应商' }));
+    warnReferenceDenied(employeesR, t('app.kuaicaiwu.otherExpense.counterparty.employee', { defaultValue: '职员' }));
+    warnReferenceDenied(deptR, t(`${i18nPrefix}.field.department`));
+
+    if (banksR.status === 'fulfilled') {
+      setBankAccounts(banksR.value.data ?? []);
+    }
+    if (catsR.status === 'fulfilled') {
+      setCategories(Array.isArray(catsR.value) ? catsR.value : []);
+    }
+    if (customersR.status === 'fulfilled') {
       setCustomerOptions(
-        customers.map((c) => ({
+        customersR.value.map((c) => ({
           value: c.id,
           label: String(c.name ?? c.code ?? c.id),
         })),
       );
+    } else {
+      setCustomerOptions([]);
+    }
+    if (suppliersR.status === 'fulfilled') {
       setSupplierOptions(
-        suppliers.map((s) => ({
+        suppliersR.value.map((s) => ({
           value: s.id,
           label: String(s.name ?? s.code ?? s.id),
         })),
       );
-      setEmployeeOptions(employees);
-      setDepartmentOptions(departments);
-    } catch {
-      setBankAccounts([]);
-      setCategories([]);
-      setCustomerOptions([]);
+    } else {
       setSupplierOptions([]);
+    }
+    if (employeesR.status === 'fulfilled') {
+      setEmployeeOptions(employeesR.value);
+    } else {
       setEmployeeOptions([]);
+    }
+    if (deptR.status === 'fulfilled') {
+      setDepartmentOptions(deptR.value);
+    } else {
       setDepartmentOptions([]);
     }
-  }, [catKind, hostResource]);
+  }, [catKind, hostResource, i18nPrefix, messageApi, t]);
 
   useEffect(() => {
     void loadMeta();
@@ -488,6 +862,102 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     },
   });
   purchaseReceiptLinkCloseRef.current = purchaseReceiptLinkQuery.closeModal;
+
+  const pullFromApplicationCloseRef = useRef<(() => void) | null>(null);
+  const pullFromApplicationQuery = useUniPullQuery<OtherExpenseApplicationPullCandidate>({
+    rowKey: 'id',
+    selectionType: 'checkbox',
+    loadData: async (params) => {
+      const http = toUniPullQueryHttpParams(params);
+      try {
+        const res = await otherExpenseService.listApplicationPullCandidates({
+          skip: http.skip,
+          limit: http.limit,
+          ...(http.keyword ? { keyword: http.keyword } : {}),
+        });
+        return { data: res.data ?? [], total: res.total ?? 0 };
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t(`${i18nPrefix}.loadPullFailed`)));
+        return { data: [], total: 0 };
+      }
+    },
+    isRowDisabled: (record) => record.capabilities?.pull_other_expense?.allowed === false,
+    onConfirm: async (keys, rows) => {
+      const selectedRows = rows.filter((row) => keys.some((k) => String(k) === String(row.id)));
+      const selected = selectedRows[0];
+      if (!selected?.id) {
+        messageApi.warning(
+          t(`${i18nPrefix}.selectPullSource`, {
+            label: pullFromApplicationAction?.sourceLabel ?? '',
+          }),
+        );
+        return;
+      }
+      try {
+        const preview = await otherExpenseService.previewFromApplication(Number(selected.id));
+        if (preview.has_blocking_issues) {
+          messageApi.warning(String(preview.blocking_reason || t(`${i18nPrefix}.pullBlocked`)));
+          return;
+        }
+        const header = (preview.header ?? {}) as Record<string, unknown>;
+        const items = (preview.items ?? []) as Array<Record<string, unknown>>;
+        pendingFormValuesRef.current = {
+          business_date: header.business_date ? dayjs(String(header.business_date)) : dayjs(),
+          counterparty_kind: header.counterparty_kind ?? 'none',
+          counterparty_id: header.counterparty_id,
+          counterparty_name: header.counterparty_name,
+          payment_method: header.payment_method,
+          bank_account_id: header.bank_account_id,
+          department_id: header.department_id,
+          notes: header.notes,
+          payable_recognition: otherExpenseSupplierPayableRecognitionForForm(
+            header.payable_recognition as string | undefined,
+          ),
+          source_type: 'other_expense_application',
+          source_id: preview.source_id,
+          source_code: preview.source_code,
+          lines: items.length
+            ? items.map((item) => ({
+                category_code: item.category_code,
+                amount: Number(item.max_push_quantity ?? 0),
+                description: item.description,
+                payee_id: item.payee_id,
+                payee_name: item.payee_name,
+              }))
+            : [{}],
+        };
+        pullFromApplicationCloseRef.current?.();
+        if (selectedRows.length > 1) {
+          messageApi.info(t('components.uniPullQuery.multiSelectedFirstOnly'));
+        }
+        setEditing(null);
+        setModalOpen(true);
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t(`${i18nPrefix}.loadPullFailed`)));
+      }
+    },
+  });
+  pullFromApplicationCloseRef.current = pullFromApplicationQuery.closeModal;
+
+  const handlePushOtherExpense = useCallback(
+    async (row: VoucherRow) => {
+      if (!isExpenseApplication) return;
+      try {
+        const res = await otherExpenseApplicationService.pushOtherExpense(row.id);
+        messageApi.success(
+          t(`${i18nPrefix}.pushSuccess`, { code: res.expense_code ?? res.expense_id }),
+        );
+        actionRef.current?.reload();
+        if (detailRow?.id === row.id) {
+          const full = await service.get(row.id);
+          setDetailRow(full);
+        }
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t(`${i18nPrefix}.pushFailed`)));
+      }
+    },
+    [detailRow?.id, i18nPrefix, isExpenseApplication, messageApi, service, t],
+  );
 
   const openPurchaseReceiptLink = useCallback(() => {
     if (kind !== 'expense') return;
@@ -573,39 +1043,82 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
   const fillPendingFormFromVoucher = useCallback(
     (full: Awaited<ReturnType<typeof service.get>>, options?: { forCopy?: boolean }) => {
       const forCopy = options?.forCopy === true;
+      const fullExt = full as typeof full & {
+        department_id?: number | null;
+        attachments?: unknown;
+        revenue_recognition?: string;
+        revenueRecognition?: string;
+        payable_recognition?: string;
+        payableRecognition?: string;
+        source_type?: string;
+        source_id?: number;
+        source_code?: string;
+      };
+      const loadedCounterpartyKind = full.counterparty_kind ?? 'none';
       pendingFormValuesRef.current = {
         business_date: forCopy
           ? dayjs()
           : full.business_date
             ? dayjs(full.business_date)
             : dayjs(),
-        counterparty_kind: full.counterparty_kind ?? 'none',
+        counterparty_kind:
+          isExpenseKind && loadedCounterpartyKind === 'none' ? 'other' : loadedCounterpartyKind,
         counterparty_id: full.counterparty_id,
         counterparty_name: full.counterparty_name,
+        counterparty_account_name: (full as { counterparty_account_name?: string })
+          .counterparty_account_name,
+        counterparty_bank_name: (full as { counterparty_bank_name?: string }).counterparty_bank_name,
+        counterparty_bank_account: (full as { counterparty_bank_account?: string })
+          .counterparty_bank_account,
         payment_method: full.payment_method,
         bank_account_id: full.bank_account_id,
-        department_id: full.department_id ?? undefined,
+        department_id: fullExt.department_id ?? undefined,
+        notes: full.notes,
         attachments: mapAttachmentsToUploadList(
-          full.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
+          fullExt.attachments as Parameters<typeof mapAttachmentsToUploadList>[0],
         ),
         related_purchase_receipts: forCopy
           ? []
-          : ((full.related_purchase_receipts as RelatedPurchaseReceiptRef[] | undefined) ?? []),
-        advance_payee_id:
-          (full.lines ?? []).find((l) => l.payee_id != null)?.payee_id ?? undefined,
-        notes: full.notes,
+          : ((fullExt as { related_purchase_receipts?: RelatedPurchaseReceiptRef[] })
+              .related_purchase_receipts ?? []),
+        revenue_recognition: fullExt.revenue_recognition ?? fullExt.revenueRecognition,
+        payable_recognition:
+          isOtherExpenseDoc && loadedCounterpartyKind === 'supplier'
+            ? otherExpenseSupplierPayableRecognitionForForm(
+                fullExt.payable_recognition ?? fullExt.payableRecognition,
+              )
+            : isOtherExpenseDoc
+              ? 'manual'
+              : (fullExt.payable_recognition ?? fullExt.payableRecognition),
         lines: (full.lines ?? []).length
           ? (full.lines ?? []).map((l) => ({
               category_code: l.category_code,
               amount: Number(l.amount),
               description: l.description,
-              payee_id: l.payee_id,
-              payee_name: l.payee_name,
+              payee_id: (l as LineFormRow).payee_id,
+              payee_name: (l as LineFormRow).payee_name,
             }))
           : [{}],
+        ...(forCopy || !(fullExt.source_type && fullExt.source_id)
+          ? {}
+          : {
+              source_type: fullExt.source_type,
+              source_id: fullExt.source_id,
+              source_code: fullExt.source_code,
+            }),
+        ...(isOtherExpenseDoc
+          ? {
+              employee_advance_enabled: isEmployeeAdvancePaymentMethod(full.payment_method),
+              advance_payee_id: (
+                (full.lines ?? []).find((l) => (l as LineFormRow).payee_id != null) as
+                  | LineFormRow
+                  | undefined
+              )?.payee_id,
+            }
+          : {}),
       };
     },
-    [],
+    [isExpenseKind, isOtherExpenseDoc],
   );
 
   const openEdit = useCallback(
@@ -626,7 +1139,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     [fillPendingFormFromVoucher, i18nPrefix, messageApi, service, t],
   );
 
-  const canCopySelectedVoucher = kind === 'expense';
+  const canCopySelectedVoucher = isExpenseApplication || isOtherExpenseDoc;
 
   const openCopySelectedVoucher = useCallback(async () => {
     if (!canCopySelectedVoucher) {
@@ -634,7 +1147,13 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     }
     const row = selectedRowsForBatch.length === 1 ? selectedRowsForBatch[0] : null;
     if (!row) {
-      messageApi.warning(t(`${i18nPrefix}.selectToCopy`));
+      messageApi.warning(
+        t(
+          isExpenseApplication
+            ? 'app.kuaicaiwu.otherExpenseApplication.selectToCopy'
+            : `${i18nPrefix}.selectToCopy`,
+        ),
+      );
       return;
     }
     try {
@@ -649,6 +1168,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     canCopySelectedVoucher,
     fillPendingFormFromVoucher,
     i18nPrefix,
+    isExpenseApplication,
     messageApi,
     selectedRowsForBatch,
     service,
@@ -685,20 +1205,27 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     if (!bankId) return '';
     const acc = bankAccounts.find((a) => a.id === bankId);
     return acc ? formatBankAccountOptionLabel(acc) : '';
-  }, [bankAccounts, detailRow]);
+  }, [bankAccounts, detailRow, t]);
 
   const handleSave = async (values: Record<string, unknown>) => {
-    assertBankAccountForPaymentMethod(
-      String(values.payment_method ?? ''),
-      values.bank_account_id as number | undefined,
-      t,
-    );
+    let paymentMethodForSave: string;
+    if (isExpenseApplication) {
+      paymentMethodForSave = BANK_TRANSFER_PAYMENT_METHOD;
+    } else {
+      paymentMethodForSave = String(values.payment_method ?? '');
+    }
+    if (kind === 'income') {
+      assertBankAccountForPaymentMethod(
+        paymentMethodForSave,
+        values.bank_account_id as number | undefined,
+        t,
+      );
+    }
     const employeeAdvance =
-      kind === 'expense' && isEmployeeAdvancePaymentMethod(String(values.payment_method ?? ''));
+      isOtherExpenseDoc && isEmployeeAdvancePaymentMethod(paymentMethodForSave);
     const headerAdvancePayeeId = values.advance_payee_id as number | undefined;
     const headerAdvancePayeeName = employeeAdvance
-      ? String(employeeOptions.find((o) => o.value === headerAdvancePayeeId)?.label ?? '').trim() ||
-        undefined
+      ? resolveAdvancePayeeName(headerAdvancePayeeId, employeeOptions)
       : undefined;
     if (employeeAdvance && (!headerAdvancePayeeId || !headerAdvancePayeeName)) {
       throw new Error(t('app.kuaicaiwu.payment.advancePayeeRequired'));
@@ -756,7 +1283,10 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     const related_purchase_receipts =
       kind === 'expense' && kindValue === 'supplier' && Array.isArray(relatedReceiptsRaw)
         ? (relatedReceiptsRaw as RelatedPurchaseReceiptRef[])
-            .map((r) => ({ id: Number(r.id), code: String(r.code || '').trim() }))
+            .map((r) => ({
+              id: Number(r.id),
+              code: String(r.code || '').trim(),
+            }))
             .filter((r) => Number.isFinite(r.id) && r.id > 0 && r.code)
         : kind === 'expense'
           ? []
@@ -769,16 +1299,46 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           ? counterpartyIdRaw
           : undefined,
       counterparty_name: kindValue === 'none' ? undefined : counterpartyName,
-      payment_method: values.payment_method,
-      bank_account_id: values.bank_account_id,
+      counterparty_account_name:
+        kind === 'expense' && (kindValue === 'supplier' || kindValue === 'employee')
+          ? (values.counterparty_account_name as string | undefined)
+          : undefined,
+      counterparty_bank_name:
+        kind === 'expense' && (kindValue === 'supplier' || kindValue === 'employee')
+          ? (values.counterparty_bank_name as string | undefined)
+          : undefined,
+      counterparty_bank_account:
+        kind === 'expense' && (kindValue === 'supplier' || kindValue === 'employee')
+          ? (values.counterparty_bank_account as string | undefined)
+          : undefined,
+      payment_method: paymentMethodForSave,
+      bank_account_id:
+        isExpenseKind ? undefined : (values.bank_account_id as number | undefined),
       department_id: departmentIdRaw,
       department_name: departmentName,
       attachments: normalizeDocumentAttachments(
-        values.attachments as Parameters<typeof normalizeDocumentAttachments>[0],
+        values.attachments as DocumentAttachmentFile[] | null | undefined,
       ),
       notes: values.notes,
       lines,
       ...(kind === 'expense' ? { related_purchase_receipts } : {}),
+      ...(kind === 'income'
+        ? { revenue_recognition: values.revenue_recognition }
+        : isExpenseApplication
+          ? {}
+          : {
+              payable_recognition:
+                kindValue === 'supplier'
+                  ? values.payable_recognition
+                  : 'manual',
+            }),
+      ...(values.source_type && values.source_id
+        ? {
+            source_type: values.source_type,
+            source_id: values.source_id,
+            source_code: values.source_code,
+          }
+        : {}),
     };
     if (editing) {
       await service.update(editing.id, payload);
@@ -807,6 +1367,112 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     },
     [detailOpen, detailRow, messageApi, service],
   );
+
+  const confirmPushFinanceVoucher = useCallback(
+    (row: VoucherRow) => {
+      const pushAction = kind === 'income' ? 'push_receipt' : 'push_payment';
+      const pushLabel =
+        kind === 'income'
+          ? t('app.kuaicaiwu.otherIncome.pushReceipt')
+          : t('app.kuaicaiwu.otherExpense.pushPayment');
+      if (!capAllowed(row, pushAction)) {
+        messageApi.warning(t(`${i18nPrefix}.toolbar.pushNotAllowed`));
+        return;
+      }
+      const code = resolveDocCode(row, codeField);
+      modal.confirm({
+        title: pushLabel,
+        content: t(`${i18nPrefix}.confirmPostDesc`, { code }),
+        onOk: () => runAction(pushLabel, () => service.confirm(row.id)),
+      });
+    },
+    [codeField, i18nPrefix, kind, messageApi, modal, runAction, service, t],
+  );
+
+  const toolbarPushMenuItems = useMemo(() => {
+    if (isExpenseApplication) {
+      return buildUniPushMenuItems([
+        buildUniPushMenuItem({
+          key: 'push-other-expense',
+          label: t('app.kuaicaiwu.otherExpenseApplication.pushOtherExpense'),
+          targetDocumentType: 'other_expense',
+          disabledReason:
+            selectedVoucherForToolbar
+            && (
+              perms.canAction?.('push') !== true
+              || selectedVoucherForToolbar.capabilities?.push_other_expense?.allowed !== true
+            )
+              ? t(`${i18nPrefix}.toolbar.pushNotAllowed`)
+              : undefined,
+          onClick: () => {
+            const row = selectedVoucherForToolbar;
+            if (!row?.id) return;
+            void handlePushOtherExpense(row);
+          },
+        }),
+      ]);
+    }
+    const pushAction = kind === 'income' ? 'push_receipt' : 'push_payment';
+    const pushLabel =
+      kind === 'income'
+        ? t('app.kuaicaiwu.otherIncome.pushReceipt')
+        : t('app.kuaicaiwu.otherExpense.pushPayment');
+    const targetDocumentType = kind === 'income' ? 'receipt' : 'payment';
+    return buildUniPushMenuItems([
+      buildUniPushMenuItem({
+        key: 'push-finance',
+        label: pushLabel,
+        targetDocumentType,
+        disabledReason:
+          selectedVoucherForToolbar
+          && (
+            perms.canAction?.('audit') !== true
+            || selectedVoucherForToolbar.capabilities?.[pushAction]?.allowed !== true
+          )
+            ? t(`${i18nPrefix}.toolbar.pushNotAllowed`)
+            : undefined,
+        onClick: () => {
+          const row = selectedVoucherForToolbar;
+          if (!row?.id) return;
+          confirmPushFinanceVoucher(row);
+        },
+      }),
+    ]);
+  }, [
+    confirmPushFinanceVoucher,
+    handlePushOtherExpense,
+    i18nPrefix,
+    isExpenseApplication,
+    kind,
+    perms,
+    selectedVoucherForToolbar,
+    t,
+  ]);
+
+  const toolbarPushDisabledReason = buildUniPushToolbarDisabledReason(t, {
+    selectedCount: selectedRowKeys.length,
+    hasSelectedRecord: Boolean(selectedVoucherForToolbar),
+  });
+
+  const toolbarPushSourceDocument = useMemo(() => {
+    if (!selectedVoucherForToolbar?.id) return null;
+    if (isExpenseApplication) {
+      return { type: 'other_expense_application', id: Number(selectedVoucherForToolbar.id) };
+    }
+    return {
+      type: kind === 'income' ? 'other_income' : 'other_expense',
+      id: Number(selectedVoucherForToolbar.id),
+    };
+  }, [isExpenseApplication, kind, selectedVoucherForToolbar]);
+
+  const toolbarPushTargets = useMemo<Record<string, string | string[]> | undefined>(() => {
+    if (isExpenseApplication) {
+      return { 'push-other-expense': 'other_expense' } as Record<string, string | string[]>;
+    }
+    return {
+      'push-finance': kind === 'income' ? 'receipt' : 'payment',
+    } as Record<string, string | string[]>;
+  }, [isExpenseApplication, kind]);
 
   const handleBatchDelete = useCallback(
     async (keys: React.Key[]) => {
@@ -920,6 +1586,30 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             sorter: true,
             render: (_, r) => formatCurrencyAmount(r.total_amount),
           },
+          ...(isOtherExpenseDoc
+            ? [
+                {
+                  title: t('app.kuaizhizao.common.colLineMaterials'),
+                  ...DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
+                  hideInSearch: true,
+                  render: (_: unknown, r: VoucherRow) =>
+                    renderDocumentLineMaterialsPreview(mapOtherExpenseLinePreviewItems(r.lines), t),
+                },
+              ]
+            : []),
+          ...(isExpenseApplication
+            ? [
+                {
+                  title: t('app.kuaicaiwu.otherExpenseApplication.col.remainingAmount'),
+                  dataIndex: 'remaining_amount',
+                  width: 120,
+                  uniTableKeepWidth: true,
+                  hideInSearch: true,
+                  align: 'right' as const,
+                  render: (_: unknown, r: VoucherRow) => formatCurrencyAmount(r.remaining_amount),
+                },
+              ]
+            : []),
           {
             title: t(`${i18nPrefix}.field.notes`),
             dataIndex: 'notes',
@@ -933,19 +1623,20 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           },
           {
             title: t('common.status'),
-            dataIndex: 'status',
+            dataIndex: incomeSaveSubmitSplit ? 'review_status' : 'status',
             hideInTable: true,
             order: 22,
-            valueEnum: miscStatusEnum,
+            valueEnum: incomeSaveSubmitSplit ? incomeReviewStatusEnum : miscStatusEnum,
           },
           ...buildDocumentAuditColumns<VoucherRow>(t),
+          ...(miscAuditColumn ? [miscAuditColumn] : []),
           {
             title: t('common.status'),
             key: 'lifecycle',
-            dataIndex: 'status',
+            dataIndex: incomeSaveSubmitSplit ? 'review_status' : 'status',
             fixed: 'right',
             hideInSearch: true,
-            render: (_, r) => renderMiscStatusTag(r.status),
+            render: (_, r) => renderMiscDocumentStatus(r),
           },
           {
             title: t('common.actions'),
@@ -965,25 +1656,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                   <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(row)} />,
                 );
               }
-              nodes.push(
-                <span {...rowActionKind('skip')} key="wf">
-                  <UniWorkflowActions
-                    {...rowActionKind('skip')}
-                    record={row}
-                    entityType={auditEntityType}
-                    auditNodeKey={auditEntityType}
-                    workflowAuditEnabled={auditEnabled}
-                    entityName={t(menuTitleKey)}
-                    statusField="status"
-                    {...miscWorkflowStatuses}
-                    onSuccess={() => reloadAfterWorkflow(row.id)}
-                  />
-                </span>,
-              );
-              const pushAction = kind === 'income' ? 'push_receipt' : 'push_payment';
-              const pushLabel =
-                kind === 'income' ? t('app.kuaicaiwu.otherIncome.pushReceipt') : t('app.kuaicaiwu.otherExpense.pushPayment');
-              if (perms.canAction?.('audit') && capAllowed(row, pushAction)) {
+              if (!incomeSaveSubmitSplit) {
                 nodes.push(
                   <span {...rowActionKind('skip')} key="wf">
                     <UniWorkflowActions
@@ -1002,7 +1675,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                   </span>,
                 );
               }
-              if (perms.canAction?.('revoke') && capAllowed(row, 'unconfirm')) {
+              if (!isExpenseApplication && perms.canAction?.('revoke') && capAllowed(row, 'unconfirm')) {
                 nodes.push(
                   <ActionConfirmPopconfirm
                     key="unconfirm"
@@ -1010,11 +1683,17 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                     description={t(`${i18nPrefix}.unconfirmDesc`, { code })}
                     onConfirm={() => void runAction(t(`${i18nPrefix}.unconfirm`), () => service.unconfirm(row.id))}
                   >
-                    <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()} />
+                    <Button
+                      {...rowActionKind('revoke')}
+                      {...rowActionLabelKeep()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t(`${i18nPrefix}.unconfirm`)}
+                    </Button>
                   </ActionConfirmPopconfirm>,
                 );
               }
-              if (perms.canAction?.('revoke') && capAllowed(row, 'cancel')) {
+              if (!isExpenseApplication && perms.canAction?.('revoke') && capAllowed(row, 'cancel')) {
                 nodes.push(
                   <ActionConfirmPopconfirm
                     key="cancel"
@@ -1022,20 +1701,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                     description={t(`${i18nPrefix}.voidDesc`, { code })}
                     onConfirm={() => void runAction(t('app.kuaicaiwu.common.void'), () => service.cancel(row.id))}
                   >
-                    <Button {...rowActionKind('revoke')} onClick={(e) => e.stopPropagation()} />
-                  </ActionConfirmPopconfirm>,
-                );
-              }
-              if (perms.canDelete && capAllowed(row, 'delete')) {
-                nodes.push(
-                  <ActionConfirmPopconfirm
-                    key="delete"
-                    title={t(`${i18nPrefix}.deleteTitle`)}
-                    description={t(`${i18nPrefix}.deleteDesc`, { code })}
-                    okType="danger"
-                    onConfirm={() => void runAction(t('common.deleteSuccess'), () => service.delete(row.id))}
-                  >
-                    <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+                    <Button {...rowActionKind('obsolete')} onClick={(e) => e.stopPropagation()} />
                   </ActionConfirmPopconfirm>,
                 );
               }
@@ -1050,8 +1716,12 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       auditEntityType,
       codeField,
       i18nPrefix,
+      incomeReviewStatusEnum,
+      incomeSaveSubmitSplit,
+      isOtherExpenseDoc,
       kind,
       menuTitleKey,
+      miscAuditColumn,
       miscStatusEnum,
       miscWorkflowStatuses,
       openDetail,
@@ -1059,6 +1729,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
       perms,
       reloadAfterWorkflow,
       renderMiscStatusTag,
+      renderMiscDocumentStatus,
       resource,
       runAction,
       service,
@@ -1066,13 +1737,57 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
     ],
   );
 
-  const createButtonText = t(`${i18nPrefix}.createButton`);
+  const createButtonText = t(createButtonI18nKey ?? `${i18nPrefix}.createButton`);
+  const usePullCreateToolbar = Boolean(
+    perms.canCreate && (pullFromApplicationAction || isExpenseApplication || isOtherExpenseDoc),
+  );
+
+  const pullCreateToolbarMenuItems = useMemo(() => {
+    const items: UniPullMenuItem[] = [];
+    if (pullFromApplicationAction) {
+      items.push(
+        ...buildKuaicaiwuPullCreateMenuItems([
+          {
+            key: 'pull-from-application',
+            actionKey: 'other_expense.pull_from_application',
+            onClick: pullFromApplicationQuery.openModal,
+          },
+        ]),
+      );
+    }
+    if (canCopySelectedVoucher) {
+      if (items.length > 0) {
+        items.push({ type: 'divider', key: 'copy-selected-divider' });
+      }
+      items.push({
+        key: 'copy-selected',
+        label: t(
+          isExpenseApplication
+            ? 'app.kuaicaiwu.otherExpenseApplication.copySelectedCreate'
+            : `${i18nPrefix}.copySelectedCreate`,
+        ),
+        disabled: selectedRowsForBatch.length !== 1,
+        onClick: () => void openCopySelectedVoucher(),
+      });
+    }
+    return items;
+  }, [
+    canCopySelectedVoucher,
+    i18nPrefix,
+    isExpenseApplication,
+    openCopySelectedVoucher,
+    pullFromApplicationAction,
+    pullFromApplicationQuery.openModal,
+    selectedRowsForBatch.length,
+    t,
+  ]);
 
   const rowSelectionEnabled =
     perms.canDelete ||
     Boolean(perms.canAction?.('submit')) ||
     Boolean(perms.canAction?.('approve')) ||
     Boolean(perms.canAction?.('audit')) ||
+    Boolean(perms.canAction?.('push')) ||
     (Boolean(perms.canCreate) && canCopySelectedVoucher);
 
   return (
@@ -1085,47 +1800,116 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           headerTitle={t(menuTitleKey)}
           rowKey="id"
           columns={columns}
-          pinnedTabsField={FINANCE_DOC_PINNED_STATUS_FIELD}
+          pinnedTabsField={
+            incomeSaveSubmitSplit ? FINANCE_INVOICE_PINNED_REVIEW_FIELD : FINANCE_DOC_PINNED_STATUS_FIELD
+          }
           showAdvancedSearch
           skipFuzzyPinyinClientFilter={isOtherExpenseDoc}
-          showCreateButton={Boolean(perms.canCreate)}
+          showCreateButton={Boolean(perms.canCreate) && !usePullCreateToolbar}
           createButtonText={createButtonText}
           onCreate={openCreate}
           enableRowSelection={rowSelectionEnabled}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={Boolean(perms.canDelete)}
-          deleteButtonText={t('common.batchDelete')}
+          deleteButtonText={t('common.delete')}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t(`${i18nPrefix}.confirmBatchDelete`, { count })}
-          toolBarActionsAfterDelete={[
-            ...(canCopySelectedVoucher && perms.canCreate
-              ? [
-                  <Button
-                    key="misc-voucher-copy-selected"
-                    size="medium"
-                    disabled={selectedRowsForBatch.length !== 1}
-                    onClick={() => void openCopySelectedVoucher()}
-                  >
-                    {t(`${i18nPrefix}.copySelectedCreate`)}
-                  </Button>,
-                ]
-              : []),
-            <UniAuditBatchMenuButton
-              key="misc-voucher-batch-audit"
-              selectedRowKeys={selectedRowKeys}
-              selectedRecords={selectedRowsForBatch}
-              auditEnabled={auditEnabled}
-              permGates={perms}
-              handlers={auditBatchHandlers}
-              onSuccess={handleAuditBatchSuccess}
-              toolBarButtonSize="medium"
+          toolBarActionsAfterCreate={[
+            <UniPushToolbarButton
+              key={`misc-voucher-push-${selectedVoucherForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={selectedRowKeys.length !== 1 || !selectedVoucherForToolbar}
+              disabledReason={toolbarPushDisabledReason}
+              sourceDocument={toolbarPushSourceDocument}
+              pushTargets={toolbarPushTargets}
             />,
           ]}
+          toolBarActions={
+            incomeSaveSubmitSplit
+              ? [
+                  <UniBatchMenuButton
+                    key="other-income-submit"
+                    selectedRowKeys={selectedRowKeys}
+                    buttonText={t('common.submit')}
+                    menuItems={incomeToolbarAuditMenus.submitItems}
+                  />,
+                  <UniBatchMenuButton
+                    key="other-income-audit"
+                    selectedRowKeys={selectedRowKeys}
+                    buttonText={t('components.uniAction.audit')}
+                    menuItems={incomeToolbarAuditMenus.auditItems}
+                  />,
+                ]
+              : undefined
+          }
+          toolBarActionsBeforeCreate={
+            usePullCreateToolbar
+              ? [
+                  <UniPullCreateToolbar
+                    key="pull-create-other-expense"
+                    compactKey="pull-create-other-expense"
+                    createIcon={<PlusOutlined />}
+                    createLabel={createButtonText}
+                    onCreate={openCreate}
+                    menuItems={pullCreateToolbarMenuItems}
+                  />,
+                ]
+              : undefined
+          }
+          toolBarActionsAfterDelete={
+            incomeSaveSubmitSplit
+              ? undefined
+              : [
+                  <UniAuditBatchMenuButton
+                    key="misc-voucher-batch-audit"
+                    selectedRowKeys={selectedRowKeys}
+                    selectedRecords={selectedRowsForBatch}
+                    auditEnabled={auditEnabled}
+                    permGates={perms}
+                    handlers={auditBatchHandlers}
+                    auditEntity={{
+                      entityType: auditEntityType,
+                      entityName: miscAuditEntityName,
+                    }}
+                    onSuccess={handleAuditBatchSuccess}
+                    toolBarButtonSize="middle"
+                  />,
+                ]
+          }
+          rightToolBarActionsBeforeExport={
+            isOtherExpenseDoc
+              ? [
+                  <UniCapabilityBatchButton
+                    key="other-expense-print"
+                    selectedRowKeys={selectedRowKeys}
+                    selectedRecords={selectedRowsForBatch}
+                    capabilityKey="print"
+                    permAllowed={Boolean(perms.canPrint)}
+                    batchAllowed={(records, perm) =>
+                      Boolean(perm) &&
+                      records.some((record) => record.capabilities?.print?.allowed === true)
+                    }
+                    singleOnly
+                    onRun={async (id) => {
+                      openPrint({ documentType: 'other_expense', documentId: id });
+                    }}
+                    labels={{
+                      single: t('components.uniAction.print'),
+                      batch: t('components.uniAction.print'),
+                    }}
+                    icon={<PrinterOutlined />}
+                    size="medium"
+                  />,
+                ]
+              : undefined
+          }
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
           request={async (params, _sort, _filter, searchFormValues) => {
+            const reviewFilter = pickSearchString(searchFormValues, 'review_status') ?? params.review_status;
+            const statusFilter = pickSearchString(searchFormValues, 'status') ?? params.status;
             const keywordParams = resolveMiscVoucherListKeywordParams(searchFormValues, {
               codeField,
               partnerNameField: 'counterparty_name',
@@ -1135,7 +1919,9 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
               ...keywordParams,
-              status: pickSearchString(searchFormValues, 'status') ?? params.status,
+              ...(incomeSaveSubmitSplit
+                ? { review_status: reviewFilter }
+                : { status: statusFilter }),
             });
             return { data: res.items, success: true, total: res.total };
           }}
@@ -1146,7 +1932,11 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         open={modalOpen}
         formRef={formRef}
         isEdit={editing != null}
-        title={editing ? t(`${i18nPrefix}.editTitle`) : t(`${i18nPrefix}.createTitle`)}
+        title={
+          editing
+            ? t(editTitleI18nKey ?? `${i18nPrefix}.editTitle`)
+            : t(createTitleI18nKey ?? `${i18nPrefix}.createTitle`)
+        }
         onClose={() => setModalOpen(false)}
         afterOpenChange={(open) => {
           if (!open) {
@@ -1164,8 +1954,15 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           if (editing == null) {
             formRef.current?.setFieldsValue({
               business_date: dayjs(),
-              counterparty_kind: 'none',
-              payment_method: BANK_TRANSFER_PAYMENT_METHOD,
+              counterparty_kind: isOtherExpenseDoc ? 'supplier' : isExpenseKind ? 'other' : 'none',
+              ...(isOtherExpenseDoc ? { payable_recognition: orgLedgerRecognitionDefault } : {}),
+              ...(isExpenseKind
+                ? {
+                    payment_method: BANK_TRANSFER_PAYMENT_METHOD,
+                    employee_advance_enabled: false,
+                  }
+                : { payment_method: BANK_TRANSFER_PAYMENT_METHOD }),
+              related_purchase_receipts: [],
               lines: [{}],
             });
           }
@@ -1190,145 +1987,199 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             />
           </Col>
           <Col span={12}>
-            <ProFormSelect
-              name="payment_method"
-              label={t(`${i18nPrefix}.field.paymentMethod`)}
-              options={paymentMethodOptions}
-              rules={[{ required: true }]}
-              fieldProps={{
-                onChange: (method: string) => {
-                  if (!isEmployeeAdvancePaymentMethod(method)) {
-                    formRef.current?.setFieldsValue({ advance_payee_id: undefined });
-                  }
-                },
-              }}
-            />
-          </Col>
-        </Row>
-        {kind === 'expense' ? (
-          <ProFormDependency name={['payment_method']} style={{ marginBottom: 0 }}>
-            {({ payment_method: method }) =>
-              isEmployeeAdvancePaymentMethod(method) ? (
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <ProFormSelect
-                      name="advance_payee_id"
-                      label={t('app.kuaicaiwu.payment.advancePayee')}
-                      options={employeeOptions}
-                      rules={[
-                        {
-                          required: true,
-                          message: t('app.kuaicaiwu.payment.advancePayeeRequired'),
-                        },
-                      ]}
-                      fieldProps={{
-                        showSearch: true,
-                        optionFilterProp: 'label',
-                        allowClear: true,
-                      }}
-                    />
-                  </Col>
-                </Row>
-              ) : null
-            }
-          </ProFormDependency>
-        ) : null}
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="bank_account_id"
-              label={t(`${i18nPrefix}.field.bankAccount`)}
-              options={bankAccounts.map((a) => ({
-                label: formatBankAccountOptionLabel(a),
-                value: a.id,
-              }))}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormSelect
-              name="counterparty_kind"
-              label={t(`${i18nPrefix}.field.counterpartyKind`)}
-              options={counterpartyKindOptions}
-              fieldProps={{
-                onChange: () => {
-                  formRef.current?.setFieldsValue({
-                    counterparty_id: undefined,
-                    counterparty_name: undefined,
-                  });
-                },
-              }}
-            />
-          </Col>
-        </Row>
-        <ProFormDependency name={['counterparty_kind']} style={{ marginBottom: 0 }}>
-          {({ counterparty_kind: cpKind }) => {
-            const kindStr = String(cpKind ?? 'none');
-            const hasCounterparty = kindStr !== 'none';
-            const departmentSelect = (
+            {isExpenseKind ? (
               <ProFormSelect
-                name="department_id"
-                label={t(`${i18nPrefix}.field.department`)}
-                options={departmentOptions}
+                name="counterparty_kind"
+                label={t(`${i18nPrefix}.field.counterpartyKind`)}
+                options={counterpartyKindOptions}
                 fieldProps={{
-                  showSearch: true,
-                  optionFilterProp: 'label',
-                  allowClear: true,
+                  onChange: (val: string) => onCounterpartyKindChange(String(val)),
                 }}
               />
-            );
+            ) : (
+              <ProFormSelect
+                name="payment_method"
+                label={t(`${i18nPrefix}.field.paymentMethod`)}
+                options={paymentMethodOptions}
+                rules={[{ required: true }]}
+              />
+            )}
+          </Col>
+        </Row>
+        {kind === 'income' ? (
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="bank_account_id"
+                label={t(`${i18nPrefix}.field.bankAccount`)}
+                options={bankAccounts.map((a) => ({
+                  label: formatBankAccountOptionLabel(a),
+                  value: a.id,
+                }))}
+              />
+            </Col>
+            <Col span={12}>
+              <ProFormSelect
+                name="counterparty_kind"
+                label={t(`${i18nPrefix}.field.counterpartyKind`)}
+                options={counterpartyKindOptions}
+                fieldProps={{
+                  onChange: (val: string) => onCounterpartyKindChange(String(val)),
+                }}
+              />
+            </Col>
+          </Row>
+        ) : null}
+        <ProFormDependency name={['counterparty_kind']} formItemProps={{ style: { marginBottom: 0 } }}>
+          {({ counterparty_kind: cpKind }) => {
+            const kindStr = String(cpKind ?? 'none');
+            const counterpartyField =
+              kindStr === 'customer' ? (
+                <ProFormSelect
+                  name="counterparty_id"
+                  label={t(`${i18nPrefix}.field.counterpartyCustomer`)}
+                  rules={[{ required: true, message: t('common.required') }]}
+                  options={customerOptions}
+                  fieldProps={{
+                    showSearch: true,
+                    optionFilterProp: 'label',
+                  }}
+                />
+              ) : kindStr === 'supplier' ? (
+                <ProFormSelect
+                  name="counterparty_id"
+                  label={t(`${i18nPrefix}.field.counterpartySupplier`)}
+                  rules={[{ required: true, message: t('common.required') }]}
+                  options={supplierOptions}
+                  fieldProps={{
+                    showSearch: true,
+                    optionFilterProp: 'label',
+                    allowClear: true,
+                    onChange: (val: number | undefined) => {
+                      formRef.current?.setFieldsValue({ related_purchase_receipts: [] });
+                      const supplierId =
+                        val != null && Number.isFinite(Number(val)) && Number(val) > 0
+                          ? Number(val)
+                          : null;
+                      pullReceiptSupplierIdRef.current = supplierId;
+                      if (supplierId == null) {
+                        purchaseReceiptLinkQuery.closeModal();
+                        return;
+                      }
+                    },
+                  }}
+                />
+              ) : kindStr === 'employee' ? (
+                <ProFormSelect
+                  name="counterparty_id"
+                  label={t(`${i18nPrefix}.field.counterpartyEmployee`)}
+                  rules={[{ required: true, message: t('common.required') }]}
+                  options={employeeOptions}
+                  fieldProps={{
+                    showSearch: true,
+                    optionFilterProp: 'label',
+                  }}
+                />
+              ) : kindStr === 'other' ? (
+                <ProFormText
+                  name="counterparty_name"
+                  label={t(`${i18nPrefix}.field.counterpartyName`)}
+                  rules={[{ required: true, message: t('common.required') }]}
+                  extra={
+                    isOtherExpenseDoc
+                      ? t('app.kuaicaiwu.otherExpense.counterpartyOtherLedgerHint')
+                      : undefined
+                  }
+                />
+              ) : null;
+            if (isExpenseKind) {
+              const departmentSelect = (
+                <ProFormSelect
+                  name="department_id"
+                  label={t(`${i18nPrefix}.field.department`)}
+                  options={departmentOptions}
+                  fieldProps={{
+                    showSearch: true,
+                    optionFilterProp: 'label',
+                    allowClear: true,
+                  }}
+                />
+              );
+              const hasCounterparty = kindStr !== 'none';
+              return (
+                <Row gutter={16}>
+                  <Col span={12}>
+                    {hasCounterparty ? counterpartyField : departmentSelect}
+                  </Col>
+                  <Col span={12}>{hasCounterparty ? departmentSelect : null}</Col>
+                </Row>
+              );
+            }
+            if (kindStr === 'none') {
+              return null;
+            }
             return (
               <Row gutter={16}>
-                <Col span={12}>
-                  {!hasCounterparty && departmentSelect}
-                  {kindStr === 'customer' && (
-                    <ProFormSelect
-                      name="counterparty_id"
-                      label={t(`${i18nPrefix}.field.counterpartyCustomer`)}
-                      rules={[{ required: true, message: t('common.required') }]}
-                      options={customerOptions}
-                      fieldProps={{
-                        showSearch: true,
-                        optionFilterProp: 'label',
-                      }}
-                    />
-                  )}
-                  {kindStr === 'supplier' && (
-                    <ProFormSelect
-                      name="counterparty_id"
-                      label={t(`${i18nPrefix}.field.counterpartySupplier`)}
-                      rules={[{ required: true, message: t('common.required') }]}
-                      options={supplierOptions}
-                      fieldProps={{
-                        showSearch: true,
-                        optionFilterProp: 'label',
-                      }}
-                    />
-                  )}
-                  {kindStr === 'employee' && (
-                    <ProFormSelect
-                      name="counterparty_id"
-                      label={t(`${i18nPrefix}.field.counterpartyEmployee`)}
-                      rules={[{ required: true, message: t('common.required') }]}
-                      options={employeeOptions}
-                      fieldProps={{
-                        showSearch: true,
-                        optionFilterProp: 'label',
-                      }}
-                    />
-                  )}
-                  {kindStr === 'other' && (
-                    <ProFormText
-                      name="counterparty_name"
-                      label={t(`${i18nPrefix}.field.counterpartyName`)}
-                      rules={[{ required: true, message: t('common.required') }]}
-                    />
-                  )}
-                </Col>
-                {hasCounterparty ? <Col span={12}>{departmentSelect}</Col> : null}
+                <Col span={12}>{counterpartyField}</Col>
               </Row>
             );
           }}
         </ProFormDependency>
+        {!isExpenseApplication ? (
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormDependency name={['counterparty_kind']}>
+                {({ counterparty_kind: ledgerCpKind }) => {
+                  const supplierLedger =
+                    !isOtherExpenseDoc || String(ledgerCpKind ?? '') === 'supplier';
+                  if (!supplierLedger) {
+                    return (
+                      <>
+                        <Form.Item name={ledgerRecognitionFieldName} hidden initialValue="manual">
+                          <Input />
+                        </Form.Item>
+                        <Form.Item
+                          label={t('field.document.ledgerRecognition')}
+                          extra={t('app.kuaicaiwu.otherExpense.counterpartyOtherLedgerHint')}
+                        >
+                          {isOtherExpenseDoc
+                            ? t('app.kuaicaiwu.otherExpense.counterpartyOtherLedgerRecognition')
+                            : payableLedgerRecognitionLabel(t, 'manual')}
+                        </Form.Item>
+                      </>
+                    );
+                  }
+                  return (
+                    <ProForm.Item
+                      name={ledgerRecognitionFieldName}
+                      label={t('field.document.ledgerRecognition')}
+                      initialValue={orgLedgerRecognitionDefault}
+                      rules={[
+                        { required: true, message: t('field.document.ledgerRecognitionRequired') },
+                      ]}
+                    >
+                      <UniDropdown options={ledgerRecognitionOptions} style={{ width: '100%' }} />
+                    </ProForm.Item>
+                  );
+                }}
+              </ProFormDependency>
+            </Col>
+            {!isExpenseKind ? (
+              <Col span={12}>
+                <ProFormSelect
+                  name="department_id"
+                  label={t(`${i18nPrefix}.field.department`)}
+                  options={departmentOptions}
+                  fieldProps={{
+                    showSearch: true,
+                    optionFilterProp: 'label',
+                    allowClear: true,
+                  }}
+                />
+              </Col>
+            ) : null}
+          </Row>
+        ) : null}
         {kind === 'expense' ? (
           <ProForm.Item name="related_purchase_receipts" noStyle>
             <FormValueSink />
@@ -1337,7 +2188,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
         {kind === 'expense' ? (
           <ProFormDependency
             name={['counterparty_kind', 'related_purchase_receipts']}
-            style={{ marginBottom: 0 }}
+            formItemProps={{ style: { marginBottom: 0 } }}
           >
             {({ counterparty_kind: ck, related_purchase_receipts: links }) => {
               if (String(ck ?? '') !== 'supplier') {
@@ -1374,11 +2225,90 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             }}
           </ProFormDependency>
         ) : null}
+        {isOtherExpenseDoc ? (
+          <>
+            <Row gutter={16} align="middle">
+              <Col span={12}>
+                <ProFormSelect
+                  name="payment_method"
+                  label={t(`${i18nPrefix}.field.paymentMethod`)}
+                  options={paymentMethodOptions}
+                  rules={[{ required: true }]}
+                  fieldProps={{
+                    onChange: (method: string) => {
+                      const employeeAdvance = isEmployeeAdvancePaymentMethod(method);
+                      formRef.current?.setFieldsValue({
+                        employee_advance_enabled: employeeAdvance,
+                        ...(employeeAdvance ? {} : { advance_payee_id: undefined }),
+                      });
+                    },
+                  }}
+                />
+              </Col>
+              <ProFormDependency name={['payment_method']}>
+                {({ payment_method: method }) =>
+                  isEmployeeAdvancePaymentMethod(method) ? (
+                    <Col span={12}>
+                      <ProFormSelect
+                        name="advance_payee_id"
+                        label={t('app.kuaicaiwu.payment.advancePayee')}
+                        options={employeeOptions.map((o) => ({
+                          label: o.label,
+                          value: o.value,
+                        }))}
+                        rules={[
+                          {
+                            required: true,
+                            message: t('app.kuaicaiwu.payment.advancePayeeRequired'),
+                          },
+                        ]}
+                        fieldProps={{
+                          showSearch: true,
+                          optionFilterProp: 'label',
+                          allowClear: true,
+                        }}
+                      />
+                    </Col>
+                  ) : null
+                }
+              </ProFormDependency>
+            </Row>
+          </>
+        ) : null}
+        {kind === 'expense' ? <MiscVoucherCounterpartyPayeeSection required={isOtherExpenseDoc} /> : null}
         <UniTableDetail
           name="lines"
           title={t(`${i18nPrefix}.linesTitle`)}
           required
           initialValue={{}}
+          onBatchSelect={
+            kind === 'expense'
+              ? () => {
+                  const ck = String(formRef.current?.getFieldValue('counterparty_kind') ?? '');
+                  if (ck !== 'supplier') {
+                    messageApi.warning(t(`${i18nPrefix}.selectSupplierFirst`));
+                    return;
+                  }
+                  openPurchaseReceiptLink();
+                }
+              : undefined
+          }
+          batchSelectText={kind === 'expense' ? t(`${i18nPrefix}.linkPurchaseReceipt`) : undefined}
+          leftExtra={
+            <ProFormDependency name={['lines']}>
+              {({ lines: lineRows }) => {
+                const sum = normalizeFormListItems<LineFormRow>(lineRows).reduce(
+                  (acc, row) => acc + (Number(row.amount) || 0),
+                  0,
+                );
+                return (
+                  <span>
+                    {t(`${i18nPrefix}.amountTotal`)}：{formatCurrencyAmount(sum)}
+                  </span>
+                );
+              }}
+            </ProFormDependency>
+          }
           columns={[
             {
               title: t(`${i18nPrefix}.line.category`),
@@ -1401,7 +2331,18 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
               ),
             },
             {
-              title: t(`${i18nPrefix}.line.amount`),
+              title: t(`${i18nPrefix}.line.description`),
+              dataIndex: 'description',
+              render: (_: unknown, field: FormListFieldData) => (
+                <Form.Item name={[field.name, 'description']} style={{ margin: 0 }}>
+                  <Input size="small" />
+                </Form.Item>
+              ),
+            },
+            {
+              title: isExpenseApplication
+                ? t('app.kuaicaiwu.otherExpenseApplication.line.estimatedAmount')
+                : t(`${i18nPrefix}.line.amount`),
               dataIndex: 'amount',
               width: 140,
               render: (_: unknown, field: FormListFieldData) => (
@@ -1414,17 +2355,13 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                 </Form.Item>
               ),
             },
-            {
-              title: t(`${i18nPrefix}.line.description`),
-              dataIndex: 'description',
-              render: (_: unknown, field: FormListFieldData) => (
-                <Form.Item name={[field.name, 'description']} style={{ margin: 0 }}>
-                  <Input size="small" />
-                </Form.Item>
-              ),
-            },
           ]}
         />
+        <Row gutter={16}>
+          <Col span={24}>
+            <DocumentAttachmentsField category={attachmentCategory} />
+          </Col>
+        </Row>
         <Row gutter={16}>
           <Col span={24}>
             <ProFormTextArea
@@ -1434,11 +2371,15 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
             />
           </Col>
         </Row>
-        <Row gutter={16}>
-          <Col span={24}>
-            <DocumentAttachmentsField category={attachmentCategory} />
-          </Col>
-        </Row>
+        <Form.Item name="source_type" hidden>
+          <FormValueSink />
+        </Form.Item>
+        <Form.Item name="source_id" hidden>
+          <FormValueSink />
+        </Form.Item>
+        <Form.Item name="source_code" hidden>
+          <FormValueSink />
+        </Form.Item>
       </FormModalTemplate>
 
       <MiscVoucherDetailDrawer
@@ -1466,15 +2407,15 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
               }
             : undefined
         }
-        record={detailRow as MiscVoucherDetailRecord | null}
+        record={detailRow}
         codeField={codeField}
         i18nPrefix={i18nPrefix}
         kind={kind}
-        isExpenseApplication={false}
+        isExpenseApplication={isExpenseApplication}
         isOtherExpenseDoc={isOtherExpenseDoc}
         bankAccountLabel={detailBankAccountLabel}
         documentType={auditEntityType}
-        renderDocumentStatus={(row) => renderMiscStatusTag(row.status)}
+        renderDocumentStatus={renderMiscDocumentStatus}
         onOpenLinkedDocument={(type, id) => linkedDetail?.openLinkedDocumentDetail(type, id)}
         extra={
           detailRow ? (
@@ -1505,10 +2446,71 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
                   {t('components.uniAction.print')}
                 </Button>
               ) : null}
+              {isExpenseApplication &&
+              detailRow.capabilities?.push_other_expense?.allowed &&
+              perms.canAction?.('push') ? (
+                <Button type="primary" onClick={() => void handlePushOtherExpense(detailRow)}>
+                  {t('app.kuaicaiwu.otherExpenseApplication.pushOtherExpense')}
+                </Button>
+              ) : null}
             </Space>
           ) : null
         }
       />
+
+      {pullFromApplicationAction ? (
+        <UniPullQueryModal<OtherExpenseApplicationPullCandidate>
+          open={pullFromApplicationQuery.open}
+          title={pullFromApplicationAction.label}
+          onCancel={pullFromApplicationQuery.closeModal}
+          onOk={() => {
+            void pullFromApplicationQuery.handleConfirm();
+          }}
+          rowKey="id"
+          columns={[
+            {
+              title: t(`${i18nPrefix}.col.code`),
+              dataIndex: 'application_code',
+              width: 168,
+              ellipsis: true,
+            },
+            {
+              title: t(`${i18nPrefix}.col.counterparty`),
+              dataIndex: 'counterparty_name',
+              ellipsis: true,
+            },
+            {
+              title: t(`${i18nPrefix}.col.remainingAmount`),
+              dataIndex: 'remaining_amount',
+              width: 120,
+              align: 'right',
+              render: (v) => formatCurrencyAmount(v),
+            },
+          ]}
+          dataSource={pullFromApplicationQuery.dataSource}
+          loading={pullFromApplicationQuery.loading}
+          confirmLoading={pullFromApplicationQuery.confirmLoading}
+          selectionType={pullFromApplicationQuery.selectionType}
+          selectedRowKeys={pullFromApplicationQuery.selectedRowKeys}
+          selectedRows={pullFromApplicationQuery.selectedRows}
+          onSelectedRowKeysChange={pullFromApplicationQuery.handleSelectedRowKeysChange}
+          isRowDisabled={pullFromApplicationQuery.isRowDisabled}
+          searchDraft={pullFromApplicationQuery.searchDraft}
+          onSearchDraftChange={pullFromApplicationQuery.setSearchDraft}
+          onSearchApply={pullFromApplicationQuery.handleSearchApply}
+          onSearchClear={pullFromApplicationQuery.handleSearchClear}
+          appliedKeyword={pullFromApplicationQuery.appliedKeyword}
+          searchPlaceholder={t(`${i18nPrefix}.pullApplication.searchPlaceholder`)}
+          page={pullFromApplicationQuery.page}
+          pageSize={pullFromApplicationQuery.pageSize}
+          total={pullFromApplicationQuery.total}
+          onPageChange={pullFromApplicationQuery.handlePageChange}
+          pullQuery={pullFromApplicationQuery.pullQuery}
+          zIndex={nestedPullZIndex}
+          okText={t('common.next')}
+        />
+      ) : null}
+
       {kind === 'expense' ? (
         <UniPullQueryModal<OtherExpensePurchaseReceiptLinkCandidate>
           open={purchaseReceiptLinkQuery.open}
@@ -1536,11 +2538,14 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
           pageSize={purchaseReceiptLinkQuery.pageSize}
           total={purchaseReceiptLinkQuery.total}
           onPageChange={purchaseReceiptLinkQuery.handlePageChange}
+          pullQuery={purchaseReceiptLinkQuery.pullQuery}
           zIndex={nestedPullZIndex}
           okText={t('common.confirm')}
         />
       ) : null}
-      {PrintModal}
+
+      {incomeSaveSubmitSplit ? miscIncomeAuditModal : null}
+      {isOtherExpenseDoc ? PrintModal : null}
     </>
   );
 };

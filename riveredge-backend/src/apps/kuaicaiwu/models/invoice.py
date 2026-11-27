@@ -62,6 +62,14 @@ class Invoice(BaseModel):
         default="summary",
         description="结算粒度 summary 汇总 | detail 明细",
     )
+    settlement_closing_date = fields.DateField(null=True, description="结账日期")
+    department_id = fields.IntField(null=True, description="部门ID")
+    department_name = fields.CharField(max_length=200, null=True, description="部门名称")
+    ledger_posting_mode = fields.CharField(
+        max_length=16,
+        null=True,
+        description="立账方式 immediate 已立账 | by_invoice 发票立账",
+    )
     source_document_code = fields.CharField(max_length=100, null=True, description="来源单据号")
     attachment_uuid = fields.CharField(max_length=36, null=True, description="发票文件ID")
     description = fields.TextField(null=True, description="备注")
@@ -112,6 +120,7 @@ class InvoiceItem(BaseModel):
     source_doc_id = fields.IntField(null=True, description="源单ID")
     source_line_id = fields.IntField(null=True, description="源单物料行ID")
     partner_statement_line_id = fields.IntField(null=True, description="对账单行ID")
+    invoice_number = fields.CharField(max_length=100, null=True, description="行级发票号码")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 

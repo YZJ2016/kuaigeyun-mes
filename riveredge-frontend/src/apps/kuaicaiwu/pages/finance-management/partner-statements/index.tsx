@@ -76,6 +76,7 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { buildReportHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { isPendingReviewStatus } from '../../../../kuaizhizao/constants/documentStatus';
+import { getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import {
   createListAuditPhaseColumn,
@@ -84,6 +85,7 @@ import {
 import { PartnerStatementPeriodQuickSelect } from './PartnerStatementPeriodQuickSelect';
 import { defaultPartnerStatementPeriodRange } from '../../../utils/partnerStatementPeriodQuick';
 import { PartnerStatementSettingsBar } from './PartnerStatementSettingsBar';
+import { useOrgInvoiceListPath } from '../shared/FinanceInvoiceSettlementModeAlert';
 const money = (v: number | string | undefined) =>
   formatCurrencyAmount(v ?? 0);
 
@@ -119,8 +121,30 @@ const PartnerStatementsPage: React.FC = () => {
   const [createForm] = ProForm.useForm();
   const { message: messageApi } = App.useApp();
   const statementPerms = useResourcePermissions(PARTNER_STATEMENT_RESOURCE);
+  const purchaseInvoicePerms = useResourcePermissions('kuaicaiwu:purchase-invoice');
+  const salesInvoicePerms = useResourcePermissions('kuaicaiwu:sales-invoice');
+  const pullPurchaseInvoiceFromStatementAction = useMemo(
+    () => getKuaicaiwuDocumentAction('purchase_invoice.pull_from_partner_statement'),
+    [],
+  );
+  const pullSalesInvoiceFromStatementAction = useMemo(
+    () => getKuaicaiwuDocumentAction('sales_invoice.pull_from_partner_statement'),
+    [],
+  );
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const purchaseInvoiceListPath = useOrgInvoiceListPath('purchase');
+  const salesInvoiceListPath = useOrgInvoiceListPath('sales');
+  const goCreatePurchaseInvoiceFromStatement = useCallback(() => {
+    navigate(purchaseInvoiceListPath, {
+      state: { openPurchaseInvoicePullFromPartnerStatement: true },
+    });
+  }, [navigate, purchaseInvoiceListPath]);
+  const goCreateSalesInvoiceFromStatement = useCallback(() => {
+    navigate(salesInvoiceListPath, {
+      state: { openSalesInvoicePullFromPartnerStatement: true },
+    });
+  }, [navigate, salesInvoiceListPath]);
   const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
   const partnerStatementAuditEnabled = useAuditRequired(PARTNER_STATEMENT_ENTITY, false);
   const partnerStatementAuditColumn = useMemo(
@@ -727,6 +751,13 @@ const PartnerStatementsPage: React.FC = () => {
       deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
       deleteConfirmDescription={(count) => t(`${PS}.batchDeleteCustomerConfirm`, { count })}
       toolBarActionsAfterDelete={[
+        ...(salesInvoicePerms.canRead
+          ? [
+              <Button key="pull-sales-invoice" size="medium" onClick={goCreateSalesInvoiceFromStatement}>
+                {pullSalesInvoiceFromStatementAction.label}
+              </Button>,
+            ]
+          : []),
         <UniBatchMenuButton
           key="customer-partner-statement-batch-actions"
           selectedRowKeys={customerSelectedRowKeys}
@@ -775,6 +806,13 @@ const PartnerStatementsPage: React.FC = () => {
       deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
       deleteConfirmDescription={(count) => t(`${PS}.batchDeleteSupplierConfirm`, { count })}
       toolBarActionsAfterDelete={[
+        ...(purchaseInvoicePerms.canRead
+          ? [
+              <Button key="pull-purchase-invoice" size="medium" onClick={goCreatePurchaseInvoiceFromStatement}>
+                {pullPurchaseInvoiceFromStatementAction.label}
+              </Button>,
+            ]
+          : []),
         <UniBatchMenuButton
           key="supplier-partner-statement-batch-actions"
           selectedRowKeys={supplierSelectedRowKeys}

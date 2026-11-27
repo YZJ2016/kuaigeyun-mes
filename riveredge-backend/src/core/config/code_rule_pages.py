@@ -169,6 +169,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaicaiwu-finance-payment-refund": "TP",       # 付款退款
     "kuaicaiwu-finance-other-income": "QS",         # 其他费用收入
     "kuaicaiwu-finance-other-expense": "QZ",        # 其他费用支出
+    "kuaicaiwu-finance-other-expense-application": "QZSQ",  # 其他费用支出申请
     "kuaicaiwu-finance-fund-transfer": "ZD",        # 资金调拨
     "kuaicaiwu-finance-purchase-invoice": "PI",     # 进项发票
     "kuaicaiwu-finance-settlement": "HX",           # 核销
@@ -2465,6 +2466,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "account-book",
         "auto_generate": True,
         "rule_code": "OTHER_EXPENSE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaicaiwu-finance-other-expense-application",
+        "page_name": "其他费用支出申请",
+        "page_path": "/apps/kuaicaiwu/finance-management/other-expense-applications",
+        "code_field": "application_code",
+        "code_field_label": "其他费用支出申请单号",
+        "module": "轻管理会计",
+        "module_icon": "account-book",
+        "auto_generate": True,
+        "rule_code": "OTHER_EXPENSE_APPLICATION_CODE",
         "allow_manual_edit": True,
     },
     {

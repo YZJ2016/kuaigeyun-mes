@@ -386,6 +386,7 @@ TORTOISE_ORM = {
                 "apps.kuaicaiwu.models.fixed_asset",  # 固定资产
                 "apps.kuaicaiwu.models.finance_misc_category",  # 其他收支类别
                 "apps.kuaicaiwu.models.other_voucher",  # 其他收支单
+                "apps.kuaicaiwu.models.other_expense_application",  # 其他费用支出申请单
                 "apps.kuaicaiwu.models.payment_advance_record",  # 员工垫付台账
                 "apps.kuaicaiwu.models.payment_pull_line",  # 付款单加载明细
                 "apps.kuaicaiwu.models.payment_offset_prepayment_line",  # 预付抵扣预付款明细

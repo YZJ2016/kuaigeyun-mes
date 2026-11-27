@@ -47,6 +47,30 @@ interface SalesInvoiceLine {
   amount: string | number;
   tax_rate: string | number;
   tax_amount: string | number;
+  source_doc_type?: string | null;
+  source_doc_id?: number | null;
+  source_line_id?: number | null;
+  partner_statement_line_id?: number | null;
+  invoice_number?: string | null;
+}
+
+function formatInvoiceLineSourceTrace(row: SalesInvoiceLine): string {
+  const docType = String(row.source_doc_type ?? '').trim();
+  const docId = Number(row.source_doc_id ?? 0);
+  const lineId = Number(row.source_line_id ?? 0);
+  if (!docType || docId <= 0) {
+    return '—';
+  }
+  return lineId > 0 ? `${docType} ${docId} / ${lineId}` : `${docType} ${docId}`;
+}
+
+function formatSalesInvoiceLedgerPostingMode(
+  mode: string | null | undefined,
+  t: (key: string) => string,
+): string {
+  return mode === 'by_invoice'
+    ? t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.byInvoice')
+    : t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.immediate');
 }
 
 interface SalesInvoiceDetail {
@@ -74,6 +98,10 @@ interface SalesInvoiceDetail {
   red_flush_invoice_id?: number | null;
   void_reason?: string | null;
   voided_at?: string | null;
+  settlement_closing_date?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  ledger_posting_mode?: string | null;
   items: SalesInvoiceLine[];
 }
 
@@ -95,6 +123,9 @@ const SalesInvoiceDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const invoiceListBase = location.pathname.includes('/sales-detail-invoices')
+    ? '/apps/kuaicaiwu/finance-management/sales-detail-invoices'
+    : '/apps/kuaicaiwu/finance-management/sales-invoices';
   const { t } = useTranslation();
   const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
   const [form] = Form.useForm();
@@ -216,7 +247,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
       onOk: async () => {
         await apiRequest(`/apps/kuaicaiwu/sales-invoices/${id}`, { method: 'DELETE' });
         message.success(t('common.deleteSuccess'));
-        navigate('/apps/kuaicaiwu/finance-management/sales-invoices');
+        navigate(invoiceListBase);
       },
     });
   };
@@ -280,7 +311,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
           data: { reason: r },
         });
         message.success(t(`${P}.redLetterDraftCreated`));
-        navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${created.id}`, { replace: true });
+        navigate(`${invoiceListBase}/${created.id}`, { replace: true });
       },
     });
   };
@@ -289,6 +320,18 @@ const SalesInvoiceDetailPage: React.FC = () => {
     () => [
       { title: t('app.kuaicaiwu.invoice.line.itemName'), dataIndex: 'item_name', width: 200 },
       { title: t('app.kuaicaiwu.invoice.line.specModel'), dataIndex: 'spec_model', width: 120 },
+      {
+        title: t('app.kuaicaiwu.invoice.line.invoiceNumber'),
+        dataIndex: 'invoice_number',
+        width: 128,
+        ellipsis: true,
+        render: (v) => {
+          const line = String(v ?? '').trim();
+          if (line) return line;
+          const header = String(data?.invoice_number ?? '').trim();
+          return header || '—';
+        },
+      },
       { title: t('common.unit'), dataIndex: 'unit', width: 72 },
       {
         title: t('common.quantity'),
@@ -329,8 +372,15 @@ const SalesInvoiceDetailPage: React.FC = () => {
         align: 'right',
         render: (_, r) => moneyCell(r.tax_amount),
       },
+      {
+        title: t('app.kuaicaiwu.invoice.line.sourceTrace'),
+        key: 'source_trace',
+        width: 160,
+        ellipsis: true,
+        render: (_, r) => formatInvoiceLineSourceTrace(r),
+      },
     ],
-    [t],
+    [t, data?.invoice_number],
   );
 
   if (!id) return null;
@@ -343,7 +393,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
 
   const pageActions = data ? (
     <Space wrap size={8}>
-      <Button onClick={() => navigate('/apps/kuaicaiwu/finance-management/sales-invoices')}>{t('common.back')}</Button>
+      <Button onClick={() => navigate(invoiceListBase)}>{t('common.back')}</Button>
       {editable && salesInvoicePerms.canUpdate ? (
         <Button type="primary" onClick={save}>
           {t(`${P}.saveChanges`)}
@@ -406,12 +456,12 @@ const SalesInvoiceDetailPage: React.FC = () => {
           <UniLifecycle percent={lc.percent} stageName={lc.stageName} status={lc.status} subStages={lc.subStages} showLabel size="small" />
           {isRedDraft ? <Tag color="volcano">{t(`${P}.redLetterTag`)}</Tag> : null}
           {data.original_invoice_id ? (
-            <Typography.Link onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${data.original_invoice_id}`)}>
+            <Typography.Link onClick={() => navigate(`${invoiceListBase}/${data.original_invoice_id}`)}>
               {t(`${P}.viewBlueInvoice`, { id: data.original_invoice_id })}
             </Typography.Link>
           ) : null}
           {data.red_flush_invoice_id ? (
-            <Typography.Link onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${data.red_flush_invoice_id}`)}>
+            <Typography.Link onClick={() => navigate(`${invoiceListBase}/${data.red_flush_invoice_id}`)}>
               {t(`${P}.viewRedInvoice`, { id: data.red_flush_invoice_id })}
             </Typography.Link>
           ) : null}
@@ -434,6 +484,16 @@ const SalesInvoiceDetailPage: React.FC = () => {
             {data.partner_address_phone || '—'}
           </ProDescriptions.Item>
           <ProDescriptions.Item label={t(`${P}.sourceOrder`)}>{data.sales_order_code || '—'}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.common.invoiceDate')}>{data.invoice_date || '—'}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.settlementClosingDate`)}>
+            {data.settlement_closing_date || '—'}
+          </ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaizhizao.purchase.field.department', '部门')}>
+            {data.department_name || '—'}
+          </ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.partnerStatement.ledgerPostingMode')}>
+            {formatSalesInvoiceLedgerPostingMode(data.ledger_posting_mode, t)}
+          </ProDescriptions.Item>
           <ProDescriptions.Item label={t('common.status')}>{formatStatusLabel(data.status)}</ProDescriptions.Item>
           <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{reviewLabel}</ProDescriptions.Item>
           {data.void_reason ? (

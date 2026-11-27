@@ -39,6 +39,11 @@ async def maybe_auto_generate_receivable_for_sales_invoice(
         int(partner_id) if partner_id is not None else None,
         resolved_strategy=resolved,
     ):
+        logger.info(
+            "销项发票 {} 跳过自动生成应收：组织门控未放行（解析策略={}）",
+            getattr(invoice, "id", None),
+            resolved,
+        )
         return None, None
     if not await _business_config.check_node_enabled(tenant_id, "receivable"):
         return None, None
@@ -99,3 +104,72 @@ async def maybe_auto_generate_receivable_for_sales_invoice(
     except Exception as rel_e:
         logger.warning("创建销售发票→应收单 单据关联失败: {}", rel_e)
     return receivable.id, receivable.receivable_code
+
+
+async def ensure_receivable_after_sales_invoice_approved(
+    *,
+    tenant_id: int,
+    invoice_id: int,
+    user_id: int,
+) -> Optional[int]:
+    """
+    销售发票已审核后：按策略生成应收（若尚无），补跑月结「根据发票立账」对账单，并对草稿应收送审。
+    对称 ensure_payable_after_purchase_invoice_approved。
+    """
+    from apps.kuaicaiwu.services.finance_audit_workflow import (
+        _APPROVED_REVIEW,
+        _PENDING_REVIEW,
+        _norm_review,
+        submit_finance_review,
+    )
+
+    invoice = await Invoice.get_or_none(
+        tenant_id=tenant_id,
+        id=invoice_id,
+        category="OUT",
+        deleted_at__isnull=True,
+    )
+    if not invoice:
+        return None
+
+    auto_id, _ = await maybe_auto_generate_receivable_for_sales_invoice(
+        tenant_id=tenant_id,
+        invoice=invoice,
+        created_by=user_id,
+    )
+    receivable_id = auto_id or (
+        int(invoice.receivable_id) if getattr(invoice, "receivable_id", None) else None
+    )
+
+    from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
+
+    await PartnerStatementService().try_complete_ledger_after_sales_invoice_approved(
+        tenant_id=tenant_id,
+        invoice_id=invoice_id,
+        operator_id=user_id,
+    )
+
+    if not receivable_id:
+        return None
+
+    from apps.kuaicaiwu.models.receivable import Receivable
+
+    receivable = await Receivable.get_or_none(
+        tenant_id=tenant_id, id=int(receivable_id), deleted_at__isnull=True
+    )
+    if not receivable:
+        return None
+
+    rs = _norm_review(getattr(receivable, "review_status", None))
+    if rs in _APPROVED_REVIEW or rs in _PENDING_REVIEW:
+        return int(receivable_id)
+
+    await submit_finance_review(
+        model=Receivable,
+        tenant_id=tenant_id,
+        doc_id=int(receivable_id),
+        updated_by=user_id,
+        doc_label="应收单",
+        node_key="receivable",
+    )
+    return int(receivable_id)

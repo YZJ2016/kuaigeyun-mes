@@ -44,6 +44,253 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaicaiwu-other-expense-application-r01',
+    date: '2026-11-27',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-other-expense-application-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-other-expense-application-r01.description',
+  },
+  {
+    id: 'sales-invoice-default-tax-inclusive-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-invoice-default-tax-inclusive-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-invoice-default-tax-inclusive-r01.description',
+  },
+  {
+    id: 'partner-statement-invoice-entry-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-invoice-entry-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-statement-invoice-entry-r01.description',
+  },
+  {
+    id: 'sales-invoice-receivable-ledger-complete-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-invoice-receivable-ledger-complete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-invoice-receivable-ledger-complete-r01.description',
+  },
+  {
+    id: 'bilateral-detail-invoice-pull-r01',
+    date: '2026-11-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.bilateral-detail-invoice-pull-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bilateral-detail-invoice-pull-r01.description',
+  },
+  {
+    id: 'bilateral-detail-invoice-statement-line-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.bilateral-detail-invoice-statement-line-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bilateral-detail-invoice-statement-line-r01.description',
+  },
+  {
+    id: 'sales-order-detail-invoice-pull-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-detail-invoice-pull-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-detail-invoice-pull-r01.description',
+  },
+  {
+    id: 'bilateral-invoice-detail-source-trace-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.bilateral-invoice-detail-source-trace-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bilateral-invoice-detail-source-trace-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-receipt-detail-table-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-detail-table-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-detail-table-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-receipt-list-batch-gross-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-list-batch-gross-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-list-batch-gross-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-receipt-line-count-cols-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-count-cols-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-count-cols-r01.description',
+  },
+  {
+    id: 'invoice-pull-line-count-cols-all-sources-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.invoice-pull-line-count-cols-all-sources-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.invoice-pull-line-count-cols-all-sources-r01.description',
+  },
+  {
+    id: 'finance-pull-preview-detail-form-spacing-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-pull-preview-detail-form-spacing-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-pull-preview-detail-form-spacing-r01.description',
+  },
+  {
+    id: 'purchase-receipt-detail-header-incl-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-detail-header-incl-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-detail-header-incl-r01.description',
+  },
+  {
+    id: 'finance-invoice-settlement-page-mask-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-mask-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-mask-r01.description',
+  },
+  {
+    id: 'finance-invoice-settlement-page-alert-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-alert-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-alert-r01.description',
+  },
+  {
+    id: 'finance-pull-detail-row-selection-keys-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-pull-detail-row-selection-keys-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-pull-detail-row-selection-keys-r01.description',
+  },
+  {
+    id: 'finance-invoice-pull-form-layout-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-invoice-pull-form-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-invoice-pull-form-layout-r01.description',
+  },
+  {
+    id: 'detail-invoice-line-invoice-number-r01',
+    date: '2026-11-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.detail-invoice-line-invoice-number-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.detail-invoice-line-invoice-number-r01.description',
+  },
+  {
+    id: 'detail-invoice-pull-17cols-line-qty-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.detail-invoice-pull-17cols-line-qty-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.detail-invoice-pull-17cols-line-qty-r01.description',
+  },
+  {
+    id: 'invoice-pull-preview-kernel-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.invoice-pull-preview-kernel-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.invoice-pull-preview-kernel-r01.description',
+  },
+  {
+    id: 'outsource-receipt-invoice-complete-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.outsource-receipt-invoice-complete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.outsource-receipt-invoice-complete-r01.description',
+  },
+  {
+    id: 'sales-summary-invoice-header-excel-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-summary-invoice-header-excel-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-summary-invoice-header-excel-r01.description',
+  },
+  {
+    id: 'sales-detail-invoice-header-excel-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-detail-invoice-header-excel-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-detail-invoice-header-excel-r01.description',
+  },
+  {
+    id: 'invoice-summary-detail-slim-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.invoice-summary-detail-slim-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.invoice-summary-detail-slim-r01.description',
+  },
+  {
+    id: 'purchase-detail-invoice-header-excel-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-detail-invoice-header-excel-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-detail-invoice-header-excel-r01.description',
+  },
+  {
+    id: 'purchase-detail-invoice-complete-price-diff-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-detail-invoice-complete-price-diff-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-detail-invoice-complete-price-diff-r01.description',
+  },
+  {
+    id: 'purchase-detail-invoice-excel-pull-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-detail-invoice-excel-pull-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-detail-invoice-excel-pull-r01.description',
+  },
+  {
+    id: 'sales-detail-invoice-list-r01',
+    date: '2026-11-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-detail-invoice-list-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-detail-invoice-list-r01.description',
+  },
+  {
+    id: 'purchase-detail-invoice-list-r01',
+    date: '2026-11-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-detail-invoice-list-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.purchase-detail-invoice-list-r01.description',
+  },
+  {
+    id: 'invoice-summary-detail-menu-split-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.invoice-summary-detail-menu-split-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.invoice-summary-detail-menu-split-r01.description',
+  },
+  {
     id: 'payment-application-pull-payee-validate-r01',
     date: '2026-11-26',
     type: 'fix',

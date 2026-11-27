@@ -2632,6 +2632,130 @@ export default {
   'components.syncFromSource.stepIncrementalEmpty': '水位内无变更',
   'components.syncFromSource.stepSourceEmptyContinue':
     '源端未返回分组行（拉取 0 条），本步完成；后续物料同步会按物料行补齐本地分组',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-other-expense-application-r01.title':
+    '新增其他费用支出申请及收支单据三段式审核',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-other-expense-application-r01.description':
+    '财务管理新增「其他费用支出申请」单据，可审核后下推其他费用支出单并跟踪待下推金额；其他费用支出/收入升级为提交、提交审核、审核三段式流程，支出单确认过账自动生成付款单核销应付。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-invoice-default-tax-inclusive-r01.title':
+    '销售发票加载默认含税录入',
+  'pages.dashboard.updateLog.entries.sales-invoice-default-tax-inclusive-r01.description':
+    '修复从销售出库等加载销售发票时金额录入默认落在不含税；与进项发票一致，默认含税并预填可开票价税合计。',
+  'pages.dashboard.updateLog.entries.partner-statement-invoice-entry-r01.title':
+    '对账后收开票回到往来对账入口',
+  'pages.dashboard.updateLog.entries.partner-statement-invoice-entry-r01.description':
+    '来源为往来对账单的应收/应付不再从应收单或应付单路径加载发票；在往来对账单列表可直接进入从对账单创建采购/销售发票。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-invoice-receivable-ledger-complete-r01.title':
+    '修复发票立账未生成应收账款',
+  'pages.dashboard.updateLog.entries.sales-invoice-receivable-ledger-complete-r01.description':
+    '月结「根据发票立账」在销项发票审核后补跑对账立账，对齐进项补跑路径；单据按票立账时销项审核自动生应收门控与进项对称放行。需重启后端。',
+  'pages.dashboard.updateLog.entries.bilateral-detail-invoice-pull-r01.title':
+    '明细发票购销取单按行提交',
+  'pages.dashboard.updateLog.entries.bilateral-detail-invoice-pull-r01.description':
+    '组织为明细发票时，采购侧支持入库/应付/订单等行级收票，销售侧出库与应收预览返回明细行并提交 detail_items；手工登记在无源单时拦截。summary 租户行为不变。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.bilateral-detail-invoice-statement-line-r01.title':
+    '明细发票绑定对账行与采购详情明细',
+  'pages.dashboard.updateLog.entries.bilateral-detail-invoice-statement-line-r01.description':
+    '从对账单取单时预览行写入 partner_statement_line_id 并提交落库；工序委外收货补全 detail_lines；采购发票详情 API 返回明细行并在详情页展示。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.sales-order-detail-invoice-pull-r01.title':
+    '明细模式支持从销售订单按行开票',
+  'pages.dashboard.updateLog.entries.sales-order-detail-invoice-pull-r01.description':
+    '组织为明细发票时，从销售订单取单预览返回订单明细行并提交 detail_items；对账行过滤修正避免应付单行误匹配采购入库。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.bilateral-invoice-detail-source-trace-r01.title':
+    '购销发票详情展示源单行',
+  'pages.dashboard.updateLog.entries.bilateral-invoice-detail-source-trace-r01.description':
+    '明细发票详情接口返回源单类型、单据与行 ID；购销详情明细表增加「源单行」只读列。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-detail-table-r01.title':
+    '修复从采购入库创建采购发票看不到明细',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-detail-table-r01.description':
+    '采购发票拉单预览已补入库物料明细表与行勾选，与应付单一致；组织为明细立账时可正常看到数据并提交。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-list-batch-gross-r01.title':
+    '修复从入库取单开票列表长时间转圈',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-list-batch-gross-r01.description':
+    '采购发票与应付从采购入库取单候选列表改为批量重算价税合计，避免每单重复查明细导致 N+1 与 25 秒超时。须重启后端；取单仍慢时前端一并更新。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-count-cols-r01.title':
+    '采购发票取入库单展示明细行数与已开行数',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-count-cols-r01.description':
+    '从采购入库创建采购发票的取单列表增加明细行数、已开行数（已有收票占用的行），便于挑选部分行合并开票。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.invoice-pull-line-count-cols-all-sources-r01.title':
+    '销项进项发票取单统一展示明细行数与已开行数',
+  'pages.dashboard.updateLog.entries.invoice-pull-line-count-cols-all-sources-r01.description':
+    '采购发票与销售发票各取单来源列表均增加明细行数、已开行数；入库出库按行开票占用统计，订单按头额分摊，应付应收透传关联出入库；往来对账取单仅展示列位无行级数据时显示横线。须重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.finance-pull-preview-detail-form-spacing-r01.title':
+    '财务取单开票明细与填写表单上下间距规范',
+  'pages.dashboard.updateLog.entries.finance-pull-preview-detail-form-spacing-r01.description':
+    '采购发票、应付从入库取单时，开票明细表与下方填写区统一留白与表单项间距，避免明细表底与发票字段贴在一起。须更新 Web 端。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-detail-header-incl-r01.title':
+    '采购入库价税合计只读已保存金额',
+  'pages.dashboard.updateLog.entries.purchase-receipt-detail-header-incl-r01.description':
+    '采购入库列表、详情与取单的价税合计只读已保存的 net_amount，明细行只读已保存的未税、税额与价税合计，不再在页面上重算。',
+  'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-mask-r01.title':
+    '购销发票粒度不符整页遮罩引导',
+  'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-mask-r01.description':
+    '组织发票开立粒度与当前汇总或明细列表不一致时，整页工作区遮罩阻断操作，居中提示并一键前往正确菜单。须更新 Web 端。',
+  'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-alert-r01.title':
+    '购销发票列表按组织粒度提示',
+  'pages.dashboard.updateLog.entries.finance-invoice-settlement-page-alert-r01.description':
+    '组织配置为明细或汇总发票时，在另一侧汇总/明细列表页顶部提示并链至正确菜单，避免误在错误页面取单。须更新 Web 端。',
+  'pages.dashboard.updateLog.entries.finance-pull-detail-row-selection-keys-r01.title':
+    '修复进项销项取单明细勾选不显示',
+  'pages.dashboard.updateLog.entries.finance-pull-detail-row-selection-keys-r01.description':
+    '开票明细表 rowKey 与 selectedRowKeys 类型对齐为字符串，默认选中与手动勾选均可正常显示对勾。须更新 Web 端。',
+  'pages.dashboard.updateLog.entries.finance-invoice-pull-form-layout-r01.title':
+    '购销发票取单填写弹窗排版调整',
+  'pages.dashboard.updateLog.entries.finance-invoice-pull-form-layout-r01.description':
+    '填写销售或采购发票信息时表头字段一行五列在上，开票明细表居中，备注与同票收款在明细下方。须更新 Web 端。',
+  'pages.dashboard.updateLog.entries.detail-invoice-line-invoice-number-r01.title':
+    '明细发票支持行级发票号码',
+  'pages.dashboard.updateLog.entries.detail-invoice-line-invoice-number-r01.description':
+    '购销明细取单表可逐行填写发票号码并随 detail_items 落库；发票详情明细表展示行号，未填时回显头表号码。',
+  'pages.dashboard.updateLog.entries.detail-invoice-pull-17cols-line-qty-r01.title':
+    '购销明细开票取单对齐 17 列与发票数量',
+  'pages.dashboard.updateLog.entries.detail-invoice-pull-17cols-line-qty-r01.description':
+    '采购明细收票与销售明细开票取单表补齐规格与仓储列，支持行内编辑发票数量并与发票金额联动，落库按数量计算不含税单价。',
+  'pages.dashboard.updateLog.entries.invoice-pull-preview-kernel-r01.title':
+    '购销发票取单预览统一分发接口',
+  'pages.dashboard.updateLog.entries.invoice-pull-preview-kernel-r01.description':
+    '采购与销售发票新增 pull-preview 统一预览；汇总与明细菜单共用前端 pull 内核，减少多源分支与重复请求拼装。',
+  'pages.dashboard.updateLog.entries.outsource-receipt-invoice-complete-r01.title':
+    '工序委外收货批次支持明细收票结束',
+  'pages.dashboard.updateLog.entries.outsource-receipt-invoice-complete-r01.description':
+    '委外收货批次满额明细开票后标记收票结束并过滤取单；明细创建写入开票占用并落单据关联，与采购入库行一致。',
+  'pages.dashboard.updateLog.entries.sales-summary-invoice-header-excel-r01.title':
+    '汇总销售发票取单补齐结账日部门与立账表头',
+  'pages.dashboard.updateLog.entries.sales-summary-invoice-header-excel-r01.description':
+    '汇总「销售发票」取单预览与创建提交对齐明细开票：结账日期、部门默认当前用户部门，立账方式由预览只读带出并落库。',
+  'pages.dashboard.updateLog.entries.sales-detail-invoice-header-excel-r01.title':
+    '销售明细开票补齐结账日部门与立账表头',
+  'pages.dashboard.updateLog.entries.sales-detail-invoice-header-excel-r01.description':
+    '销项发票支持结账日期、部门与立账方式落库；明细开票取单展示并提交表头字段，拉单预览按收入确认推断立账。',
+  'pages.dashboard.updateLog.entries.invoice-summary-detail-slim-r01.title':
+    '汇总发票取单瘦身与销售明细列对齐',
+  'pages.dashboard.updateLog.entries.invoice-summary-detail-slim-r01.description':
+    '汇总采购发票取单去掉行勾选，明细粒度仅在明细菜单；销售明细开票取单预览对齐来源单号与数量金额列。',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-header-excel-r01.title':
+    '采购发票取单补齐结账日部门与立账表头',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-header-excel-r01.description':
+    '采购发票与明细收票取单新建支持结账日期、部门与立账方式（来自源单预览锁定），详情页展示上述表头字段。',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-complete-price-diff-r01.title':
+    '采购明细收票收票结束与价差应付',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-complete-price-diff-r01.description':
+    '明细进项发票审核后：入库行收满价税占用则标记收票结束并不再出现在取单；入库立账时票面与源价不一致自动生成价差调整应付，按票立账仍按票面生成应付。',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-excel-pull-r01.title':
+    '采购明细收票取单对齐 Excel 明细列',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-excel-pull-r01.description':
+    '明细收票新建支持从往来对账单加载；取单预览展示来源单号、数量、单价、含税与仓批等列，优惠区提示价税合计（明细合计减优惠）。',
+  'pages.dashboard.updateLog.entries.sales-detail-invoice-list-r01.title':
+    '销售明细开票独立列表',
+  'pages.dashboard.updateLog.entries.sales-detail-invoice-list-r01.description':
+    '「销售明细开票」菜单提供明细粒度列表与取单：订单、出库、应收及对账来源按行勾选并提交 detail_items；禁止无源单手工登记。须同步菜单并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-list-r01.title':
+    '采购明细收票独立列表',
+  'pages.dashboard.updateLog.entries.purchase-detail-invoice-list-r01.description':
+    '「采购明细收票」菜单提供明细粒度列表与取单：订单、入库、应付、委外收货及对账来源按行勾选并提交 detail_items；禁止无源单手工登记。须同步菜单并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.invoice-summary-detail-menu-split-r01.title':
+    '购销汇总发票与明细菜单拆分',
+  'pages.dashboard.updateLog.entries.invoice-summary-detail-menu-split-r01.description':
+    '「采购发票」「销售发票」恢复为汇总开立；新增「采购明细收票」「销售明细开票」菜单。后端允许按请求粒度并存，不再因组织参数锁定拒绝汇总建单。明细页功能续建中。需同步菜单并更新 Web 端。',
   'pages.dashboard.updateLog.entries.purchase-receipt-zero-tax-rollup-r01.title':
     '采购入库普票 0% 税率下推与价税重算',
   'pages.dashboard.updateLog.entries.purchase-receipt-zero-tax-rollup-r01.description':
@@ -8217,6 +8341,8 @@ export default {
   'app.kuaicaiwu.menu.finance-management.fund-transfers': '资金调拨',
   'app.kuaicaiwu.menu.finance-management.payment-refunds': '付款退款',
   'app.kuaicaiwu.menu.finance-management.sales-invoices': '销售发票',
+  'app.kuaicaiwu.menu.finance-management.sales-detail-invoices': '销售明细开票',
+  'app.kuaicaiwu.menu.finance-management.purchase-detail-invoices': '采购明细收票',
   'app.kuaicaiwu.menu.finance-management.settlement': '往来核销',
   'app.kuaicaiwu.menu.finance-management.partner-statements': '往来对账',
   'app.kuaicaiwu.menu.finance-management.price-settlement': '月结定价',
@@ -8359,6 +8485,7 @@ export default {
   'app.kuaicaiwu.otherExpense.col.lineKeyword': '明细摘要',
   'app.kuaicaiwu.otherExpense.copySelectedCreate': '复制选中单据新建',
   'app.kuaicaiwu.otherExpense.selectToCopy': '请选中一张其他费用支出单',
+  'app.kuaicaiwu.otherExpense.referenceLoadDenied': '{{label}}加载被拒绝，请授予查看或回显权限',
   'app.kuaicaiwu.otherExpense.payableRecognitionOpt.onReceipt': '立即产生应付账款',
   'app.kuaicaiwu.otherExpense.payableRecognitionOpt.onPurchaseInvoice': '以发票为准',
   'app.kuaicaiwu.otherExpense.counterpartyOtherLedgerRecognition': '不自动生成应付账款',
@@ -8435,6 +8562,8 @@ export default {
   'app.kuaicaiwu.otherExpense.confirmPostTitle': '确认过账',
   'app.kuaicaiwu.otherExpense.confirmPostDesc': '确定对单号 {{code}} 确认过账并生成付款单核销应付吗？',
   'app.kuaicaiwu.otherExpense.pushPayment': '下推付款单',
+  'app.kuaicaiwu.otherExpense.pushSuccess': '已下推支出单 {{code}}',
+  'app.kuaicaiwu.otherExpense.pushFailed': '下推支出单失败',
   'app.kuaicaiwu.otherExpense.finance.payable': '应付单',
   'app.kuaicaiwu.otherExpense.finance.payment': '付款单',
   'app.kuaicaiwu.otherExpense.unconfirm': '撤回确认',
@@ -27232,6 +27361,80 @@ export default {
     '多选对账单时须为同一立账方式',
   'app.kuaicaiwu.purchaseInvoice.detailNotFound': '未找到采购发票',
   'app.kuaicaiwu.purchaseInvoice.lifecycleHint': '采购发票未接入单据跟踪中心；与应付单、采购订单的关联以编号跳转业务系统为准。',
+  'app.kuaicaiwu.purchaseInvoice.col.settlementClosingDate': '结账日期',
+  'app.kuaicaiwu.purchaseInvoice.form.settlementClosingDateRequired': '请选择结账日期',
+  'app.kuaicaiwu.purchaseInvoice.form.settlementClosingDateTip': '默认可与收票日期相同，可单独调整',
+  'app.kuaicaiwu.purchaseInvoice.form.ledgerPostingModePullHint':
+    '由入库、应付或对账来源推断，创建时锁定不可改',
+  'app.kuaicaiwu.salesInvoice.col.settlementClosingDate': '结账日期',
+  'app.kuaicaiwu.salesInvoice.form.settlementClosingDateRequired': '请选择结账日期',
+  'app.kuaicaiwu.salesInvoice.form.settlementClosingDateTip': '默认可与开票日期相同，可单独调整',
+  'app.kuaicaiwu.salesInvoice.form.ledgerPostingModePullHint':
+    '由出库、应收或对账来源推断，创建时锁定不可改',
+  'app.kuaicaiwu.salesInvoice.pull.detailTitle': '开票明细',
+  'app.kuaicaiwu.salesInvoice.pull.detailEmpty': '当前源单无可选明细行',
+  'app.kuaicaiwu.salesInvoice.pull.col.lineNo': '行号',
+  'app.kuaicaiwu.salesInvoice.pull.col.materialCode': '物料编码',
+  'app.kuaicaiwu.salesInvoice.pull.col.materialName': '物料名称',
+  'app.kuaicaiwu.salesInvoice.pull.col.materialSpec': '规格',
+  'app.kuaicaiwu.salesInvoice.pull.col.lineAmount': '金额',
+  'app.kuaicaiwu.salesInvoice.pull.col.occupiedAmount': '已占用',
+  'app.kuaicaiwu.salesInvoice.pull.col.thisInvoiceAmount': '本次开票',
+  'app.kuaicaiwu.salesInvoice.pull.col.detailLineCount': '明细行数',
+  'app.kuaicaiwu.salesInvoice.pull.col.invoicedLineCount': '已开行数',
+  'app.kuaicaiwu.salesInvoice.detailRegisterFromSourceOnly':
+    '当前组织为明细发票，请从出库、应收或对账单取单开票，勿用手工登记',
+  'app.kuaicaiwu.salesInvoice.detailPullRequiresDetailLines':
+    '明细发票须按源单行开票，当前无可选明细行，请换源单或联系管理员',
+  'app.kuaicaiwu.salesInvoice.pull.selectAtLeastOneLine': '请至少勾选一行出库明细',
+  'app.kuaicaiwu.salesInvoice.pull.lineAmountMismatch':
+    '价税合计超过所选出库行可分摊上限，请减少开票金额或调整勾选行',
+  'app.kuaicaiwu.salesInvoice.pull.lineExceedMax': '某行本次开票超过该行可开票上限',
+  'app.kuaicaiwu.finance.invoiceSettlementUseDetailMenuAlert':
+    '当前组织发票开立粒度为明细发票，请使用「{{menu}}」取单与登记；在本页操作可能无法通过保存校验。',
+  'app.kuaicaiwu.finance.invoiceSettlementUseSummaryMenuAlert':
+    '当前组织发票开立粒度为汇总发票，请使用「{{menu}}」取单与登记；在本页与组织配置不一致。',
+  'app.kuaicaiwu.finance.invoiceSettlementGoMenu': '前往 {{menu}}',
+  'app.kuaicaiwu.invoice.line.invoiceNumber': '发票号码',
+  'app.kuaicaiwu.invoice.line.sourceTrace': '源单行',
+  'app.kuaicaiwu.purchaseDetailInvoice.pageTitle': '采购明细收票',
+  'app.kuaicaiwu.purchaseDetailInvoice.createTitle': '新建明细收票',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.sourceDocCode': '来源单号',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.sourceQuantity': '来源数量',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.receivableQuantity': '应收数量',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.invoiceQuantity': '发票数量',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.sourceUnitPrice': '来源单价',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.invoiceUnitPrice': '发票单价',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.thisInvoiceAmount': '发票金额',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.sourceGrossAmount': '来源含税金额',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.receivableAmount': '应收金额',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.warehouse': '仓库',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.location': '库位',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.batchNumber': '批号',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.lineQtyRequired': '已选行须填写发票数量',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.lineQtyExceedMax': '某行发票数量超过该行可开票数量',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.col.lineInvoiceNumber': '发票号码',
+  'app.kuaicaiwu.purchaseDetailInvoice.pull.lineInvoiceNumberRequired': '已选行须填写发票号码',
+  'app.kuaicaiwu.purchaseDetailInvoice.form.totalInclFromLines': '价税合计（明细发票金额合计减优惠）：{{total}}',
+  'app.kuaicaiwu.purchaseDetailInvoice.form.totalInclNonPositive': '优惠金额过大，价税合计须大于零',
+  'app.kuaicaiwu.salesDetailInvoice.pageTitle': '销售明细开票',
+  'app.kuaicaiwu.salesDetailInvoice.createTitle': '新建明细开票',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.sourceDocCode': '来源单号',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.sourceQuantity': '来源数量',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.receivableQuantity': '应开数量',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.invoiceQuantity': '发票数量',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.sourceUnitPrice': '来源单价',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.invoiceUnitPrice': '发票单价',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.thisInvoiceAmount': '发票金额',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.sourceGrossAmount': '来源含税金额',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.receivableAmount': '应开金额',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.warehouse': '仓库',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.location': '库位',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.batchNumber': '批号',
+  'app.kuaicaiwu.salesDetailInvoice.pull.lineQtyRequired': '已选行须填写发票数量',
+  'app.kuaicaiwu.salesDetailInvoice.pull.lineQtyExceedMax': '某行发票数量超过该行可开票数量',
+  'app.kuaicaiwu.salesDetailInvoice.pull.col.lineInvoiceNumber': '发票号码',
+  'app.kuaicaiwu.salesDetailInvoice.pull.lineInvoiceNumberRequired': '已选行须填写发票号码',
   'app.kuaicaiwu.purchaseInvoice.noLines': '暂无票面明细行（单头登记模式）',
   'app.kuaicaiwu.purchaseInvoice.activityCreated': '创建于 {{time}}',
   'app.kuaicaiwu.purchaseInvoice.activityUpdated': '更新于 {{time}}',
@@ -27316,6 +27519,12 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.pull.col.lineAmount': '金额',
   'app.kuaicaiwu.purchaseInvoice.pull.col.occupiedAmount': '已占用',
   'app.kuaicaiwu.purchaseInvoice.pull.col.thisInvoiceAmount': '本次开票',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.detailLineCount': '明细行数',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.invoicedLineCount': '已开行数',
+  'app.kuaicaiwu.purchaseInvoice.detailRegisterFromSourceOnly':
+    '当前组织为明细发票，请从入库、应付、采购订单或对账单取单开票，勿用手工登记',
+  'app.kuaicaiwu.purchaseInvoice.detailPullRequiresDetailLines':
+    '明细发票须按源单行开票，当前无可选明细行，请换源单或联系管理员',
   'app.kuaicaiwu.purchaseInvoice.pull.converted': '已创建',
   'app.kuaicaiwu.purchaseInvoice.pull.convertible': '可创建',
   'app.kuaicaiwu.purchaseInvoice.pull.selectAtLeastOneLine': '请至少勾选一行入库明细',
@@ -56768,7 +56977,7 @@ export default {
   'app.kuaizhizao.warehouseOutbound.msg.requesterRequired': '请选择领用人',
   'app.kuaizhizao.warehouseOutbound.msg.pickDepartmentRequired': '请选择领用部门',
   'pages.system.configCenter.param.finance_invoice_settlement_mode': '发票开立粒度',
-  'pages.system.configCenter.param.finance_invoice_settlement_mode_desc': '全组织仅启用一种：汇总发票（按源单合并占用）或明细发票（一行一物料源行）。切换前须无另一种粒度的在库发票。',
+  'pages.system.configCenter.param.finance_invoice_settlement_mode_desc': '默认新开票据粒度；汇总发票与明细发票分菜单开立，创建时显式传入 settlement_mode。切换前须无另一种粒度的在库发票。',
   'pages.system.configCenter.param.finance_invoice_settlement_mode_opt_summary': '汇总发票',
   'pages.system.configCenter.param.finance_invoice_settlement_mode_opt_detail': '明细发票',
   'pages.system.configCenter.invoiceSettlementMigrate.title': '同步迁移历史发票并切换开立粒度',

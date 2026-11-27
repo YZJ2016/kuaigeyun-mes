@@ -8,7 +8,7 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Modal, Space, Dropdown, Form, theme, Typography } from 'antd';
+import { App, Button, Dropdown, Form, Input, Modal, Space, theme, Typography } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ModalForm,
@@ -43,7 +43,12 @@ import {
   MODAL_NESTED_ABOVE_PARENT_OFFSET,
   FormModalGridBlock,
 } from '../../../../../components/layout-templates';
-import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
+import {
+  financeColFifth,
+  financeColFull,
+  financeColHalf,
+  financeFormGridProps,
+} from '../../../utils/financeFormLayout';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
@@ -83,7 +88,6 @@ import {
   moneyExceedsMax,
   recalcEnteredAmountOnTaxRateChange,
   resolveInvoiceAmountsForSubmit,
-  resolveInvoiceExclFromSourceTotal,
   type InvoiceAmountInputMode,
 } from '../../../utils/invoiceAmountInput';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
@@ -104,10 +108,21 @@ import { MarkerTag } from '../../../../../constants/statusBadges';
 import { renderFinanceTypeMarker } from '../../../utils/financeListPresentation';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
-import { useQuery } from '@tanstack/react-query';
-import { getBusinessConfig } from '../../../../../services/businessConfig';
-import { orgFinanceInvoiceSettlementMode } from '../../../../../utils/documentLedgerRecognition';
-type PullPreviewKind = 'sales_order' | 'sales_delivery' | 'receivable';
+import { FinanceInvoiceSettlementModeAlert } from '../shared/FinanceInvoiceSettlementModeAlert';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import {
+  PurchaseDepartmentFormField,
+  resolvePurchaseDepartmentFromApplicant,
+  resolvePurchaseDepartmentPayload,
+  usePurchaseDepartmentOptions,
+} from '../../../../kuaizhizao/pages/purchase-management/shared/PurchaseDepartmentFormField';
+import {
+  fetchSalesInvoicePullPreview,
+  resolveSalesInvoicePullPreviewCap,
+  type SalesInvoicePullPreviewKind,
+} from '../shared/salesInvoicePullPreviewKernel';
+
+type PullPreviewKind = SalesInvoicePullPreviewKind;
 
 const TAX_RATE_OPTIONS = [
   { label: '13%', value: 13 },
@@ -157,17 +172,8 @@ const SalesInvoicesPage: React.FC = () => {
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
-  const { data: financeBusinessConfig } = useQuery({
-    queryKey: ['businessConfigFinanceInvoiceSettlement'],
-    queryFn: getBusinessConfig,
-    staleTime: 60_000,
-  });
-  const tenantInvoiceSettlementMode = useMemo(
-    () => orgFinanceInvoiceSettlementMode(financeBusinessConfig),
-    [financeBusinessConfig],
-  );
   const [pullForm] = Form.useForm();
-  const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
+  const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_inclusive');
   const pullTaxRateRef = useRef<number>(13);
   const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
   const pullFromSalesOrderOpenRef = useRef<(() => void) | null>(null);
@@ -179,6 +185,8 @@ const SalesInvoicesPage: React.FC = () => {
   const pullFromPartnerStatementOpenRef = useRef<(() => void) | null>(null);
   const pullPartnerStatementIdsRef = useRef<number[]>([]);
   const pullPartnerStatementCodesRef = useRef<string[]>([]);
+  const pullApplicantDepartmentUuidRef = useRef<string | undefined>(undefined);
+  const pullBroughtAmountRef = useRef(0);
   const { token } = theme.useToken();
   const pullQueryModalZIndex = token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const pullPreviewZIndex = pullQueryModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
@@ -210,6 +218,25 @@ const SalesInvoicesPage: React.FC = () => {
   const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_sales_delivery');
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_receivable');
   const pullFromPartnerStatementAction = getKuaicaiwuDocumentAction('sales_invoice.pull_from_partner_statement');
+  const currentUser = useCurrentUser();
+  const {
+    options: departmentOptions,
+    loading: departmentOptionsLoading,
+    resolveName: resolveDepartmentName,
+  } = usePurchaseDepartmentOptions();
+  const ledgerPostingModeOptions = useMemo(
+    () => [
+      {
+        label: t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.immediate'),
+        value: 'immediate',
+      },
+      {
+        label: t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.byInvoice'),
+        value: 'by_invoice',
+      },
+    ],
+    [t],
+  );
   const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
   const receiptPerms = useResourcePermissions('kuaicaiwu:receipt');
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
@@ -238,10 +265,6 @@ const SalesInvoicesPage: React.FC = () => {
   }, []);
 
   const handleCreate = async (values: any) => {
-    if (tenantInvoiceSettlementMode === 'detail') {
-      messageApi.warning('当前组织已开启「明细发票」模式，新建销售发票需携带明细行；请先在配置中心切换为汇总模式或使用支持明细行的来源开票');
-      return false;
-    }
     const invoiceAmount = Number(values.invoice_amount) || 0;
     const taxRate = Number(values.tax_rate) || 13;
     const data = {
@@ -252,7 +275,6 @@ const SalesInvoicesPage: React.FC = () => {
       invoice_type: values.invoice_type || '增值税专用发票',
       tax_rate: taxRate,
       invoice_amount: invoiceAmount,
-      settlement_mode: tenantInvoiceSettlementMode,
       notes: values.notes,
       partner_tax_no: values.partner_tax_no,
       partner_bank_info: values.partner_bank_info,
@@ -260,7 +282,10 @@ const SalesInvoicesPage: React.FC = () => {
       attachments: normalizeDocumentAttachments(values.attachments),
     };
     try {
-      await apiRequest('/apps/kuaicaiwu/sales-invoices', { method: 'POST', data });
+      await apiRequest('/apps/kuaicaiwu/sales-invoices', {
+        method: 'POST',
+        data: { ...data, settlement_mode: 'summary' },
+      });
       messageApi.success(t(`${P}.createSuccess`));
       setCreateModalVisible(false);
       actionRef.current?.reload();
@@ -318,87 +343,16 @@ const SalesInvoicesPage: React.FC = () => {
     setPullPreviewSourceIds(sourceIds);
     const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
     try {
-      let data: Awaited<ReturnType<typeof salesInvoiceService.previewPullFromSalesOrder>>;
-      if (kind === 'sales_order') {
-        if (sourceIds.length > 1) {
-          showPullFlowNotice('warning', t(`${P}.pull.sameCustomerRequired`));
-          resetPullPreview();
-          return;
-        }
-        data = await salesInvoiceService.previewPullFromSalesOrder(sourceIds[0]);
-      } else if (kind === 'sales_delivery') {
-        data =
-          sourceIds.length === 1
-            ? await salesInvoiceService.previewPullFromSalesDelivery(
-                sourceIds[0],
-                pullPartnerStatementIdsRef.current,
-              )
-            : await salesInvoiceService.previewPullFromSalesDeliveries(
-                sourceIds,
-                pullPartnerStatementIdsRef.current,
-              );
-      } else {
-        const fragments = await Promise.all(
-          sourceIds.map((id) => salesInvoiceService.previewPullFromReceivable(id)),
-        );
-        const customerKeys = new Set(
-          fragments
-            .map((f) => String(f.customer_id ?? f.customer_name ?? '').trim())
-            .filter(Boolean),
-        );
-        if (customerKeys.size > 1) {
-          showPullFlowNotice('warning', t(`${P}.pull.sameCustomerRequired`));
-          resetPullPreview();
-          return;
-        }
-        const blocking = fragments.find((f) => f.has_blocking_issues);
-        if (blocking) {
-          const blockedText =
-            salesInvoiceCapabilityReasonMessage(blocking.blocking_reason, t)
-            || (blocking.summary ? String(blocking.summary) : '')
-            || t(`${P}.pullPreviewBlocked`);
-          showPullFlowNotice('warning', blockedText, t(`${P}.pullPreviewBlocked`));
-          resetPullPreview();
-          return;
-        }
-        const mergedItems = fragments.flatMap((f) => f.items || []);
-        const maxPush =
-          Number(
-            fragments.reduce(
-              (sum, f) =>
-                sum +
-                Number(
-                  f.max_push_total
-                    ?? (f.items || []).reduce(
-                      (s, row) => s + Number(row.max_push_quantity ?? 0),
-                      0,
-                    ),
-                ),
-              0,
-            ),
-          ) || 0;
-        if (maxPush <= 0) {
-          const noAmtText =
-            (fragments[0]?.summary ? String(fragments[0].summary) : '') ||
-            t(`${P}.pullNoInvoiceableAmount`);
-          showPullFlowNotice('warning', noAmtText, t(`${P}.pullNoInvoiceableAmount`));
-          resetPullPreview();
-          return;
-        }
-        const first = fragments[0];
-        data = {
-          ...first,
-          source_id: sourceId,
-          source_ids: sourceIds,
-          source_code: fragments.map((f) => f.source_code).filter(Boolean).join('、'),
-          items: mergedItems,
-          max_push_total: maxPush,
-          summary:
-            sourceIds.length > 1
-              ? `将从 ${sourceIds.length} 张来源单据创建销售发票（可开票合计 ¥${maxPush.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}）`
-              : first.summary,
-        };
+      if (kind === 'sales_order' && sourceIds.length > 1) {
+        showPullFlowNotice('warning', t(`${P}.pull.sameCustomerRequired`));
+        resetPullPreview();
+        return;
       }
+      const data = await fetchSalesInvoicePullPreview(
+        kind,
+        sourceIds,
+        pullPartnerStatementIdsRef.current,
+      );
       if (data.has_blocking_issues) {
         const blockedText =
           salesInvoiceCapabilityReasonMessage(data.blocking_reason, t)
@@ -751,7 +705,7 @@ const SalesInvoicesPage: React.FC = () => {
       return false;
     }
     const taxRate = Number(values.tax_rate) || 13;
-    const amountMode = (values.amount_input_mode || 'tax_exclusive') as InvoiceAmountInputMode;
+    const amountMode = (values.amount_input_mode || 'tax_inclusive') as InvoiceAmountInputMode;
     const { invoiceAmountExcl: invoiceAmount, totalIncl: estimatedTotal } = resolveInvoiceAmountsForSubmit(
       enteredAmount,
       taxRate,
@@ -787,24 +741,34 @@ const SalesInvoicesPage: React.FC = () => {
         : pullPreviewKind === 'sales_delivery'
           ? pullFromSalesDeliveryAction.sourceLabel
           : pullFromReceivableAction.sourceLabel;
-    if (tenantInvoiceSettlementMode === 'detail') {
-      messageApi.warning('当前组织已开启「明细发票」模式，拉单开票需提供销售明细行（detail_items），当前销售拉单暂未支持明细行选择');
-      return false;
-    }
+    const departmentPayload = resolvePurchaseDepartmentPayload(
+      values.department_id,
+      resolveDepartmentName,
+      values.department_name,
+    );
+    const pullLedgerMode =
+      pullPreviewData.ledger_posting_mode === 'by_invoice' ? 'by_invoice' : 'immediate';
     setPullSubmitting(true);
     try {
       await apiRequest('/apps/kuaicaiwu/sales-invoices', {
         method: 'POST',
         data: {
+          settlement_mode: 'summary',
           customer_id: pullPreviewData.customer_id,
           customer_name: pullPreviewData.customer_name || '',
+          settlement_closing_date: formatDateTime(
+            values.settlement_closing_date || values.invoice_date || dayjs(),
+            'YYYY-MM-DD',
+          ),
+          department_id: departmentPayload.department_id,
+          department_name: departmentPayload.department_name,
+          ledger_posting_mode: pullLedgerMode,
           sales_order_id: pullPreviewData.sales_order_id ?? undefined,
           sales_order_code: pullPreviewData.sales_order_code ?? pullPreviewData.source_code,
           receivable_id: pullPreviewKind === 'receivable' ? pullPreviewSourceId : pullPreviewData.receivable_id,
           receivable_code: pullPreviewKind === 'receivable' ? pullPreviewData.source_code : pullPreviewData.receivable_code,
           source_type: pullPreviewKind,
           source_id: pullPreviewSourceId,
-          settlement_mode: tenantInvoiceSettlementMode,
           invoice_number: String(values.invoice_number ?? '').trim(),
           invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
           invoice_type: values.invoice_type || '增值税专用发票',
@@ -974,23 +938,6 @@ const SalesInvoicesPage: React.FC = () => {
             }
           />
         ),
-      },
-      {
-        title: t(`${P}.settlementMode`),
-        dataIndex: 'settlement_mode',
-        width: 96,
-        minWidth: 96,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, record) => {
-          const mode = String(record.settlement_mode || 'summary');
-          const text =
-            mode === 'detail'
-              ? t(`${P}.settlementMode.detail`)
-              : t(`${P}.settlementMode.summary`);
-          return <MarkerTag variant="filled">{text}</MarkerTag>;
-        },
       },
       {
         title: t('app.kuaicaiwu.common.customer'),
@@ -1391,11 +1338,7 @@ const SalesInvoicesPage: React.FC = () => {
           ),
       ) || 0;
     const taxRate = 13;
-    const defaultExcl = resolveInvoiceExclFromSourceTotal(
-      maxPush,
-      taxRate,
-      pullPreviewData.price_type,
-    );
+    const defaultIncl = maxPush > 0 ? maxPush : undefined;
     const sourceLabel =
       pullPreviewKind === 'sales_order'
         ? pullFromSalesOrderAction.sourceLabel
@@ -1403,14 +1346,25 @@ const SalesInvoicesPage: React.FC = () => {
           ? pullFromSalesDeliveryAction.sourceLabel
           : pullFromReceivableAction.sourceLabel;
     const maxSettle = Number(pullPreviewData.remaining_settle_amount ?? 0);
+    const ledgerMode =
+      pullPreviewData.ledger_posting_mode === 'by_invoice' ? 'by_invoice' : 'immediate';
+    const deptUuid = currentUser?.department?.uuid;
+    if (deptUuid) {
+      pullApplicantDepartmentUuidRef.current = deptUuid;
+    }
+    const deptDefaults = resolvePurchaseDepartmentFromApplicant(deptUuid, departmentOptions);
+    const invoiceDay = dayjs();
     return {
       source_code: pullPreviewData.source_code,
       customer_name: pullPreviewData.customer_name,
-      invoice_date: dayjs(),
+      invoice_date: invoiceDay,
+      settlement_closing_date: invoiceDay,
+      ledger_posting_mode: ledgerMode,
+      ...deptDefaults,
       invoice_type: '增值税专用发票',
       tax_rate: taxRate,
-      amount_input_mode: 'tax_exclusive' as InvoiceAmountInputMode,
-      invoice_amount: defaultExcl,
+      amount_input_mode: 'tax_inclusive' as InvoiceAmountInputMode,
+      invoice_amount: defaultIncl,
       notes:
         pullPartnerStatementIdsRef.current.length
           ? t('app.kuaicaiwu.common.createdFromSourceNote', {
@@ -1434,18 +1388,41 @@ const SalesInvoicesPage: React.FC = () => {
     pullFromReceivableAction.sourceLabel,
     pullFromPartnerStatementAction.sourceLabel,
     t,
+    currentUser?.department?.uuid,
+    departmentOptions,
   ]);
 
   useEffect(() => {
-    const pullReceivableId = (location.state as { pullReceivableId?: number } | null)?.pullReceivableId;
+    if (!departmentOptions.length) return;
+    const pendingUuid = String(pullApplicantDepartmentUuidRef.current ?? '').trim();
+    if (!pendingUuid) return;
+    if (!pullPreviewOpen) return;
+    const existing = pullForm.getFieldValue('department_id');
+    if (existing != null && existing !== '') return;
+    const payload = resolvePurchaseDepartmentFromApplicant(pendingUuid, departmentOptions);
+    if (payload.department_id == null) return;
+    pullForm.setFieldsValue(payload);
+  }, [departmentOptions, pullPreviewOpen, pullForm]);
+
+  useEffect(() => {
+    const state = (location.state ?? null) as {
+      pullReceivableId?: number;
+      openSalesInvoicePullFromPartnerStatement?: boolean;
+    } | null;
+    if (state?.openSalesInvoicePullFromPartnerStatement) {
+      pullFromPartnerStatementQuery.openModal();
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
+    const pullReceivableId = state?.pullReceivableId;
     if (!pullReceivableId) return;
     void openPullPreview('receivable', pullReceivableId);
     navigate(location.pathname, { replace: true, state: null });
-  }, [location.state, location.pathname, navigate]);
+  }, [location.state, location.pathname, navigate, pullFromPartnerStatementQuery]);
 
   useEffect(() => {
     if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
-    pullAmountModeRef.current = 'tax_exclusive';
+    pullAmountModeRef.current = 'tax_inclusive';
     pullTaxRateRef.current = Number(pullFormInitialValues.tax_rate) || 13;
     pullForm.setFieldsValue(pullFormInitialValues);
   }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
@@ -1457,7 +1434,7 @@ const SalesInvoicesPage: React.FC = () => {
     const entered = Number(pullInvoiceAmountWatch || 0);
     const taxRate = Number(pullTaxRateWatch) || 13;
     if (!(entered > 0)) return '';
-    const mode = (pullAmountInputMode || 'tax_exclusive') as InvoiceAmountInputMode;
+    const mode = (pullAmountInputMode || 'tax_inclusive') as InvoiceAmountInputMode;
     const resolved = resolveInvoiceAmountsForSubmit(entered, taxRate, mode, {
       maxTotalIncl: pullPreviewMaxPush,
     });
@@ -1494,6 +1471,8 @@ const SalesInvoicesPage: React.FC = () => {
   };
 
   return (
+    <>
+    <FinanceInvoiceSettlementModeAlert pageMode="summary" kind="sales">
     <ListPageTemplate>
       <UniTable<SalesInvoice>
         headerTitle={t(`${P}.pageTitle`)}
@@ -1504,7 +1483,7 @@ const SalesInvoicesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v6-line-settlement"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v10-summary-only"
         showAdvancedSearch
         showCreateButton={false}
         createButtonText={t(`${P}.createTitle`)}
@@ -1558,13 +1537,6 @@ const SalesInvoicesPage: React.FC = () => {
                   pullFromReceivableQuery.openModal();
                 },
               },
-              {
-                key: 'pull-from-partner-statement',
-                actionKey: 'sales_invoice.pull_from_partner_statement',
-                onClick: () => {
-                  pullFromPartnerStatementQuery.openModal();
-                },
-              },
             ])}
           />,
         ]}
@@ -1574,6 +1546,7 @@ const SalesInvoicesPage: React.FC = () => {
           const apiParams: SalesInvoiceListParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            settlement_mode: 'summary',
             ...listParams,
           };
           const res = await salesInvoiceService.list(apiParams);
@@ -1727,7 +1700,7 @@ const SalesInvoicesPage: React.FC = () => {
         title={t(`${P}.pullFormTitle`)}
         open={pullPreviewOpen}
         destroyOnHidden
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         zIndex={pullPreviewZIndex}
         onCancel={resetPullPreview}
         okText={pullPreviewTargetLabel}
@@ -1750,20 +1723,24 @@ const SalesInvoicesPage: React.FC = () => {
                 layout="vertical"
                 {...financeFormGridProps}
               >
-                <ProFormText name="source_code" label={t(`${P}.form.sourceCode`)} readonly colProps={financeColHalf} />
-                <ProFormText name="customer_name" label={t('app.kuaicaiwu.common.customer')} readonly colProps={financeColHalf} />
+                <ProFormText
+                  name="source_code"
+                  label={t(`${P}.form.sourceCode`)}
+                  readonly
+                  colProps={financeColFifth}
+                />
                 <ProFormText
                   name="invoice_number"
                   label={t('app.kuaicaiwu.invoice.col.invoiceNumber')}
                   placeholder={t(`${P}.form.invoiceNumberOptional`)}
-                  colProps={financeColHalf}
+                  colProps={financeColFifth}
                 />
                 <ProFormSelect
                   name="invoice_type"
                   label={t(`${P}.col.invoiceType`)}
                   options={invoiceTypeOptions}
                   rules={[{ required: true, message: t(`${P}.form.selectInvoiceType`) }]}
-                  colProps={financeColHalf}
+                  colProps={financeColFifth}
                 />
                 <ProFormDatePicker
                   name="invoice_date"
@@ -1771,19 +1748,44 @@ const SalesInvoicesPage: React.FC = () => {
                   tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
                   rules={[{ required: true, message: t(`${P}.form.selectInvoiceDate`) }]}
                   fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
-                  colProps={financeColHalf}
+                  colProps={financeColFifth}
+                />
+                <ProFormDatePicker
+                  name="settlement_closing_date"
+                  label={t(`${P}.col.settlementClosingDate`)}
+                  tooltip={t(`${P}.form.settlementClosingDateTip`)}
+                  rules={[{ required: true, message: t(`${P}.form.settlementClosingDateRequired`) }]}
+                  fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
+                  colProps={financeColFifth}
+                />
+                <ProFormItem label={t('app.kuaicaiwu.common.customer')} colProps={financeColFifth}>
+                  <Input disabled value={pullPreviewData.customer_name || ''} placeholder="—" />
+                </ProFormItem>
+                <ProFormSelect
+                  name="ledger_posting_mode"
+                  label={t('app.kuaicaiwu.partnerStatement.ledgerPostingMode')}
+                  tooltip={t(`${P}.form.ledgerPostingModePullHint`)}
+                  options={ledgerPostingModeOptions}
+                  disabled
+                  rules={[{ required: true }]}
+                  colProps={financeColFifth}
+                />
+                <PurchaseDepartmentFormField
+                  options={departmentOptions}
+                  loading={departmentOptionsLoading}
+                  colProps={financeColFifth}
                 />
                 <ProFormSelect
                   name="tax_rate"
                   label={t(`${P}.form.taxRate`)}
                   options={TAX_RATE_OPTIONS}
                   rules={[{ required: true, message: t(`${P}.form.selectTaxRate`) }]}
-                  colProps={financeColHalf}
+                  colProps={financeColFifth}
                   fieldProps={{
                     onChange: (nextRate: number) => {
                       const prevRate = pullTaxRateRef.current;
                       const mode = (pullForm.getFieldValue('amount_input_mode')
-                        || 'tax_exclusive') as InvoiceAmountInputMode;
+                        || 'tax_inclusive') as InvoiceAmountInputMode;
                       const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
                       const next = Number(nextRate) || 0;
                       if (current > 0) {
@@ -1796,44 +1798,40 @@ const SalesInvoicesPage: React.FC = () => {
                     },
                   }}
                 />
-                <FormModalGridBlock span={12}>
-                  <ProFormItem
-                    name="amount_input_mode"
-                    label={t(`${P}.form.amountInputMode`)}
-                  >
-                    <ThemedSegmented
-                      block
-                      options={[
-                        { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
-                        { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
-                      ]}
-                      onChange={(next) => {
-                        const nextMode = next as InvoiceAmountInputMode;
-                        const prevMode = pullAmountModeRef.current;
-                        const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
-                        const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
-                        if (current > 0 && prevMode && prevMode !== nextMode) {
-                          pullForm.setFieldValue(
-                            'invoice_amount',
-                            convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
-                          );
-                        }
-                        pullAmountModeRef.current = nextMode;
-                      }}
-                    />
-                  </ProFormItem>
-                </FormModalGridBlock>
+                <ProFormItem name="amount_input_mode" label={t(`${P}.form.amountInputMode`)} colProps={financeColFifth}>
+                  <ThemedSegmented
+                    className="form-field-segmented"
+                    block
+                    options={[
+                      { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
+                      { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
+                    ]}
+                    onChange={(next) => {
+                      const nextMode = next as InvoiceAmountInputMode;
+                      const prevMode = pullAmountModeRef.current;
+                      const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
+                      const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
+                      if (current > 0 && prevMode && prevMode !== nextMode) {
+                        pullForm.setFieldValue(
+                          'invoice_amount',
+                          convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
+                        );
+                      }
+                      pullAmountModeRef.current = nextMode;
+                    }}
+                  />
+                </ProFormItem>
                 <ProFormDigit
                   name="invoice_amount"
                   label={
-                    (pullAmountInputMode || 'tax_exclusive') === 'tax_inclusive'
+                    (pullAmountInputMode || 'tax_inclusive') === 'tax_inclusive'
                       ? t(`${P}.form.amountModeIncl`)
                       : t(`${P}.form.amountModeExcl`)
                   }
                   min={0}
                   rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
                   extra={pullAmountCounterpartHint || undefined}
-                  colProps={financeColHalf}
+                  colProps={financeColFifth}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
                 <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
@@ -2024,6 +2022,8 @@ const SalesInvoicesPage: React.FC = () => {
         <DocumentAttachmentsField category="sales_invoice_attachments" />
       </ModalForm>
     </ListPageTemplate>
+    </FinanceInvoiceSettlementModeAlert>
+    </>
   );
 };
 

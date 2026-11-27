@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form, Row, Col, InputNumber, theme } from 'antd';
+import { App, Button, Modal, Form, Row, Col, Input, InputNumber, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
@@ -24,7 +24,7 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import { ListPageTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET, FormModalGridBlock } from '../../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET, FormModalGridBlock, FORM_LAYOUT } from '../../../../../components/layout-templates';
 import { financeColFull, financeColHalf, financeFormGridProps } from '../../../utils/financeFormLayout';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -81,13 +81,6 @@ import {
 } from '../../../components/LedgerAccountFormFields';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { purchaseInvoiceCapabilityReasonMessage } from '../../../utils/purchaseInvoiceCapabilityMessages';
-import {
-  initPullReceiptLineSelection,
-  reconcilePullReceiptLinesForHeaderAmount,
-  sumPullReceiptLineAmounts,
-  buildPurchaseDetailItemsFromPullLines,
-  type PullReceiptFinanceDetailLine,
-} from '../../../../kuaizhizao/utils/pullReceiptFinanceLines';
 import { formatDateTime, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import {
   FINANCE_INVOICE_PINNED_REVIEW_FIELD,
@@ -103,11 +96,24 @@ import { TaxRatePercentInput } from '../../../../kuaizhizao/components/document-
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
-import { useQuery } from '@tanstack/react-query';
-import { getBusinessConfig } from '../../../../../services/businessConfig';
-import { orgFinanceInvoiceSettlementMode } from '../../../../../utils/documentLedgerRecognition';
+import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
+import {
+  PurchaseDepartmentFormField,
+  resolvePurchaseDepartmentFromApplicant,
+  resolvePurchaseDepartmentPayload,
+  usePurchaseDepartmentOptions,
+} from '../../../../kuaizhizao/pages/purchase-management/shared/PurchaseDepartmentFormField';
+import {
+  fetchPurchaseInvoicePartnerStatementPullPreview,
+  fetchPurchaseInvoicePullPreview,
+  resolvePurchaseInvoicePullPreviewCap,
+  type PurchaseInvoicePullPreviewKind,
+} from '../shared/purchaseInvoicePullPreviewKernel';
+import { FinanceInvoiceSettlementModeAlert } from '../shared/FinanceInvoiceSettlementModeAlert';
 
 const P = 'app.kuaicaiwu.purchaseInvoice';
+
+const formatPullMoney = (value: number) => formatCurrencyAmount(value || 0);
 
 function resolveApiErrorMessage(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { detail?: unknown } }; message?: string };
@@ -127,18 +133,7 @@ const TAX_RATE_OPTIONS = [
   { label: '0%', value: 0 },
 ];
 
-type PullPreviewKind = 'purchase_order' | 'purchase_receipt' | 'payable' | 'outsource_order_receipt';
-
-function resolvePullPreviewInvoiceCap(data: PurchaseInvoicePullPreview | null | undefined): number {
-  if (!data) return 0;
-  const budget = Number(data.partner_statement_invoice_budget);
-  if (budget > 0) return budget;
-  const total = Number(data.max_push_total);
-  if (total > 0) return total;
-  return (
-    (data.items || []).reduce((sum, row) => sum + Number(row.max_push_quantity ?? 0), 0) || 0
-  );
-}
+type PullPreviewKind = PurchaseInvoicePullPreviewKind;
 
 const PurchaseInvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -155,17 +150,6 @@ const PurchaseInvoiceList: React.FC = () => {
   const [pullPreviewData, setPullPreviewData] = useState<PurchaseInvoicePullPreview | null>(null);
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
   const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
-  const [pullReceiptSelectedIds, setPullReceiptSelectedIds] = useState<number[]>([]);
-  const [pullReceiptLineAmounts, setPullReceiptLineAmounts] = useState<Record<number, number>>({});
-  const { data: financeBusinessConfig } = useQuery({
-    queryKey: ['businessConfigFinanceInvoiceSettlement'],
-    queryFn: getBusinessConfig,
-    staleTime: 60_000,
-  });
-  const tenantInvoiceSettlementMode = useMemo(
-    () => orgFinanceInvoiceSettlementMode(financeBusinessConfig),
-    [financeBusinessConfig],
-  );
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
   const [pullForm] = Form.useForm();
   const [createForm] = Form.useForm();
@@ -185,6 +169,7 @@ const PurchaseInvoiceList: React.FC = () => {
   const pullFromPartnerStatementOpenRef = useRef<(() => void) | null>(null);
   const pullPartnerStatementIdsRef = useRef<number[]>([]);
   const pullPartnerStatementCodesRef = useRef<string[]>([]);
+  const pullApplicantDepartmentUuidRef = useRef<string | undefined>(undefined);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const { message: messageApi } = App.useApp();
@@ -219,6 +204,25 @@ const PurchaseInvoiceList: React.FC = () => {
     [t],
   );
   const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const currentUser = useCurrentUser();
+  const {
+    options: departmentOptions,
+    loading: departmentOptionsLoading,
+    resolveName: resolveDepartmentName,
+  } = usePurchaseDepartmentOptions();
+  const ledgerPostingModeOptions = useMemo(
+    () => [
+      {
+        label: t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.immediate'),
+        value: 'immediate',
+      },
+      {
+        label: t('app.kuaicaiwu.partnerStatement.ledgerPostingMode.byInvoice'),
+        value: 'by_invoice',
+      },
+    ],
+    [t],
+  );
   const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_order');
   const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_receipt');
   const pullFromPayableAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_payable');
@@ -236,14 +240,6 @@ const PurchaseInvoiceList: React.FC = () => {
   const purchaseInvoiceAuditBatchHandlers = useMemo(
     () => createUniAuditBatchHandlers('purchase_invoice'),
     [],
-  );
-  const pullReceiptLineSelectEnabled = useMemo(
-    () =>
-      (pullPreviewKind === 'purchase_receipt'
-        || pullPreviewKind === 'outsource_order_receipt'
-        || pullPreviewKind === 'payable')
-      && (pullPreviewData?.detail_lines?.length ?? 0) > 0,
-    [pullPreviewKind, pullPreviewData],
   );
   const selectedRecordsForBatch = useMemo(
     () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
@@ -277,11 +273,21 @@ const PurchaseInvoiceList: React.FC = () => {
     if (!editingRecord?.id) return false;
     setEditSubmitting(true);
     try {
-      await purchaseInvoiceService.update(Number(editingRecord.id), {
+      const updateData: {
+        invoice_number: string;
+        invoice_date?: string;
+        attachments: ReturnType<typeof normalizeDocumentAttachments>;
+      } = {
         invoice_number: String(values.invoice_number ?? '').trim(),
-        invoice_date: formatDateTime(values.invoice_date || editingRecord.invoice_date || dayjs(), 'YYYY-MM-DD'),
         attachments: normalizeDocumentAttachments(values.attachments),
-      });
+      };
+      if (!['已审核', '已开票'].includes(String(editingRecord.status ?? '').trim())) {
+        updateData.invoice_date = formatDateTime(
+          values.invoice_date || editingRecord.invoice_date || dayjs(),
+          'YYYY-MM-DD',
+        );
+      }
+      await purchaseInvoiceService.update(Number(editingRecord.id), updateData);
       messageApi.success(t(`${P}.editNumberSuccess`));
       setEditVisible(false);
       setEditingRecord(null);
@@ -360,7 +366,7 @@ const PurchaseInvoiceList: React.FC = () => {
       );
 
       const data: PurchaseInvoiceCreateData = {
-        settlement_mode: tenantInvoiceSettlementMode,
+        settlement_mode: 'summary',
         supplier_id: values.supplier_id,
         supplier_name: supplierOptions.find((o) => o.value === values.supplier_id)?.label || '',
         invoice_number: values.invoice_number,
@@ -394,26 +400,8 @@ const PurchaseInvoiceList: React.FC = () => {
     setPullPreviewSourceIds([]);
     setPullPreviewData(null);
     setPullPreviewKind(null);
-    setPullReceiptSelectedIds([]);
-    setPullReceiptLineAmounts({});
     pullForm.resetFields();
   };
-
-  const syncPullReceiptSumToInvoiceForm = useCallback(
-    (sumIncl: number) => {
-      if (sumIncl <= 0) return;
-      const taxRate = Number(pullForm.getFieldValue('tax_rate') ?? pullTaxRateRef.current ?? 13);
-      const mode = (pullForm.getFieldValue('amount_input_mode') || pullAmountModeRef.current) as InvoiceAmountInputMode;
-      pullBroughtAmountRef.current = sumIncl;
-      const faceIncl = sumIncl - (Number(pullForm.getFieldValue('discount_amount')) || 0);
-      if (mode === 'tax_inclusive') {
-        pullForm.setFieldsValue({ invoice_amount: faceIncl });
-      } else {
-        pullForm.setFieldsValue({ invoice_amount: invoiceExclFromIncl(faceIncl, taxRate) });
-      }
-    },
-    [pullForm],
-  );
 
   const openPullPreview = async (
     kind: PullPreviewKind,
@@ -449,41 +437,16 @@ const PurchaseInvoiceList: React.FC = () => {
     setPullPreviewKind(kind);
     setPullPreviewSourceIds(sourceIds);
     setPullPreviewSourceId(sourceIds[0]);
-    setPullReceiptSelectedIds([]);
-    setPullReceiptLineAmounts({});
     setPullPreviewOpen(true);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
     const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
     try {
-      const data =
-        kind === 'purchase_order'
-          ? sourceIds.length === 1
-            ? await purchaseInvoiceService.previewPullFromPurchaseOrder(sourceIds[0])
-            : await purchaseInvoiceService.previewPullFromPurchaseOrders(sourceIds)
-          : kind === 'purchase_receipt'
-            ? sourceIds.length === 1
-              ? await purchaseInvoiceService.previewPullFromPurchaseReceipt(
-                  sourceIds[0],
-                  pullPartnerStatementIdsRef.current,
-                )
-              : await purchaseInvoiceService.previewPullFromPurchaseReceipts(
-                  sourceIds,
-                  pullPartnerStatementIdsRef.current,
-                )
-            : kind === 'outsource_order_receipt'
-              ? sourceIds.length === 1
-                ? await purchaseInvoiceService.previewPullFromOutsourceOrderReceipt(
-                    sourceIds[0],
-                    pullPartnerStatementIdsRef.current,
-                  )
-                : await purchaseInvoiceService.previewPullFromOutsourceOrderReceipts(
-                    sourceIds,
-                    pullPartnerStatementIdsRef.current,
-                  )
-              : sourceIds.length === 1
-                ? await purchaseInvoiceService.previewPullFromPayable(sourceIds[0])
-                : await purchaseInvoiceService.previewPullFromPayables(sourceIds);
+      const data = await fetchPurchaseInvoicePullPreview(
+        kind,
+        sourceIds,
+        pullPartnerStatementIdsRef.current,
+      );
       if (data.has_blocking_issues) {
         const blockedText =
           purchaseInvoiceCapabilityReasonMessage(data.blocking_reason, t)
@@ -493,7 +456,7 @@ const PurchaseInvoiceList: React.FC = () => {
         resetPullPreview();
         return;
       }
-      const maxPush = resolvePullPreviewInvoiceCap(data);
+      const maxPush = resolvePurchaseInvoicePullPreviewCap(data);
       if (maxPush <= 0) {
         const noAmtText = (data.summary ? String(data.summary) : '') || t(`${P}.pullNoInvoiceableAmount`);
         showPullFlowNotice('warning', noAmtText, t(`${P}.pullNoInvoiceableAmount`));
@@ -767,7 +730,7 @@ const PurchaseInvoiceList: React.FC = () => {
           pullPartnerStatementCodesRef.current = partnerStatementCodes;
           const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
           try {
-            const data = await purchaseInvoiceService.previewPullFromPartnerStatementSupplierSources({
+            const data = await fetchPurchaseInvoicePartnerStatementPullPreview({
               receiptIds,
               outsourceOrderReceiptIds: outsourceReceiptIds,
               partnerStatementIds: selectedIds,
@@ -781,7 +744,7 @@ const PurchaseInvoiceList: React.FC = () => {
               resetPullPreview();
               return;
             }
-            const maxPush = resolvePullPreviewInvoiceCap(data);
+            const maxPush = resolvePurchaseInvoicePullPreviewCap(data);
             if (maxPush <= 0) {
               showPullFlowNotice('warning', t(`${P}.pullNoInvoiceableAmount`));
               resetPullPreview();
@@ -845,7 +808,7 @@ const PurchaseInvoiceList: React.FC = () => {
       );
       return false;
     }
-    const maxPush = resolvePullPreviewInvoiceCap(pullPreviewData);
+    const maxPush = resolvePurchaseInvoicePullPreviewCap(pullPreviewData);
     const enteredAmount = Number(values.invoice_amount) || 0;
     if (enteredAmount <= 0) {
       messageApi.warning(t(`${P}.amountRequired`));
@@ -863,69 +826,6 @@ const PurchaseInvoiceList: React.FC = () => {
     const occupancyTotal = estimatedTotal + discountAmount;
     if (moneyExceedsMax(occupancyTotal, maxPush)) {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
-      return false;
-    }
-    const useDetailSettlement =
-      tenantInvoiceSettlementMode === 'detail' && pullReceiptLineSelectEnabled;
-    let pullReceiptLines: PurchaseInvoiceCreateData['pull_receipt_lines'];
-    let detailItems: PurchaseInvoiceCreateData['detail_items'];
-    if (pullReceiptLineSelectEnabled) {
-      if (pullReceiptSelectedIds.length === 0) {
-        messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
-        return false;
-      }
-      const detailLines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
-      const reconciled = reconcilePullReceiptLinesForHeaderAmount(
-        pullReceiptSelectedIds,
-        detailLines,
-        occupancyTotal,
-        pullReceiptLineAmounts,
-      );
-      if (reconciled.selectedItemIds.length === 0) {
-        messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
-        return false;
-      }
-      if (Math.abs(reconciled.lineSum - occupancyTotal) > 0.009) {
-        messageApi.warning(t(`${P}.pull.lineAmountMismatch`));
-        return false;
-      }
-      if (!pullPartnerStatementIdsRef.current.length) {
-        const detailById = new Map(detailLines.map((row) => [row.purchase_receipt_item_id, row]));
-        for (const id of reconciled.selectedItemIds) {
-          const cap = Number(detailById.get(id)?.max_push_amount ?? 0);
-          const amt = Number(reconciled.amounts[id] ?? 0);
-          if (amt <= 0 || amt > cap + 0.009) {
-            messageApi.warning(t(`${P}.pull.lineExceedMax`));
-            return false;
-          }
-        }
-      }
-      if (useDetailSettlement) {
-        const fallbackDocId =
-          pullPreviewKind === 'payable'
-            ? Number(pullPreviewData.purchase_receipt_id || pullPreviewData.receipt_ids?.[0] || 0)
-            : pullPreviewSourceIds[0];
-        const fallbackType =
-          pullPreviewKind === 'outsource_order_receipt'
-            ? 'outsource_order_receipt'
-            : 'purchase_receipt';
-        detailItems = buildPurchaseDetailItemsFromPullLines(
-          reconciled.selectedItemIds,
-          reconciled.amounts,
-          detailLines,
-          taxRate,
-          fallbackType,
-          Number(fallbackDocId || 0),
-        );
-        if (!detailItems.length) {
-          messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
-          return false;
-        }
-      } else {
-        pullReceiptLines = reconciled.payload;
-      }
-    } else if (tenantInvoiceSettlementMode === 'detail') {
-      messageApi.warning('当前组织已锁定「明细发票」模式，请从含明细行的采购入库单/委外收货单/应付单加载开票');
       return false;
     }
     const sourceLabel =
@@ -963,10 +863,17 @@ const PurchaseInvoiceList: React.FC = () => {
         return false;
       }
     }
+    const departmentPayload = resolvePurchaseDepartmentPayload(
+      values.department_id,
+      resolveDepartmentName,
+      values.department_name,
+    );
+    const pullLedgerMode =
+      pullPreviewData.ledger_posting_mode === 'by_invoice' ? 'by_invoice' : 'immediate';
     setPullSubmitting(true);
     try {
       await purchaseInvoiceService.create({
-        settlement_mode: tenantInvoiceSettlementMode,
+        settlement_mode: 'summary',
         purchase_order_id: pullPreviewData.purchase_order_id ?? undefined,
         purchase_order_code: pullPreviewData.purchase_order_code ?? undefined,
         payable_id:
@@ -974,6 +881,13 @@ const PurchaseInvoiceList: React.FC = () => {
         payable_code: pullPreviewKind === 'payable' ? pullPreviewData.source_code : pullPreviewData.payable_code,
         supplier_id: Number(pullPreviewData.supplier_id || 0),
         supplier_name: pullPreviewData.supplier_name || '',
+        settlement_closing_date: formatDateTime(
+          values.settlement_closing_date || values.invoice_date || dayjs(),
+          'YYYY-MM-DD',
+        ),
+        department_id: departmentPayload.department_id,
+        department_name: departmentPayload.department_name,
+        ledger_posting_mode: pullLedgerMode,
         source_type: pullPreviewKind,
         source_id: pullPreviewSourceIds[0],
         source_ids:
@@ -1013,8 +927,6 @@ const PurchaseInvoiceList: React.FC = () => {
         status: '未审核',
         review_status: '草稿',
         attachments: normalizeDocumentAttachments(values.attachments),
-        pull_receipt_lines: useDetailSettlement ? undefined : pullReceiptLines,
-        detail_items: detailItems,
         ...(pullPartnerStatementIdsRef.current.length
           ? { partner_statement_ids: pullPartnerStatementIdsRef.current }
           : {}),
@@ -1087,23 +999,6 @@ const PurchaseInvoiceList: React.FC = () => {
             }
           />
         ),
-      },
-      {
-        title: t(`${P}.settlementMode`),
-        dataIndex: 'settlement_mode',
-        width: 96,
-        minWidth: 96,
-        uniTableKeepWidth: true,
-        resizable: false,
-        hideInSearch: true,
-        render: (_, record) => {
-          const mode = String(record.settlement_mode || 'summary');
-          const text =
-            mode === 'detail'
-              ? t(`${P}.settlementMode.detail`)
-              : t(`${P}.settlementMode.summary`);
-          return <MarkerTag variant="filled">{text}</MarkerTag>;
-        },
       },
       {
         title: t('app.kuaicaiwu.common.supplier'),
@@ -1471,9 +1366,7 @@ const PurchaseInvoiceList: React.FC = () => {
     [t],
   );
 
-  const pullPreviewMaxPush = resolvePullPreviewInvoiceCap(pullPreviewData);
-  const formatPullMoney = (v: number) =>
-    formatCurrencyAmount(v || 0);
+  const pullPreviewMaxPush = resolvePurchaseInvoicePullPreviewCap(pullPreviewData);
   const pullPreviewTargetLabel =
     pullPreviewKind === 'purchase_receipt'
       ? pullFromPurchaseReceiptAction.targetLabel
@@ -1483,7 +1376,7 @@ const PurchaseInvoiceList: React.FC = () => {
 
   const pullFormInitialValues = useMemo(() => {
     if (!pullPreviewData || !pullPreviewKind) return undefined;
-    const maxPush = resolvePullPreviewInvoiceCap(pullPreviewData);
+    const maxPush = resolvePurchaseInvoicePullPreviewCap(pullPreviewData);
     const taxRate = 13;
     // 默认取含税可开票上限，避免默认值正算再超 0.01
     const defaultIncl = maxPush > 0 ? maxPush : undefined;
@@ -1507,10 +1400,19 @@ const PurchaseInvoiceList: React.FC = () => {
             code: pullPreviewData.source_code,
           });
     const remainingSettle = Number(pullPreviewData.remaining_settle_amount ?? 0);
+    const ledgerMode =
+      pullPreviewData.ledger_posting_mode === 'by_invoice' ? 'by_invoice' : 'immediate';
+    const deptUuid = currentUser?.department?.uuid;
+    if (deptUuid) {
+      pullApplicantDepartmentUuidRef.current = deptUuid;
+    }
+    const deptDefaults = resolvePurchaseDepartmentFromApplicant(deptUuid, departmentOptions);
+    const invoiceDay = dayjs();
     return {
-      source_code: pullPreviewData.source_code,
-      supplier_name: pullPreviewData.supplier_name,
-      invoice_date: dayjs(),
+      invoice_date: invoiceDay,
+      settlement_closing_date: invoiceDay,
+      ledger_posting_mode: ledgerMode,
+      ...deptDefaults,
       invoice_type: '增值税专用发票',
       tax_rate: taxRate,
       amount_input_mode: 'tax_inclusive' as InvoiceAmountInputMode,
@@ -1534,14 +1436,37 @@ const PurchaseInvoiceList: React.FC = () => {
     pullFromPayableAction.sourceLabel,
     pullFromPartnerStatementAction.sourceLabel,
     t,
+    currentUser?.department?.uuid,
+    departmentOptions,
   ]);
 
   useEffect(() => {
-    const pullPayableId = (location.state as { pullPayableId?: number } | null)?.pullPayableId;
+    if (!departmentOptions.length) return;
+    const pendingUuid = String(pullApplicantDepartmentUuidRef.current ?? '').trim();
+    if (!pendingUuid) return;
+    if (!pullPreviewOpen) return;
+    const existing = pullForm.getFieldValue('department_id');
+    if (existing != null && existing !== '') return;
+    const payload = resolvePurchaseDepartmentFromApplicant(pendingUuid, departmentOptions);
+    if (payload.department_id == null) return;
+    pullForm.setFieldsValue(payload);
+  }, [departmentOptions, pullPreviewOpen, pullForm]);
+
+  useEffect(() => {
+    const state = (location.state ?? null) as {
+      pullPayableId?: number;
+      openPurchaseInvoicePullFromPartnerStatement?: boolean;
+    } | null;
+    if (state?.openPurchaseInvoicePullFromPartnerStatement) {
+      pullFromPartnerStatementQuery.openModal();
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
+    const pullPayableId = state?.pullPayableId;
     if (!pullPayableId) return;
     void openPullPreview('payable', pullPayableId);
     navigate(location.pathname, { replace: true, state: null });
-  }, [location.state, location.pathname, navigate]);
+  }, [location.state, location.pathname, navigate, pullFromPartnerStatementQuery]);
 
   useEffect(() => {
     if (!pullPreviewOpen || pullPreviewLoading || !pullFormInitialValues) return;
@@ -1550,36 +1475,6 @@ const PurchaseInvoiceList: React.FC = () => {
     pullBroughtAmountRef.current = Number(pullPreviewData?.items?.[0]?.max_push_quantity) || 0;
     pullForm.setFieldsValue(pullFormInitialValues);
   }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
-
-  useEffect(() => {
-    if (!pullPreviewOpen || !pullPreviewData) return;
-    if (pullPreviewKind !== 'purchase_receipt' && pullPreviewKind !== 'payable') return;
-    const lines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
-    if (!lines.length) {
-      setPullReceiptSelectedIds([]);
-      setPullReceiptLineAmounts({});
-      return;
-    }
-    const { selectedItemIds, amounts } = initPullReceiptLineSelection(lines);
-    let effectiveIds = selectedItemIds;
-    let effectiveAmounts = amounts;
-    const headerCap = resolvePullPreviewInvoiceCap(pullPreviewData);
-    let sum = sumPullReceiptLineAmounts(selectedItemIds, amounts);
-    if (pullPartnerStatementIdsRef.current.length > 0 && headerCap > sum + 0.009) {
-      const reconciled = reconcilePullReceiptLinesForHeaderAmount(
-        selectedItemIds,
-        lines,
-        headerCap,
-        amounts,
-      );
-      effectiveIds = reconciled.selectedItemIds;
-      effectiveAmounts = reconciled.amounts;
-      sum = reconciled.lineSum;
-    }
-    setPullReceiptSelectedIds(effectiveIds);
-    setPullReceiptLineAmounts(effectiveAmounts);
-    syncPullReceiptSumToInvoiceForm(sum > 0 ? sum : headerCap);
-  }, [pullPreviewOpen, pullPreviewKind, pullPreviewData, syncPullReceiptSumToInvoiceForm]);
 
   const pullAmountInputMode = Form.useWatch('amount_input_mode', pullForm) as InvoiceAmountInputMode | undefined;
   const pullTaxRateWatch = Form.useWatch('tax_rate', pullForm);
@@ -1633,45 +1528,6 @@ const PurchaseInvoiceList: React.FC = () => {
     }
   }, [pullDiscountWatch, pullPreviewOpen, pullForm]);
 
-  useEffect(() => {
-    if (!pullPreviewOpen || !pullReceiptLineSelectEnabled || !pullPreviewData) return;
-    if (pullReceiptSelectedIds.length === 0) return;
-    const entered = Number(pullInvoiceAmountWatch || 0);
-    if (!(entered > 0)) return;
-    const taxRate = Number(pullTaxRateWatch) || 13;
-    const mode = (pullAmountInputMode || 'tax_exclusive') as InvoiceAmountInputMode;
-    const { totalIncl } = resolveInvoiceAmountsForSubmit(entered, taxRate, mode, {
-      maxTotalIncl: pullPreviewMaxPush - (Number(pullDiscountWatch) || 0),
-    });
-    const discount = Number(pullDiscountWatch) || 0;
-    const occupancyIncl = totalIncl + discount;
-    const detailLines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
-    const currentSum = sumPullReceiptLineAmounts(pullReceiptSelectedIds, pullReceiptLineAmounts);
-    if (Math.abs(currentSum - occupancyIncl) <= 0.009) return;
-    const reconciled = reconcilePullReceiptLinesForHeaderAmount(
-      pullReceiptSelectedIds,
-      detailLines,
-      occupancyIncl,
-    );
-    setPullReceiptLineAmounts(reconciled.amounts);
-    if (reconciled.selectedItemIds.join(',') !== pullReceiptSelectedIds.join(',')) {
-      setPullReceiptSelectedIds(reconciled.selectedItemIds);
-    }
-  }, [
-    pullPreviewOpen,
-    pullReceiptLineSelectEnabled,
-    pullPreviewData,
-    pullReceiptSelectedIds,
-    pullReceiptLineAmounts,
-    pullInvoiceAmountWatch,
-    pullDiscountWatch,
-    pullAmountInputMode,
-    pullTaxRateWatch,
-    pullDiscountWatch,
-    pullPreviewMaxPush,
-    syncPullReceiptSumToInvoiceForm,
-  ]);
-
   const pullAmountCounterpartHint = useMemo(() => {
     const entered = Number(pullInvoiceAmountWatch || 0);
     const taxRate = Number(pullTaxRateWatch) || 13;
@@ -1715,6 +1571,8 @@ const PurchaseInvoiceList: React.FC = () => {
   };
 
   return (
+    <>
+    <FinanceInvoiceSettlementModeAlert pageMode="summary" kind="purchase">
     <ListPageTemplate>
       <UniTable<PurchaseInvoice>
         headerTitle={t(`${P}.pageTitle`)}
@@ -1726,7 +1584,7 @@ const PurchaseInvoiceList: React.FC = () => {
         onRowSelectionChange={setSelectedRowKeys}
         onTableDataChange={setTableRows}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v8-line-settlement"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices.list-v9-summary-only"
         showAdvancedSearch
         request={async (params, sort, _filter, searchFormValues) => {
           const listParams = resolvePurchaseInvoiceListParams(searchFormValues, sort);
@@ -1734,6 +1592,7 @@ const PurchaseInvoiceList: React.FC = () => {
           const apiParams: PurchaseInvoiceListParams = {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
+            settlement_mode: 'summary',
             ...listParams,
           };
           try {
@@ -1791,11 +1650,6 @@ const PurchaseInvoiceList: React.FC = () => {
                 key: 'pull-from-payable',
                 actionKey: 'purchase_invoice.pull_from_payable',
                 onClick: pullFromPayableQuery.openModal,
-              },
-              {
-                key: 'pull-from-partner-statement',
-                actionKey: 'purchase_invoice.pull_from_partner_statement',
-                onClick: pullFromPartnerStatementQuery.openModal,
               },
             ])}
           />,
@@ -1940,7 +1794,7 @@ const PurchaseInvoiceList: React.FC = () => {
         title={t(`${P}.pullFormTitle`)}
         open={pullPreviewOpen}
         destroyOnHidden
-        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
         zIndex={pullPreviewZIndex}
         onCancel={resetPullPreview}
         okText={pullPreviewTargetLabel}
@@ -1953,243 +1807,89 @@ const PurchaseInvoiceList: React.FC = () => {
           disabled: !pullPreviewData || pullPreviewMaxPush <= 0,
         }}
       >
-        {!pullPreviewData ? (
+        {pullPreviewData ? (
           <div>
-            <Spin />
-            <div style={{ color: 'var(--ant-color-primary)' }}>
-              {t('app.kuaizhizao.salesOrder.loadingPreview')}
-            </div>
-          </div>
-        ) : (
-          <div>
-            <p style={{ marginBottom: 12, fontWeight: 500 }}>{pullPreviewData.summary}</p>
-            {pullPreviewData.has_blocking_issues && pullPreviewData.blocking_reason ? (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 12 }}
-                title={purchaseInvoiceCapabilityReasonMessage(pullPreviewData.blocking_reason, t)}
-              />
-            ) : null}
-            {pullPreviewData.items?.length > 0 ? (
-              <Table
-                size="small"
-                dataSource={pullPreviewData.items}
-                rowKey={(row) => String(row.item_id)}
-                pagination={false}
-                scroll={{ x: 720 }}
-                columns={[
-                  { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 140, ellipsis: true },
-                  { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', width: 160, ellipsis: true },
-                  {
-                    title: t(`${P}.pull.col.docAmount`),
-                    dataIndex: 'quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${P}.pull.col.invoicedAmount`),
-                    dataIndex: 'pushed_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${P}.pull.col.invoiceableAmount`),
-                    dataIndex: 'max_push_quantity',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                ]}
-              />
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('app.kuaizhizao.purchaseReturn.pull.previewNoLines')}
-              />
-            )}
-            <Typography.Paragraph strong style={{ marginTop: 16, marginBottom: 8 }}>
-              {t(`${P}.pull.detailTitle`)}
-            </Typography.Paragraph>
-            {(pullPreviewData.detail_lines?.length ?? 0) > 0 ? (
-              <Table<PullReceiptFinanceDetailLine>
-                size="small"
-                dataSource={pullPreviewData.detail_lines as PullReceiptFinanceDetailLine[]}
-                rowKey={(row) => String(row.purchase_receipt_item_id ?? row.line_no)}
-                pagination={false}
-                scroll={{ x: pullReceiptLineSelectEnabled ? 980 : 880, y: 240 }}
-                rowSelection={
-                  pullReceiptLineSelectEnabled
-                    ? {
-                        selectedRowKeys: pullReceiptSelectedIds,
-                        onChange: (keys) => {
-                          const ids = keys.map((k) => Number(k)).filter((id) => id > 0);
-                          setPullReceiptSelectedIds(ids);
-                          const sum = sumPullReceiptLineAmounts(ids, pullReceiptLineAmounts);
-                          syncPullReceiptSumToInvoiceForm(sum);
-                        },
-                        getCheckboxProps: (row) => ({
-                          disabled: Number(row.max_push_amount ?? 0) <= 0,
-                        }),
-                      }
-                    : undefined
-                }
-                columns={[
-                  {
-                    title: t(`${P}.pull.col.lineNo`),
-                    dataIndex: 'line_no',
-                    width: 56,
-                    align: 'center',
-                  },
-                  {
-                    title: t(`${P}.pull.col.materialCode`),
-                    dataIndex: 'material_code',
-                    width: 120,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t(`${P}.pull.col.materialName`),
-                    dataIndex: 'material_name',
-                    width: 160,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t(`${P}.pull.col.materialSpec`),
-                    dataIndex: 'material_spec',
-                    width: 120,
-                    ellipsis: true,
-                    render: (v: string | null | undefined) => v || '',
-                  },
-                  {
-                    title: t('common.unit'),
-                    dataIndex: 'unit',
-                    width: 64,
-                    ellipsis: true,
-                  },
-                  {
-                    title: t('common.quantity'),
-                    dataIndex: 'quantity',
-                    width: 100,
-                    align: 'right',
-                    render: (v: number) => formatAmount(v || 0),
-                  },
-                  {
-                    title: t(`${P}.pull.col.unitPrice`),
-                    dataIndex: 'unit_price',
-                    width: 110,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  {
-                    title: t(`${P}.pull.col.lineAmount`),
-                    dataIndex: 'amount',
-                    width: 120,
-                    align: 'right',
-                    render: (v: number) => formatPullMoney(v),
-                  },
-                  ...(pullReceiptLineSelectEnabled
-                    ? [
-                        {
-                          title: t(`${P}.pull.col.occupiedAmount`),
-                          dataIndex: 'occupied_amount',
-                          width: 100,
-                          align: 'right' as const,
-                          render: (v: number) => formatPullMoney(v),
-                        },
-                        {
-                          title: t(`${P}.pull.col.invoiceableAmount`),
-                          dataIndex: 'max_push_amount',
-                          width: 100,
-                          align: 'right' as const,
-                          render: (v: number) => formatPullMoney(v),
-                        },
-                        {
-                          title: t(`${P}.pull.col.thisInvoiceAmount`),
-                          width: 130,
-                          align: 'right' as const,
-                          render: (_: unknown, row: PullReceiptFinanceDetailLine) => {
-                            const id = row.purchase_receipt_item_id;
-                            const selected = pullReceiptSelectedIds.includes(id);
-                            const cap = Number(row.max_push_amount ?? 0);
-                            return (
-                              <InputNumber
-                                size="small"
-                                min={0}
-                                max={cap}
-                                precision={2}
-                                disabled={!selected || cap <= 0}
-                                value={pullReceiptLineAmounts[id]}
-                                onChange={(val) => {
-                                  const next = Number(val ?? 0);
-                                  setPullReceiptLineAmounts((prev) => {
-                                    const merged = { ...prev, [id]: next };
-                                    const sum = sumPullReceiptLineAmounts(pullReceiptSelectedIds, merged);
-                                    syncPullReceiptSumToInvoiceForm(sum);
-                                    return merged;
-                                  });
-                                }}
-                                style={{ width: '100%' }}
-                              />
-                            );
-                          },
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            ) : (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t(`${P}.pull.detailEmpty`)}
-              />
-            )}
-            {pullPreviewData.tip ? (
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 16 }}>
-                {pullPreviewData.tip}
-              </Typography.Paragraph>
-            ) : null}
-            {!pullPreviewData.has_blocking_issues && pullPreviewMaxPush > 0 ? (
-              <ProForm
-                key={`pull-purchase-invoice-${pullPreviewKind}-${pullPreviewSourceIds.join('-')}`}
-                form={pullForm}
-                initialValues={pullFormInitialValues}
-                submitter={false}
-                onFinish={handlePullCreateSubmit}
-                layout="vertical"
-                {...financeFormGridProps}
-              >
-                <ProFormText name="source_code" label={t('app.kuaicaiwu.common.sourceDoc')} readonly colProps={financeColHalf} />
-                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly colProps={financeColHalf} />
+            <ProForm
+            key={`pull-purchase-invoice-${pullPreviewKind}-${pullPreviewSourceIds.join('-')}`}
+            form={pullForm}
+            initialValues={pullFormInitialValues}
+            submitter={false}
+            onFinish={handlePullCreateSubmit}
+            layout="vertical"
+            grid={false}
+          >
+            <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+              <Col span={12}>
                 <ProFormText
                   name="invoice_number"
                   label={t(`${P}.col.invoiceNumber`)}
                   rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
                   placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
-                  colProps={financeColHalf}
                 />
+              </Col>
+              <Col span={12}>
                 <ProFormSelect
                   name="invoice_type"
                   label={t(`${P}.col.invoiceType`)}
                   options={invoiceTypeOptions}
                   rules={[{ required: true, message: t(`${P}.form.invoiceTypeRequired`) }]}
-                  colProps={financeColHalf}
                 />
+              </Col>
+            </Row>
+            <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+              <Col span={12}>
                 <ProFormDatePicker
                   name="invoice_date"
                   label={t('app.kuaicaiwu.common.invoiceDate')}
                   tooltip={t('app.kuaicaiwu.common.invoiceDateTip')}
                   rules={[{ required: true, message: t(`${P}.form.invoiceDateRequired`) }]}
                   fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
-                  colProps={financeColHalf}
                 />
+              </Col>
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="settlement_closing_date"
+                  label={t(`${P}.col.settlementClosingDate`)}
+                  tooltip={t(`${P}.form.settlementClosingDateTip`)}
+                  rules={[{ required: true, message: t(`${P}.form.settlementClosingDateRequired`) }]}
+                  fieldProps={{ style: { width: '100%' }, format: 'YYYY-MM-DD' }}
+                />
+              </Col>
+            </Row>
+            <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+              <Col span={12}>
+                <ProFormItem label={t('app.kuaicaiwu.common.supplier')}>
+                  <Input
+                    disabled
+                    value={pullPreviewData.supplier_name || ''}
+                    placeholder="—"
+                  />
+                </ProFormItem>
+              </Col>
+              <Col span={12}>
+                <ProFormSelect
+                  name="ledger_posting_mode"
+                  label={t('app.kuaicaiwu.partnerStatement.ledgerPostingMode')}
+                  tooltip={t(`${P}.form.ledgerPostingModePullHint`)}
+                  options={ledgerPostingModeOptions}
+                  disabled
+                  rules={[{ required: true }]}
+                />
+              </Col>
+            </Row>
+            <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+              <Col span={12}>
+                <PurchaseDepartmentFormField
+                  options={departmentOptions}
+                  loading={departmentOptionsLoading}
+                />
+              </Col>
+              <Col span={12}>
                 <ProFormSelect
                   name="tax_rate"
                   label={t(`${P}.col.taxRate`)}
                   options={TAX_RATE_OPTIONS}
                   rules={[{ required: true, message: t(`${P}.form.taxRateRequired`) }]}
-                  colProps={financeColHalf}
                   fieldProps={{
                     onChange: (nextRate: number) => {
                       const prevRate = pullTaxRateRef.current;
@@ -2207,46 +1907,51 @@ const PurchaseInvoiceList: React.FC = () => {
                     },
                   }}
                 />
-                <FormModalGridBlock span={12}>
-                  <ProFormItem
-                    name="amount_input_mode"
-                    label={t(`${P}.form.amountInputMode`)}
-                  >
-                    <ThemedSegmented
-                      block
-                      options={[
-                        { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
-                        { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
-                      ]}
-                      onChange={(next) => {
-                        const nextMode = next as InvoiceAmountInputMode;
-                        const prevMode = pullAmountModeRef.current;
-                        const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
-                        const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
-                        if (current > 0 && prevMode && prevMode !== nextMode) {
-                          pullForm.setFieldValue(
-                            'invoice_amount',
-                            convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
-                          );
-                        }
-                        pullAmountModeRef.current = nextMode;
-                      }}
-                    />
-                  </ProFormItem>
-                </FormModalGridBlock>
+              </Col>
+            </Row>
+            <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+              <Col span={12}>
+                <ProFormItem name="amount_input_mode" label={t(`${P}.form.amountInputMode`)}>
+                  <ThemedSegmented
+                    className="form-field-segmented"
+                    style={{ width: 'fit-content', maxWidth: '100%' }}
+                    options={[
+                      { label: t(`${P}.form.amountModeExcl`), value: 'tax_exclusive' },
+                      { label: t(`${P}.form.amountModeIncl`), value: 'tax_inclusive' },
+                    ]}
+                    onChange={(next) => {
+                      const nextMode = next as InvoiceAmountInputMode;
+                      const prevMode = pullAmountModeRef.current;
+                      const taxRate = Number(pullForm.getFieldValue('tax_rate')) || 13;
+                      const current = Number(pullForm.getFieldValue('invoice_amount')) || 0;
+                      if (current > 0 && prevMode && prevMode !== nextMode) {
+                        pullForm.setFieldValue(
+                          'invoice_amount',
+                          convertInvoiceAmountBetweenModes(current, taxRate, prevMode, nextMode),
+                        );
+                      }
+                      pullAmountModeRef.current = nextMode;
+                    }}
+                  />
+                </ProFormItem>
+              </Col>
+              <Col span={12}>
                 <ProFormDigit
                   name="invoice_amount"
                   label={
-                    (pullAmountInputMode || 'tax_exclusive') === 'tax_inclusive'
+                    (pullAmountInputMode || 'tax_inclusive') === 'tax_inclusive'
                       ? t(`${P}.form.amountModeIncl`)
                       : t(`${P}.form.amountModeExcl`)
                   }
                   min={0}
                   rules={[{ required: true, message: t(`${P}.amountRequired`) }]}
                   extra={pullAmountCounterpartHint || undefined}
-                  colProps={financeColHalf}
                   fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
+              </Col>
+            </Row>
+            <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+              <Col span={12}>
                 <ProFormDigit
                   name="discount_amount"
                   label={t(`${P}.form.discountAmount`)}
@@ -2258,68 +1963,96 @@ const PurchaseInvoiceList: React.FC = () => {
                     min: Number.NEGATIVE_INFINITY,
                   }}
                 />
-                {pullPreviewKind === 'payable' && Math.abs(Number(pullDiscountWatch) || 0) > 0.0009 ? (
+              </Col>
+              {pullPreviewKind === 'payable' && Math.abs(Number(pullDiscountWatch) || 0) > 0.0009 ? (
+                <Col span={12}>
                   <ProFormSwitch
                     name="adjust_payable"
                     label={t(`${P}.form.adjustPayable`)}
                     tooltip={t(`${P}.form.adjustPayableTip`)}
-                    colProps={financeColHalf}
                   />
-                ) : null}
-                <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} colProps={financeColFull} />
-                {canConcurrentPayment ? (
-                  <>
+                </Col>
+              ) : null}
+            </Row>
+            <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+              <Col span={24}>
+                <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
+              </Col>
+            </Row>
+            {canConcurrentPayment ? (
+              <>
+                <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+                  <Col span={24}>
                     <ProFormSwitch
                       name="concurrent_payment_enabled"
                       label={t(`${P}.concurrentPayment`)}
                       extra={t(`${P}.concurrentPaymentHint`, {
                         max: formatAmount(pullPreviewData.remaining_settle_amount || 0),
                       })}
-                      colProps={financeColFull}
                     />
-                    {concurrentPaymentEnabled ? (
-                      <>
+                  </Col>
+                </Row>
+                {concurrentPaymentEnabled ? (
+                  <>
+                    <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+                      <Col span={12}>
                         <ProFormMoney
                           name="settle_amount"
                           label={t(`${P}.concurrentPaymentAmount`)}
                           min={0.01}
-                          rules={[{ required: true, message: t(`${P}.concurrentPaymentAmountRequired`) }]}
-                          colProps={financeColHalf}
+                          rules={[
+                            { required: true, message: t(`${P}.concurrentPaymentAmountRequired`) },
+                          ]}
                         />
+                      </Col>
+                      <Col span={12}>
                         <ProFormDatePicker
                           name="settle_date"
                           label={t('app.kuaicaiwu.payment.col.paymentDate')}
                           rules={[{ required: true }]}
                           fieldProps={{ style: { width: '100%' } }}
-                          colProps={financeColHalf}
                         />
+                      </Col>
+                    </Row>
+                    <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+                      <Col span={12}>
                         <ProFormSelect
                           name="payment_method"
                           label={t('app.kuaicaiwu.payment.col.paymentMethod')}
                           options={paymentMethodOptions}
-                          rules={[{ required: true, message: t('app.kuaicaiwu.payment.selectPaymentMethod') }]}
-                          colProps={financeColHalf}
+                          rules={[
+                            {
+                              required: true,
+                              message: t('app.kuaicaiwu.payment.selectPaymentMethod'),
+                            },
+                          ]}
                         />
-                        <LedgerAccountFormFields
-                          accounts={bankAccounts}
-                          accountLabel={t('app.kuaicaiwu.payment.outBankAccount')}
-                          noteLabel={t('app.kuaicaiwu.payment.outAccountNote')}
-                        />
+                      </Col>
+                    </Row>
+                    <LedgerAccountFormFields
+                      accounts={bankAccounts}
+                      accountLabel={t('app.kuaicaiwu.payment.outBankAccount')}
+                      noteLabel={t('app.kuaicaiwu.payment.outAccountNote')}
+                      omitColProps
+                      rowNestedSpans={{ account: 12, note: 12 }}
+                    />
+                    <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+                      <Col span={24}>
                         <ProFormTextArea
                           name="settle_notes"
                           label={t(`${P}.concurrentPaymentNotes`)}
                           fieldProps={{ rows: 2 }}
-                          colProps={financeColFull}
                         />
-                      </>
-                    ) : null}
+                      </Col>
+                    </Row>
                   </>
                 ) : null}
+              </>
+            ) : null}
             <DocumentAttachmentsField category="purchase_invoice_attachments" />
           </ProForm>
-            ) : null}
           </div>
-        )}
+        ) : null}
       </Modal>
 
       <ModalForm
@@ -2516,6 +2249,8 @@ const PurchaseInvoiceList: React.FC = () => {
         <DocumentAttachmentsField category="purchase_invoice_attachments" />
       </ModalForm>
     </ListPageTemplate>
+    </FinanceInvoiceSettlementModeAlert>
+  </>
   );
 };
 

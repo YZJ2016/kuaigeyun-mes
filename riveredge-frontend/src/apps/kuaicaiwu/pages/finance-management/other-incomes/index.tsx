@@ -11,7 +11,7 @@ const OtherIncomesPage: React.FC = () => (
     hostResource={KUAIZHIZAO_DOC_HOST.otherIncome}
     menuTitleKey="app.kuaicaiwu.menu.finance-management.other-incomes"
     i18nPrefix="app.kuaicaiwu.otherIncome"
-    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.other-incomes.list-v1"
+    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.other-incomes.list-v2"
     service={otherIncomeService}
   />
 );

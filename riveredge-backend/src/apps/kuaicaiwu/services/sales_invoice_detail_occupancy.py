@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from decimal import Decimal
-from typing import DefaultDict, List, Tuple
+from typing import DefaultDict, List, Optional, Tuple
 
 from apps.kuaicaiwu.models.invoice import InvoiceItem
 from apps.kuaicaiwu.services.sales_delivery_line_finance_occupancy_service import (
@@ -21,6 +21,8 @@ def _q_money(value) -> Decimal:
 async def record_detail_sales_invoice_occupancy_on_approve(
     tenant_id: int,
     invoice_id: int,
+    *,
+    created_by: Optional[int] = None,
 ) -> None:
     items = await InvoiceItem.filter(
         tenant_id=tenant_id,
@@ -51,4 +53,5 @@ async def record_detail_sales_invoice_occupancy_on_approve(
             invoice_id=int(invoice_id),
             amount=_q_money(total),
             line_slices=slices,
+            created_by=created_by,
         )

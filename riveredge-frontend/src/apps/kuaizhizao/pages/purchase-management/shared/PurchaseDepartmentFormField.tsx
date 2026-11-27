@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Form } from 'antd';
-import { ProFormSelect } from '@ant-design/pro-components';
+import { ProFormSelect, type ProFormSelectProps } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { getDepartmentTree } from '../../../../../services/department';
 import {
@@ -96,6 +96,7 @@ type PurchaseDepartmentFormFieldProps = {
   requiredMessage?: string;
   options: PurchaseDepartmentOption[];
   loading?: boolean;
+  colProps?: ProFormSelectProps['colProps'];
 };
 
 /** 表头部门下拉；外层自行包 Col。 */
@@ -106,6 +107,7 @@ export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldPr
   requiredMessage,
   options,
   loading,
+  colProps,
 }) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
@@ -126,6 +128,7 @@ export const PurchaseDepartmentFormField: React.FC<PurchaseDepartmentFormFieldPr
     <ProFormSelect
       name={name}
       label={t('app.kuaizhizao.purchase.field.department')}
+      colProps={colProps}
       options={mergedOptions}
       disabled={disabled}
       rules={required ? [{ required: true, message: departmentRequiredMsg }] : undefined}

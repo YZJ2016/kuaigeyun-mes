@@ -29,11 +29,45 @@ async def record_sales_delivery_invoice_occupancy(
     amount: Decimal,
     line_slices: Optional[List[Tuple[int, Decimal, Decimal]]] = None,
     target_item_id: Optional[int] = None,
+    created_by: Optional[int] = None,
 ) -> None:
     """明细/汇总发票审核后写入出库行开票占用（按出库单+发票幂等、行锁防并发超占）。"""
     amt = _q_money(amount)
     if amt <= 0:
         return
+    user_name: Optional[str] = None
+    if created_by:
+        from infra.models.user import User
+
+        user = await User.get_or_none(id=int(created_by))
+        user_name = getattr(user, "name", None) or getattr(user, "username", None)
+    from tortoise.transactions import in_transaction
+
+    async with in_transaction():
+        await _record_sales_delivery_invoice_occupancy_locked(
+            tenant_id,
+            sales_delivery_id=sales_delivery_id,
+            invoice_id=invoice_id,
+            amount=amt,
+            line_slices=line_slices,
+            target_item_id=target_item_id,
+            created_by=created_by,
+            created_by_name=created_by_name,
+        )
+
+
+async def _record_sales_delivery_invoice_occupancy_locked(
+    tenant_id: int,
+    *,
+    sales_delivery_id: int,
+    invoice_id: int,
+    amount: Decimal,
+    line_slices: Optional[List[Tuple[int, Decimal, Decimal]]] = None,
+    target_item_id: Optional[int] = None,
+    created_by: Optional[int] = None,
+    created_by_name: Optional[str] = None,
+) -> None:
+    amt = _q_money(amount)
     existing = await SalesDeliveryLineFinanceOccupancy.filter(
         tenant_id=tenant_id,
         sales_delivery_id=int(sales_delivery_id),
@@ -84,6 +118,10 @@ async def record_sales_delivery_invoice_occupancy(
                 target_doc_type="sales_invoice",
                 target_doc_id=int(invoice_id),
                 target_item_id=target_item_id,
+                created_by=created_by,
+                created_by_name=created_by_name,
+                updated_by=created_by,
+                updated_by_name=created_by_name,
             )
         return
     remaining = amt
@@ -101,6 +139,10 @@ async def record_sales_delivery_invoice_occupancy(
             target_doc_type="sales_invoice",
             target_doc_id=int(invoice_id),
             target_item_id=target_item_id,
+            created_by=created_by,
+            created_by_name=created_by_name,
+            updated_by=created_by,
+            updated_by_name=created_by_name,
         )
 
 

@@ -18,6 +18,46 @@ from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE, norma
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
+async def resolve_sales_invoice_pull_ledger_posting_mode(
+    tenant_id: int,
+    *,
+    partner_statement_ids: Optional[Sequence[int]] = None,
+    sales_delivery: Any = None,
+    sales_order: Any = None,
+    receivable: Any = None,
+) -> str:
+    """拉单预览立账方式：对账单优先，否则按源单收入确认策略映射。"""
+    from apps.kuaicaiwu.models.partner_statement import PartnerStatement
+    from apps.kuaizhizao.services.document_recognition import (
+        ledger_posting_mode_from_revenue_recognition,
+        revenue_recognition_from_doc,
+    )
+
+    if partner_statement_ids:
+        stmt_ids = [int(s) for s in partner_statement_ids if int(s) > 0]
+        if stmt_ids:
+            stmts = await PartnerStatement.filter(
+                tenant_id=tenant_id, id__in=stmt_ids, deleted_at__isnull=True
+            ).all()
+            if stmts:
+                modes = {
+                    str(getattr(stmt, "ledger_posting_mode", "") or "").strip()
+                    for stmt in stmts
+                }
+                return "by_invoice" if "by_invoice" in modes else "immediate"
+    if sales_delivery is not None:
+        return ledger_posting_mode_from_revenue_recognition(
+            revenue_recognition_from_doc(sales_delivery)
+        )
+    if sales_order is not None:
+        return ledger_posting_mode_from_revenue_recognition(
+            revenue_recognition_from_doc(sales_order)
+        )
+    if receivable is not None:
+        return "immediate"
+    return "immediate"
+
+
 class SalesInvoiceService(AppBaseService[Invoice]):
     """销售发票（销项）加载门控服务"""
 
@@ -52,10 +92,15 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         already_pulled_reason: str,
         source_type: Optional[str] = None,
     ) -> tuple[bool, Optional[str]]:
-        from apps.kuaicaiwu.constants.finance_source_types import is_sales_return_offset_receivable
+        from apps.kuaicaiwu.constants.finance_source_types import (
+            is_partner_statement_sourced_receivable,
+            is_sales_return_offset_receivable,
+        )
 
         if is_sales_return_offset_receivable(source_type):
             return False, "sales_invoice.pull_from_receivable.sales_return_offset"
+        if is_partner_statement_sourced_receivable(source_type):
+            return False, "sales_invoice.pull_from_receivable.partner_statement_source"
         if not source_allowed:
             return False, not_allowed_reason
         if not preview_items:
@@ -278,7 +323,10 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         return result
 
     def _receivable_source_allowed(self, receivable: Any) -> bool:
-        from apps.kuaicaiwu.constants.finance_source_types import is_sales_return_offset_receivable
+        from apps.kuaicaiwu.constants.finance_source_types import (
+            is_partner_statement_sourced_receivable,
+            is_sales_return_offset_receivable,
+        )
 
         source_type = (
             receivable.get("source_type")
@@ -286,6 +334,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             else getattr(receivable, "source_type", None)
         )
         if is_sales_return_offset_receivable(source_type):
+            return False
+        if is_partner_statement_sourced_receivable(source_type):
             return False
         review = str(
             (receivable.get("review_status") if isinstance(receivable, dict) else getattr(receivable, "review_status", ""))
@@ -496,7 +546,20 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         )
         code = str(order.order_code or order_id)
         pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
-        return {
+        pushed_map = await self._sum_pushed_totals_by_source(
+            tenant_id, "sales_order", [int(order_id)], {int(order_id): code}
+        )
+        pushed_total = pushed_map.get(int(order_id), Decimal("0"))
+        from apps.kuaicaiwu.services.sales_delivery_finance_pull_lines import (
+            build_sales_order_invoice_detail_lines,
+        )
+
+        detail_lines = await build_sales_order_invoice_detail_lines(
+            tenant_id,
+            int(order_id),
+            header_pushed=pushed_total,
+        )
+        preview = {
             "target_type": "sales_invoice",
             "source_type": "sales_order",
             "source_id": order_id,
@@ -507,6 +570,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 else f"销售订单 {code} 当前不可加载销售发票"
             ),
             "items": preview_items,
+            "detail_lines": detail_lines,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
             "tip": "价税合计不可超过可开票金额；删除未审核销售发票后，可开票金额自动回退。",
@@ -516,6 +580,11 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "sales_order_code": code,
             "price_type": normalize_price_type(getattr(order, "price_type", None)),
         }
+        preview["ledger_posting_mode"] = await resolve_sales_invoice_pull_ledger_posting_mode(
+            tenant_id,
+            sales_order=order,
+        )
+        return preview
 
     async def preview_pull_from_sales_delivery(
         self,
@@ -553,13 +622,16 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             and ledger_block is None
         )
         preview_items = await self._build_preview_items_for_sales_delivery(tenant_id, delivery)
-        allowed, reason = self._derive_pull_capability(
-            source_allowed=source_allowed,
-            preview_items=preview_items,
-            not_allowed_reason="sales_invoice.pull_from_sales_delivery.not_allowed",
-            no_lines_reason="sales_invoice.pull_from_sales_delivery.no_lines",
-            already_pulled_reason="sales_invoice.pull_from_sales_delivery.already_pulled",
-        )
+        if ledger_block:
+            allowed, reason = False, ledger_block
+        else:
+            allowed, reason = self._derive_pull_capability(
+                source_allowed=source_allowed,
+                preview_items=preview_items,
+                not_allowed_reason="sales_invoice.pull_from_sales_delivery.not_allowed",
+                no_lines_reason="sales_invoice.pull_from_sales_delivery.no_lines",
+                already_pulled_reason="sales_invoice.pull_from_sales_delivery.already_pulled",
+            )
         code = str(delivery.delivery_code or delivery_id)
         pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
         price_type = DEFAULT_SALES_PRICE_TYPE
@@ -573,6 +645,11 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             )
             if linked_order is not None:
                 price_type = normalize_price_type(getattr(linked_order, "price_type", None))
+        from apps.kuaicaiwu.services.sales_delivery_finance_pull_lines import (
+            build_sales_delivery_finance_detail_lines,
+        )
+
+        detail_lines = await build_sales_delivery_finance_detail_lines(tenant_id, int(delivery_id))
         preview: Dict[str, Any] = {
             "target_type": "sales_invoice",
             "source_type": "sales_delivery",
@@ -584,6 +661,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 else f"销售出库单 {code} 当前不可加载销售发票"
             ),
             "items": preview_items,
+            "detail_lines": detail_lines,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
             "tip": "价税合计不可超过可开票金额；删除未审核销售发票后，可开票金额自动回退。",
@@ -615,6 +693,18 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 )
             elif cap_f <= 0:
                 preview["has_blocking_issues"] = True
+        preview["ledger_posting_mode"] = await resolve_sales_invoice_pull_ledger_posting_mode(
+            tenant_id,
+            partner_statement_ids=partner_statement_ids,
+            sales_delivery=delivery,
+        )
+        from apps.kuaicaiwu.services.partner_statement_line_invoice_map import (
+            maybe_attach_partner_statement_line_ids,
+        )
+
+        await maybe_attach_partner_statement_line_ids(
+            tenant_id, partner_statement_ids, preview
+        )
         return preview
 
     @staticmethod
@@ -654,6 +744,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         sales_order_id: Optional[int] = None
         sales_order_code: Optional[str] = None
         price_type = DEFAULT_SALES_PRICE_TYPE
+        merged_detail_lines: List[Dict[str, Any]] = []
 
         for did in ids:
             fragment = await self.preview_pull_from_sales_delivery(
@@ -673,6 +764,10 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 if reason:
                     blocking_reasons.append(reason)
             merged_items.extend(fragment.get("items") or [])
+            for row in fragment.get("detail_lines") or []:
+                line = dict(row)
+                line["sales_delivery_id"] = did
+                merged_detail_lines.append(line)
             if sales_order_id is None and fragment.get("sales_order_id"):
                 sales_order_id = int(fragment["sales_order_id"])
                 sales_order_code = str(fragment.get("sales_order_code") or "") or None
@@ -696,6 +791,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 else "所选出库单当前不可一起加载销售发票"
             ),
             "items": merged_items,
+            "detail_lines": merged_detail_lines,
             "has_blocking_issues": not allowed,
             "blocking_reason": blocking_reasons[0] if blocking_reasons else None,
             "tip": "价税合计不可超过可开票金额；删除未审核销售发票后，可开票金额自动回退。",
@@ -706,6 +802,21 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "price_type": price_type,
             "max_push_total": float(max_push_total),
         }
+        if partner_statement_ids:
+            preview["ledger_posting_mode"] = await resolve_sales_invoice_pull_ledger_posting_mode(
+                tenant_id,
+                partner_statement_ids=partner_statement_ids,
+            )
+        else:
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+            first_delivery = await SalesDelivery.get_or_none(
+                tenant_id=tenant_id, id=int(ids[0]), deleted_at__isnull=True
+            )
+            preview["ledger_posting_mode"] = await resolve_sales_invoice_pull_ledger_posting_mode(
+                tenant_id,
+                sales_delivery=first_delivery,
+            )
         if partner_statement_ids:
             from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
                 apply_invoice_budget_to_pull_preview,
@@ -727,6 +838,13 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 )
             elif cap_f <= 0:
                 preview["has_blocking_issues"] = True
+        from apps.kuaicaiwu.services.partner_statement_line_invoice_map import (
+            maybe_attach_partner_statement_line_ids,
+        )
+
+        await maybe_attach_partner_statement_line_ids(
+            tenant_id, partner_statement_ids, preview
+        )
         return preview
 
     async def preview_pull_from_receivable(
@@ -752,7 +870,14 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         )
         code = str(receivable.receivable_code or receivable_id)
         pushable = float(preview_items[0]["max_push_quantity"]) if preview_items else 0.0
-        return {
+        from apps.kuaicaiwu.services.sales_delivery_finance_pull_lines import (
+            build_invoice_detail_lines_from_receivable,
+        )
+
+        _delivery_id, detail_lines = await build_invoice_detail_lines_from_receivable(
+            tenant_id, int(receivable_id)
+        )
+        preview = {
             "target_type": "sales_invoice",
             "source_type": "receivable",
             "source_id": receivable_id,
@@ -763,6 +888,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 else f"应收单 {code} 当前不可加载销售发票"
             ),
             "items": preview_items,
+            "detail_lines": detail_lines,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
             "tip": (
@@ -779,6 +905,11 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 Decimal(str(getattr(receivable, "remaining_amount", 0) or 0))
             ),
         }
+        preview["ledger_posting_mode"] = await resolve_sales_invoice_pull_ledger_posting_mode(
+            tenant_id,
+            receivable=receivable,
+        )
+        return preview
 
     async def list_sales_order_pull_candidates(
         self,
@@ -807,6 +938,13 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         pushed_map = await self._sum_pushed_totals_by_source(
             tenant_id, "sales_order", order_ids, code_by_id
         )
+        from apps.kuaicaiwu.services.sales_delivery_finance_pull_lines import (
+            batch_sales_order_invoice_line_stats,
+        )
+
+        line_stats = await batch_sales_order_invoice_line_stats(
+            tenant_id, orders, pushed_map
+        )
 
         rows: List[Dict[str, Any]] = []
         for order in orders:
@@ -826,6 +964,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             code = str(order.order_code or oid)
             name = str(getattr(order, "customer_name", "") or "").strip()
             label = f"{code} - {name}" if name else code
+            stats = line_stats.get(oid, {})
             rows.append(
                 {
                     "id": oid,
@@ -835,6 +974,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                     "source_status": order.status,
                     "source_date": str(getattr(order, "order_date", "") or ""),
                     "amount": float(order.total_amount or 0),
+                    "detail_line_count": int(stats.get("detail_line_count") or 0),
+                    "invoiced_line_count": int(stats.get("invoiced_line_count") or 0),
                     "capabilities": {
                         "pull_sales_invoice": {
                             "allowed": allowed,
@@ -874,6 +1015,11 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         pushed_map = await self._sum_pushed_totals_by_source(
             tenant_id, "sales_delivery", delivery_ids, code_by_id
         )
+        from apps.kuaicaiwu.services.sales_delivery_finance_pull_lines import (
+            batch_sales_delivery_invoice_line_stats,
+        )
+
+        line_stats = await batch_sales_delivery_invoice_line_stats(tenant_id, deliveries)
 
         rows: List[Dict[str, Any]] = []
         for delivery in deliveries:
@@ -883,19 +1029,28 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 delivery,
                 pushed=pushed_map.get(did, Decimal("0")),
             )
-            allowed, reason = self._derive_pull_capability(
-                source_allowed=Decimal(str(delivery.total_amount or 0)) > 0,
-                preview_items=preview_items,
-                not_allowed_reason="sales_invoice.pull_from_sales_delivery.not_allowed",
-                no_lines_reason="sales_invoice.pull_from_sales_delivery.no_lines",
-                already_pulled_reason="sales_invoice.pull_from_sales_delivery.already_pulled",
+            from apps.kuaizhizao.services.document_recognition import (
+                sales_delivery_direct_invoice_pull_block_reason,
             )
+
+            ledger_block = sales_delivery_direct_invoice_pull_block_reason(delivery)
+            if ledger_block:
+                allowed, reason = False, ledger_block
+            else:
+                allowed, reason = self._derive_pull_capability(
+                    source_allowed=Decimal(str(delivery.total_amount or 0)) > 0,
+                    preview_items=preview_items,
+                    not_allowed_reason="sales_invoice.pull_from_sales_delivery.not_allowed",
+                    no_lines_reason="sales_invoice.pull_from_sales_delivery.no_lines",
+                    already_pulled_reason="sales_invoice.pull_from_sales_delivery.already_pulled",
+                )
             code = str(delivery.delivery_code or did)
             name = str(getattr(delivery, "customer_name", "") or "").strip()
             label = f"{code} - {name}" if name else code
             amount = float(delivery.total_amount or 0)
             invoiced_amount = float(pushed_map.get(did, Decimal("0")))
             invoiceable_amount = max(0.0, amount - invoiced_amount)
+            stats = line_stats.get(did, {})
             rows.append(
                 {
                     "id": did,
@@ -910,6 +1065,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                     "amount": amount,
                     "invoiceable_amount": invoiceable_amount,
                     "invoiced_amount": invoiced_amount,
+                    "detail_line_count": int(stats.get("detail_line_count") or 0),
+                    "invoiced_line_count": int(stats.get("invoiced_line_count") or 0),
                     "capabilities": {
                         "pull_sales_invoice": {
                             "allowed": allowed,
@@ -927,11 +1084,18 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         limit: int = 20,
         keyword: Optional[str] = None,
     ) -> Dict[str, Any]:
-        query = Receivable.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            total_amount__gt=0,
-        ).exclude(source_type="销售退货").exclude(status="已冲减")
+        from apps.kuaicaiwu.constants.finance_source_types import RECEIVABLE_SOURCE_PARTNER_STATEMENT
+
+        query = (
+            Receivable.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                total_amount__gt=0,
+            )
+            .exclude(source_type="销售退货")
+            .exclude(source_type=RECEIVABLE_SOURCE_PARTNER_STATEMENT)
+            .exclude(status="已冲减")
+        )
         kw = str(keyword or "").strip()
         if kw:
             query = query.filter(
@@ -947,6 +1111,11 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         pushed_map = await self._sum_pushed_totals_by_receivable(
             tenant_id, receivable_ids, code_by_id
         )
+        from apps.kuaicaiwu.services.sales_delivery_finance_pull_lines import (
+            batch_receivable_invoice_line_stats,
+        )
+
+        line_stats = await batch_receivable_invoice_line_stats(tenant_id, receivables)
 
         rows: List[Dict[str, Any]] = []
         for receivable in receivables:
@@ -970,6 +1139,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             amount = float(receivable.total_amount or 0)
             invoiced_amount = float(pushed_map.get(rid, Decimal("0")))
             invoiceable_amount = max(0.0, amount - invoiced_amount)
+            stats = line_stats.get(rid, {})
             rows.append(
                 {
                     "id": rid,
@@ -983,6 +1153,8 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                     "amount": amount,
                     "invoiceable_amount": invoiceable_amount,
                     "invoiced_amount": invoiced_amount,
+                    "detail_line_count": int(stats.get("detail_line_count") or 0),
+                    "invoiced_line_count": int(stats.get("invoiced_line_count") or 0),
                     "capabilities": {
                         "pull_sales_invoice": {
                             "allowed": allowed,
@@ -1004,8 +1176,10 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         from apps.kuaicaiwu.models.partner_statement import PartnerStatement
         from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
             compute_statement_invoice_pull_metrics,
+            resolve_statement_amount_basis,
             resolve_statement_invoice_source_ids,
             snapshot_ids_for_api,
+            sum_statement_invoice_period_amount,
         )
 
         query = PartnerStatement.filter(
@@ -1033,16 +1207,20 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 ledger_posting_mode=stmt.ledger_posting_mode,
                 transaction_details=stmt.transaction_details,
             )
+            period_amt = sum_statement_invoice_period_amount(
+                stmt.transaction_details, snapshot.doc_type
+            )
             invoiced, remaining, allowed, reason = await compute_statement_invoice_pull_metrics(
                 tenant_id,
                 side="sales",
                 source_ids=snapshot.source_ids,
                 source_type=snapshot.source_type,
+                statement_period_amount=period_amt,
             )
             code = str(stmt.statement_code or sid)
             name = str(stmt.partner_name or "").strip()
             label = f"{code} - {name}" if name else code
-            closing = float(stmt.closing_balance or 0)
+            period = float(period_amt)
             id_fields = snapshot_ids_for_api(snapshot)
             rows.append(
                 {
@@ -1054,10 +1232,12 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                     "customer_name": stmt.partner_name,
                     "source_status": stmt.status,
                     "source_date": str(stmt.end_date or ""),
-                    "amount": closing,
-                    "closing_balance": closing,
+                    "amount": period,
+                    "period_amount": period,
+                    "closing_balance": float(stmt.closing_balance or 0),
                     "invoiceable_amount": max(0.0, remaining),
                     "invoiced_amount": invoiced,
+                    "amount_basis": resolve_statement_amount_basis(stmt.transaction_details),
                     "ledger_posting_mode": snapshot.ledger_posting_mode,
                     **id_fields,
                     "capabilities": {
@@ -1070,6 +1250,82 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             )
         return {"data": rows, "total": total, "success": True}
 
+    async def preview_pull(
+        self,
+        tenant_id: int,
+        *,
+        source_type: str,
+        source_ids: Sequence[int],
+        partner_statement_ids: Optional[Sequence[int]] = None,
+    ) -> Dict[str, Any]:
+        """销售发票取单预览唯一分发（汇总/明细开票共用）。"""
+        st = str(source_type or "").strip()
+        ids = [int(x) for x in source_ids if int(x) > 0]
+        if not ids:
+            raise BusinessLogicError("须指定源单")
+        if st == "sales_order":
+            if len(ids) > 1:
+                raise BusinessLogicError("销售订单仅支持单张加载开票")
+            preview = await self.preview_pull_from_sales_order(tenant_id, ids[0])
+        elif st == "sales_delivery":
+            preview = (
+                await self.preview_pull_from_sales_deliveries(
+                    tenant_id,
+                    ids,
+                    partner_statement_ids=partner_statement_ids,
+                )
+                if len(ids) > 1
+                else await self.preview_pull_from_sales_delivery(
+                    tenant_id,
+                    ids[0],
+                    partner_statement_ids=partner_statement_ids,
+                )
+            )
+        elif st == "receivable":
+            if len(ids) > 1:
+                fragments = []
+                for rid in ids:
+                    fragments.append(await self.preview_pull_from_receivable(tenant_id, int(rid)))
+                customer_keys = {
+                    str(f.get("customer_id") or f.get("customer_name") or "").strip()
+                    for f in fragments
+                }
+                customer_keys.discard("")
+                if len(customer_keys) > 1:
+                    raise BusinessLogicError("所选应收须为同一客户")
+                blocking = next((f for f in fragments if f.get("has_blocking_issues")), None)
+                if blocking:
+                    return blocking
+                merged_items = [item for f in fragments for item in (f.get("items") or [])]
+                merged_detail = [row for f in fragments for row in (f.get("detail_lines") or [])]
+                max_push = sum(
+                    float(
+                        f.get("max_push_total")
+                        or sum(float(row.get("max_push_quantity") or 0) for row in (f.get("items") or []))
+                    )
+                    for f in fragments
+                )
+                first = fragments[0]
+                preview = {
+                    **first,
+                    "source_id": int(ids[0]),
+                    "source_ids": list(ids),
+                    "source_code": "、".join(str(f.get("source_code") or "") for f in fragments if f.get("source_code")),
+                    "items": merged_items,
+                    "detail_lines": merged_detail,
+                    "max_push_total": max_push,
+                    "summary": (
+                        f"将从 {len(ids)} 张来源单据创建销售发票（可开票合计 ¥{max_push:,.2f}）"
+                        if len(ids) > 1
+                        else first.get("summary")
+                    ),
+                }
+            else:
+                preview = await self.preview_pull_from_receivable(tenant_id, ids[0])
+        else:
+            raise BusinessLogicError(f"不支持的加载源单类型: {st}")
+        return preview
+
     async def assert_pull_create_allowed(
         self,
         tenant_id: int,
@@ -1078,19 +1334,14 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         source_id: int,
         total_amount: Decimal,
         partner_statement_ids: Optional[Sequence[int]] = None,
+        source_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
-        if source_type == "sales_order":
-            preview = await self.preview_pull_from_sales_order(tenant_id, source_id)
-        elif source_type == "sales_delivery":
-            preview = await self.preview_pull_from_sales_delivery(
-                tenant_id,
-                source_id,
-                partner_statement_ids=partner_statement_ids,
-            )
-        elif source_type == "receivable":
-            preview = await self.preview_pull_from_receivable(tenant_id, source_id)
-        else:
-            raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
+        preview = await self.preview_pull(
+            tenant_id,
+            source_type=source_type,
+            source_ids=source_ids if source_ids else [source_id],
+            partner_statement_ids=partner_statement_ids,
+        )
         if preview.get("has_blocking_issues"):
             reason = preview.get("blocking_reason") or "当前不可加载销售发票"
             raise BusinessLogicError(reason)
@@ -1106,7 +1357,11 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 enforce_partner_statement_invoice_total,
             )
 
-            restrict_ids = [int(source_id)]
+            restrict_ids = (
+                [int(s) for s in source_ids if int(s) > 0]
+                if source_ids
+                else [int(source_id)]
+            )
             await enforce_partner_statement_invoice_total(
                 tenant_id,
                 partner_statement_ids,

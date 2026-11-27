@@ -139,16 +139,22 @@
                 "sort_order": 3
               },
               {
+                "title": "app.kuaicaiwu.menu.finance-management.sales-detail-invoices",
+                "path": "/apps/kuaicaiwu/finance-management/sales-detail-invoices",
+                "permission": "kuaicaiwu:sales-invoice:read",
+                "sort_order": 4
+              },
+              {
                 "title": "app.kuaicaiwu.menu.finance-management.other-incomes",
                 "path": "/apps/kuaicaiwu/finance-management/other-incomes",
                 "permission": "kuaicaiwu:other-income:read",
-                "sort_order": 4
+                "sort_order": 5
               },
               {
                 "title": "app.kuaicaiwu.menu.finance-management.notes-receivable",
                 "path": "/apps/kuaicaiwu/finance-management/notes-receivable",
                 "permission": "kuaicaiwu:notes-receivable:read",
-                "sort_order": 5
+                "sort_order": 6
               }
             ]
           },
@@ -184,16 +190,28 @@
                 "sort_order": 3
               },
               {
+                "title": "app.kuaicaiwu.menu.finance-management.purchase-detail-invoices",
+                "path": "/apps/kuaicaiwu/finance-management/purchase-detail-invoices",
+                "permission": "kuaicaiwu:purchase-invoice:read",
+                "sort_order": 4
+              },
+              {
                 "title": "app.kuaicaiwu.menu.finance-management.other-expenses",
                 "path": "/apps/kuaicaiwu/finance-management/other-expenses",
                 "permission": "kuaicaiwu:other-expense:read",
-                "sort_order": 4
+                "sort_order": 5
+              },
+              {
+                "title": "app.kuaicaiwu.menu.finance-management.other-expense-applications",
+                "path": "/apps/kuaicaiwu/finance-management/other-expense-applications",
+                "permission": "kuaicaiwu:other-expense-application:read",
+                "sort_order": 6
               },
               {
                 "title": "app.kuaicaiwu.menu.finance-management.notes-payable",
                 "path": "/apps/kuaicaiwu/finance-management/notes-payable",
                 "permission": "kuaicaiwu:notes-payable:read",
-                "sort_order": 5
+                "sort_order": 7
               }
             ]
           },
@@ -420,6 +438,27 @@
   "module_references": {
     "__all_modules__": [
       "*"
+    ],
+    "other-income": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "system:department",
+      "system:user"
+    ],
+    "other-expense": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "system:department",
+      "system:user"
+    ],
+    "other-expense-application": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "system:department",
+      "system:user"
     ]
   },
   "permissions": [
@@ -700,6 +739,18 @@
     "kuaicaiwu:other-income:revoke",
     "kuaicaiwu:other-income:export",
     "kuaicaiwu:other-income:print",
+    "kuaicaiwu:other-expense-application:read",
+    "kuaicaiwu:other-expense-application:create",
+    "kuaicaiwu:other-expense-application:update",
+    "kuaicaiwu:other-expense-application:delete",
+    "kuaicaiwu:other-expense-application:submit",
+    "kuaicaiwu:other-expense-application:approve",
+    "kuaicaiwu:other-expense-application:reject",
+    "kuaicaiwu:other-expense-application:audit",
+    "kuaicaiwu:other-expense-application:revoke",
+    "kuaicaiwu:other-expense-application:export",
+    "kuaicaiwu:other-expense-application:print",
+    "kuaicaiwu:other-expense-application:push",
     "kuaicaiwu:other-expense:read",
     "kuaicaiwu:other-expense:create",
     "kuaicaiwu:other-expense:update",
@@ -781,6 +832,15 @@
       "entity_type": "other_expense",
       "resource": "kuaicaiwu:other-expense",
       "name": "其他费用支出审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_misc"
+    },
+    {
+      "node_key": "other_expense_application",
+      "entity_type": "other_expense_application",
+      "resource": "kuaicaiwu:other-expense-application",
+      "name": "其他费用支出申请审核",
       "template": "simple",
       "config_category": "finance",
       "config_section": "finance_misc"

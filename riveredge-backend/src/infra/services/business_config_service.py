@@ -103,6 +103,9 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
     fin["revenue_recognition"] = rev
     if rev in ("on_shipment", "on_milestone", "mixed", "manual", "on_partner_statement"):
         fin["auto_generate_receivable_from_sales_invoice"] = False
+    elif rev == "on_invoice":
+        # 组织选「以销项发票立账」即表示开票后自动生应收；对称进项 on_purchase_invoice
+        fin["auto_generate_receivable_from_sales_invoice"] = True
     pay = str(fin.get("payable_recognition") or "on_receipt").strip()
     if pay not in PAYABLE_RECOGNITION_VALUES:
         pay = "on_receipt"

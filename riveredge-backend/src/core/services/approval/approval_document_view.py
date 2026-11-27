@@ -1367,13 +1367,21 @@ async def _load_freight_bill(tenant_id: int, entity_id: int) -> Any:
 async def _load_other_income(tenant_id: int, entity_id: int) -> Any:
     from apps.kuaicaiwu.services.other_income_service import OtherIncomeService
 
-    return await OtherIncomeService().get_or_404(tenant_id, entity_id)
+    return await OtherIncomeService().get_by_id(tenant_id, entity_id)
 
 
 async def _load_other_expense(tenant_id: int, entity_id: int) -> Any:
     from apps.kuaicaiwu.services.other_expense_service import OtherExpenseService
 
-    return await OtherExpenseService().get_or_404(tenant_id, entity_id)
+    return await OtherExpenseService().get_by_id(tenant_id, entity_id)
+
+
+async def _load_other_expense_application(tenant_id: int, entity_id: int) -> Any:
+    from apps.kuaicaiwu.services.other_expense_application_service import (
+        OtherExpenseApplicationService,
+    )
+
+    return await OtherExpenseApplicationService().get_by_id(tenant_id, entity_id)
 
 
 async def _document_payload_from_orm(
@@ -1652,6 +1660,7 @@ DOCUMENT_LOADERS: Dict[str, LoaderFn] = {
     "freight_bill": _load_freight_bill,
     "other_income": _load_other_income,
     "other_expense": _load_other_expense,
+    "other_expense_application": _load_other_expense_application,
     "kuaioa_form_request": _load_kuaioa_form_request,
     "kuaioa_expense": _load_kuaioa_expense,
     "kuaioa_asset_purchase": _load_kuaioa_asset_purchase,

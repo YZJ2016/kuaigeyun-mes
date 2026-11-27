@@ -5,9 +5,32 @@ import type { SalesInvoice, SalesInvoiceListParams } from '../../types/finance/s
 
 export type { SalesInvoice, SalesInvoiceListParams };
 
+export type SalesInvoicePullDetailLine = {
+  line_no: number;
+  sales_delivery_item_id?: number;
+  purchase_receipt_item_id: number;
+  sales_delivery_id?: number;
+  material_code?: string;
+  material_name: string;
+  material_spec?: string | null;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  tax_rate?: number;
+  tax_amount?: number;
+  occupied_amount: number;
+  max_push_amount: number;
+  max_push_quantity: number;
+  partner_statement_invoice_budget?: number;
+};
+
 export type SalesInvoicePullPreview = DocumentPushPreview & {
   source_code?: string;
   source_type?: 'sales_order' | 'sales_delivery' | 'receivable';
+  ledger_posting_mode?: 'immediate' | 'by_invoice' | string;
+  detail_lines?: SalesInvoicePullDetailLine[];
+  partner_statement_invoice_budget?: number;
   customer_id?: number;
   customer_name?: string;
   sales_order_id?: number | null;
@@ -33,9 +56,13 @@ export type SalesInvoicePullCandidate = {
   source_status?: string;
   source_date?: string;
   amount?: number;
+  period_amount?: number;
   closing_balance?: number;
   invoiceable_amount?: number;
   invoiced_amount?: number;
+  detail_line_count?: number;
+  invoiced_line_count?: number;
+  amount_basis?: 'tax_inclusive' | 'tax_exclusive' | string;
   delivery_ids?: number[];
   receivable_ids?: number[];
   ledger_posting_mode?: 'immediate' | 'by_invoice' | string;
@@ -59,6 +86,24 @@ export const salesInvoiceService = {
       '/apps/kuaicaiwu/sales-invoices/pull-candidates/sales-deliveries',
       { method: 'GET', params },
     ),
+  previewPull: async (params: {
+    source_type: string;
+    source_ids: number[];
+    partner_statement_ids?: number[];
+  }) =>
+    apiRequest<SalesInvoicePullPreview>('/apps/kuaicaiwu/sales-invoices/pull-preview', {
+      method: 'GET',
+      params: {
+        source_type: params.source_type,
+        source_ids: params.source_ids.join(','),
+        ...(params.partner_statement_ids?.length
+          ? { partner_statement_ids: params.partner_statement_ids.join(',') }
+          : {}),
+      },
+      notifyOnGatewayError: true,
+      timeoutMs: 90_000,
+    }),
+
   previewPullFromSalesOrder: async (orderId: number) =>
     apiRequest<SalesInvoicePullPreview>(`/apps/kuaicaiwu/sales-invoices/from-sales-order/${orderId}/pull-preview`, {
       method: 'GET',

@@ -11,22 +11,12 @@ from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
 )
 
 
-class _AwaitableList:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def __await__(self):
-        async def _get():
-            return self._rows
-
-        return _get().__await__()
-
-
 @pytest.mark.asyncio
 async def test_receipt_detail_lines_max_push_is_line_gross():
-    receipt = SimpleNamespace(id=1, tax_rate=Decimal("13"))
+    receipt = SimpleNamespace(id=1, tax_rate=Decimal("13"), receipt_code="RK-001")
     item = SimpleNamespace(
         id=10,
+        invoice_receipt_complete=False,
         material_code="M1",
         material_name="刀",
         material_spec=None,
@@ -34,9 +24,8 @@ async def test_receipt_detail_lines_max_push_is_line_gross():
         receipt_quantity=Decimal("10"),
         unit_price=Decimal("176.99"),
         total_amount=Decimal("1769.91"),
-        purchase_order_item_id=99,
+        purchase_order_item_id=None,
     )
-    poi = SimpleNamespace(id=99, ordered_quantity=Decimal("10"), total_price=Decimal("1769.91"))
 
     with patch(
         "apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines._purchase_receipt_line_gross_by_item_id",
@@ -50,10 +39,7 @@ async def test_receipt_detail_lines_max_push_is_line_gross():
         ),
     ), patch(
         "apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines.PurchaseReceiptLineFinanceOccupancyService"
-    ) as mock_svc_cls, patch(
-        "apps.kuaizhizao.models.purchase_order.PurchaseOrderItem.filter",
-        return_value=_AwaitableList([poi]),
-    ):
+    ) as mock_svc_cls:
         mock_svc_cls.return_value._sum_occupied_by_item = AsyncMock(return_value={})
 
         lines = await build_purchase_receipt_finance_detail_lines(1, 1, "invoice")
@@ -64,3 +50,5 @@ async def test_receipt_detail_lines_max_push_is_line_gross():
     assert row["tax_amount"] == pytest.approx(230.09, abs=0.02)
     assert row["max_push_amount"] == pytest.approx(2000.0)
     assert row["max_push_quantity"] == pytest.approx(10.0)
+    assert row["source_doc_code"] == "RK-001"
+    assert row["gross_amount"] == pytest.approx(2000.0)

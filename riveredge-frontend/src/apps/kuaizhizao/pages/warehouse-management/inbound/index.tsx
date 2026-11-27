@@ -112,7 +112,7 @@ import {
   renderWarehouseAmountDisplay,
   useWarehouseShowAmount,
 } from '../shared/warehouseAmountDisplay';
-import { readPurchaseReceiptHeaderInclAmount } from '../shared/purchaseReceiptWarehouseAmounts';
+import { resolvePurchaseReceiptDisplayAmount } from '../../purchase-management/shared/purchaseOrderAmounts';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
@@ -2388,7 +2388,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
       render: (_dom: unknown, record: InboundOrder) =>
         renderWarehouseAmountDisplay(
           record.receipt_type === 'purchase'
-            ? readPurchaseReceiptHeaderInclAmount(record)
+            ? resolvePurchaseReceiptDisplayAmount(record)
             : record.total_amount,
           'amount',
           KUAIZHIZAO_INBOUND_FIELD_RESOURCE,
@@ -2886,10 +2886,7 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
             width: 72,
             render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
           },
-          ...buildPurchaseReceiptDetailFinanceColumns(
-            t,
-            (currentOrder as { tax_rate?: number }).tax_rate ?? null,
-          ),
+          ...buildPurchaseReceiptDetailFinanceColumns(t),
           { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
           { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
           {

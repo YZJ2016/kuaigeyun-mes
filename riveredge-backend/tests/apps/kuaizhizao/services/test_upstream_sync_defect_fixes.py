@@ -335,6 +335,9 @@ async def test_fifo_occupancy_untaxed_cap_rejects_gross_amount(monkeypatch):
     )
 
     class _QS:
+        def select_for_update(self):
+            return self
+
         def order_by(self, *_args):
             return self
 

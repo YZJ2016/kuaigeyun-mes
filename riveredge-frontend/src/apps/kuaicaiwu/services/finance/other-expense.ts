@@ -1,5 +1,4 @@
 import { apiRequest } from '../../../../services/api';
-import type { DocumentLineMaterialPreviewItem } from '../../../../components/document-line-materials-preview';
 
 export const OTHER_EXPENSE_RESOURCE = 'kuaicaiwu:other-expense';
 
@@ -13,8 +12,6 @@ export type OtherVoucherLine = {
   amount: number;
   description?: string;
   gl_account_code?: string;
-  payee_id?: number;
-  payee_name?: string;
 };
 
 export type RelatedPurchaseReceiptRef = {
@@ -31,15 +28,36 @@ export type OtherExpensePurchaseReceiptLinkCandidate = {
   source_status?: string;
   source_date?: string;
   amount?: number;
-  items?: DocumentLineMaterialPreviewItem[];
+  items?: Array<{
+    material_name?: string;
+    material_code?: string;
+    material_spec?: string;
+    material_model?: string;
+  }>;
   item_count?: number;
   purchase_order_code?: string | null;
   total_quantity?: number;
 };
 
+export type OtherExpenseApplicationPullCandidate = {
+  id: number;
+  application_code: string;
+  business_date?: string;
+  counterparty_name?: string;
+  total_amount?: number;
+  remaining_amount?: number;
+  payment_method?: string;
+  capabilities?: {
+    pull_other_expense?: { allowed: boolean; reason?: string };
+  };
+};
+
 export type OtherExpenseVoucher = {
   id: number;
   expense_code: string;
+  source_type?: string;
+  source_id?: number;
+  source_code?: string;
   business_date: string;
   counterparty_kind: string;
   counterparty_id?: number;
@@ -48,13 +66,15 @@ export type OtherExpenseVoucher = {
   payment_method: string;
   bank_account_id?: number;
   status: string;
+  review_status?: string;
   notes?: string;
   department_id?: number | null;
   department_name?: string | null;
   attachments?: unknown[];
   related_purchase_receipts?: RelatedPurchaseReceiptRef[] | null;
   lines: OtherVoucherLine[];
-  capabilities?: Record<string, { allowed: boolean; reason?: string }>;
+  capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
+  audit?: { phase?: string; allowed_actions?: string[]; [key: string]: unknown };
   /** 审核后 MiscVoucherFinanceBridge 回写 */
   payable_id?: number;
   payable_code?: string;
@@ -70,14 +90,20 @@ export const otherExpenseService = {
   update: (id: number, data: Record<string, unknown>) =>
     apiRequest<OtherExpenseVoucher>(`${base}/${id}`, { method: 'PUT', data }),
   delete: (id: number) => apiRequest(`${base}/${id}`, { method: 'DELETE' }),
-  submit: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/submit`, { method: 'POST' }),
-  approve: (id: number, body?: { review_remarks?: string }) =>
-    apiRequest<OtherExpenseVoucher>(`${base}/${id}/approve`, { method: 'POST', data: { approved: true, ...body } }),
-  reject: (id: number, body?: { review_remarks?: string }) =>
-    apiRequest<OtherExpenseVoucher>(`${base}/${id}/reject`, { method: 'POST', data: { approved: false, ...body } }),
-  confirm: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/confirm`, { method: 'POST' }),
-  unconfirm: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/unconfirm`, { method: 'POST' }),
-  cancel: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/cancel`, { method: 'POST' }),
+  listApplicationPullCandidates: (params?: {
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+  }) =>
+    apiRequest<{ data: OtherExpenseApplicationPullCandidate[]; total: number; success: boolean }>(
+      `${base}/pull-candidates/other-expense-applications`,
+      { method: 'GET', params },
+    ),
+  previewFromApplication: (applicationId: number) =>
+    apiRequest<Record<string, unknown>>(
+      `${base}/from-other-expense-application/${applicationId}/pull-preview`,
+      { method: 'GET' },
+    ),
   listPurchaseReceiptLinkCandidates: (params: {
     supplier_id: number;
     skip?: number;
@@ -88,4 +114,28 @@ export const otherExpenseService = {
       `${base}/pull-candidates/purchase-receipts`,
       { method: 'GET', params },
     ),
+  /** @deprecated 页面提交走 commit；保留给旧调用 */
+  submit: (id: number) =>
+    apiRequest<OtherExpenseVoucher>(`/core/uni-audit/other_expense/${id}/submit`, { method: 'POST' }),
+  commit: (id: number) =>
+    apiRequest<OtherExpenseVoucher>(`/core/uni-audit/other_expense/${id}/submit`, { method: 'POST' }),
+  submitForReview: (id: number) =>
+    apiRequest<OtherExpenseVoucher>(`/core/uni-audit/other_expense/${id}/submit_review`, { method: 'POST' }),
+  withdraw: (id: number) =>
+    apiRequest<OtherExpenseVoucher>(`/core/uni-audit/other_expense/${id}/withdraw`, { method: 'POST' }),
+  approve: (id: number, body?: { review_remarks?: string }) =>
+    apiRequest<OtherExpenseVoucher>(`/core/uni-audit/other_expense/${id}/approve`, {
+      method: 'POST',
+      data: body,
+    }),
+  reject: (id: number, body?: { review_remarks?: string }) =>
+    apiRequest<OtherExpenseVoucher>(`/core/uni-audit/other_expense/${id}/reject`, {
+      method: 'POST',
+      data: { reason: body?.review_remarks || '审批驳回' },
+    }),
+  revoke: (id: number) =>
+    apiRequest<OtherExpenseVoucher>(`/core/uni-audit/other_expense/${id}/revoke`, { method: 'POST' }),
+  confirm: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/confirm`, { method: 'POST' }),
+  unconfirm: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/unconfirm`, { method: 'POST' }),
+  cancel: (id: number) => apiRequest<OtherExpenseVoucher>(`${base}/${id}/cancel`, { method: 'POST' }),
 };

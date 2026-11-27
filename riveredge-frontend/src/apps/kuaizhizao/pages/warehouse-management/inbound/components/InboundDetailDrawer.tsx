@@ -451,10 +451,7 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               render: (v) => (v != null && String(v).trim() ? String(v) : '—'),
             },
             ...(effective.receipt_type === 'purchase'
-              ? buildPurchaseReceiptDetailFinanceColumns(
-                  t,
-                  (effective as { tax_rate?: number }).tax_rate ?? null,
-                )
+              ? buildPurchaseReceiptDetailFinanceColumns(t)
               : []),
             ...(effective.receipt_type === 'purchase'
               ? [

@@ -31,6 +31,16 @@ def test_coerce_on_invoice_keeps_receivable_auto_switch():
     assert fin["auto_generate_payable_from_purchase_invoice"] is True
 
 
+def test_coerce_on_invoice_forces_receivable_auto_switch_when_false():
+    fin = coerce_finance_parameter_dict(
+        {
+            "revenue_recognition": "on_invoice",
+            "auto_generate_receivable_from_sales_invoice": False,
+        }
+    )
+    assert fin["auto_generate_receivable_from_sales_invoice"] is True
+
+
 def test_coerce_on_shipment_forces_receivable_invoice_auto_off():
     fin = coerce_finance_parameter_dict(
         {
@@ -39,3 +49,18 @@ def test_coerce_on_shipment_forces_receivable_invoice_auto_off():
         }
     )
     assert fin["auto_generate_receivable_from_sales_invoice"] is False
+
+
+def test_coerce_on_partner_statement_disables_invoice_auto_switches():
+    fin = coerce_finance_parameter_dict(
+        {
+            "revenue_recognition": "on_partner_statement",
+            "payable_recognition": "on_partner_statement",
+            "auto_generate_receivable_from_sales_invoice": True,
+            "auto_generate_payable_from_purchase_invoice": True,
+        }
+    )
+    assert fin["revenue_recognition"] == "on_partner_statement"
+    assert fin["payable_recognition"] == "on_partner_statement"
+    assert fin["auto_generate_receivable_from_sales_invoice"] is False
+    assert fin["auto_generate_payable_from_purchase_invoice"] is False

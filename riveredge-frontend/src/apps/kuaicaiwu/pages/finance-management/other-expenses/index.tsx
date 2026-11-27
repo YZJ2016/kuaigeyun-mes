@@ -11,7 +11,7 @@ const OtherExpensesPage: React.FC = () => (
     hostResource={KUAIZHIZAO_DOC_HOST.otherExpense}
     menuTitleKey="app.kuaicaiwu.menu.finance-management.other-expenses"
     i18nPrefix="app.kuaicaiwu.otherExpense"
-    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.other-expenses.list-v1"
+    columnPersistenceId="apps.kuaicaiwu.pages.finance-management.other-expenses.list-v2"
     service={otherExpenseService}
   />
 );

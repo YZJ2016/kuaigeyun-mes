@@ -183,6 +183,11 @@ export const KUAICAIWU_DOCUMENT_ACTION_REGISTRY: Record<KuaicaiwuDocumentActionK
   },
 };
 
+/**
+ * 其他费用支出申请入口开关（Spec 225：PC 侧栏与支出页「从申请取单」均已启用）。
+ */
+export const OTHER_EXPENSE_APPLICATION_UI_ENTRIES_ENABLED = true;
+
 export const getKuaicaiwuDocumentAction = (key: KuaicaiwuDocumentActionKey): KuaicaiwuDocumentActionDefinition =>
   KUAICAIWU_DOCUMENT_ACTION_REGISTRY[key];
 

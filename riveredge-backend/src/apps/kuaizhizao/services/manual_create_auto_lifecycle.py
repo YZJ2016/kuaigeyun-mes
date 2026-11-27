@@ -43,6 +43,7 @@ MANUAL_CREATE_LIFECYCLE_DOCS: Tuple[Dict[str, str], ...] = (
     {"node_key": "freight_bill", "category": "warehouse", "name": "运费单"},
     {"node_key": "other_income", "category": "finance", "name": "其他费用收入"},
     {"node_key": "other_expense", "category": "finance", "name": "其他费用支出"},
+    {"node_key": "other_expense_application", "category": "finance", "name": "其他费用支出申请"},
 )
 
 MANUAL_CREATE_LIFECYCLE_NODE_KEYS = frozenset(d["node_key"] for d in MANUAL_CREATE_LIFECYCLE_DOCS)
@@ -220,6 +221,13 @@ def _resolve_submitter(node_key: str) -> Optional[SubmitFn]:
 
         return await OtherExpenseService().submit_expense(tid, eid, oid)
 
+    async def _other_expense_application(tid: int, eid: int, oid: int) -> Any:
+        from apps.kuaicaiwu.services.other_expense_application_service import (
+            OtherExpenseApplicationService,
+        )
+
+        return await OtherExpenseApplicationService().submit_application(tid, eid, oid)
+
     registry: Dict[str, SubmitFn] = {
         "sales_order": _sales_order,
         "sales_forecast": _sales_forecast,
@@ -243,6 +251,7 @@ def _resolve_submitter(node_key: str) -> Optional[SubmitFn]:
         "freight_bill": _freight_bill,
         "other_income": _other_income,
         "other_expense": _other_expense,
+        "other_expense_application": _other_expense_application,
     }
     return registry.get(node_key)
 

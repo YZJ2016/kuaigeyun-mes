@@ -19,6 +19,7 @@ PAYABLE_SOURCE_OUTSOURCE_RETURN = "委外退货"
 PAYABLE_SOURCE_PURCHASE_RETURN = "采购退货"
 PAYABLE_SOURCE_PRICE_SETTLEMENT = "采购调价"
 PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT = "采购收票优惠调整"
+PAYABLE_SOURCE_PURCHASE_INVOICE_PRICE_ADJUST = "采购收票价差调整"
 PAYABLE_SOURCE_ORDER_MILESTONE = "订单里程碑"
 
 RECEIVABLE_SOURCE_OTHER_INCOME = "其他费用收入"
@@ -28,6 +29,16 @@ PAYABLE_SOURCE_OTHER_EXPENSE = "其他费用支出"
 def is_sales_return_offset_receivable(source_type: str | None) -> bool:
     """销售退货确认生成的红字/冲减应收（往来贷方冲减，非正向待收款）。"""
     return str(source_type or "").strip() == RECEIVABLE_SOURCE_SALES_RETURN
+
+
+def is_partner_statement_sourced_payable(source_type: str | None) -> bool:
+    """对账立即立账生成的应付，开票须走往来对账单取单。"""
+    return str(source_type or "").strip() == PAYABLE_SOURCE_PARTNER_STATEMENT
+
+
+def is_partner_statement_sourced_receivable(source_type: str | None) -> bool:
+    """对账立即立账生成的应收，开票须走往来对账单取单。"""
+    return str(source_type or "").strip() == RECEIVABLE_SOURCE_PARTNER_STATEMENT
 
 
 def is_purchase_return_offset_payable(source_type: str | None) -> bool:
@@ -55,6 +66,7 @@ def is_payable_red_total_source(source_type: str | None) -> bool:
         or is_outsource_settlement_credit_payable(st)
         or st == PAYABLE_SOURCE_PRICE_SETTLEMENT
         or st == PAYABLE_SOURCE_PURCHASE_INVOICE_DISCOUNT
+        or st == PAYABLE_SOURCE_PURCHASE_INVOICE_PRICE_ADJUST
     )
 
 

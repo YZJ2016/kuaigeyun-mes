@@ -69,9 +69,11 @@ export const UniPullCreateToolbar: React.FC<UniPullCreateToolbarProps> = ({
   return (
     <Space.Compact key={compactKey} className="uni-pull-create-toolbar">
       <Tooltip title={t('common.shortcutNewHover')}>
-        <Button type="primary" size={size} icon={createIcon} onClick={onCreate}>
-          {createButtonLabel}
-        </Button>
+        <span className="uni-pull-create-tooltip-anchor" style={{ display: 'inline-flex' }}>
+          <Button type="primary" size={size} icon={createIcon} onClick={onCreate}>
+            {createButtonLabel}
+          </Button>
+        </span>
       </Tooltip>
       <Dropdown
         trigger={['click']}

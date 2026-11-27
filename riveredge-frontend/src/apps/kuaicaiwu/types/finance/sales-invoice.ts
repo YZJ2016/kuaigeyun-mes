@@ -7,6 +7,10 @@ export interface SalesInvoice {
   sales_order_code?: string;
   invoice_number: string;
   invoice_date: string;
+  settlement_closing_date?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  ledger_posting_mode?: 'immediate' | 'by_invoice' | string | null;
   invoice_type: string;
   tax_rate: number;
   invoice_amount: number;
@@ -25,8 +29,20 @@ export interface SalesInvoice {
   partner_tax_no?: string | null;
   partner_bank_info?: string | null;
   partner_address_phone?: string | null;
-  capabilities?: Record<string, { allowed?: boolean; reason?: string }>;
-  audit?: { phase?: string; [key: string]: unknown };
+  capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
+  audit?: {
+    allowed_actions?: string[];
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+    viewer_actions?: {
+      has_my_pending_task?: boolean;
+      approve?: boolean;
+      my_acted?: boolean;
+      block_reason?: string | null;
+    } | null;
+    [key: string]: unknown;
+  };
 }
 
 export interface SalesInvoiceListParams {

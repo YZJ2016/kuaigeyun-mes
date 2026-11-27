@@ -26,12 +26,21 @@ export function formatPurchaseInvoiceTypeZh(raw: string | undefined | null): str
 
 const PURCHASE_INVOICE_NON_DELETABLE_STATUSES = new Set(['已审核', '已开票', '已作废', '已红冲']);
 const PURCHASE_INVOICE_FACE_LOCKED_STATUSES = new Set(['已作废', '已红冲']);
+const PURCHASE_INVOICE_EDITABLE_REVIEW = new Set(['', '草稿', 'draft', '驳回', 'rejected', '已驳回']);
 
-/** 是否允许删除（与后端 delete 接口一致） */
-export function canDeletePurchaseInvoice(record: { status?: string | null }): boolean {
+export function purchaseInvoiceReviewRaw(record: { review_status?: string | null }): string {
+  return String(record.review_status || '').trim();
+}
+
+/** 是否允许删除（与后端 delete 接口一致：业务终态或非草稿/已驳回审核态不可删） */
+export function canDeletePurchaseInvoice(record: {
+  status?: string | null;
+  review_status?: string | null;
+}): boolean {
   const st = String(record.status || '').trim();
   if (!st) return false;
-  return !PURCHASE_INVOICE_NON_DELETABLE_STATUSES.has(st);
+  if (PURCHASE_INVOICE_NON_DELETABLE_STATUSES.has(st)) return false;
+  return PURCHASE_INVOICE_EDITABLE_REVIEW.has(purchaseInvoiceReviewRaw(record));
 }
 
 /** 是否允许填写/更正票面发票号码（与后端 PUT 门禁一致；已审核仍可补全） */

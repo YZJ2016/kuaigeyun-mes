@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
@@ -155,6 +156,8 @@ async def build_purchase_receipt_finance_detail_lines(
 
     lines: List[Dict[str, Any]] = []
     for idx, item in enumerate(items, start=1):
+        if bool(getattr(item, "invoice_receipt_complete", False)):
+            continue
         item_id = int(item.id)
         line_excl = line_excl_by_id[item_id]
         line_gross = line_gross_by_id[item_id]
@@ -191,22 +194,224 @@ async def build_purchase_receipt_finance_detail_lines(
         else:
             max_push_qty = Decimal("0")
 
+        gross_f = float(line_gross)
+        unit_incl = float(_q_money(line_gross / line_qty)) if line_qty > 0 else gross_f
+        receipt_code = ""
+        if receipt is not None:
+            receipt_code = str(
+                getattr(receipt, "receipt_code", None)
+                or getattr(receipt, "code", None)
+                or "",
+            ).strip()
         lines.append(
             {
                 "line_no": idx,
                 "purchase_receipt_item_id": int(item.id),
+                "purchase_receipt_id": int(receipt_id),
+                "source_doc_code": receipt_code,
                 "material_code": str(item.material_code or ""),
                 "material_name": str(item.material_name or ""),
                 "material_spec": getattr(item, "material_spec", None),
                 "unit": str(item.material_unit or ""),
                 "quantity": float(line_qty),
                 **inv,
+                "gross_amount": gross_f,
+                "source_unit_price_incl": unit_incl,
                 "occupied_amount": float(occ),
                 "max_push_amount": float(max_push),
                 "max_push_quantity": float(max_push_qty),
+                "warehouse_name": str(getattr(item, "warehouse_name", None) or ""),
+                "location_code": str(getattr(item, "location_code", None) or ""),
+                "batch_number": str(getattr(item, "batch_number", None) or ""),
             }
         )
     return lines
+
+
+async def batch_purchase_receipt_invoice_line_stats(
+    tenant_id: int,
+    receipts: Sequence[Any],
+) -> Dict[int, Dict[str, int]]:
+    """取单列表：明细行数、已收票占用行数（批量，避免 N+1）。"""
+    from tortoise.functions import Sum
+
+    from apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy import (
+        PurchaseReceiptLineFinanceOccupancy,
+    )
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        _batch_purchase_receipt_settlement_rollup_context,
+    )
+
+    if not receipts:
+        return {}
+    receipt_ids = [
+        int(getattr(r, "id", 0) or 0) for r in receipts if int(getattr(r, "id", 0) or 0) > 0
+    ]
+    if not receipt_ids:
+        return {}
+
+    _, items_by_receipt, _, _, _ = await _batch_purchase_receipt_settlement_rollup_context(
+        tenant_id, receipts
+    )
+
+    occ_rows = (
+        await PurchaseReceiptLineFinanceOccupancy.filter(
+            tenant_id=tenant_id,
+            purchase_receipt_id__in=receipt_ids,
+            occupancy_kind=_KIND_INVOICE,
+            deleted_at__isnull=True,
+        )
+        .annotate(total=Sum("amount"))
+        .group_by("purchase_receipt_id", "purchase_receipt_item_id")
+        .values("purchase_receipt_id", "purchase_receipt_item_id", "total")
+    )
+    occ_positive_item_ids: Dict[int, set[int]] = {}
+    for row in occ_rows:
+        amt = _q_money(row["total"])
+        if amt <= Decimal("0"):
+            continue
+        rid = int(row["purchase_receipt_id"])
+        iid = int(row["purchase_receipt_item_id"])
+        occ_positive_item_ids.setdefault(rid, set()).add(iid)
+
+    out: Dict[int, Dict[str, int]] = {}
+    for rid in receipt_ids:
+        items = items_by_receipt.get(rid, [])
+        invoiced = occ_positive_item_ids.get(rid, set())
+        complete_ids = {int(it.id) for it in items if bool(getattr(it, "invoice_receipt_complete", False))}
+        out[rid] = {
+            "detail_line_count": len(items),
+            "invoiced_line_count": sum(
+                1 for it in items if int(it.id) in invoiced or int(it.id) in complete_ids
+            ),
+        }
+    return out
+
+
+async def batch_purchase_order_invoice_line_stats(
+    tenant_id: int,
+    orders: Sequence[Any],
+    pushed_by_order_id: Mapping[int, Decimal],
+) -> Dict[int, Dict[str, int]]:
+    """采购订单直开具单列表：明细行数、已全部开完的行数（按头额比例分摊）。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        purchase_order_settlement_gross,
+        quantize_money,
+        resolve_purchase_line_tax_rate_percent,
+    )
+    from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+
+    if not orders:
+        return {}
+    order_ids = [int(o.id) for o in orders]
+    items = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).all()
+    by_order: Dict[int, List[Any]] = {}
+    for item in items:
+        by_order.setdefault(int(item.order_id), []).append(item)
+
+    out: Dict[int, Dict[str, int]] = {}
+    for order in orders:
+        oid = int(order.id)
+        pushed = _q_money(pushed_by_order_id.get(oid, Decimal("0")))
+        header_gross = purchase_order_settlement_gross(order)
+        header_price_type = str(getattr(order, "price_type", None) or "tax_exclusive")
+        detail = 0
+        invoiced = 0
+        for item in by_order.get(oid, []):
+            line_qty = _q_qty(getattr(item, "ordered_quantity", 0) or 0)
+            stored_unit = Decimal(str(getattr(item, "unit_price", 0) or 0))
+            display_raw = getattr(item, "display_unit_price", None)
+            tax_pct = resolve_purchase_line_tax_rate_percent(
+                line_tax_rate=getattr(item, "tax_rate", None),
+                header_tax_rate=getattr(order, "tax_rate", None),
+            )
+            if (
+                header_price_type == "tax_inclusive"
+                and display_raw is not None
+                and Decimal(str(display_raw or 0)) > 0
+                and line_qty > 0
+            ):
+                _, _, line_gross = calc_document_line_amounts(
+                    line_qty,
+                    Decimal(str(display_raw)),
+                    tax_pct,
+                    "tax_inclusive",
+                )
+            elif line_qty > 0 and stored_unit > 0:
+                _, _, line_gross = calc_document_line_amounts(
+                    line_qty,
+                    stored_unit,
+                    tax_pct,
+                    "tax_exclusive",
+                )
+            else:
+                line_gross = Decimal("0")
+            line_gross = quantize_money(line_gross)
+            if line_gross <= 0:
+                continue
+            detail += 1
+            if header_gross > 0 and pushed > 0:
+                occupied = _q_money((line_gross / header_gross) * pushed)
+            else:
+                occupied = Decimal("0")
+            max_push = _q_money(line_gross - occupied)
+            if max_push <= Decimal("0.01") and occupied > 0:
+                invoiced += 1
+        out[oid] = {"detail_line_count": detail, "invoiced_line_count": invoiced}
+    return out
+
+
+async def batch_payable_invoice_line_stats(
+    tenant_id: int,
+    payables: Sequence[Any],
+) -> Dict[int, Dict[str, int]]:
+    """应付单取单：透传关联采购入库的行统计。"""
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+    if not payables:
+        return {}
+    receipt_id_by_payable: Dict[int, int] = {}
+    receipt_ids: set[int] = set()
+    for payable in payables:
+        pid = int(payable.id)
+        receipt_id = resolve_purchase_receipt_id_from_payable(
+            str(getattr(payable, "source_type", "") or ""),
+            getattr(payable, "source_id", None),
+        )
+        if not receipt_id:
+            continue
+        receipt_id_by_payable[pid] = int(receipt_id)
+        receipt_ids.add(int(receipt_id))
+
+    if not receipt_ids:
+        return {int(p.id): {"detail_line_count": 0, "invoiced_line_count": 0} for p in payables}
+
+    receipts = await PurchaseReceipt.filter(
+        tenant_id=tenant_id,
+        id__in=list(receipt_ids),
+        deleted_at__isnull=True,
+    ).all()
+    receipt_stats = await batch_purchase_receipt_invoice_line_stats(tenant_id, receipts)
+    stats_by_receipt = {int(r.id): receipt_stats.get(int(r.id), {}) for r in receipts}
+
+    out: Dict[int, Dict[str, int]] = {}
+    for payable in payables:
+        pid = int(payable.id)
+        rid = receipt_id_by_payable.get(pid)
+        if rid and rid in stats_by_receipt:
+            st = stats_by_receipt[rid]
+            out[pid] = {
+                "detail_line_count": int(st.get("detail_line_count") or 0),
+                "invoiced_line_count": int(st.get("invoiced_line_count") or 0),
+            }
+        else:
+            out[pid] = {"detail_line_count": 0, "invoiced_line_count": 0}
+    return out
 
 
 async def build_slices_from_pull_receipt_line_selections(
@@ -510,7 +715,6 @@ async def build_invoice_detail_lines_from_payable(
         lines.append(
             {
                 "line_no": idx,
-                "purchase_receipt_id": receipt_id,
                 "purchase_receipt_item_id": item_id,
                 "material_code": str(item.material_code or ""),
                 "material_name": str(item.material_name or ""),
@@ -525,3 +729,80 @@ async def build_invoice_detail_lines_from_payable(
             }
         )
     return receipt_id, lines
+
+
+async def build_outsource_order_receipt_invoice_detail_lines(
+    tenant_id: int,
+    batch_id: int,
+) -> List[Dict[str, Any]]:
+    """工序委外收货批次：单条明细行（与 preview item_id 同为 batch_id）。"""
+    from decimal import Decimal
+
+    from apps.kuaicaiwu.services.purchase_invoice_pull_service import (
+        PurchaseInvoicePullService,
+    )
+    from apps.kuaizhizao.models.outsource_order import OutsourceOrder
+    from apps.kuaizhizao.models.outsource_order_receipt import OutsourceOrderReceipt
+
+    batch = await OutsourceOrderReceipt.get_or_none(
+        tenant_id=tenant_id, id=int(batch_id), deleted_at__isnull=True
+    )
+    if not batch:
+        return []
+    if bool(getattr(batch, "invoice_receipt_complete", False)):
+        return []
+    order = await OutsourceOrder.get_or_none(
+        tenant_id=tenant_id,
+        id=int(batch.outsource_order_id),
+        deleted_at__isnull=True,
+    )
+    if not order:
+        return []
+
+    svc = PurchaseInvoicePullService()
+    gross = await svc.outsource_order_receipt_settlement_gross(tenant_id, int(batch_id))
+    code = f"{order.code}-{batch.id}"
+    pushed_map = await svc._sum_pushed_totals_by_source(
+        tenant_id,
+        "outsource_order_receipt",
+        [int(batch_id)],
+        {int(batch_id): code},
+    )
+    pushed = pushed_map.get(int(batch_id), Decimal("0"))
+    remaining = _q_money(gross - pushed)
+    if remaining <= 0:
+        return []
+
+    qual = _q_qty(batch.qualified_quantity or 0)
+    unit_price = Decimal(str(order.unit_price or 0))
+    line_excl = remaining
+    if qual > 0 and unit_price > 0:
+        unit_excl = _q_money(unit_price)
+    else:
+        unit_excl = remaining if qual <= 0 else _q_money(remaining / qual)
+
+    inv = enrich_standard_invoice_line_fields(
+        line_excl=line_excl,
+        tax_rate_percent=Decimal("0"),
+        quantity=qual if qual > 0 else Decimal("1"),
+        stored_unit_price_excl=unit_excl,
+        tax_amount=Decimal("0"),
+    )
+
+    return [
+        {
+            "line_no": 1,
+            "purchase_receipt_item_id": int(batch_id),
+            "outsource_order_receipt_id": int(batch_id),
+            "material_code": str(order.operation_code or ""),
+            "material_name": str(order.operation_name or order.code or ""),
+            "material_spec": None,
+            "unit": "工序",
+            "quantity": float(qual if qual > 0 else 1),
+            **inv,
+            "occupied_amount": float(pushed),
+            "payable_line_amount": float(remaining),
+            "max_push_amount": float(remaining),
+            "max_push_quantity": float(remaining),
+        }
+    ]

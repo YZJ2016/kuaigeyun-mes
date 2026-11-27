@@ -52,7 +52,7 @@ export function purchaseOrderTaxRateToDecimal(percent: unknown): number {
   return n / 100;
 }
 
-/** 采购入库单列表/取单金额：与后端 settlement_gross / purchase_receipt_settlement_gross 同源 */
+/** 采购入库头表价税合计：列表、详情、取单只读已落库 net_amount，禁止重算。 */
 /** 入库行税率：行优先，否则头表（百分比） */
 export function resolvePurchaseReceiptLineTaxPercent(
   lineTax: unknown,
@@ -331,31 +331,25 @@ export function computePurchaseReceiptFormGoodsTotals(
   return { totalQuantity, goodsExcl, taxAmount, goodsIncl };
 }
 
-/** 详情/只读：行未税、税额、价税（与 computePurchaseReceiptLineSettlementAmounts 同源） */
-export function calcPurchaseReceiptDetailLineAmounts(
-  row: PurchaseReceiptLineSettlementInput,
-  headerTaxRate?: number | null,
-  priceType: string = 'tax_inclusive',
-  poCtx?: PurchaseReceiptPoSettlementCtx | null,
-): { excl: number; tax: number; incl: number; taxPct: number } {
-  return computePurchaseReceiptLineSettlementAmounts(row, headerTaxRate, priceType, poCtx);
-}
-
+/** 采购入库头表价税合计。列表、详情、取单唯一读法：net_amount，否则未税加税额。禁止 settlement_gross，禁止用明细重算。 */
 export function resolvePurchaseReceiptDisplayAmount(receipt: {
-  settlement_gross?: number | null;
-  settlementGross?: number | null;
   net_amount?: number | null;
   netAmount?: number | null;
+  total_amount?: number | null;
+  totalAmount?: number | null;
+  tax_amount?: number | null;
+  taxAmount?: number | null;
 }): number {
-  const hasSettlement =
-    receipt.settlement_gross != null || receipt.settlementGross != null;
-  if (hasSettlement) {
-    const settlement = Number(receipt.settlement_gross ?? receipt.settlementGross);
-    if (Number.isFinite(settlement)) return settlement;
-  }
-  return resolveDocumentStoredNetGrossAmount({
+  const net = resolveDocumentStoredNetGrossAmount({
     net_amount: receipt.net_amount ?? receipt.netAmount,
   });
+  if (net > 0) return net;
+  const excl = Number(receipt.total_amount ?? receipt.totalAmount);
+  const tax = Number(receipt.tax_amount ?? receipt.taxAmount);
+  if (Number.isFinite(excl) && Number.isFinite(tax) && (excl > 0 || tax > 0)) {
+    return excl + tax;
+  }
+  return 0;
 }
 
 const roundToPricePlaces = (value: number, priceDecimals?: number): number => {

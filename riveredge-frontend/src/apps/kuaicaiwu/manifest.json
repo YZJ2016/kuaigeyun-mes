@@ -21,7 +21,7 @@
         "children": [
           {
             "title": "app.kuaicaiwu.menu.finance-management.dashboard",
-            "path": "/apps/kuaizhizao/finance-management/dashboard",
+            "path": "/apps/kuaicaiwu/finance-management/dashboard",
             "permission": "kuaicaiwu:finance-dashboard:read",
             "sort_order": 0
           },
@@ -137,16 +137,22 @@
                 "sort_order": 3
               },
               {
+                "title": "app.kuaicaiwu.menu.finance-management.sales-detail-invoices",
+                "path": "/apps/kuaicaiwu/finance-management/sales-detail-invoices",
+                "permission": "kuaicaiwu:sales-invoice:read",
+                "sort_order": 4
+              },
+              {
                 "title": "app.kuaicaiwu.menu.finance-management.other-incomes",
                 "path": "/apps/kuaicaiwu/finance-management/other-incomes",
                 "permission": "kuaicaiwu:other-income:read",
-                "sort_order": 4
+                "sort_order": 5
               },
               {
                 "title": "app.kuaicaiwu.menu.finance-management.notes-receivable",
                 "path": "/apps/kuaicaiwu/finance-management/notes-receivable",
                 "permission": "kuaicaiwu:notes-receivable:read",
-                "sort_order": 5
+                "sort_order": 6
               }
             ]
           },
@@ -182,16 +188,28 @@
                 "sort_order": 3
               },
               {
+                "title": "app.kuaicaiwu.menu.finance-management.purchase-detail-invoices",
+                "path": "/apps/kuaicaiwu/finance-management/purchase-detail-invoices",
+                "permission": "kuaicaiwu:purchase-invoice:read",
+                "sort_order": 4
+              },
+              {
                 "title": "app.kuaicaiwu.menu.finance-management.other-expenses",
                 "path": "/apps/kuaicaiwu/finance-management/other-expenses",
                 "permission": "kuaicaiwu:other-expense:read",
-                "sort_order": 4
+                "sort_order": 5
+              },
+              {
+                "title": "app.kuaicaiwu.menu.finance-management.other-expense-applications",
+                "path": "/apps/kuaicaiwu/finance-management/other-expense-applications",
+                "permission": "kuaicaiwu:other-expense-application:read",
+                "sort_order": 6
               },
               {
                 "title": "app.kuaicaiwu.menu.finance-management.notes-payable",
                 "path": "/apps/kuaicaiwu/finance-management/notes-payable",
                 "permission": "kuaicaiwu:notes-payable:read",
-                "sort_order": 5
+                "sort_order": 7
               }
             ]
           },
@@ -199,49 +217,49 @@
             "title": "app.kuaicaiwu.menu.finance-management.settlement",
             "path": "/apps/kuaicaiwu/finance-management/settlement",
             "permission": "kuaicaiwu:settlement:read",
-            "sort_order": 10
+            "sort_order": 2
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.partner-statements",
             "path": "/apps/kuaicaiwu/finance-management/partner-statements",
             "permission": "kuaicaiwu:partner-statement:read",
-            "sort_order": 11
+            "sort_order": 3
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.price-settlement",
             "path": "/apps/kuaicaiwu/finance-management/price-settlement",
             "permission": "kuaicaiwu:price-settlement:read",
-            "sort_order": 12
+            "sort_order": 4
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.prepayments",
             "path": "/apps/kuaicaiwu/finance-management/prepayments",
             "permission": "kuaicaiwu:prepayment:read",
-            "sort_order": 13
+            "sort_order": 5
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.document-reconciliation",
             "path": "/apps/kuaicaiwu/finance-management/document-reconciliation",
             "permission": "kuaicaiwu:document-reconciliation:read",
-            "sort_order": 14
+            "sort_order": 6
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.bank-accounts",
             "path": "/apps/kuaicaiwu/finance-management/bank-accounts",
             "permission": "kuaicaiwu:bank-account:read",
-            "sort_order": 15
+            "sort_order": 7
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.finance-misc-categories",
             "path": "/apps/kuaicaiwu/finance-management/finance-misc-categories",
             "permission": "kuaicaiwu:finance-misc-category:read",
-            "sort_order": 16
+            "sort_order": 8
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.fund-transfers",
             "path": "/apps/kuaicaiwu/finance-management/fund-transfers",
             "permission": "kuaicaiwu:fund-transfer:read",
-            "sort_order": 17
+            "sort_order": 9
           }
         ]
       },
@@ -607,7 +625,19 @@
     "kuaicaiwu:fixed-asset-depreciation:execute",
     "kuaicaiwu:fixed-asset-report:read",
     "kuaicaiwu:fixed-asset-report:export",
-    "kuaicaiwu:fixed-asset-report:print"
+    "kuaicaiwu:fixed-asset-report:print",
+    "kuaicaiwu:other-expense-application:read",
+    "kuaicaiwu:other-expense-application:create",
+    "kuaicaiwu:other-expense-application:update",
+    "kuaicaiwu:other-expense-application:delete",
+    "kuaicaiwu:other-expense-application:submit",
+    "kuaicaiwu:other-expense-application:approve",
+    "kuaicaiwu:other-expense-application:reject",
+    "kuaicaiwu:other-expense-application:audit",
+    "kuaicaiwu:other-expense-application:revoke",
+    "kuaicaiwu:other-expense-application:export",
+    "kuaicaiwu:other-expense-application:print",
+    "kuaicaiwu:other-expense-application:push"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

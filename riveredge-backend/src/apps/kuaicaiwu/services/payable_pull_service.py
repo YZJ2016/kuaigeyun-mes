@@ -196,10 +196,14 @@ class PayablePullService(AppBaseService[Payable]):
         receipt: Any,
         *,
         pushed: Optional[Decimal] = None,
+        settlement_gross: Optional[Decimal] = None,
     ) -> List[Dict[str, Any]]:
         rid = int(receipt.id)
         code = str(receipt.receipt_code or rid)
-        total = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
+        if settlement_gross is not None:
+            total = settlement_gross
+        else:
+            total = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
         if total <= 0:
             return []
         if pushed is None:
@@ -489,15 +493,22 @@ class PayablePullService(AppBaseService[Payable]):
             tenant_id, "purchase_receipt", receipt_ids, code_by_id
         )
 
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            batch_purchase_receipt_settlement_gross,
+        )
+
+        gross_map = await batch_purchase_receipt_settlement_gross(tenant_id, receipts)
+
         rows: List[Dict[str, Any]] = []
         for receipt in receipts:
             rid = int(receipt.id)
+            receipt_gross = gross_map.get(rid, Decimal("0"))
             preview_items = await self._build_preview_items_for_purchase_receipt(
                 tenant_id,
                 receipt,
                 pushed=pushed_map.get(rid, Decimal("0")),
+                settlement_gross=receipt_gross,
             )
-            receipt_gross = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
             allowed, reason = self._derive_pull_capability(
                 source_allowed=receipt_gross > 0,
                 preview_items=preview_items,

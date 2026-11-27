@@ -1794,35 +1794,120 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                     exc,
                 )
 
+    async def try_complete_ledger_after_sales_invoice_approved(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+        operator_id: int,
+    ) -> None:
+        """
+        对账单「根据发票立账」：对账单先审时可能尚无已审发票而无法立账；
+        关联出库的销项发票审核通过后补跑立账。
+        """
+        from apps.kuaicaiwu.models.invoice import Invoice
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        invoice = await Invoice.get_or_none(
+            tenant_id=tenant_id,
+            id=int(invoice_id),
+            category="OUT",
+            deleted_at__isnull=True,
+        )
+        if not invoice:
+            return
+        rs = str(invoice.review_status or "").strip()
+        if rs not in ("已审核", "approved"):
+            return
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            target_type="sales_invoice",
+            target_id=int(invoice_id),
+        ).all()
+        delivery_ids: set[int] = set()
+        for rel in rels:
+            if str(rel.source_type or "").strip() == "sales_delivery" and rel.source_id:
+                delivery_ids.add(int(rel.source_id))
+        if not delivery_ids:
+            return
+
+        statements = await PartnerStatement.filter(
+            tenant_id=tenant_id,
+            partner_id=int(invoice.partner_id),
+            partner_type="Customer",
+            deleted_at__isnull=True,
+        ).all()
+        for stmt in statements:
+            review = str(getattr(stmt, "review_status", None) or "").strip()
+            if review not in ("已审核", "approved"):
+                continue
+            if str(stmt.status or "").strip() not in ("Confirmed", "Sent", "LedgerPosted"):
+                continue
+            if stmt.ledger_posted_at is not None and str(stmt.status or "").strip() == "LedgerPosted":
+                continue
+            details = dict(stmt.transaction_details or {})
+            lines = list(details.get("lines") or [])
+            if not any(
+                str(ln.get("doc_type") or "").strip() == "销售出库"
+                and int(ln.get("doc_id") or 0) in delivery_ids
+                for ln in lines
+                if isinstance(ln, dict)
+            ):
+                continue
+            try:
+                await self.post_ledger(tenant_id, int(stmt.id), operator_id)
+            except BusinessLogicError as exc:
+                logger.info(
+                    "销项发票 {} 审核后补立账跳过对账单 {}: {}",
+                    invoice_id,
+                    stmt.id,
+                    exc,
+                )
+
     async def _sales_delivery_has_approved_invoice(
         self, tenant_id: int, delivery_id: int
     ) -> bool:
         from apps.kuaicaiwu.models.invoice import Invoice
+        from apps.kuaicaiwu.models.sales_delivery_line_finance_occupancy import (
+            SalesDeliveryLineFinanceOccupancy,
+        )
         from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        async def _invoice_approved(inv_id: int) -> bool:
+            inv = await Invoice.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inv_id),
+                category="OUT",
+                deleted_at__isnull=True,
+            )
+            if not inv:
+                return False
+            rs = str(inv.review_status or "").strip()
+            return rs in ("已审核", "approved")
+
+        occ_rows = await SalesDeliveryLineFinanceOccupancy.filter(
+            tenant_id=tenant_id,
+            sales_delivery_id=int(delivery_id),
+            occupancy_kind="invoice",
+            deleted_at__isnull=True,
+        ).all()
+        for occ in occ_rows:
+            tid = int(getattr(occ, "target_doc_id", 0) or 0)
+            if tid > 0 and await _invoice_approved(tid):
+                return True
 
         # DocumentRelation 无软删字段，禁止 deleted_at__isnull
         rels = await DocumentRelation.filter(
             tenant_id=tenant_id,
-            target_type="sales_delivery",
-            target_id=delivery_id,
+            source_type="sales_delivery",
+            source_id=int(delivery_id),
+            target_type="sales_invoice",
         ).all()
-        invoice_ids: List[int] = []
         for rel in rels:
-            if str(rel.source_type or "").strip() in (
-                "sales_invoice",
-                "invoice",
-                "Invoice",
-            ) and rel.source_id:
-                invoice_ids.append(int(rel.source_id))
-        if not invoice_ids:
-            return False
-        inv = await Invoice.filter(
-            tenant_id=tenant_id,
-            id__in=list(set(invoice_ids)),
-            category="OUT",
-            deleted_at__isnull=True,
-        ).exclude(status__in=("DRAFT", "VOID", "void", "作废", "草稿")).first()
-        return inv is not None
+            tid = int(getattr(rel, "target_id", 0) or 0)
+            if tid > 0 and await _invoice_approved(tid):
+                return True
+        return False
 
     async def _auto_post_ledger_if_immediate_after_review_approve(
         self, tenant_id: int, statement_id: int, operator_id: int

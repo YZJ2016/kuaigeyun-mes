@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
@@ -187,31 +187,23 @@ class SalesInvoiceAuditService:
             )
         out = result if result is not None else await _write()
         if not rejection_reason:
-            invoice_row = await self._record_detail_occupancy_if_approved(tenant_id, invoice_id)
+            invoice_row = await self._record_detail_occupancy_if_approved(
+                tenant_id, invoice_id, user_id
+            )
             if str(invoice_row.status or "").strip() == "已审核":
-                from apps.kuaicaiwu.models.receivable import Receivable
-                from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
                 from apps.kuaicaiwu.services.sales_invoice_receivable_auto import (
-                    maybe_auto_generate_receivable_for_sales_invoice,
+                    ensure_receivable_after_sales_invoice_approved,
                 )
-                auto_receivable_id, _ = await maybe_auto_generate_receivable_for_sales_invoice(
+
+                await ensure_receivable_after_sales_invoice_approved(
                     tenant_id=tenant_id,
-                    invoice=invoice_row,
-                    created_by=user_id,
+                    invoice_id=invoice_id,
+                    user_id=user_id,
                 )
-                if auto_receivable_id:
-                    await submit_finance_review(
-                        model=Receivable,
-                        tenant_id=tenant_id,
-                        doc_id=int(auto_receivable_id),
-                        updated_by=user_id,
-                        doc_label="应收单",
-                        node_key="receivable",
-                    )
         return out
 
     async def _record_detail_occupancy_if_approved(
-        self, tenant_id: int, invoice_id: int
+        self, tenant_id: int, invoice_id: int, user_id: Optional[int] = None
     ) -> Invoice:
         from apps.kuaicaiwu.config.finance_settlement_contract import SETTLEMENT_MODE_DETAIL
         from apps.kuaicaiwu.services.sales_invoice_detail_occupancy import (
@@ -223,7 +215,9 @@ class SalesInvoiceAuditService:
             str(invoice_row.status or "").strip() == "已审核"
             and str(invoice_row.settlement_mode or "") == SETTLEMENT_MODE_DETAIL
         ):
-            await record_detail_sales_invoice_occupancy_on_approve(tenant_id, invoice_id)
+            await record_detail_sales_invoice_occupancy_on_approve(
+                tenant_id, invoice_id, created_by=user_id
+            )
         return invoice_row
 
     async def revoke_sales_invoice(
@@ -252,6 +246,20 @@ class SalesInvoiceAuditService:
         invoice.status = "未审核"
         return self._payload(invoice)
 
+    async def _complete_receivable_if_approved(
+        self, tenant_id: int, invoice_id: int, user_id: int
+    ) -> None:
+        await self._record_detail_occupancy_if_approved(tenant_id, invoice_id, user_id)
+        from apps.kuaicaiwu.services.sales_invoice_receivable_auto import (
+            ensure_receivable_after_sales_invoice_approved,
+        )
+
+        await ensure_receivable_after_sales_invoice_approved(
+            tenant_id=tenant_id,
+            invoice_id=invoice_id,
+            user_id=user_id,
+        )
+
     async def _enter_review(self, tenant_id: int, invoice: Invoice, user_id: int) -> None:
         from core.services.approval.approval_instance_service import ApprovalInstanceService
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
@@ -265,7 +273,9 @@ class SalesInvoiceAuditService:
                 review_status="已审核",
                 status="已审核",
             )
-            await self._record_detail_occupancy_if_approved(tenant_id, int(invoice.id))
+            await self._complete_receivable_if_approved(
+                tenant_id, int(invoice.id), user_id
+            )
             return
 
         content = f"销售发票 {invoice.invoice_code}"
@@ -296,7 +306,9 @@ class SalesInvoiceAuditService:
                 review_status="已审核",
                 status="已审核",
             )
-            await self._record_detail_occupancy_if_approved(tenant_id, int(invoice.id))
+            await self._complete_receivable_if_approved(
+                tenant_id, int(invoice.id), user_id
+            )
 
     @staticmethod
     def _payload(invoice: Invoice) -> dict[str, Any]:

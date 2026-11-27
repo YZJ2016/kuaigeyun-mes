@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple, Mapping
 
 from tortoise.functions import Sum
+from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.purchase_receipt_line_finance_occupancy import (
@@ -65,7 +66,7 @@ class PurchaseReceiptLineFinanceOccupancyService(AppBaseService):
             tenant_id=tenant_id,
             receipt_id=receipt_id,
             deleted_at__isnull=True,
-        ).order_by("id").all()
+        ).select_for_update().order_by("id").all()
         if not items:
             raise ValidationError("采购入库单无明细，无法分摊财务占用")
 
@@ -123,38 +124,39 @@ class PurchaseReceiptLineFinanceOccupancyService(AppBaseService):
         allow_append: bool = False,
     ) -> None:
         """按 FIFO 写入行占用（多入库单同属一张发票时传 allow_append=True，按入库单粒度幂等）。"""
-        filter_kwargs: Dict[str, Any] = {
-            "tenant_id": tenant_id,
-            "occupancy_kind": occupancy_kind,
-            "target_doc_type": target_doc_type,
-            "target_doc_id": int(target_doc_id),
-            "deleted_at__isnull": True,
-        }
-        if allow_append:
-            filter_kwargs["purchase_receipt_id"] = int(receipt_id)
-        existing = await PurchaseReceiptLineFinanceOccupancy.filter(**filter_kwargs).count()
-        if existing > 0:
-            return
+        async with in_transaction():
+            filter_kwargs: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "occupancy_kind": occupancy_kind,
+                "target_doc_type": target_doc_type,
+                "target_doc_id": int(target_doc_id),
+                "deleted_at__isnull": True,
+            }
+            if allow_append:
+                filter_kwargs["purchase_receipt_id"] = int(receipt_id)
+            existing = await PurchaseReceiptLineFinanceOccupancy.filter(**filter_kwargs).count()
+            if existing > 0:
+                return
 
-        slices = await self._fifo_slices(
-            tenant_id,
-            receipt_id,
-            amount,
-            occupancy_kind,
-            line_amount_caps=line_amount_caps,
-        )
-        if not slices:
-            return
+            slices = await self._fifo_slices(
+                tenant_id,
+                receipt_id,
+                amount,
+                occupancy_kind,
+                line_amount_caps=line_amount_caps,
+            )
+            if not slices:
+                return
 
-        await self._persist_slices(
-            tenant_id,
-            receipt_id,
-            occupancy_kind=occupancy_kind,
-            target_doc_type=target_doc_type,
-            target_doc_id=target_doc_id,
-            slices=slices,
-            created_by=created_by,
-        )
+            await self._persist_slices(
+                tenant_id,
+                receipt_id,
+                occupancy_kind=occupancy_kind,
+                target_doc_type=target_doc_type,
+                target_doc_id=target_doc_id,
+                slices=slices,
+                created_by=created_by,
+            )
 
     async def record_receipt_finance_occupancy_explicit(
         self,
@@ -169,29 +171,30 @@ class PurchaseReceiptLineFinanceOccupancyService(AppBaseService):
         allow_append: bool = False,
     ) -> None:
         """按用户勾选的入库行写入占用（须先通过 pull_lines 校验）。"""
-        filter_kwargs: Dict[str, Any] = {
-            "tenant_id": tenant_id,
-            "occupancy_kind": occupancy_kind,
-            "target_doc_type": target_doc_type,
-            "target_doc_id": int(target_doc_id),
-            "deleted_at__isnull": True,
-        }
-        if allow_append:
-            filter_kwargs["purchase_receipt_id"] = int(receipt_id)
-        existing = await PurchaseReceiptLineFinanceOccupancy.filter(**filter_kwargs).count()
-        if existing > 0:
-            return
-        if not slices:
-            return
-        await self._persist_slices(
-            tenant_id,
-            receipt_id,
-            occupancy_kind=occupancy_kind,
-            target_doc_type=target_doc_type,
-            target_doc_id=target_doc_id,
-            slices=slices,
-            created_by=created_by,
-        )
+        async with in_transaction():
+            filter_kwargs: Dict[str, Any] = {
+                "tenant_id": tenant_id,
+                "occupancy_kind": occupancy_kind,
+                "target_doc_type": target_doc_type,
+                "target_doc_id": int(target_doc_id),
+                "deleted_at__isnull": True,
+            }
+            if allow_append:
+                filter_kwargs["purchase_receipt_id"] = int(receipt_id)
+            existing = await PurchaseReceiptLineFinanceOccupancy.filter(**filter_kwargs).count()
+            if existing > 0:
+                return
+            if not slices:
+                return
+            await self._persist_slices(
+                tenant_id,
+                receipt_id,
+                occupancy_kind=occupancy_kind,
+                target_doc_type=target_doc_type,
+                target_doc_id=target_doc_id,
+                slices=slices,
+                created_by=created_by,
+            )
 
     async def _persist_slices(
         self,
@@ -543,6 +546,13 @@ class PurchaseReceiptLineFinanceOccupancyService(AppBaseService):
             purchase_receipt_id=int(receipt_id),
             deleted_at__isnull=True,
         ).update(deleted_at=now)
+        from apps.kuaicaiwu.services.purchase_invoice_detail_post_approve import (
+            refresh_purchase_receipt_items_invoice_receipt_complete,
+        )
+
+        await refresh_purchase_receipt_items_invoice_receipt_complete(
+            tenant_id, int(receipt_id)
+        )
 
     async def sums_by_receipt_item_ids(
         self,

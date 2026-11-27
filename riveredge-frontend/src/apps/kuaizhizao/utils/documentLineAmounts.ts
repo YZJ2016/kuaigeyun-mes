@@ -568,7 +568,8 @@ export interface DocumentGoodsTotals {
  * - 头表货值：computeDocumentGoodsTotals（禁止保存时再对已存未税合计二次拆税）
  * - 销售头表落库：resolveSalesDocumentStoredTotalAmount(computeSalesDocumentTotals(...))
  * - 采购头表落库：mapDocumentGoodsTotalsToPurchaseHeader(computeDocumentGoodsTotals(...))
- * - 列表/详情价税展示（采购）：resolveDocumentStoredNetGrossAmount（读 net_amount）
+ * - 列表/详情价税展示（采购订单）：resolveDocumentStoredNetGrossAmount（读 net_amount）
+ * - 列表/详情/取单价税展示（采购入库）：purchaseOrderAmounts.resolvePurchaseReceiptDisplayAmount（读 net_amount，禁止重算）
  * - 列表/详情（销售）：resolveSalesOrderDisplayTotalAmount
  */
 

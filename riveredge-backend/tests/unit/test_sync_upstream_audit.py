@@ -10,7 +10,12 @@ import pytest
 
 
 def _load_module():
-    script_path = Path(__file__).resolve().parents[2] / "scripts" / "sync_upstream_audit.py"
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parents[2] / "scripts" / "sync_upstream_audit.py",
+        here.parents[4] / "scripts" / "sync_upstream_audit.py",
+    ]
+    script_path = next((p for p in candidates if p.is_file()), candidates[0])
     spec = importlib.util.spec_from_file_location("sync_upstream_audit", script_path)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)

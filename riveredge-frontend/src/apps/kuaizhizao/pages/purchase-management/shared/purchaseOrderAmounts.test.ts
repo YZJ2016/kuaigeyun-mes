@@ -7,6 +7,7 @@ import {
   purchaseStoredExclAsFormItemAmount,
   readPurchaseOrderEnteredUnitPrice,
   resolvePurchaseOrderDisplayAmount,
+  resolvePurchaseReceiptDisplayAmount,
   resolvePurchaseOrderLineTaxPercent,
   resolvePurchaseReceiptLineTaxPercent,
   resolvePurchaseOrderLineAmounts,
@@ -178,5 +179,35 @@ describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
     expect(line.excl).toBe(8849.6);
     expect(line.incl).toBe(10000.05);
     expect(line.tax).toBe(1150.45);
+  });
+});
+
+describe('resolvePurchaseReceiptDisplayAmount', () => {
+  it('reads net_amount when present', () => {
+    expect(
+      resolvePurchaseReceiptDisplayAmount({
+        net_amount: 860,
+        total_amount: 761.06,
+        tax_amount: 98.94,
+      }),
+    ).toBe(860);
+  });
+
+  it('falls back to excl plus tax when net missing', () => {
+    expect(
+      resolvePurchaseReceiptDisplayAmount({
+        total_amount: 761.06,
+        tax_amount: 98.94,
+      }),
+    ).toBe(860);
+  });
+
+  it('ignores settlement_gross if passed alongside stale net', () => {
+    expect(
+      resolvePurchaseReceiptDisplayAmount({
+        net_amount: 860,
+        settlement_gross: 761.06,
+      } as Parameters<typeof resolvePurchaseReceiptDisplayAmount>[0]),
+    ).toBe(860);
   });
 });

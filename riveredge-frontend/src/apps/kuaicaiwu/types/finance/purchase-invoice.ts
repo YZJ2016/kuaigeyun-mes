@@ -1,3 +1,20 @@
+export interface PurchaseInvoiceLine {
+  id: number;
+  item_name: string;
+  spec_model?: string | null;
+  unit?: string | null;
+  quantity?: number | string | null;
+  unit_price?: number | string | null;
+  amount: number | string;
+  tax_rate: number | string;
+  tax_amount: number | string;
+  source_doc_type?: string | null;
+  source_doc_id?: number | null;
+  source_line_id?: number | null;
+  partner_statement_line_id?: number | null;
+  invoice_number?: string | null;
+}
+
 export interface PurchaseInvoice {
     id: number;
     tenant_id: number;
@@ -8,6 +25,10 @@ export interface PurchaseInvoice {
     supplier_name: string;
     invoice_number: string;
     invoice_date: string;
+    settlement_closing_date?: string | null;
+    department_id?: number | null;
+    department_name?: string | null;
+    ledger_posting_mode?: 'immediate' | 'by_invoice' | string | null;
     invoice_type: string;
     tax_rate: number;
     invoice_amount: number;
@@ -21,6 +42,20 @@ export interface PurchaseInvoice {
     review_time?: string;
     review_status: string;
     settlement_mode?: 'summary' | 'detail' | string;
+    capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
+    audit?: {
+      allowed_actions?: string[];
+      phase?: string;
+      enabled?: boolean;
+      mode?: string;
+      viewer_actions?: {
+        has_my_pending_task?: boolean;
+        approve?: boolean;
+        my_acted?: boolean;
+        block_reason?: string | null;
+      } | null;
+      [key: string]: unknown;
+    };
     review_remarks?: string;
     payable_id?: number;
     payable_code?: string;
@@ -30,6 +65,7 @@ export interface PurchaseInvoice {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
+  items?: PurchaseInvoiceLine[];
 }
 
 export interface PurchaseInvoiceListParams {
@@ -67,6 +103,7 @@ export interface PurchaseInvoiceDetailItemCreate {
     source_doc_id: number;
     source_line_id: number;
     partner_statement_line_id?: number | null;
+  invoice_number?: string | null;
 }
 
 export interface PurchaseInvoiceCreateData {
@@ -78,6 +115,10 @@ export interface PurchaseInvoiceCreateData {
     supplier_name: string;
     invoice_number: string;
     invoice_date: string;
+    settlement_closing_date?: string;
+    department_id?: number;
+    department_name?: string;
+    ledger_posting_mode?: 'immediate' | 'by_invoice' | string;
     invoice_type: string;
     tax_rate: number;
     invoice_amount: number;
@@ -91,7 +132,7 @@ export interface PurchaseInvoiceCreateData {
     payable_code?: string;
     notes?: string;
     attachments?: unknown;
-    source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
+    source_type?: 'purchase_order' | 'purchase_receipt' | 'payable' | 'outsource_order_receipt';
     source_id?: number;
     source_ids?: number[];
     pull_receipt_lines?: { purchase_receipt_item_id: number; amount: number }[];

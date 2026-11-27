@@ -40,7 +40,7 @@ from core.services.authorization.permission_policy_service import PermissionPoli
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str
-from apps.kuaicaiwu.services.tax.tax_period_service import tax_period_from_date
+from apps.kuaicaiwu.utils.tax_period import tax_period_from_date
 
 router = APIRouter(prefix="/sales-invoices", tags=["App - Kuaicaiwu - Finance"])
 invoice_service = InvoiceService()
@@ -143,6 +143,10 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
         invoice_amount=float(obj.amount_excluding_tax or 0),
         tax_amount=float(obj.tax_amount or 0),
         total_amount=float(obj.total_amount or 0),
+        settlement_closing_date=getattr(obj, "settlement_closing_date", None),
+        department_id=getattr(obj, "department_id", None),
+        department_name=getattr(obj, "department_name", None),
+        ledger_posting_mode=getattr(obj, "ledger_posting_mode", None),
         receivable_id=getattr(obj, "receivable_id", None),
         receivable_code=getattr(obj, "receivable_code", None),
         attachment_path=obj.attachment_uuid,
@@ -196,6 +200,7 @@ async def _serialize_detail(tenant_id: int, user_id: int, obj: Invoice) -> Sales
                 source_doc_id=getattr(it, "source_doc_id", None),
                 source_line_id=getattr(it, "source_line_id", None),
                 partner_statement_line_id=getattr(it, "partner_statement_line_id", None),
+                invoice_number=it.invoice_number,
             ).model_dump()
         )
     base["items"] = line_payloads
@@ -300,9 +305,13 @@ async def create_sales_invoice(
                 Decimal("0"),
             )
             if abs(detail_total - Decimal(str(total_amount or 0))) > Decimal("0.01"):
-                raise ValidationError(
+                raise BusinessLogicError(
                     f"明细销售发票行价税合计（{detail_total:.2f}）与表头价税合计（{Decimal(str(total_amount or 0)):.2f}）不一致"
                 )
+
+        lpm = str(getattr(data, "ledger_posting_mode", None) or "").strip()
+        if lpm and lpm not in ("immediate", "by_invoice"):
+            raise BusinessLogicError("立账方式须为 immediate 或 by_invoice")
 
         create_payload = {
             "tenant_id": tenant_id,
@@ -311,6 +320,10 @@ async def create_sales_invoice(
             "settlement_mode": settlement_mode,
             "invoice_number": data.invoice_number,
             "invoice_date": data.invoice_date,
+            "settlement_closing_date": getattr(data, "settlement_closing_date", None),
+            "department_id": getattr(data, "department_id", None),
+            "department_name": getattr(data, "department_name", None),
+            "ledger_posting_mode": lpm or None,
             "tax_period": tax_period_from_date(data.invoice_date),
             "invoice_color": "blue",
             "invoice_type": data.invoice_type or "增值税专用发票",
@@ -445,6 +458,54 @@ async def list_sales_invoices(
         items=[SalesInvoiceResponse.model_validate(p) for p in payloads],
         total=total, skip=skip, limit=limit
     )
+
+
+@router.get(
+    "/pull-preview",
+    summary="Preview pull sales invoice (unified dispatch)",
+)
+async def preview_pull_sales_invoice_unified(
+    source_type: str = Query(
+        ...,
+        description="sales_order|sales_delivery|receivable",
+    ),
+    source_ids: str = Query(..., description="源单 ID，逗号分隔"),
+    partner_statement_ids: Optional[str] = Query(
+        None, description="往来对账单 ID，逗号分隔（出库来自对账时传入）"
+    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+    def _parse_csv(raw: Optional[str]) -> list[int]:
+        parsed: list[int] = []
+        for part in str(raw or "").split(","):
+            part = part.strip()
+            if not part:
+                continue
+            parsed.append(int(part))
+        return parsed
+
+    ids = _parse_csv(source_ids)
+    if not ids:
+        raise HTTPException(status_code=422, detail="须指定源单")
+    stmt_ids = None
+    if partner_statement_ids:
+        from apps.kuaicaiwu.services.partner_statement_invoice_pull import (
+            parse_partner_statement_id_csv,
+        )
+
+        stmt_ids = parse_partner_statement_id_csv(partner_statement_ids)
+    try:
+        return await sales_invoice_service.preview_pull(
+            tenant_id=tenant_id,
+            source_type=str(source_type).strip(),
+            source_ids=ids,
+            partner_statement_ids=stmt_ids,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get(

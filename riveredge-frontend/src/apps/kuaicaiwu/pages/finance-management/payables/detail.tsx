@@ -13,6 +13,7 @@ import { useLinkedDocumentDetail } from '../../../../../components/linked-docume
 
 import { payableService } from '../../../services/finance/payable';
 import { payableSourceDiagnosisKey } from '../../../utils/payableSourceDiagnosis';
+import { useOrgInvoiceListPath } from '../shared/FinanceInvoiceSettlementModeAlert';
 
 import { Payable } from '../../../types/finance/payable';
 
@@ -87,6 +88,8 @@ const PayableDetail: React.FC = () => {
   const navigate = useNavigate();
 
   const location = useLocation();
+
+  const purchaseInvoiceListPath = useOrgInvoiceListPath('purchase');
 
   const [data, setData] = useState<Payable>();
 
@@ -194,7 +197,7 @@ const PayableDetail: React.FC = () => {
 
     if (!data?.id) return;
 
-    navigate('/apps/kuaicaiwu/finance-management/purchase-invoices', {
+    navigate(purchaseInvoiceListPath, {
 
       state: { pullPayableId: data.id },
 
