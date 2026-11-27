@@ -16,6 +16,23 @@ from apps.kuaicaiwu.services.gl.coa_templates import (
 from apps.kuaicaiwu.services.gl.settings_service import GlSettingsService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
+AUX_ACCOUNT_LOCK_KEYS = frozenset(
+    {
+        "aux_customer",
+        "aux_supplier",
+        "aux_department",
+        "aux_employee",
+        "aux_project",
+    }
+)
+
+
+def allows_account_field_change_with_activity(key: str, old_value: Any, new_value: Any) -> bool:
+    """已有发生额时仍允许关闭辅助核算；编码/类型及新开辅助项仍禁止。"""
+    if key not in AUX_ACCOUNT_LOCK_KEYS:
+        return False
+    return bool(old_value) and not bool(new_value)
+
 
 class CoaService:
     @staticmethod
@@ -166,22 +183,48 @@ class CoaService:
         if not row:
             raise NotFoundError("科目不存在")
         has_activity = await self._has_activity(tenant_id, account_id)
-        locked = {
-            "aux_customer",
-            "aux_supplier",
-            "aux_department",
-            "aux_employee",
-            "aux_project",
-            "account_code",
-            "account_type",
-        }
+        locked = set(AUX_ACCOUNT_LOCK_KEYS) | {"account_code", "account_type"}
         for key, value in data.items():
             if key in locked and has_activity and getattr(row, key, None) != value:
-                raise ValidationError("科目已有发生额或余额，禁止修改编码/类型/辅助核算")
+                old_value = getattr(row, key, None)
+                if not allows_account_field_change_with_activity(key, old_value, value):
+                    raise ValidationError("科目已有发生额或余额，禁止修改编码/类型/辅助核算")
             if hasattr(row, key) and key not in {"id", "tenant_id", "uuid"}:
                 setattr(row, key, value)
         await row.save()
         return row
+
+    async def sync_parent_leaf_flag(self, tenant_id: int, parent_id: Optional[int]) -> None:
+        """无下级时恢复上级为末级，避免期初录入页漏科目。"""
+        if not parent_id:
+            return
+        parent = await ChartOfAccount.get_or_none(
+            tenant_id=tenant_id, id=int(parent_id), deleted_at__isnull=True
+        )
+        if not parent:
+            return
+        has_children = await ChartOfAccount.filter(
+            tenant_id=tenant_id, parent_id=parent.id, deleted_at__isnull=True
+        ).exists()
+        if not has_children and not parent.is_leaf:
+            parent.is_leaf = True
+            await parent.save()
+
+    async def repair_orphan_non_leaf_flags(self, tenant_id: int) -> int:
+        """修正「无下级却仍为非末级」的历史脏数据（如删光下级未回写）。"""
+        fixed = 0
+        rows = await ChartOfAccount.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True, is_leaf=False
+        ).all()
+        for row in rows:
+            has_children = await ChartOfAccount.filter(
+                tenant_id=tenant_id, parent_id=row.id, deleted_at__isnull=True
+            ).exists()
+            if not has_children:
+                row.is_leaf = True
+                await row.save()
+                fixed += 1
+        return fixed
 
     async def delete_account(self, tenant_id: int, account_id: int) -> None:
         row = await ChartOfAccount.get_or_none(
@@ -198,9 +241,11 @@ class CoaService:
             raise ValidationError("存在下级科目，禁止删除")
         from core.utils.timezone_utils import resolve_business_datetime
 
+        parent_id = row.parent_id
         row.deleted_at = resolve_business_datetime()
         row.is_active = False
         await row.save()
+        await self.sync_parent_leaf_flag(tenant_id, parent_id)
 
     async def seed_industry_template(
         self, tenant_id: int, template_key: Optional[str] = None

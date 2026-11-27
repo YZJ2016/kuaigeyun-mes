@@ -50,7 +50,7 @@ async def _metrics(tenant_id: int, days: int) -> Dict[str, Optional[int]]:
         from core.ai.stats_service import AiStatsService
 
         overview = await AiStatsService.get_overview(
-            tenant_id=tenant_id, days=days
+            tenant_id=tenant_id, days=days, include_pulse=False
         )
         return {
             "total_calls": overview.total_calls,
@@ -345,13 +345,24 @@ async def _build_capabilities(
 
 
 async def get_hub(
-    tenant_id: int, days: int, user=None
+    tenant_id: int,
+    days: int,
+    user=None,
+    *,
+    include_pulse: bool = False,
 ) -> Dict[str, Any]:
-    """GET /operations/hub 聚合（days 由路由层校验 1..90）。"""
+    """GET /operations/hub 聚合（days 由路由层校验 1..90）。
+
+    默认 include_pulse=False，不阻塞首屏全量五域 Pulse 扫描；
+    Pulse 总数由前端首屏后异步拉取 /core/ai/stats/pulse-count（60s 缓存）。
+    """
     days = max(1, min(int(days or 7), 90))
     model_status = await _model_public_status(tenant_id)
     metrics = await _metrics(tenant_id, days)
-    metrics["pulse_count"] = await _pulse_total(tenant_id, user)
+    if include_pulse:
+        metrics["pulse_count"] = await _pulse_total(tenant_id, user)
+    else:
+        metrics["pulse_count"] = None
     capabilities = await _build_capabilities(tenant_id, model_status, user)
     return {
         "days": days,

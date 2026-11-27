@@ -16,6 +16,7 @@ class EmployeeProfileCreate(BaseModel):
     pay_method: str = Field(default="time", max_length=20)
     hourly_rate: Optional[Decimal] = None
     hire_date: Optional[str] = None
+    hire_introducer: Optional[str] = Field(None, max_length=100)
     leave_date: Optional[str] = None
     bank_account: Optional[str] = Field(None, max_length=50)
     bank_name: Optional[str] = Field(None, max_length=100)
@@ -77,6 +78,7 @@ class EmployeeProfileUpdate(BaseModel):
     pay_method: Optional[str] = Field(None, max_length=20)
     hourly_rate: Optional[Decimal] = None
     hire_date: Optional[str] = None
+    hire_introducer: Optional[str] = Field(None, max_length=100)
     leave_date: Optional[str] = None
     bank_account: Optional[str] = Field(None, max_length=50)
     bank_name: Optional[str] = Field(None, max_length=100)

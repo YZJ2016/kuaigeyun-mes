@@ -310,6 +310,7 @@ const EmployeeMovementsPage: React.FC = () => {
         phone: optionalTrimmed(values.phone),
         hourly_rate: optionalNumber(values.hourly_rate),
         hire_date: hireDay.format('YYYY-MM-DD'),
+        hire_introducer: optionalTrimmed(values.hire_introducer),
         bank_account: optionalTrimmed(values.bank_account),
         bank_name: optionalTrimmed(values.bank_name),
         bank_branch: optionalTrimmed(values.bank_branch),
@@ -551,6 +552,13 @@ const EmployeeMovementsPage: React.FC = () => {
                       ]}
                       colProps={{ span: 12 }}
                       fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormText
+                      name="hire_introducer"
+                      label={t('app.kuaioa.employee.hireIntroducer')}
+                      placeholder={t('app.kuaioa.employee.hireIntroducerPlaceholder')}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ maxLength: 100 }}
                     />
                     <ProFormText
                       name="bank_account"

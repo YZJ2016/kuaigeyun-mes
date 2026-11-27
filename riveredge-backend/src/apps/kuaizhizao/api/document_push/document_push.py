@@ -269,7 +269,7 @@ async def reconcile_document_push(
         require_all=True,
         check_abac=False,
     )
-    from apps.kuaizhizao.services.document_push_reconcile_service import (
+    from apps.kuaiconnect.services.document_push.document_push_reconcile_service import (
         reconcile_documents,
     )
 

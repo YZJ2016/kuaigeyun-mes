@@ -81,6 +81,16 @@ export type GlPendingAccountingEvent = {
   voucher_status?: string | null;
 };
 
+export type GlOpeningBalanceResidual = {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  opening_debit: number;
+  opening_credit: number;
+  ending_debit: number;
+  ending_credit: number;
+};
+
 export type GlVoucherLine = {
   id?: number;
   line_no?: number;
@@ -147,6 +157,19 @@ export const glService = {
     period_month: number;
     items: Array<Record<string, unknown>>;
   }) => apiRequest<Record<string, unknown>>(`${BASE}/opening-balances`, { method: 'POST', data }),
+  getOpeningBalanceDiagnostics: (year: number, month: number) =>
+    apiRequest<{ items: GlOpeningBalanceResidual[]; count: number }>(
+      `${BASE}/opening-balances/diagnostics`,
+      {
+        method: 'GET',
+        params: { year, month },
+      },
+    ),
+  clearNonLeafOpeningResidual: (data: { period_year: number; period_month: number }) =>
+    apiRequest<{ cleared: number; trial?: Record<string, unknown> }>(
+      `${BASE}/opening-balances/clear-non-leaf-residual`,
+      { method: 'POST', data },
+    ),
 
   listVouchers: (params?: Record<string, unknown>) =>
     apiRequest<GlVoucher[]>(`${BASE}/vouchers`, { method: 'GET', params }),

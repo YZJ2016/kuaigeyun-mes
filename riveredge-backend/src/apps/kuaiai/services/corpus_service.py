@@ -289,6 +289,68 @@ async def seed_faqs(
     return {"created": created, "skipped": skipped}
 
 
+_DEFAULT_KB_NAME = "默认知识库"
+_DEFAULT_KB_DESC = "系统自动创建的默认企业知识库（含出厂 FAQ）"
+
+
+async def seed_default_faqs_for_tenant(
+    tenant_id: int,
+    *,
+    user_id: Optional[int] = None,
+) -> int:
+    """新租户初始化 / 初始项加载出厂 FAQ（唯一真源，幂等）。
+
+    优先写入本租户首个启用知识库；若尚无启用知识库：
+    - 若已存在同名停用默认库则尊重管理员停用状态直接跳过（返回 0）；
+    - 否则自动创建默认启用知识库后再调用 ``seed_faqs`` 幂等写入，返回新增条数。
+    """
+    user: Any = None
+    if user_id is not None:
+        from infra.models.user import User
+
+        user = await User.get_or_none(id=int(user_id))
+
+    kb = (
+        await KuaiaiKnowledgeBase.filter(
+            tenant_id=tenant_id,
+            status=STATUS_ENABLED,
+            deleted_at__isnull=True,
+        )
+        .order_by("id")
+        .first()
+    )
+    if kb is None:
+        existing_default = await KuaiaiKnowledgeBase.get_or_none(
+            tenant_id=tenant_id,
+            name=_DEFAULT_KB_NAME,
+            deleted_at__isnull=True,
+        )
+        if existing_default is not None:
+            return 0
+        audit: Dict[str, Any] = {}
+        if user is not None and getattr(user, "id", None) is not None:
+            name = getattr(user, "full_name", None) or getattr(
+                user, "username", None
+            )
+            audit = {
+                "created_by": user.id,
+                "created_by_name": name,
+                "updated_by": user.id,
+                "updated_by_name": name,
+            }
+        kb = await KuaiaiKnowledgeBase.create(
+            tenant_id=tenant_id,
+            name=_DEFAULT_KB_NAME,
+            description=_DEFAULT_KB_DESC,
+            embedding_model_id=None,
+            status=STATUS_ENABLED,
+            **audit,
+        )
+
+    result = await seed_faqs(tenant_id, user, kb.id)
+    return int(result.get("created", 0))
+
+
 def _batch_error(exc: Exception) -> str:
     """批量单项错误脱敏：不存在统一文案（无跨租户存在性泄露）。"""
     if isinstance(exc, NotFoundError):

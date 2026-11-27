@@ -201,8 +201,8 @@ def _compatible_related_for_im_operate(expected: Optional[str]) -> Optional[froz
     code = str(expected or "").strip()
     if not code:
         return None
-    if code in ("other_outbound", "production_picking"):
-        return frozenset({"other_outbound", "production_picking"})
+    if code in ("other_outbound", "other_outbound_asset", "production_picking"):
+        return frozenset({"other_outbound", "other_outbound_asset", "production_picking"})
     if code in ("other_inbound", "finished_goods_receipt"):
         return frozenset({"other_inbound", "finished_goods_receipt"})
     return frozenset({code})
@@ -323,6 +323,10 @@ def strip_mismatched_std_document_types(
         for key in ("billtype_number", "bill_type_number"):
             if is_standard_other_outbill_billtype(out.get(key)):
                 out.pop(key, None)
+    elif expected == "other_outbound_asset":
+        for key in ("billtype_number", "bill_type_number"):
+            if is_standard_other_outbill_billtype(out.get(key)):
+                out.pop(key, None)
     elif expected == "finished_goods_receipt":
         for key in ("billtype_number", "bill_type_number"):
             if is_standard_other_inbill_billtype(out.get(key)):
@@ -434,6 +438,9 @@ async def _merge_header_from_save_api(
             if key in _DOC_TYPE_SAMPLE_KEYS and expected == "production_picking":
                 if is_standard_other_outbill_billtype(val):
                     continue
+            if key in _DOC_TYPE_SAMPLE_KEYS and expected == "other_outbound_asset":
+                if is_standard_other_outbill_billtype(val):
+                    continue
             if key in _DOC_TYPE_SAMPLE_KEYS and expected == "finished_goods_receipt":
                 if is_standard_other_inbill_billtype(val):
                     continue
@@ -442,6 +449,11 @@ async def _merge_header_from_save_api(
                 # 已有 STD 误配时允许被专用接口真实编码覆盖
                 if key in ("billtype_number", "bill_type_number"):
                     if expected == "production_picking" and is_standard_other_outbill_billtype(
+                        existing
+                    ):
+                        out[key] = val
+                        continue
+                    if expected == "other_outbound_asset" and is_standard_other_outbill_billtype(
                         existing
                     ):
                         out[key] = val

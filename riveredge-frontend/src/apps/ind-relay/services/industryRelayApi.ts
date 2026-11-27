@@ -1,5 +1,11 @@
 import { apiRequest } from '../../../services/api';
 
+export type RelayLineProductItem = {
+  id: number;
+  code?: string | null;
+  name?: string | null;
+};
+
 export type RelayLineCapacity = {
   id: number;
   production_line_id: number;
@@ -10,6 +16,9 @@ export type RelayLineCapacity = {
   changeover_minutes_default: number;
   is_active: boolean;
   remarks?: string | null;
+  product_ids?: number[];
+  products?: RelayLineProductItem[];
+  product_count?: number;
 };
 
 export type RelayChangeover = {
@@ -147,6 +156,7 @@ export const industryRelayApi = {
     daily_capacity_qty?: number;
     changeover_minutes_default?: number;
     remarks?: string;
+    product_ids?: number[];
   }) =>
     apiRequest<RelayLineCapacity>('/apps/ind-relay/line-capacities', { method: 'POST', data }),
   updateLineCapacity: (
@@ -157,6 +167,7 @@ export const industryRelayApi = {
       changeover_minutes_default?: number;
       is_active?: boolean;
       remarks?: string;
+      product_ids?: number[];
     }
   ) =>
     apiRequest<RelayLineCapacity>(`/apps/ind-relay/line-capacities/${id}`, {

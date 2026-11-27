@@ -10,12 +10,23 @@ from apps.kuaizhizao.constants.other_outbound_type import (
 from apps.master_data.constants.material_inventory_category import INVENTORY_CATEGORY_ASSET
 from core.services.integration.kingdee_warehouse_push_routing import (
     OTHER_OUTBOUND_ASSET_KEY,
+    OTHER_OUTBOUND_ASSET_KINGDEE_RELATED_DOCUMENT,
     OTHER_OUTBOUND_AUXILIARY_KEY,
     OTHER_OUTBOUND_BASE_KEY,
+    resolve_other_outbound_kingdee_expected_related_document,
     resolve_other_outbound_push_config,
     resolve_other_outbound_variant_key_from_outbound_type,
 )
 from infra.exceptions.exceptions import BusinessLogicError
+
+
+def test_kingdee_expected_related_document_asset():
+    assert (
+        resolve_other_outbound_kingdee_expected_related_document(OTHER_OUTBOUND_TYPE_ASSET)
+        == OTHER_OUTBOUND_ASSET_KINGDEE_RELATED_DOCUMENT
+    )
+    assert resolve_other_outbound_kingdee_expected_related_document(OTHER_OUTBOUND_TYPE_MATERIAL) == "other_outbound"
+    assert resolve_other_outbound_kingdee_expected_related_document(None) == "other_outbound"
 
 
 def test_variant_from_outbound_type_asset():

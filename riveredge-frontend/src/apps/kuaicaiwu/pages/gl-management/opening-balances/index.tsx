@@ -1,14 +1,18 @@
 /**
  * 总账期初余额（科目 + 辅助）
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { App, Alert, Button, InputNumber, Select, Space, Table, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { formatAmount } from '../../../../../utils/format';
-import { glService, type GlAccount } from '../../../services/gl';
+import {
+  glService,
+  type GlAccount,
+  type GlOpeningBalanceResidual,
+} from '../../../services/gl';
 const NS = 'app.kuaicaiwu.gl.openingBalances';
 
 const asList = <T,>(res: unknown): T[] => {
@@ -28,6 +32,7 @@ type BalanceRow = {
   opening_debit: number;
   opening_credit: number;
   isAux: boolean;
+  isLeaf?: boolean;
 };
 
 type TrialInfo = {
@@ -52,17 +57,25 @@ const OpeningBalancesPage: React.FC = () => {
   const [auxRows, setAuxRows] = useState<BalanceRow[]>([]);
   const [accounts, setAccounts] = useState<GlAccount[]>([]);
   const [trial, setTrial] = useState<TrialInfo | null>(null);
+  const [residuals, setResiduals] = useState<GlOpeningBalanceResidual[]>([]);
+  const [clearingResidual, setClearingResidual] = useState(false);
+  const dirtyAccountIdsRef = useRef<Set<number>>(new Set());
+  const dirtyAuxKeysRef = useRef<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    dirtyAccountIdsRef.current = new Set();
+    dirtyAuxKeysRef.current = new Set();
     try {
-      const [accountsRes, balancesRes, trialRes] = await Promise.all([
+      const [accountsRes, balancesRes, trialRes, diagRes] = await Promise.all([
         glService.listAccounts({ is_active: true }),
         glService.getOpeningBalances(year, month),
         glService.trialBalance({ year, month, include_unposted: false }),
+        glService.getOpeningBalanceDiagnostics(year, month),
       ]);
-      const accountList = asList<GlAccount>(accountsRes).filter((a) => a.is_leaf);
-      setAccounts(accountList);
+      const allAccounts = asList<GlAccount>(accountsRes);
+      setAccounts(allAccounts);
+      const leafAccounts = allAccounts.filter((a) => a.is_leaf);
       const balances = asList<{
         account_id: number;
         opening_debit?: number;
@@ -71,13 +84,13 @@ const OpeningBalancesPage: React.FC = () => {
         supplier_id?: number | null;
         department_id?: number | null;
       }>(balancesRes);
-      const accountById = new Map(accountList.map((a) => [a.id, a]));
+      const accountById = new Map(leafAccounts.map((a) => [a.id, a]));
       const plainBalances = balances.filter(
         (b) => !b.customer_id && !b.supplier_id && !b.department_id,
       );
       const byId = new Map(plainBalances.map((b) => [b.account_id, b]));
       setAccountRows(
-        accountList
+        allAccounts
           .slice()
           .sort((a, b) => String(a.account_code).localeCompare(String(b.account_code)))
           .map((a) => {
@@ -86,10 +99,13 @@ const OpeningBalancesPage: React.FC = () => {
               key: `a-${a.id}`,
               account_id: a.id,
               account_code: a.account_code,
-              account_name: a.account_name,
+              account_name: a.is_leaf
+                ? a.account_name
+                : `${a.account_name}${t(`${NS}.nonLeafHint`, { defaultValue: '（汇总，不可录入）' })}`,
               opening_debit: Number(bal?.opening_debit || 0),
               opening_credit: Number(bal?.opening_credit || 0),
               isAux: false,
+              isLeaf: a.is_leaf,
             };
           }),
       );
@@ -112,6 +128,7 @@ const OpeningBalancesPage: React.FC = () => {
         });
       setAuxRows(auxFromApi);
       setTrial((trialRes || {}) as TrialInfo);
+      setResiduals(diagRes?.items ?? []);
     } catch (error) {
       messageApi.error(getApiErrorMessage(error, t('common.loadFailed', { defaultValue: '加载失败' })));
     } finally {
@@ -123,10 +140,53 @@ const OpeningBalancesPage: React.FC = () => {
     void loadData();
   }, [loadData]);
 
+  const handleClearResidual = useCallback(async () => {
+    setClearingResidual(true);
+    try {
+      const res = await glService.clearNonLeafOpeningResidual({
+        period_year: year,
+        period_month: month,
+      });
+      messageApi.success(
+        t(`${NS}.residualCleared`, {
+          defaultValue: '已清零 {{count}} 个非末级残留期初',
+          count: res.cleared ?? 0,
+        }),
+      );
+      if (res.trial) {
+        setTrial(res.trial as TrialInfo);
+      }
+      await loadData();
+    } catch (error) {
+      messageApi.error(
+        getApiErrorMessage(error, t('common.operationFailed', { defaultValue: '操作失败' })),
+      );
+    } finally {
+      setClearingResidual(false);
+    }
+  }, [year, month, loadData, messageApi, t]);
+
+  const residualSummary = useMemo(
+    () =>
+      residuals
+        .map((item) => {
+          const code = item.account_code || '';
+          const od = Number(item.opening_debit || 0);
+          const oc = Number(item.opening_credit || 0);
+          const sideText =
+            od > 0
+              ? `${t(`${NS}.col.openingDebit`, { defaultValue: '期初借方' })}${formatAmount(od)}`
+              : `${t(`${NS}.col.openingCredit`, { defaultValue: '期初贷方' })}${formatAmount(oc)}`;
+          return `${code} ${item.account_name || ''} ${sideText}`.trim();
+        })
+        .join('；'),
+    [residuals, t],
+  );
+
   const auxAccountOptions = useMemo(
     () =>
       accounts
-        .filter((a) => a.aux_customer || a.aux_supplier || a.aux_department)
+        .filter((a) => a.is_leaf && (a.aux_customer || a.aux_supplier || a.aux_department))
         .map((a) => ({
           label: `${a.account_code} ${a.account_name}`,
           value: a.id,
@@ -139,6 +199,7 @@ const OpeningBalancesPage: React.FC = () => {
     field: 'opening_debit' | 'opening_credit',
     value: number | null,
   ) => {
+    dirtyAccountIdsRef.current.add(accountId);
     setAccountRows((prev) =>
       prev.map((r) =>
         r.account_id === accountId ? { ...r, [field]: Number(value || 0) } : r,
@@ -154,6 +215,7 @@ const OpeningBalancesPage: React.FC = () => {
     >,
     value: number | null,
   ) => {
+    dirtyAuxKeysRef.current.add(key);
     setAuxRows((prev) =>
       prev.map((r) => {
         if (r.key !== key) return r;
@@ -175,7 +237,9 @@ const OpeningBalancesPage: React.FC = () => {
   };
 
   const handleAddAuxRow = () => {
-    const first = accounts.find((a) => a.aux_customer || a.aux_supplier || a.aux_department);
+    const first = accounts.find(
+      (a) => a.is_leaf && (a.aux_customer || a.aux_supplier || a.aux_department),
+    );
     if (!first) {
       messageApi.warning(
         t(`${NS}.noAuxAccount`, { defaultValue: '请先在科目中启用辅助核算' }),
@@ -189,7 +253,7 @@ const OpeningBalancesPage: React.FC = () => {
         account_id: first.id,
         account_code: first.account_code,
         account_name: first.account_name,
-        customer_id: first.aux_customer ? undefined : undefined,
+        customer_id: undefined,
         opening_debit: 0,
         opening_credit: 0,
         isAux: true,
@@ -200,15 +264,22 @@ const OpeningBalancesPage: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const dirtyAccounts = dirtyAccountIdsRef.current;
+      const dirtyAux = dirtyAuxKeysRef.current;
       const accountItems = accountRows
-        .filter((r) => r.opening_debit > 0 || r.opening_credit > 0)
+        .filter((r) => r.isLeaf)
+        .filter((r) => dirtyAccounts.has(r.account_id) || r.opening_debit > 0 || r.opening_credit > 0)
         .map((r) => ({
           account_id: r.account_id,
           opening_debit: r.opening_debit,
           opening_credit: r.opening_credit,
         }));
       const auxItems = auxRows
-        .filter((r) => r.account_id && (r.opening_debit > 0 || r.opening_credit > 0))
+        .filter(
+          (r) =>
+            Boolean(r.account_id) &&
+            (dirtyAux.has(r.key) || r.opening_debit > 0 || r.opening_credit > 0),
+        )
         .map((r) => {
           if (!r.customer_id && !r.supplier_id && !r.department_id) {
             throw new Error(
@@ -225,6 +296,12 @@ const OpeningBalancesPage: React.FC = () => {
           };
         });
       const items = [...accountItems, ...auxItems];
+      if (items.length === 0) {
+        messageApi.warning(
+          t(`${NS}.nothingToSave`, { defaultValue: '没有需要保存的期初变更' }),
+        );
+        return;
+      }
       const res = (await glService.setOpeningBalances({
         period_year: year,
         period_month: month,
@@ -273,6 +350,7 @@ const OpeningBalancesPage: React.FC = () => {
             precision={amountDecimals}
             style={{ width: '100%' }}
             value={record.opening_debit}
+            disabled={!record.isLeaf}
             onChange={(v) => updateAccountCell(record.account_id, 'opening_debit', v)}
           />
         ),
@@ -289,12 +367,13 @@ const OpeningBalancesPage: React.FC = () => {
             precision={amountDecimals}
             style={{ width: '100%' }}
             value={record.opening_credit}
+            disabled={!record.isLeaf}
             onChange={(v) => updateAccountCell(record.account_id, 'opening_credit', v)}
           />
         ),
       },
     ],
-    [t],
+    [amountDecimals, t],
   );
 
   const auxColumns = useMemo(
@@ -447,6 +526,28 @@ const OpeningBalancesPage: React.FC = () => {
             {t(`${NS}.save`, { defaultValue: '保存期初' })}
           </Button>
         </Space>
+
+        {residuals.length > 0 ? (
+          <Alert
+            showIcon
+            type="warning"
+            title={t(`${NS}.residualTitle`, { defaultValue: '存在非末级科目残留期初' })}
+            description={
+              <Space orientation="vertical" size={8}>
+                <Typography.Text>
+                  {t(`${NS}.residualDetail`, {
+                    defaultValue:
+                      '以下科目已有下级，自身余额行仍有期初，科目余额表会轧卷显示但不可在此录入。请将金额迁到末级科目后清零残留：{{list}}',
+                    list: residualSummary,
+                  })}
+                </Typography.Text>
+                <Button loading={clearingResidual} onClick={() => void handleClearResidual()}>
+                  {t(`${NS}.residualClear`, { defaultValue: '清零本月残留期初' })}
+                </Button>
+              </Space>
+            }
+          />
+        ) : null}
 
         {trial ? (
           <Alert

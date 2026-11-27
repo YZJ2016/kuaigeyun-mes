@@ -537,7 +537,9 @@ class IngestService:
                 return False
             elapsed = _aware(server_now) - _aware(latest.created_at)
             status_changed = "status" in fields and normalize_equipment_status(fields["status"]) != latest.status
-            if elapsed < timedelta(seconds=THROTTLE_SECONDS) and not status_changed:
+            next_is_online = fields["is_online"] if "is_online" in fields else True
+            online_changed = bool(next_is_online) != bool(latest.is_online)
+            if elapsed < timedelta(seconds=THROTTLE_SECONDS) and not status_changed and not online_changed:
                 return False
         if blocked:
             status_value = latest.status
@@ -583,6 +585,22 @@ class IngestService:
             status__in=list(OPEN_REPAIR_STATUSES),
             deleted_at__isnull=True,
         ).exists()
+
+    @staticmethod
+    async def sync_offline_to_mes(device: Any) -> bool:
+        """设备离线时向 MES 写回一条离线监控行（走本地护栏）。"""
+        tenant_id = int(device.tenant_id)
+        equipment = await IngestService._bound_equipment(tenant_id, device.equipment_uuid)
+        if equipment is None:
+            return False
+        now = resolve_business_datetime()
+        return await IngestService._maybe_insert_monitor(
+            tenant_id,
+            equipment,
+            {"is_online": False},
+            now,
+            now,
+        )
 
 
 # ---- 上游集成面：批量入站与离线写回 ----
@@ -630,15 +648,4 @@ async def ingest_batch(device_token: str, payload) -> IngestBatchResponse:
 
 async def sync_offline_to_mes(device: KuaiiotDevice) -> bool:
     """设备离线时向 MES 写回一条离线监控行（走本地护栏）。"""
-    tenant_id = int(device.tenant_id)
-    equipment = await IngestService._bound_equipment(tenant_id, device.equipment_uuid)
-    if equipment is None:
-        return False
-    now = resolve_business_datetime()
-    return await IngestService._maybe_insert_monitor(
-        tenant_id,
-        equipment,
-        {"is_online": False},
-        now,
-        now,
-    )
+    return await IngestService.sync_offline_to_mes(device)

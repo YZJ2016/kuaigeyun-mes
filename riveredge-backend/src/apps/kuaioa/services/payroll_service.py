@@ -871,17 +871,28 @@ class PayrollSettlementService:
         ym = _parse_ym(year_month)
         year = int(ym[:4])
         month = int(ym[5:7])
-        last_day = calendar.monthrange(year, month)[1]
-        ref = date(year, month, last_day)
+        first_day = date(year, month, 1)
+        last_day = date(year, month, calendar.monthrange(year, month)[1])
         row = (
             await KuaioaMinimumWageConfig.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
-                effective_date__lte=ref,
+                effective_date__lte=last_day,
             )
-            .order_by("-effective_date")
+            .filter(Q(end_date__isnull=True) | Q(end_date__gte=first_day))
+            .order_by("-is_current", "-effective_date", "-id")
             .first()
         )
+        if not row:
+            row = (
+                await KuaioaMinimumWageConfig.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    is_current=True,
+                )
+                .order_by("-effective_date", "-id")
+                .first()
+            )
         if not row:
             return None
         return _d(row.amount)

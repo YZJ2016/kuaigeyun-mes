@@ -96,10 +96,14 @@ def _binding_configured(binding: Any) -> bool:
 
 
 def _inbound_sync_service(module_leaf: str, class_name: str) -> Any:
-    """本地入站同步服务解析：本地无 kuaiconnect 应用，同步服务分布在 master_data/kuaizhizao。"""
+    """入站同步服务解析：优先 kuaiconnect 单一真源，兼容既有 master_data/kuaizhizao 模块。"""
     import importlib
 
-    for pkg in ("apps.master_data.services", "apps.kuaizhizao.services"):
+    for pkg in (
+        "apps.kuaiconnect.services.inbound_sync",
+        "apps.master_data.services",
+        "apps.kuaizhizao.services",
+    ):
         try:
             mod = importlib.import_module(f"{pkg}.{module_leaf}")
         except ImportError:
@@ -160,7 +164,7 @@ class KingdeeConsistencyOrchestrator:
 
     @classmethod
     async def audit(cls, tenant_id: int) -> KingdeeConsistencyAuditOut:
-        from apps.kuaizhizao.services.warehouse_kingdee_alignment import (
+        from apps.kuaiconnect.services.document_push.warehouse_kingdee_alignment import (
             list_inventory_pull_blocker_records,
         )
 
@@ -393,7 +397,7 @@ class KingdeeConsistencyOrchestrator:
         incremental: bool = False,
         active_only: bool = True,
     ) -> KingdeeConsistencyInventoryOut:
-        from apps.kuaizhizao.services.warehouse_kingdee_alignment import (
+        from apps.kuaiconnect.services.document_push.warehouse_kingdee_alignment import (
             list_inventory_pull_blockers,
         )
         from apps.kuaizhizao.api._inbound_sync_run_log import kuaizhizao_sync_from_source_with_run_log

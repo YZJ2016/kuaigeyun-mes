@@ -53,6 +53,8 @@ import { buildEquipmentDetailPath } from './equipmentPaths';
 import { MEASURING_INSTRUMENT_NATURE } from '../measuring-instruments/measuringInstrumentConstants';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useKuaiiotDeviceRealtime } from '../../../../../hooks/useKuaiiotDeviceRealtime';
+import type { KuaiiotDeviceRealtimePayload } from '../../../../../services/realtime';
 import EquipmentFactoryBindingFields from '../../../components/EquipmentFactoryBindingFields';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
@@ -340,7 +342,31 @@ const EquipmentPage: React.FC = () => {
   const equipmentPerms = useResourcePermissions('kuaizhizao:equipment-management-equipment');
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const actionRef = useRef<ActionType>(null);
+  const realtimeReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchFormRef = useRef<ProFormInstance>();
+
+  useEffect(() => {
+    return () => {
+      if (realtimeReloadTimerRef.current) {
+        clearTimeout(realtimeReloadTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleKuaiiotDeviceRealtime = useCallback((payload: KuaiiotDeviceRealtimePayload) => {
+    if (!payload.synced_to_mes && !payload.equipment_uuid) {
+      return;
+    }
+    if (realtimeReloadTimerRef.current) {
+      clearTimeout(realtimeReloadTimerRef.current);
+    }
+    realtimeReloadTimerRef.current = setTimeout(() => {
+      realtimeReloadTimerRef.current = null;
+      actionRef.current?.reload();
+    }, 300);
+  }, []);
+
+  useKuaiiotDeviceRealtime({ onUpdate: handleKuaiiotDeviceRealtime });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [ledgerGroupMode, setLedgerGroupMode] = useState<EquipmentLedgerGroupMode>('nature');
   const [workshopGroupOptions, setWorkshopGroupOptions] = useState<Array<{ id: number; name: string }>>([]);

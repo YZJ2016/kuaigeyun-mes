@@ -18,7 +18,10 @@ import { TwoColumnLayout } from '../../../../components/layout-templates';
 import { LIST_PAGE_TABLE_SCROLL } from '../../../../components/layout-templates/constants';
 import { UniTable } from '../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { useKuaiiotDeviceRealtime } from '../../../../hooks/useKuaiiotDeviceRealtime';
+import type { KuaiiotDeviceRealtimePayload } from '../../../../services/realtime';
 import { API_BASE_URL } from '../../../../services/api';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
 import {
   translateDispatchChannel,
@@ -218,6 +221,37 @@ const DevicesPage: React.FC = () => {
   const [commandForm] = Form.useForm();
   const [selectedFunctionKey, setSelectedFunctionKey] = useState<string>();
   const hasGroupSelectionInitializedRef = useRef(false);
+  const realtimeReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (realtimeReloadTimerRef.current) {
+        clearTimeout(realtimeReloadTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleDeviceRealtime = useCallback((payload: KuaiiotDeviceRealtimePayload) => {
+    setDetail((prev) => {
+      if (!prev || !payload.device_uuid || prev.uuid !== payload.device_uuid) {
+        return prev;
+      }
+      return {
+        ...prev,
+        is_online: payload.is_online ?? prev.is_online,
+        last_seen_at: payload.last_seen_at !== undefined ? payload.last_seen_at : prev.last_seen_at,
+      };
+    });
+    if (realtimeReloadTimerRef.current) {
+      clearTimeout(realtimeReloadTimerRef.current);
+    }
+    realtimeReloadTimerRef.current = setTimeout(() => {
+      realtimeReloadTimerRef.current = null;
+      actionRef.current?.reload();
+    }, 300);
+  }, []);
+
+  useKuaiiotDeviceRealtime({ onUpdate: handleDeviceRealtime });
 
   const selectedGroupId = useMemo(() => {
     const key = selectedGroupKeys[0];
@@ -439,26 +473,57 @@ const DevicesPage: React.FC = () => {
   const reloadDeviceData = async (row: Device) => {
     setDataLoading(true);
     try {
-      const [snapshotRes, historyRes, tagRes, commandRes, messageLogRes] = await Promise.all([
+      const [snapshotRes, historyRes, tagRes, commandRes, messageLogRes] = await Promise.allSettled([
         listDeviceSnapshots(row.uuid),
         listDeviceHistory(row.uuid, { limit: 100 }),
-        listTags({ page: 1, page_size: 200, device_id: row.id }),
-        listDeviceCommands(row.uuid, { page: 1, page_size: 50 }).catch(() => ({ items: [], total: 0 })),
-        listDeviceMessageLogs(row.uuid, { page: 1, page_size: 50 }).catch(() => ({ items: [], total: 0 })),
+        listTags({ page: 1, page_size: 100, device_id: row.id }),
+        listDeviceCommands(row.uuid, { page: 1, page_size: 50 }),
+        listDeviceMessageLogs(row.uuid, { page: 1, page_size: 50 }),
       ]);
-      setSnapshots(snapshotRes);
-      setHistory(historyRes.items);
-      setTsdbConfigured(historyRes.tsdb_configured);
-      setDeviceTags(tagRes.items);
-      setCommands(commandRes.items);
-      setMessageLogs(messageLogRes.items);
-      const firstNumberTag = tagRes.items.find((item) => item.value_type === 'number')?.tag_key;
-      setTrendTagKey(firstNumberTag);
-      if (firstNumberTag && historyRes.tsdb_configured) {
-        const trendRes = await listDeviceHistory(row.uuid, { tag_key: firstNumberTag, limit: 200 });
-        setTrendHistory(trendRes.items);
+      const errors: string[] = [];
+      if (snapshotRes.status === 'fulfilled') {
+        setSnapshots(snapshotRes.value);
       } else {
+        errors.push(getApiErrorMessage(snapshotRes.reason));
+      }
+      let tsdbReady = false;
+      if (historyRes.status === 'fulfilled') {
+        setHistory(historyRes.value.items);
+        setTsdbConfigured(historyRes.value.tsdb_configured);
+        tsdbReady = historyRes.value.tsdb_configured;
+      } else {
+        errors.push(getApiErrorMessage(historyRes.reason));
+      }
+      let firstNumberTag: string | undefined;
+      if (tagRes.status === 'fulfilled') {
+        setDeviceTags(tagRes.value.items);
+        firstNumberTag = tagRes.value.items.find((item) => item.value_type === 'number')?.tag_key;
+        setTrendTagKey(firstNumberTag);
+      } else {
+        errors.push(getApiErrorMessage(tagRes.reason));
+      }
+      if (commandRes.status === 'fulfilled') {
+        setCommands(commandRes.value.items);
+      } else {
+        errors.push(getApiErrorMessage(commandRes.reason));
+      }
+      if (messageLogRes.status === 'fulfilled') {
+        setMessageLogs(messageLogRes.value.items);
+      } else {
+        errors.push(getApiErrorMessage(messageLogRes.reason));
+      }
+      if (firstNumberTag && tsdbReady) {
+        try {
+          const trendRes = await listDeviceHistory(row.uuid, { tag_key: firstNumberTag, limit: 200 });
+          setTrendHistory(trendRes.items);
+        } catch (err) {
+          errors.push(getApiErrorMessage(err));
+        }
+      } else if (tagRes.status === 'fulfilled' && historyRes.status === 'fulfilled') {
         setTrendHistory([]);
+      }
+      if (errors.length > 0) {
+        message.error(errors[0]);
       }
     } finally {
       setDataLoading(false);
@@ -475,15 +540,20 @@ const DevicesPage: React.FC = () => {
     setDataDevice(row);
     setDebugOpen(true);
     setDebugResponse('');
-    const tagRes = await listTags({ page: 1, page_size: 200, device_id: row.id });
-    setDeviceTags(tagRes.items);
-    const sampleTags: Record<string, unknown> = {};
-    for (const tag of tagRes.items) {
-      if (tag.value_type === 'boolean') sampleTags[tag.tag_key] = true;
-      else if (tag.value_type === 'number') sampleTags[tag.tag_key] = 1;
-      else sampleTags[tag.tag_key] = 'sample';
+    try {
+      const tagRes = await listTags({ page: 1, page_size: 100, device_id: row.id });
+      setDeviceTags(tagRes.items);
+      const sampleTags: Record<string, unknown> = {};
+      for (const tag of tagRes.items) {
+        if (tag.value_type === 'boolean') sampleTags[tag.tag_key] = true;
+        else if (tag.value_type === 'number') sampleTags[tag.tag_key] = 1;
+        else sampleTags[tag.tag_key] = 'sample';
+      }
+      setDebugPayload(JSON.stringify({ tags: sampleTags }, null, 2));
+    } catch (err) {
+      message.error(getApiErrorMessage(err));
+      setDebugPayload('{\n  "tags": {}\n}');
     }
-    setDebugPayload(JSON.stringify({ tags: sampleTags }, null, 2));
     await reloadDeviceData(row);
   };
 

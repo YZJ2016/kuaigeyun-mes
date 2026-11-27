@@ -6,6 +6,7 @@ import { ListPageTemplate } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { factoryListItems, productionLineApi } from '../../../master-data/services/factory';
+import { materialApi } from '../../../master-data/services/material';
 import { industryRelayApi, type RelayLineCapacity } from '../../services/industryRelayApi';
 
 export default function RelayLineCapacityPage() {
@@ -15,6 +16,7 @@ export default function RelayLineCapacityPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<RelayLineCapacity | null>(null);
   const [lineOptions, setLineOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [productOptions, setProductOptions] = useState<Array<{ label: string; value: number }>>([]);
   const perms = useResourcePermissions('ind-relay:line-capacity');
 
   useEffect(() => {
@@ -33,6 +35,29 @@ export default function RelayLineCapacityPage() {
     })();
   }, []);
 
+  const loadProductOptions = useCallback(async (keyword?: string) => {
+    const res = await materialApi.list({
+      sourceType: 'Make',
+      isActive: true,
+      keyword: keyword || undefined,
+      limit: 200,
+    });
+    const next = (res.items || [])
+      .map((item) => {
+        const code = item.mainCode || item.code || '';
+        return {
+          value: Number(item.id),
+          label: code ? `${code} ${item.name || ''}`.trim() : String(item.name || item.id),
+        };
+      })
+      .filter((o) => Number.isInteger(o.value) && o.value > 0);
+    setProductOptions(next);
+  }, []);
+
+  useEffect(() => {
+    void loadProductOptions();
+  }, [loadProductOptions]);
+
   const openCreate = useCallback(() => {
     setEditing(null);
     form.resetFields();
@@ -41,6 +66,7 @@ export default function RelayLineCapacityPage() {
       daily_capacity_qty: 0,
       changeover_minutes_default: 0,
       is_active: true,
+      product_ids: [],
     });
     setOpen(true);
   }, [form]);
@@ -48,6 +74,19 @@ export default function RelayLineCapacityPage() {
   const openEdit = useCallback(
     (row: RelayLineCapacity) => {
       setEditing(row);
+      const rowProducts = (row.products || []).map((item) => ({
+        value: Number(item.id),
+        label: item.code ? `${item.code} ${item.name || ''}`.trim() : String(item.name || item.id),
+      }));
+      setProductOptions((prev) => {
+        const map = new Map(prev.map((opt) => [opt.value, opt]));
+        for (const opt of rowProducts) {
+          if (!map.has(opt.value)) {
+            map.set(opt.value, opt);
+          }
+        }
+        return Array.from(map.values());
+      });
       form.setFieldsValue({
         production_line_id: row.production_line_id,
         takt_seconds: row.takt_seconds,
@@ -55,6 +94,7 @@ export default function RelayLineCapacityPage() {
         changeover_minutes_default: row.changeover_minutes_default,
         is_active: row.is_active,
         remarks: row.remarks,
+        product_ids: row.product_ids || rowProducts.map((item) => item.value),
       });
       setOpen(true);
     },
@@ -75,6 +115,25 @@ export default function RelayLineCapacityPage() {
         title: t('app.ind-relay.lineCapacity.changeoverMinutes'),
         dataIndex: 'changeover_minutes_default',
         width: 140,
+      },
+      {
+        title: t('app.ind-relay.lineCapacity.products'),
+        dataIndex: 'product_count',
+        width: 220,
+        ellipsis: true,
+        render: (_, row) => {
+          const count = Number(row.product_count ?? row.product_ids?.length ?? 0);
+          if (count <= 0) {
+            return t('app.ind-relay.lineCapacity.productsEmpty');
+          }
+          const names = (row.products || [])
+            .slice(0, 3)
+            .map((item) => item.code || item.name || item.id)
+            .join('、');
+          return count > 3
+            ? t('app.ind-relay.lineCapacity.productsSummaryMore', { count, names })
+            : t('app.ind-relay.lineCapacity.productsSummary', { count, names });
+        },
       },
       {
         title: t('common.status'),
@@ -112,6 +171,9 @@ export default function RelayLineCapacityPage() {
 
   const handleSubmit = useCallback(async () => {
     const values = await form.validateFields();
+    const productIds = Array.isArray(values.product_ids)
+      ? values.product_ids.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+      : [];
     if (editing) {
       await industryRelayApi.updateLineCapacity(editing.id, {
         takt_seconds: values.takt_seconds,
@@ -119,10 +181,14 @@ export default function RelayLineCapacityPage() {
         changeover_minutes_default: values.changeover_minutes_default,
         is_active: values.is_active,
         remarks: values.remarks,
+        product_ids: productIds,
       });
       message.success(t('common.updateSuccess'));
     } else {
-      await industryRelayApi.createLineCapacity(values);
+      await industryRelayApi.createLineCapacity({
+        ...values,
+        product_ids: productIds,
+      });
       message.success(t('app.ind-relay.lineCapacity.createSuccess'));
     }
     setOpen(false);
@@ -137,7 +203,7 @@ export default function RelayLineCapacityPage() {
         actionRef={actionRef}
         rowKey="id"
         headerTitle={t('app.ind-relay.menu.lineCapacity')}
-        columnPersistenceId="apps.ind-relay.pages.line-capacity-v1"
+        columnPersistenceId="apps.ind-relay.pages.line-capacity-v2"
         permissionResource="ind-relay:line-capacity"
         createButtonText={t('app.ind-relay.lineCapacity.createButton')}
         showCreateButton
@@ -161,6 +227,7 @@ export default function RelayLineCapacityPage() {
         }}
         onOk={() => void handleSubmit()}
         destroyOnHidden
+        width={640}
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -182,6 +249,36 @@ export default function RelayLineCapacityPage() {
             initialValue={0}
           >
             <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="product_ids"
+            label={t('app.ind-relay.lineCapacity.products')}
+            extra={t('app.ind-relay.lineCapacity.productsHint')}
+            initialValue={[]}
+            rules={[
+              {
+                validator: async (_, value) => {
+                  const ids = Array.isArray(value)
+                    ? value.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v > 0)
+                    : [];
+                  if (ids.length === 0) {
+                    throw new Error(t('app.ind-relay.lineCapacity.productsRequired'));
+                  }
+                },
+              },
+            ]}
+          >
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={productOptions}
+              placeholder={t('app.ind-relay.lineCapacity.productsPlaceholder')}
+              onSearch={(keyword) => {
+                void loadProductOptions(keyword);
+              }}
+            />
           </Form.Item>
           {editing ? (
             <Form.Item name="is_active" label={t('common.status')} valuePropName="checked">

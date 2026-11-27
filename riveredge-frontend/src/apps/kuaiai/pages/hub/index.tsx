@@ -38,7 +38,7 @@ import { useKuaiaiEntryAvailable } from '../../hooks/useKuaiaiEntryAvailable';
 import OperationalPageHeader from '../../components/OperationalPageHeader';
 import MetricCard from '../../components/MetricCard';
 import { openAssistantDrawer } from '../../assistant';
-import { getHub } from '../../services/operations';
+import { getAiPulseCount, getHub } from '../../services/operations';
 import { HUB_BRAND_VISUAL_URL } from '../../assets/scenes';
 import type { HubCapabilityOut, HubMetricsOut, OperationalStatus } from '../../types/operations';
 import '../../ops.less';
@@ -113,6 +113,19 @@ const HubPage: React.FC = () => {
     staleTime: 30_000,
   });
 
+  // 首屏不阻塞五域 Pulse 扫描：hub 首屏就绪后再异步补拉 60s 缓存的 Pulse 计数
+  const pulseCountQuery = useQuery({
+    queryKey: ['kuaiai', 'core-ai', 'pulse-count'],
+    queryFn: ({ signal }) => getAiPulseCount(signal),
+    enabled: Boolean(data),
+    staleTime: 60_000,
+  });
+
+  const handleRefresh = useCallback(() => {
+    void refetch();
+    void pulseCountQuery.refetch();
+  }, [refetch, pulseCountQuery]);
+
   const errorStatus = (error as any)?.response?.status as number | undefined;
 
   const canNavigateTo = useCallback(
@@ -148,6 +161,8 @@ const HubPage: React.FC = () => {
 
   const metricCards = useMemo(() => {
     const metrics: HubMetricsOut | undefined = data?.metrics;
+    const pulseValue =
+      metrics?.pulse_count ?? pulseCountQuery.data?.pulse_suggestion_count ?? null;
     return [
       {
         key: 'calls',
@@ -159,7 +174,7 @@ const HubPage: React.FC = () => {
       {
         key: 'pulse',
         title: t('app.kuaiai.hub.metric.pulse', { defaultValue: 'Pulse 异常建议' }),
-        value: metrics?.pulse_count ?? null,
+        value: pulseValue,
         route: '/apps/kuaiai/pulse',
         perm: 'kuaiai:pulse:display',
       },
@@ -179,7 +194,7 @@ const HubPage: React.FC = () => {
         perm: 'kuaiai:insights:display',
       },
     ];
-  }, [data?.metrics, t]);
+  }, [data?.metrics, pulseCountQuery.data?.pulse_suggestion_count, t]);
 
   const modelName = data?.model?.configured && data.model.name
     ? data.model.name
@@ -349,7 +364,7 @@ const HubPage: React.FC = () => {
           <Button
             icon={<ReloadOutlined />}
             loading={isFetching}
-            onClick={() => void refetch()}
+            onClick={handleRefresh}
             aria-label={t('common.refresh', { defaultValue: '刷新' })}
           >
             {t('common.refresh', { defaultValue: '刷新' })}

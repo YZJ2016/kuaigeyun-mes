@@ -89,11 +89,17 @@ router = APIRouter(prefix="/operations", tags=["App - KU-AI Operations"])
 )
 async def api_get_hub(
     days: int = Query(7, ge=1, le=90),
+    include_pulse: bool = Query(
+        False,
+        description="是否同步计算 Pulse 异常建议数（默认 false，前端首屏后异步补数）",
+    ),
     tenant_id: int = Depends(get_current_tenant),
     current_user=Depends(get_current_user),
 ):
-    """能力矩阵聚合：模型/四项指标/八能力状态（局部降级，不伪造）。"""
-    return await operations_service.get_hub(tenant_id, days, current_user)
+    """能力矩阵聚合：模型/四项指标/能力状态（局部降级，不伪造）。"""
+    return await operations_service.get_hub(
+        tenant_id, days, current_user, include_pulse=include_pulse
+    )
 
 
 @router.get(

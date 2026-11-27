@@ -80,7 +80,7 @@ class PurchaseInvoiceTaxService:
             raise ValidationError("小规模纳税人不进行进项抵扣认证")
 
         inv = await self._get_invoice(tenant_id, invoice_id)
-        if (inv.status or "").strip() != "已审核":
+        if (inv.status or "").strip() not in ("已审核", "已开票"):
             raise ValidationError("仅已审核发票可认证")
         if inv.verification_status not in (VERIFICATION_PENDING,):
             raise ValidationError("当前状态不可认证")
@@ -157,7 +157,7 @@ class PurchaseInvoiceTaxService:
             orig = await self._get_invoice(tenant_id, invoice_id)
             if getattr(orig, "original_invoice_id", None):
                 raise ValidationError("红字发票不能再红冲")
-            if (orig.status or "").strip() != "已审核":
+            if (orig.status or "").strip() not in ("已审核", "已开票"):
                 raise ValidationError("仅已审核的蓝字发票可红冲")
             if getattr(orig, "red_flush_invoice_id", None):
                 raise ValidationError("该发票已关联红字发票")

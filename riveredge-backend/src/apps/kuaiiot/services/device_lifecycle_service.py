@@ -27,8 +27,10 @@ class DeviceLifecycleService:
             await device.save()
             marked += 1
             await AlertService.evaluate_device_offline(device.tenant_id, device)
+            synced = False
             if device.equipment_uuid:
                 synced = await IngestService.sync_offline_to_mes(device)
                 if synced:
                     mes_synced += 1
+            IngestService.schedule_device_update(device, synced_to_mes=synced)
         return {"marked_offline": marked, "mes_synced": mes_synced}

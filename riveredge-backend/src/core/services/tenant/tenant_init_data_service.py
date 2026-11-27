@@ -385,9 +385,11 @@ class TenantInitDataService:
 
             if not pro_app_available("kuaiai"):
                 return 0
-            from apps.kuaiai.services.faq_seed_service import FaqSeedService
+            from apps.kuaiai.services.corpus_service import (
+                seed_default_faqs_for_tenant,
+            )
 
-            return await FaqSeedService.seed_default_faqs(
+            return await seed_default_faqs_for_tenant(
                 tenant_id,
                 user_id=current_user_id,
             )

@@ -10,14 +10,19 @@ class KuaioaMinimumWageConfig(BaseModel):
 
     tenant_id = fields.IntField(description="租户ID")
     amount = fields.DecimalField(max_digits=12, decimal_places=2, description="最低工资金额")
-    effective_date = fields.DateField(description="生效日期")
+    effective_date = fields.DateField(description="执行开始日期")
+    end_date = fields.DateField(null=True, description="执行结束日期")
+    is_current = fields.BooleanField(default=False, description="是否当前执行")
     notes = fields.TextField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:
         table = "apps_kuaioa_minimum_wage_configs"
         table_description = "轻办公 - 最低工资配置"
-        indexes = [("tenant_id", "effective_date")]
+        indexes = [
+            ("tenant_id", "effective_date"),
+            ("tenant_id", "is_current"),
+        ]
 
     class PydanticMeta:
         exclude = ["deleted_at"]

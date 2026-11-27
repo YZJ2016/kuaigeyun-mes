@@ -9,6 +9,10 @@ from typing import Any, Dict, List, Optional
 from apps.kuaicaiwu.models.chart_of_account import ChartOfAccount
 from apps.kuaicaiwu.models.gl_transfer_template import GlTransferTemplate
 from apps.kuaicaiwu.models.account_balance import AccountBalance
+from apps.kuaicaiwu.services.posting_service import (
+    PostingService,
+    VOUCHER_SOURCE_DOC_TYPE_GL_AUTO_TRANSFER,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -229,8 +233,6 @@ class GlTransferService:
         if total_debit != total_credit:
             raise ValidationError(f"自定义转账借贷不平衡: 借 {total_debit} 贷 {total_credit}")
 
-        from apps.kuaicaiwu.services.posting_service import PostingService
-
         posting = PostingService()
         voucher = await posting.create_manual_voucher(
             tenant_id,
@@ -241,9 +243,11 @@ class GlTransferService:
                 "period_month": month,
                 "summary": f"{tpl.template_name} {year:04d}-{month:02d}",
                 "voucher_word": "记",
+                "source_doc_type": VOUCHER_SOURCE_DOC_TYPE_GL_AUTO_TRANSFER,
                 "lines": lines,
             },
             allow_controlled=True,
+            require_aux=False,
         )
         return {"created": True, "voucher": posting.voucher_to_dict(voucher)}
 
@@ -374,8 +378,6 @@ class GlTransferService:
                 f"结转损益借贷不平衡: 借 {total_debit} 贷 {total_credit}"
             )
 
-        from apps.kuaicaiwu.services.posting_service import PostingService
-
         posting = PostingService()
         voucher = await posting.create_manual_voucher(
             tenant_id,
@@ -386,8 +388,10 @@ class GlTransferService:
                 "period_month": month,
                 "summary": f"结转损益 {year:04d}-{month:02d}",
                 "voucher_word": "记",
+                "source_doc_type": VOUCHER_SOURCE_DOC_TYPE_GL_AUTO_TRANSFER,
                 "lines": lines,
             },
             allow_controlled=True,
+            require_aux=False,
         )
         return {"created": True, "voucher": posting.voucher_to_dict(voucher)}

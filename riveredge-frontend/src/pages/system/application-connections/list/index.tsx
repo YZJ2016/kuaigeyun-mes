@@ -215,11 +215,17 @@ const SENSITIVE_KEYS = [
   'password',
   'token',
   'app_secret',
+  'appsecret',
   'client_secret',
+  'secret',
   'corp_secret',
   'encoding_aes_key',
-  'security_token',
   'aes_key',
+  'encrypt_key',
+  'verification_token',
+  'security_token',
+  'consumer_secret',
+  'token_secret',
   'access_key_secret',
   'secret_access_key',
   'secret_key',
@@ -231,6 +237,9 @@ const SENSITIVE_KEYS = [
   'app_code',
   'x_acgw_identity',
 ];
+
+/** 编辑回填用脱敏哨兵：Password 显示为点点；提交时剔除，后端合并保留原密钥 */
+const SENSITIVE_MASK = '****';
 
 const ApplicationConnectionsListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -409,10 +418,13 @@ const ApplicationConnectionsListPage: React.FC = () => {
       const configured: Record<string, boolean> = {};
       for (const key of SENSITIVE_KEYS) {
         const raw = config[key];
-        configured[key] = raw === '****' || Boolean(typeof raw === 'string' && raw.trim() && raw !== '****');
-        if (config[key] === '****') {
-          // 脱敏占位勿回填进表单，否则保存会把 **** 当真实密钥
-          config[key] = '';
+        const hasValue =
+          raw === SENSITIVE_MASK ||
+          Boolean(typeof raw === 'string' && raw.trim() && raw !== SENSITIVE_MASK);
+        configured[key] = hasValue;
+        // 已配置：保留脱敏哨兵，Password 显示点点；提交时会剔除，不会当真实密钥写入
+        if (hasValue) {
+          config[key] = SENSITIVE_MASK;
         }
       }
       setSensitiveConfigured(configured);
@@ -645,8 +657,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
       } = values;
       const config = { ...restConfig };
       for (const key of SENSITIVE_KEYS) {
-        if (config[key] === '****' || config[key] === '') {
-          // 编辑留空/占位：交给后端合并保留原密钥；新建则字段缺失由必填校验拦截
+        if (config[key] === SENSITIVE_MASK || config[key] === '') {
+          // 编辑留空/点点占位：交给后端合并保留原密钥；新建则字段缺失由必填校验拦截
           delete config[key];
         }
       }
@@ -1816,7 +1828,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       render: (value: any) => {
         const masked = value ? { ...value } : {};
         SENSITIVE_KEYS.forEach((k) => {
-          if (masked[k]) masked[k] = '****';
+          if (masked[k]) masked[k] = SENSITIVE_MASK;
         });
         return (
           <pre style={{ margin: 0, padding: 8, background: '#f5f5f5', borderRadius: 4, maxHeight: 300, overflow: 'auto', fontSize: 12 }}>

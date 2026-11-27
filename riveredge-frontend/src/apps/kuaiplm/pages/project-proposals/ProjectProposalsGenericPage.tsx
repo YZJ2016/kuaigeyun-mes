@@ -10,6 +10,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import {
   ActionType,
+  ProForm,
   ProFormDatePicker,
   ProFormText,
   ProFormTextArea,
@@ -19,6 +20,7 @@ import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
 import {
   DetailDrawerTemplate,
+  FormModalGridBlock,
   FormModalTemplate,
   ListPageTemplate,
   detailDrawerBasicColumn,
@@ -26,7 +28,8 @@ import {
 import { detailDrawerDescriptionItems } from '../../../../components/layout-templates/detailDrawerDescriptionItems';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
-import { formatDateBySiteSetting, todaySiteDateString } from '../../../../utils/format';
+import { formatDateBySiteSetting, formatDateTime, todaySiteDateString } from '../../../../utils/format';
+import { CustomerSelectDropdown } from '../../../master-data/components/CustomerSelectDropdown';
 import { downloadRecordsAsXlsx, type ExportXlsxColumn } from '../../../../utils/exportRecordsXlsx';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
@@ -494,7 +497,7 @@ const ProjectProposalsGenericPage: React.FC = () => {
         key={editing?.uuid ?? 'create'}
         title={
           editing
-            ? t('common.edit') + t('app.kuaiplm.projectProposal.title')
+            ? t('app.kuaiplm.projectProposal.editTitle')
             : t('app.kuaiplm.projectProposal.createButton')
         }
         open={modalOpen}
@@ -512,6 +515,7 @@ const ProjectProposalsGenericPage: React.FC = () => {
                 title: editing.title,
                 summary: editing.summary,
                 customer_name: editing.customer_name,
+                customer_code: editing.customer_code,
                 expected_date: editing.expected_date,
                 remarks: editing.remarks,
               }
@@ -525,7 +529,10 @@ const ProjectProposalsGenericPage: React.FC = () => {
               title: String(values.title || '').trim(),
               summary: values.summary || null,
               customer_name: values.customer_name || null,
-              expected_date: values.expected_date || null,
+              customer_code: values.customer_code || null,
+              expected_date: values.expected_date
+                ? formatDateTime(values.expected_date, 'YYYY-MM-DD')
+                : null,
               remarks: values.remarks || null,
             };
             if (editing?.id) {
@@ -569,11 +576,26 @@ const ProjectProposalsGenericPage: React.FC = () => {
           colProps={{ span: 24 }}
           fieldProps={{ maxLength: 200 }}
         />
-        <ProFormText
-          name="customer_name"
-          label={t('app.kuaiplm.projectProposal.fields.customer')}
-          colProps={{ span: 12 }}
-        />
+        <FormModalGridBlock span={12}>
+          <ProForm.Item
+            name="_customer_id"
+            label={t('app.kuaiplm.projectProposal.fields.customer')}
+          >
+            <CustomerSelectDropdown
+              hostResource={RESOURCE}
+              snapshotNameField="customer_name"
+              style={{ width: '100%' }}
+              onCustomerPick={(customer) => {
+                formRef.current?.setFieldsValue({
+                  customer_name: customer?.name ?? null,
+                  customer_code: customer?.code ?? null,
+                });
+              }}
+            />
+          </ProForm.Item>
+          <ProFormText name="customer_name" hidden />
+          <ProFormText name="customer_code" hidden />
+        </FormModalGridBlock>
         <ProFormTextArea
           name="summary"
           label={t('app.kuaiplm.projectProposal.fields.summary')}

@@ -26,6 +26,7 @@ PURCHASE_RECEIPT_STD_BILLTYPE_NUMBER = "im_PurInBill_STD_BT_S"
 OTHER_OUTBOUND_BASE_KEY = "kingdee_other_outbound_push"
 OTHER_OUTBOUND_AUXILIARY_KEY = "kingdee_other_outbound_push_auxiliary"
 OTHER_OUTBOUND_ASSET_KEY = "kingdee_other_outbound_push_asset"
+OTHER_OUTBOUND_ASSET_KINGDEE_RELATED_DOCUMENT = "other_outbound_asset"
 
 FINISHED_GOODS_RECEIPT_KEY = "kingdee_finished_goods_receipt_push"
 PRODUCTION_PICKING_KEY = "kingdee_production_picking_push"
@@ -233,6 +234,23 @@ def assert_purchase_receipt_asset_push_line_type_configured(
             "请在业务配置 parameters.warehouse.kingdee_purchase_receipt_push_asset "
             "填写 billtype_number、biztype_number、invscheme_number 与 linetype_number。"
         )
+
+
+def resolve_other_outbound_kingdee_expected_related_document(
+    outbound_type: Optional[str],
+    *,
+    default: str = "other_outbound",
+) -> str:
+    """资产出库外推：Save 样例/operate 解析用 other_outbound_asset，与物料出库 other_outbound 区分。"""
+    from apps.kuaizhizao.constants.other_outbound_type import (
+        OTHER_OUTBOUND_TYPE_ASSET,
+        normalize_other_outbound_type,
+    )
+
+    if outbound_type is not None and str(outbound_type).strip():
+        if normalize_other_outbound_type(outbound_type) == OTHER_OUTBOUND_TYPE_ASSET:
+            return OTHER_OUTBOUND_ASSET_KINGDEE_RELATED_DOCUMENT
+    return default
 
 
 def resolve_other_outbound_variant_key_from_outbound_type(

@@ -132,6 +132,11 @@ class OpeningBalanceBody(BaseSchema):
     items: List[OpeningBalanceItem]
 
 
+class OpeningPeriodBody(BaseSchema):
+    period_year: int
+    period_month: int
+
+
 class GenerateFromEventsBody(BaseSchema):
     event_ids: Optional[List[int]] = None
 
@@ -240,6 +245,7 @@ async def list_accounts(
     account_type: Optional[str] = None,
     tenant_id: int = Depends(get_current_tenant), current_user: Any = Depends(get_current_user),
 ):
+    await coa_service.repair_orphan_non_leaf_flags(tenant_id)
     rows = await coa_service.list_accounts(
         tenant_id, is_active=is_active, account_type=account_type
     )
@@ -318,7 +324,29 @@ async def get_opening_balances(
     month: int = Query(..., ge=1, le=12),
     tenant_id: int = Depends(get_current_tenant), current_user: Any = Depends(get_current_user),
 ):
+    await coa_service.repair_orphan_non_leaf_flags(tenant_id)
     return await balance_service.account_balance_sheet(tenant_id, year, month)
+
+
+@router.get("/opening-balances/diagnostics")
+async def opening_balance_diagnostics(
+    year: int = Query(...),
+    month: int = Query(..., ge=1, le=12),
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: Any = Depends(get_current_user),
+):
+    return await balance_service.opening_balance_diagnostics(tenant_id, year, month)
+
+
+@router.post("/opening-balances/clear-non-leaf-residual")
+async def clear_non_leaf_opening_residual(
+    body: OpeningPeriodBody,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: Any = Depends(get_current_user),
+):
+    return await balance_service.clear_non_leaf_opening_residual(
+        tenant_id, body.period_year, body.period_month
+    )
 
 
 # ---------- summaries ----------

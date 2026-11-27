@@ -31,9 +31,9 @@ import type {
 
 const OPS_BASE = '/apps/kuaiai/operations';
 
-export function getHub(days = 7): Promise<HubOut> {
+export function getHub(days = 7, includePulse = false): Promise<HubOut> {
   return apiRequest<HubOut>(`${OPS_BASE}/hub`, {
-    params: { days },
+    params: includePulse ? { days, include_pulse: true } : { days },
   });
 }
 
@@ -91,6 +91,15 @@ export function getAiStatsOverview(
     params: { days },
     signal,
   });
+}
+
+export function getAiPulseCount(
+  signal?: AbortSignal,
+): Promise<{ pulse_suggestion_count: number | null }> {
+  return apiRequest<{ pulse_suggestion_count: number | null }>(
+    `${CORE_AI_BASE}/stats/pulse-count`,
+    { signal },
+  );
 }
 
 export function listAiAuditLogs(

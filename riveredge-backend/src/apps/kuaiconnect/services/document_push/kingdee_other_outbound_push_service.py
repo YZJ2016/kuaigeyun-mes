@@ -35,10 +35,14 @@ from core.services.integration.document_push_pipeline import (
 from core.services.integration.kingdee_warehouse_document_push_config import (
     enrich_kingdee_warehouse_push_config,
     finalize_kingdee_warehouse_im_push_config,
+    is_standard_other_outbill_billtype,
     merge_warehouse_kingdee_push_config,
 )
 from core.services.integration.kingdee_warehouse_push_routing import (
+    OTHER_OUTBOUND_ASSET_KEY,
+    OTHER_OUTBOUND_ASSET_KINGDEE_RELATED_DOCUMENT,
     OTHER_OUTBOUND_BASE_KEY,
+    resolve_other_outbound_kingdee_expected_related_document,
     resolve_other_outbound_push_config,
 )
 from core.services.integration.kingdee_cosmic_api_presets import (
@@ -671,6 +675,7 @@ class KingdeeOtherOutboundPushService:
                     tenant_id=tenant_id,
                     config=config,
                     relation=relation,
+                    outbound_type=getattr(outbound, "outbound_type", None),
                     dry_run=dry_run,
                 )
             except Exception as exc:
@@ -722,10 +727,14 @@ class KingdeeOtherOutboundPushService:
             **config,
             "form_id": str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID,
         }
+        expected_related = resolve_other_outbound_kingdee_expected_related_document(
+            getattr(outbound, "outbound_type", None),
+            default=SOURCE_TYPE,
+        )
         config = await enrich_kingdee_warehouse_push_config(
             tenant_id,
             config,
-            expected_related_document=SOURCE_TYPE,
+            expected_related_document=expected_related,
         )
         config = await enrich_other_outbound_pick_header_config(
             tenant_id, outbound, acting_user_id, config
@@ -763,10 +772,29 @@ class KingdeeOtherOutboundPushService:
                     missing.append(key)
             elif not str(config.get(key) or "").strip():
                 missing.append(key)
-        if missing and not dry_run:
+        billtype = str(
+            config.get("billtype_number") or config.get("bill_type_number") or ""
+        ).strip()
+        if (
+            expected_related == OTHER_OUTBOUND_ASSET_KINGDEE_RELATED_DOCUMENT
+            and billtype
+            and is_standard_other_outbill_billtype(billtype)
+            and not dry_run
+        ):
             raise BusinessLogicError(
-                "金蝶其他出库推送缺少配置：" + "、".join(missing)
-                + "（业务配置 parameters.warehouse.kingdee_other_outbound_push）"
+                "资产其他出库外推单据类型不能是标准其他出库单；"
+                "请在接口库「苍穹资产其他出库批量新增」样例的 billtype_number "
+                "填写本账套「资产其他出库」编码（勿用 im_OtherOutBill_STD_*），"
+                f"或修正业务配置 parameters.warehouse.{OTHER_OUTBOUND_ASSET_KEY}.billtype_number"
+            )
+        if missing and not dry_run:
+            config_hint = (
+                f"parameters.warehouse.{OTHER_OUTBOUND_ASSET_KEY}"
+                if expected_related == OTHER_OUTBOUND_ASSET_KINGDEE_RELATED_DOCUMENT
+                else f"parameters.warehouse.{OTHER_OUTBOUND_BASE_KEY}"
+            )
+            raise BusinessLogicError(
+                "金蝶其他出库推送缺少配置：" + "、".join(missing) + f"（业务配置 {config_hint}）"
             )
 
         header_warehouse_number = await _resolve_warehouse_number(
@@ -907,6 +935,7 @@ class KingdeeOtherOutboundPushService:
         tenant_id: int,
         config: Dict[str, Any],
         relation: DocumentRelation,
+        outbound_type: Optional[str] = None,
         dry_run: bool,
     ) -> Dict[str, Any]:
         """已有关联时只调 batchSubmit / billbatchAudit。"""
@@ -914,10 +943,14 @@ class KingdeeOtherOutboundPushService:
             **config,
             "form_id": str(config.get("form_id") or DEFAULT_FORM_ID).strip() or DEFAULT_FORM_ID,
         }
+        expected_related = resolve_other_outbound_kingdee_expected_related_document(
+            outbound_type,
+            default=SOURCE_TYPE,
+        )
         config = await enrich_kingdee_warehouse_push_config(
             tenant_id,
             config,
-            expected_related_document=SOURCE_TYPE,
+            expected_related_document=expected_related,
         )
         config = finalize_kingdee_warehouse_im_push_config(
             config,

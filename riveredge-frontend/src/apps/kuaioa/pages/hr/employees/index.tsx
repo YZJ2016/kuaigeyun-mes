@@ -144,6 +144,11 @@ const EmployeesPage: React.FC = () => {
             aliases: ['入职日期', '入职时间'],
           },
           {
+            field: 'hire_introducer',
+            labelKey: 'app.kuaioa.employee.hireIntroducer',
+            aliases: ['入职介绍人', '介绍人'],
+          },
+          {
             field: 'leave_date',
             labelKey: 'app.kuaioa.employee.leaveDate',
             aliases: ['离职日期', '离职时间'],
@@ -218,6 +223,7 @@ const EmployeesPage: React.FC = () => {
           t('app.kuaioa.employee.importExample.phone'),
           t('app.kuaioa.employee.importExample.hourlyRate'),
           t('app.kuaioa.employee.importExample.hireDate'),
+          '',
           '',
           t('app.kuaioa.employee.importExample.bankAccount'),
           t('app.kuaioa.employee.importExample.bankName'),
@@ -388,6 +394,12 @@ const EmployeesPage: React.FC = () => {
         name: 'welfare_spring_festival',
         labelKey: 'app.kuaioa.employee.welfareSpringFestival',
         type: 'number' as const,
+        hideInTable: true,
+      },
+      {
+        name: 'hire_introducer',
+        labelKey: 'app.kuaioa.employee.hireIntroducer',
+        width: 120,
         hideInTable: true,
       },
       {
@@ -594,6 +606,8 @@ const EmployeesPage: React.FC = () => {
       const hireDate = parseImportDateField('hire_date', 'app.kuaioa.employee.hireDate');
       if (hireDate === null) return;
       if (hireDate) payload.hire_date = hireDate;
+      const hireIntroducer = cell('hire_introducer');
+      if (hireIntroducer) payload.hire_introducer = hireIntroducer;
       const leaveDate = parseImportDateField('leave_date', 'app.kuaioa.employee.leaveDate');
       if (leaveDate === null) return;
       if (leaveDate) payload.leave_date = leaveDate;

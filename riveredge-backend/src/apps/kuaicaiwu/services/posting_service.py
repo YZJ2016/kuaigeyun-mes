@@ -41,6 +41,18 @@ def _d(v: Any) -> Decimal:
     return Decimal(str(v or 0))
 
 
+# 期末转账/结转损益等系统汇总凭证：分录不带客商等辅助项
+VOUCHER_SOURCE_DOC_TYPE_GL_AUTO_TRANSFER = "gl_auto_transfer"
+
+
+def voucher_requires_aux(voucher: Voucher) -> bool:
+    if voucher.source_event_id:
+        return False
+    if (voucher.source_doc_type or "").strip() == VOUCHER_SOURCE_DOC_TYPE_GL_AUTO_TRANSFER:
+        return False
+    return True
+
+
 class PostingService:
     def __init__(self):
         self.template_service = VoucherTemplateService()
@@ -319,8 +331,7 @@ class PostingService:
         allow_controlled = bool(settings.allow_gl_entry_on_controlled) or bool(
             voucher.source_event_id
         )
-        # 事件生成凭证：辅助核算非必填（与创建口径一致）；手工凭证仍必填
-        require_aux = not bool(voucher.source_event_id)
+        require_aux = voucher_requires_aux(voucher)
         lines = await self._validate_lines(
             tenant_id,
             data.get("lines") or [],
@@ -428,12 +439,12 @@ class PostingService:
         voucher = await self._get(tenant_id, voucher_id)
         if voucher.status != "reviewed":
             raise ValidationError("仅已审核凭证可记账")
-        await self.period_service.assert_period_open_for_posting(
-            tenant_id, voucher.period_year, voucher.period_month
-        )
         lines = await VoucherLine.filter(tenant_id=tenant_id, voucher_id=voucher.id).all()
         await self._assert_deficit_control(tenant_id, voucher, lines)
         async with in_transaction():
+            await self.period_service.prepare_period_for_posting(
+                tenant_id, voucher.period_year, voucher.period_month, posted_by
+            )
             await self.balance_service.apply_voucher_lines(tenant_id, voucher, lines, sign=1)
             voucher.status = "posted"
             voucher.posted_at = resolve_business_datetime()

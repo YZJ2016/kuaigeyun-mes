@@ -37,9 +37,21 @@ const MinimumWagePage: React.FC = () => {
         labelKey: 'app.kuaioa.minimumWage.effectiveDate',
         type: 'date' as const,
         required: true,
-        width: 120,
+        width: 130,
+      },
+      {
+        name: 'end_date',
+        labelKey: 'app.kuaioa.minimumWage.endDate',
+        type: 'date' as const,
+        width: 130,
       },
       { name: 'notes', labelKey: 'common.remark', type: 'textarea' as const, hideInTable: true },
+      {
+        name: 'is_current',
+        labelKey: 'app.kuaioa.minimumWage.isCurrent',
+        type: 'switch' as const,
+        width: 100,
+      },
     ],
     [],
   );
@@ -61,9 +73,19 @@ const MinimumWagePage: React.FC = () => {
             labelKey: 'app.kuaioa.minimumWage.effectiveDate',
             aliases: ['生效日期', '执行开始时间'],
           },
+          {
+            field: 'end_date',
+            labelKey: 'app.kuaioa.minimumWage.endDate',
+            aliases: ['执行结束时间', '结束日期'],
+          },
+          {
+            field: 'is_current',
+            labelKey: 'app.kuaioa.minimumWage.isCurrent',
+            aliases: ['当前执行', '是否当前'],
+          },
           { field: 'notes', labelKey: 'common.remark', aliases: ['备注'] },
         ],
-        ['2490', '2026-01-01', ''],
+        ['2660', '2026-08-01', '', '是', ''],
       ),
     [t],
   );
@@ -81,6 +103,10 @@ const MinimumWagePage: React.FC = () => {
     const cellOf = buildOaImportCellReader(parsed.headers, importTemplate.importHeaderMap);
     const importData: Record<string, unknown>[] = [];
     const errors: OaImportRowError[] = [];
+    const parseCurrentFlag = (raw: string) => {
+      const normalized = String(raw || '').trim().toLowerCase();
+      return ['1', 'true', 'yes', 'y', '是', '当前', '当前执行'].includes(normalized);
+    };
     parsed.rows.forEach((row, rowIndex) => {
       if (!Array.isArray(row)) return;
       const actualRowIndex = rowIndex + 3;
@@ -99,9 +125,12 @@ const MinimumWagePage: React.FC = () => {
         });
         return;
       }
+      const endDate = cellOf(row, 'end_date');
       importData.push({
         amount,
         effective_date: effectiveDate,
+        end_date: endDate || undefined,
+        is_current: parseCurrentFlag(cellOf(row, 'is_current')),
         notes: cellOf(row, 'notes') || undefined,
       });
     });
@@ -128,7 +157,7 @@ const MinimumWagePage: React.FC = () => {
       statusPresentation="marker"
       detailVariant="master"
       getDetailFn={getMinimumWageConfig}
-      columnPersistenceId="apps.kuaioa.minimum-wage.list-v2"
+      columnPersistenceId="apps.kuaioa.minimum-wage.list-v3"
       fields={fields}
       listFn={listMinimumWageConfigs}
       createFn={createMinimumWageConfig}
@@ -144,6 +173,8 @@ const MinimumWagePage: React.FC = () => {
           columns: [
             { key: 'amount', title: t('app.kuaioa.minimumWage.amount') },
             { key: 'effective_date', title: t('app.kuaioa.minimumWage.effectiveDate') },
+            { key: 'end_date', title: t('app.kuaioa.minimumWage.endDate') },
+            { key: 'is_current', title: t('app.kuaioa.minimumWage.isCurrent') },
             { key: 'notes', title: t('common.remark') },
           ],
           filename: t('app.kuaioa.minimumWage.exportFileName'),

@@ -19,6 +19,23 @@ class GlPeriodService:
             q = q.filter(period_year=year)
         return await q.order_by("period_year", "period_month").all()
 
+    @staticmethod
+    def _prev_year_month(year: int, month: int) -> tuple[int, int]:
+        return (year - 1, 12) if month == 1 else (year, month - 1)
+
+    @staticmethod
+    def _next_year_month(year: int, month: int) -> tuple[int, int]:
+        return (year + 1, 1) if month == 12 else (year, month + 1)
+
+    async def _has_later_active_period(self, tenant_id: int, year: int, month: int) -> bool:
+        """该月之后是否已有打开或已结账期间。"""
+        rows = await AccountingPeriod.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status__in=["open", "closed"],
+        ).all()
+        return any((row.period_year, row.period_month) > (year, month) for row in rows)
+
     async def ensure_period(self, tenant_id: int, year: int, month: int, *, status: str = "open") -> AccountingPeriod:
         row = await AccountingPeriod.get_or_none(
             tenant_id=tenant_id,
@@ -27,6 +44,10 @@ class GlPeriodService:
             deleted_at__isnull=True,
         )
         if row:
+            # 已存在的「未打开」在结账打开下期时必须变成打开；已结账期间不在这里重开。
+            if status == "open" and row.status == "not_open":
+                row.status = "open"
+                await row.save()
             return row
         return await AccountingPeriod.create(
             tenant_id=tenant_id,
@@ -36,33 +57,94 @@ class GlPeriodService:
             status=status,
         )
 
+    async def _open_periods(self, tenant_id: int) -> List[AccountingPeriod]:
+        return await AccountingPeriod.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            status="open",
+        ).order_by("period_year", "period_month")
+
+    def _period_label(self, year: int, month: int) -> str:
+        return f"{year:04d}-{month:02d}"
+
     async def assert_period_open_for_posting(self, tenant_id: int, year: int, month: int) -> None:
+        """目标期间必须已经是唯一打开期间。更早的期间仍打开时不在这里跳月打开。"""
         settings = await GlSettingsService().get_or_create(tenant_id)
         if not settings.initialized:
             raise BusinessLogicError("账套尚未开账，禁止记账")
-        period = await AccountingPeriod.get_or_none(
-            tenant_id=tenant_id,
-            period_year=year,
-            period_month=month,
-            deleted_at__isnull=True,
-        )
-        if not period:
-            raise BusinessLogicError(f"会计期间 {year:04d}-{month:02d} 不存在")
-        if period.status == "closed":
-            raise BusinessLogicError(f"会计期间 {year:04d}-{month:02d} 已结账，禁止记账")
-        if period.status != "open":
-            raise BusinessLogicError(f"会计期间 {year:04d}-{month:02d} 未打开，禁止记账")
-
-        # 上月未结账则本月不可记账（开账月无上月期间则跳过）
-        prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
+        label = self._period_label(year, month)
+        prev_year, prev_month = self._prev_year_month(year, month)
         prev = await AccountingPeriod.get_or_none(
             tenant_id=tenant_id,
             period_year=prev_year,
             period_month=prev_month,
             deleted_at__isnull=True,
         )
+        period = await AccountingPeriod.get_or_none(
+            tenant_id=tenant_id,
+            period_year=year,
+            period_month=month,
+            deleted_at__isnull=True,
+        )
+        opens = await self._open_periods(tenant_id)
+        if len(opens) > 1:
+            labels = "、".join(self._period_label(p.period_year, p.period_month) for p in opens)
+            raise BusinessLogicError(f"存在多个打开的会计期间：{labels}，请先结掉较早的期间")
+        current = opens[0] if opens else None
+        if current and (current.period_year, current.period_month) < (year, month):
+            raise BusinessLogicError(
+                f"会计期间 {label} 未打开。当前打开期间为 {self._period_label(current.period_year, current.period_month)}，"
+                f"请先在期末结账结转该期间，逐月结到 {label} 后再记账"
+            )
+        if current and (current.period_year, current.period_month) > (year, month):
+            raise BusinessLogicError(
+                f"会计期间 {label} 未打开，当前打开期间为 {self._period_label(current.period_year, current.period_month)}。"
+                f"请从期末结账按月反结账回到 {label} 后再记账"
+            )
+        if period and period.status == "closed":
+            raise BusinessLogicError(f"会计期间 {label} 已结账，禁止记账")
         if prev and prev.status != "closed":
-            raise BusinessLogicError(f"上月 {prev_year:04d}-{prev_month:02d} 未结账，本月不可记账")
+            raise BusinessLogicError(
+                f"上月 {self._period_label(prev_year, prev_month)} 未结账，本月不可记账"
+            )
+        if period and period.status == "open":
+            return
+        if current is None and ((prev and prev.status == "closed") or (
+            settings.current_year == year and settings.current_month == month
+        )):
+            await self.ensure_period(tenant_id, year, month, status="open")
+            settings.current_year = year
+            settings.current_month = month
+            await settings.save()
+            return
+        if not period:
+            raise BusinessLogicError(f"会计期间 {label} 不存在")
+        raise BusinessLogicError(f"会计期间 {label} 未打开，禁止记账")
+
+    async def prepare_period_for_posting(
+        self,
+        tenant_id: int,
+        year: int,
+        month: int,
+        operator_id: int,
+    ) -> None:
+        """记账前把当前打开期间逐月结转到目标月。任一月结账检查不通过则停在该月。"""
+        for _ in range(48):
+            opens = await self._open_periods(tenant_id)
+            if len(opens) == 1 and (opens[0].period_year, opens[0].period_month) < (year, month):
+                current = opens[0]
+                await self.close_period(
+                    tenant_id,
+                    current.period_year,
+                    current.period_month,
+                    operator_id,
+                )
+                continue
+            await self.assert_period_open_for_posting(tenant_id, year, month)
+            return
+        raise BusinessLogicError(
+            f"无法按月结转到会计期间 {self._period_label(year, month)}"
+        )
 
     async def close_period(
         self,
@@ -82,6 +164,13 @@ class GlPeriodService:
         if not period:
             raise NotFoundError(f"会计期间不存在: {year:04d}-{month:02d}")
         if period.status == "closed":
+            next_year, next_month = self._next_year_month(year, month)
+            if not await self._has_later_active_period(tenant_id, next_year, next_month):
+                await self.ensure_period(tenant_id, next_year, next_month, status="open")
+                settings = await GlSettingsService().get_or_create(tenant_id)
+                settings.current_year = next_year
+                settings.current_month = next_month
+                await settings.save()
             return {"period": f"{year:04d}-{month:02d}", "status": "already_closed"}
 
         if not skip_checks:
@@ -95,7 +184,7 @@ class GlPeriodService:
         await period.save()
 
         settings = await GlSettingsService().get_or_create(tenant_id)
-        next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+        next_year, next_month = self._next_year_month(year, month)
         await self.ensure_period(tenant_id, next_year, next_month, status="open")
         settings.current_year = next_year
         settings.current_month = next_month
@@ -126,7 +215,7 @@ class GlPeriodService:
             raise ValidationError("仅已结账期间可反结账")
 
         # 仅允许反结最近已结期间：下一期间尚无已记账凭证
-        next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+        next_year, next_month = self._next_year_month(year, month)
         posted_next = await Voucher.filter(
             tenant_id=tenant_id,
             period_year=next_year,

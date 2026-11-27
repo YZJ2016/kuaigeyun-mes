@@ -38,6 +38,10 @@ TBinding = TypeVar("TBinding")
 
 DEFAULT_SCHEDULE_INTERVAL_MINUTES = 15
 
+SYNC_EMPTY_SOURCE = "source_empty"
+SYNC_EMPTY_FILTERED = "filtered_all"
+SYNC_EMPTY_MAPPING = "mapping_empty"
+
 
 def normalize_sync_mode(value: Optional[str]) -> str:
     mode = (value or "manual_full").strip() or "manual_full"
@@ -762,6 +766,119 @@ def attach_sync_fetch_meta(
     return result
 
 
+def finalize_sync_run_outcome(
+    result: Any,
+    *,
+    since: Optional[datetime],
+    mapped_count: Optional[int] = None,
+    source_empty_detail: Optional[str] = None,
+    filtered_all_detail: Optional[str] = None,
+    mapping_empty_detail: Optional[str] = None,
+) -> Any:
+    """统一入站同步空结果语义：source_empty / filtered_all / mapping_empty。"""
+    created = int(getattr(result, "created", 0) or 0)
+    updated = int(getattr(result, "updated", 0) or 0)
+    skipped = int(getattr(result, "skipped", 0) or 0)
+    failed = int(getattr(result, "failed", 0) or 0)
+    fetched = int(getattr(result, "fetched", 0) or 0)
+    after_filter = int(getattr(result, "after_filter", 0) or 0)
+
+    if created or updated or skipped or failed:
+        if hasattr(result, "empty_reason"):
+            result.empty_reason = None
+        return result
+
+    if since is not None and fetched == 0:
+        if hasattr(result, "empty_reason"):
+            result.empty_reason = None
+        return result
+
+    reason: Optional[str] = None
+    detail: Optional[str] = None
+    if fetched == 0:
+        reason = SYNC_EMPTY_SOURCE
+        detail = (
+            source_empty_detail
+            or "源接口返回 0 条数据（fetched=0），未写入任何记录；请检查源接口参数、组织/筛选条件或授权"
+        )
+    elif after_filter == 0:
+        reason = SYNC_EMPTY_FILTERED
+        detail = (
+            filtered_all_detail
+            or f"源端拉取 {fetched} 条但有效过滤后剩余 0 条（after_filter=0），未写入任何记录；请检查「仅同步有效」开关或源端状态字段"
+        )
+    elif mapped_count is not None and int(mapped_count) == 0:
+        reason = SYNC_EMPTY_MAPPING
+        detail = (
+            mapping_empty_detail
+            or f"过滤后剩余 {after_filter} 条但字段映射结果为空（mapped=0），未写入任何记录；请检查字段映射配置"
+        )
+
+    if reason is not None:
+        if hasattr(result, "empty_reason"):
+            result.empty_reason = reason
+        if detail:
+            existing = list(getattr(result, "errors", None) or [])
+            if detail not in existing:
+                result.errors = [detail, *existing][:20]
+    return result
+
+
+async def settle_sync_run_outcome(
+    result: Any,
+    *,
+    binding: Any,
+    fetched: int,
+    after_filter: Optional[int] = None,
+    mapped_count: Optional[int] = None,
+    since: Optional[datetime] = None,
+    truncated: bool = False,
+    source_errors: Optional[List[str]] = None,
+    source_empty_detail: Optional[str] = None,
+    filtered_all_detail: Optional[str] = None,
+    mapping_empty_detail: Optional[str] = None,
+    failure_label: str = "同步失败",
+    partial_label: Optional[str] = None,
+    update_binding: bool = True,
+) -> Any:
+    """统一入站同步收口：合并源错误 → 写入元数据 → 判空 → 回写绑定状态。"""
+    if source_errors:
+        existing = list(getattr(result, "errors", None) or [])
+        result.errors = (list(source_errors) + existing)[:20]
+
+    attach_sync_fetch_meta(result, fetched=fetched, since=since, truncated=truncated)
+    if hasattr(result, "after_filter"):
+        result.after_filter = int(fetched if after_filter is None else after_filter or 0)
+
+    finalize_sync_run_outcome(
+        result,
+        since=since,
+        mapped_count=mapped_count,
+        source_empty_detail=source_empty_detail,
+        filtered_all_detail=filtered_all_detail,
+        mapping_empty_detail=mapping_empty_detail,
+    )
+
+    if update_binding and binding is not None:
+        created = int(getattr(result, "created", 0) or 0)
+        updated = int(getattr(result, "updated", 0) or 0)
+        skipped = int(getattr(result, "skipped", 0) or 0)
+        failed = int(getattr(result, "failed", 0) or 0)
+        empty_reason = getattr(result, "empty_reason", None)
+        errors = list(getattr(result, "errors", None) or [])
+        err_summary = "; ".join(str(e) for e in errors[:5]) if errors else failure_label
+        if empty_reason:
+            await mark_binding_failure(binding, err_summary)
+        elif failed and not (created or updated or skipped):
+            await mark_binding_failure(binding, err_summary)
+        elif failed or truncated:
+            await mark_binding_partial_success(binding, partial_label or err_summary)
+        else:
+            await mark_binding_success(binding)
+
+    return result
+
+
 async def run_inbound_sync_with_run_log(
     *,
     tenant_id: int,
@@ -839,6 +956,8 @@ async def record_sync_run_log(
         truncated = bool(truncated)
 
     if result is None:
+        status = "failed"
+    elif getattr(result, "empty_reason", None):
         status = "failed"
     elif failed and not (created or updated):
         status = "failed"

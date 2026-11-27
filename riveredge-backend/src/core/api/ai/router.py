@@ -254,7 +254,15 @@ async def ai_stats_overview(
 async def ai_stats_pulse_count(
     ai_auth: AiAuth = Depends(get_ai_auth),
 ):
-    count = await AiStatsService.get_pulse_suggestion_count(ai_auth.tenant_id)
+    from apps.common.optional_pro import pro_app_available
+
+    if not pro_app_available("kuaiai"):
+        return {"pulse_suggestion_count": None}
+    from apps.kuaiai.services.pulse import registry as pulse_registry
+
+    count = await pulse_registry.pulse_total_count(
+        ai_auth.tenant_id, ai_auth.user
+    )
     return {"pulse_suggestion_count": count}
 
 

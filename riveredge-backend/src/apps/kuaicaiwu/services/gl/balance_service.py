@@ -432,6 +432,33 @@ class BalanceService:
         result.sort(key=lambda x: str(x.get("account_code") or ""))
         return result
 
+    @staticmethod
+    def _is_plain_balance_row(row: Dict[str, Any]) -> bool:
+        return not any(
+            row.get(k)
+            for k in (
+                "customer_id",
+                "supplier_id",
+                "department_id",
+                "employee_id",
+                "project_id",
+            )
+        )
+
+    @staticmethod
+    def _row_has_balance_activity(row: Dict[str, Any]) -> bool:
+        for field in (
+            "opening_debit",
+            "opening_credit",
+            "period_debit",
+            "period_credit",
+            "ending_debit",
+            "ending_credit",
+        ):
+            if _d(row.get(field)) != 0:
+                return True
+        return False
+
     async def _load_accounts_by_id(self, tenant_id: int) -> Dict[int, ChartOfAccount]:
         return {
             a.id: a
@@ -513,6 +540,93 @@ class BalanceService:
             "balanced": opening_d == opening_c and period_d == period_c and ending_d == ending_c,
             "rows": display_rows,
         }
+
+    async def opening_balance_diagnostics(
+        self,
+        tenant_id: int,
+        year: int,
+        month: int,
+    ) -> Dict[str, Any]:
+        """非末级科目 plain 余额行残留（期初页不可录入却参与旧试算口径）。"""
+        accounts = await self._load_accounts_by_id(tenant_id)
+        rows = await self.account_balance_sheet(
+            tenant_id,
+            year,
+            month,
+            include_unposted=False,
+            merge_aux=False,
+            rollup_hierarchy=False,
+        )
+        residuals: List[Dict[str, Any]] = []
+        for row in rows:
+            if not self._is_plain_balance_row(row):
+                continue
+            account_id = int(row.get("account_id") or 0)
+            acc = accounts.get(account_id)
+            if not acc or acc.is_leaf:
+                continue
+            if not self._row_has_balance_activity(row):
+                continue
+            residuals.append(
+                {
+                    "account_id": account_id,
+                    "account_code": acc.account_code,
+                    "account_name": acc.account_name,
+                    "opening_debit": float(_d(row.get("opening_debit"))),
+                    "opening_credit": float(_d(row.get("opening_credit"))),
+                    "ending_debit": float(_d(row.get("ending_debit"))),
+                    "ending_credit": float(_d(row.get("ending_credit"))),
+                }
+            )
+        residuals.sort(key=lambda x: str(x.get("account_code") or ""))
+        return {"items": residuals, "count": len(residuals)}
+
+    async def clear_non_leaf_opening_residual(
+        self,
+        tenant_id: int,
+        year: int,
+        month: int,
+    ) -> Dict[str, Any]:
+        """清零指定期间非末级 plain 余额行（不动末级、不动辅助行）。"""
+        accounts = await self._load_accounts_by_id(tenant_id)
+        cleared = 0
+        async with in_transaction():
+            db_rows = await AccountBalance.filter(
+                tenant_id=tenant_id,
+                period_year=year,
+                period_month=month,
+                deleted_at__isnull=True,
+                customer_id=0,
+                supplier_id=0,
+                department_id=0,
+                employee_id=0,
+                project_id=0,
+            ).all()
+            for row in db_rows:
+                acc = accounts.get(row.account_id)
+                if not acc or acc.is_leaf:
+                    continue
+                if not (
+                    _d(row.opening_debit)
+                    or _d(row.opening_credit)
+                    or _d(row.period_debit)
+                    or _d(row.period_credit)
+                    or _d(row.ending_debit)
+                    or _d(row.ending_credit)
+                ):
+                    continue
+                row.opening_debit = Decimal("0")
+                row.opening_credit = Decimal("0")
+                row.period_debit = Decimal("0")
+                row.period_credit = Decimal("0")
+                row.year_debit = Decimal("0")
+                row.year_credit = Decimal("0")
+                row.ending_debit = Decimal("0")
+                row.ending_credit = Decimal("0")
+                await row.save()
+                cleared += 1
+        trial = await self.trial_balance(tenant_id, year, month, include_unposted=False)
+        return {"cleared": cleared, "trial": trial}
 
     async def detail_ledger(
         self,

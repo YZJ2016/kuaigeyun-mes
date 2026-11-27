@@ -3534,7 +3534,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
 
             result = await self.get_production_picking_by_id(tenant_id, picking_id)
 
-        from apps.kuaizhizao.services.kingdee_im_batch_update_sync import (
+        from apps.kuaiconnect.services.document_push.kingdee_im_batch_update_sync import (
             sync_production_picking_kingdee_after_update,
         )
 
@@ -4053,7 +4053,7 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         confirmation_data: Optional[OutboundConfirmationRequest] = None,
     ) -> ProductionPickingResponse:
         """确认领料"""
-        from apps.kuaizhizao.services.kingdee_outbound_avb_precheck_service import (
+        from apps.kuaiconnect.services.document_push.kingdee_outbound_avb_precheck_service import (
             OutboundAvbDemandLine,
             assert_kingdee_avb_before_outbound_confirm,
         )
@@ -12104,7 +12104,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         item_batches: Optional[List[SalesDeliveryConfirmItemBatch]] = None,
     ) -> SalesDeliveryResponse:
         """确认出库写路径（已在锁外完成 OQC/授信预校验）。"""
-        from apps.kuaizhizao.services.kingdee_outbound_avb_precheck_service import (
+        from apps.kuaiconnect.services.document_push.kingdee_outbound_avb_precheck_service import (
             OutboundAvbDemandLine,
             assert_kingdee_avb_before_outbound_confirm,
         )
@@ -22138,7 +22138,7 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
         confirmation_data: Optional[OutboundConfirmationRequest] = None,
     ) -> OtherOutboundResponse:
         """确认出库"""
-        from apps.kuaizhizao.services.kingdee_outbound_avb_precheck_service import (
+        from apps.kuaiconnect.services.document_push.kingdee_outbound_avb_precheck_service import (
             OutboundAvbDemandLine,
             assert_kingdee_avb_before_outbound_confirm,
         )

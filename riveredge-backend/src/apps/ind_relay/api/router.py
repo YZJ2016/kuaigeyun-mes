@@ -7,13 +7,20 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from tortoise.transactions import in_transaction
 
 from apps.ind_relay.models.changeover_matrix import RelayChangeoverMatrix
 from apps.ind_relay.models.line_capacity import RelayLineCapacity
+from apps.ind_relay.models.line_product import RelayLineProduct
 from apps.kuaizhizao.services.output_basis_service import OutputBasisService
 from apps.master_data.models.factory import ProductionLine
+from apps.master_data.models.material import Material
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
+from core.utils.model_audit import (
+    load_audit_fields_for_create,
+    load_audit_fields_for_update,
+)
 from core.utils.timezone_utils import (
     resolve_business_datetime,
     site_day_bounds_utc,
@@ -25,12 +32,19 @@ from infra.models.user import User
 router = APIRouter(prefix="", tags=["App - Industry Relay"])
 
 
+class LineProductItem(BaseModel):
+    id: int
+    code: Optional[str] = None
+    name: Optional[str] = None
+
+
 class LineCapacityCreate(BaseModel):
     production_line_id: int
     takt_seconds: float = 0
     daily_capacity_qty: float = 0
     changeover_minutes_default: float = 0
     remarks: Optional[str] = None
+    product_ids: List[int] = Field(default_factory=list)
 
 
 class LineCapacityUpdate(BaseModel):
@@ -39,6 +53,7 @@ class LineCapacityUpdate(BaseModel):
     changeover_minutes_default: Optional[float] = None
     is_active: Optional[bool] = None
     remarks: Optional[str] = None
+    product_ids: Optional[List[int]] = None
 
 
 class LineCapacityResponse(BaseModel):
@@ -51,6 +66,9 @@ class LineCapacityResponse(BaseModel):
     changeover_minutes_default: float
     is_active: bool
     remarks: Optional[str] = None
+    product_ids: List[int] = Field(default_factory=list)
+    products: List[LineProductItem] = Field(default_factory=list)
+    product_count: int = 0
 
 
 class ChangeoverCreate(BaseModel):
@@ -175,7 +193,132 @@ async def _planned_qty_by_line(
     return dict(result)
 
 
-def _capacity_response(row: RelayLineCapacity) -> LineCapacityResponse:
+def _normalize_product_ids(raw_ids: Optional[List[int]]) -> List[int]:
+    if not raw_ids:
+        return []
+    seen: set[int] = set()
+    cleaned: List[int] = []
+    for raw in raw_ids:
+        pid = int(raw or 0)
+        if pid <= 0 or pid in seen:
+            continue
+        seen.add(pid)
+        cleaned.append(pid)
+    return cleaned
+
+
+async def _load_line_products_map(
+    tenant_id: int,
+    production_line_ids: List[int],
+) -> dict[int, List[LineProductItem]]:
+    line_ids = [int(x) for x in set(production_line_ids) if int(x or 0) > 0]
+    if not line_ids:
+        return {}
+    rows = (
+        await RelayLineProduct.filter(
+            tenant_id=tenant_id,
+            production_line_id__in=line_ids,
+            deleted_at__isnull=True,
+        )
+        .order_by("id")
+        .all()
+    )
+    out: dict[int, List[LineProductItem]] = {}
+    for item in rows:
+        lid = int(item.production_line_id)
+        out.setdefault(lid, []).append(
+            LineProductItem(
+                id=int(item.product_id),
+                code=item.product_code,
+                name=item.product_name,
+            )
+        )
+    return out
+
+
+async def _sync_line_products(
+    tenant_id: int,
+    production_line_id: int,
+    raw_product_ids: List[int],
+    user_id: int,
+) -> List[LineProductItem]:
+    """校验物料租户归属并在当前事务内同步产线可生产自制件绑定。"""
+    clean_ids = _normalize_product_ids(raw_product_ids)
+    materials_by_id: dict[int, Material] = {}
+    if clean_ids:
+        materials = await Material.filter(
+            tenant_id=tenant_id,
+            id__in=clean_ids,
+            deleted_at__isnull=True,
+        ).all()
+        materials_by_id = {int(m.id): m for m in materials}
+        missing = [pid for pid in clean_ids if pid not in materials_by_id]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"存在无效或不属于当前租户的物料：{missing}",
+            )
+
+    existing_rows = await RelayLineProduct.filter(
+        tenant_id=tenant_id,
+        production_line_id=production_line_id,
+        deleted_at__isnull=True,
+    ).all()
+    existing_by_pid = {int(r.product_id): r for r in existing_rows}
+    target_set = set(clean_ids)
+
+    update_audit = await load_audit_fields_for_update(user_id)
+    now = resolve_business_datetime()
+    for pid, row in existing_by_pid.items():
+        if pid not in target_set:
+            row.deleted_at = now
+            for k, v in update_audit.items():
+                setattr(row, k, v)
+            await row.save(
+                update_fields=["deleted_at", "updated_at", *update_audit.keys()]
+            )
+
+    create_audit: Optional[dict] = None
+    result_items: List[LineProductItem] = []
+    for pid in clean_ids:
+        mat = materials_by_id[pid]
+        mat_code = mat.main_code or mat.code
+        mat_name = mat.name
+        if pid in existing_by_pid:
+            row = existing_by_pid[pid]
+            if row.product_code != mat_code or row.product_name != mat_name:
+                row.product_code = mat_code
+                row.product_name = mat_name
+                for k, v in update_audit.items():
+                    setattr(row, k, v)
+                await row.save(
+                    update_fields=[
+                        "product_code",
+                        "product_name",
+                        "updated_at",
+                        *update_audit.keys(),
+                    ]
+                )
+        else:
+            if create_audit is None:
+                create_audit = await load_audit_fields_for_create(user_id)
+            await RelayLineProduct.create(
+                tenant_id=tenant_id,
+                production_line_id=production_line_id,
+                product_id=pid,
+                product_code=mat_code,
+                product_name=mat_name,
+                **create_audit,
+            )
+        result_items.append(LineProductItem(id=pid, code=mat_code, name=mat_name))
+    return result_items
+
+
+def _capacity_response(
+    row: RelayLineCapacity,
+    products: Optional[List[LineProductItem]] = None,
+) -> LineCapacityResponse:
+    items = list(products or [])
     return LineCapacityResponse(
         id=row.id,
         production_line_id=row.production_line_id,
@@ -186,6 +329,9 @@ def _capacity_response(row: RelayLineCapacity) -> LineCapacityResponse:
         changeover_minutes_default=float(row.changeover_minutes_default or 0),
         is_active=bool(row.is_active),
         remarks=row.remarks,
+        product_ids=[item.id for item in items],
+        products=items,
+        product_count=len(items),
     )
 
 
@@ -290,7 +436,13 @@ async def list_line_capacities(
         .offset(skip)
         .limit(limit)
     )
-    return [_capacity_response(r) for r in rows]
+    products_map = await _load_line_products_map(
+        tenant_id, [int(r.production_line_id) for r in rows]
+    )
+    return [
+        _capacity_response(r, products_map.get(int(r.production_line_id), []))
+        for r in rows
+    ]
 
 
 @router.post(
@@ -315,20 +467,27 @@ async def create_line_capacity(
     )
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该产线已配置节拍产能")
-    row = await RelayLineCapacity.create(
-        tenant_id=tenant_id,
-        production_line_id=body.production_line_id,
-        production_line_code=line.code,
-        production_line_name=line.name,
-        takt_seconds=Decimal(str(body.takt_seconds or 0)),
-        daily_capacity_qty=Decimal(str(body.daily_capacity_qty or 0)),
-        changeover_minutes_default=Decimal(str(body.changeover_minutes_default or 0)),
-        is_active=True,
-        remarks=body.remarks,
-        created_by=current_user.id,
-        updated_by=current_user.id,
-    )
-    return _capacity_response(row)
+    audit_fields = await load_audit_fields_for_create(current_user.id)
+    async with in_transaction():
+        row = await RelayLineCapacity.create(
+            tenant_id=tenant_id,
+            production_line_id=body.production_line_id,
+            production_line_code=line.code,
+            production_line_name=line.name,
+            takt_seconds=Decimal(str(body.takt_seconds or 0)),
+            daily_capacity_qty=Decimal(str(body.daily_capacity_qty or 0)),
+            changeover_minutes_default=Decimal(str(body.changeover_minutes_default or 0)),
+            is_active=True,
+            remarks=body.remarks,
+            **audit_fields,
+        )
+        products = await _sync_line_products(
+            tenant_id,
+            int(row.production_line_id),
+            body.product_ids,
+            current_user.id,
+        )
+    return _capacity_response(row, products)
 
 
 @router.patch(
@@ -348,14 +507,31 @@ async def update_line_capacity(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="记录不存在")
     data = body.model_dump(exclude_unset=True)
-    for key, val in data.items():
-        if key in ("takt_seconds", "daily_capacity_qty", "changeover_minutes_default") and val is not None:
-            setattr(row, key, Decimal(str(val)))
+    has_product_ids = "product_ids" in data
+    raw_product_ids = data.pop("product_ids", None)
+    audit_fields = await load_audit_fields_for_update(current_user.id)
+    async with in_transaction():
+        for key, val in data.items():
+            if key in ("takt_seconds", "daily_capacity_qty", "changeover_minutes_default") and val is not None:
+                setattr(row, key, Decimal(str(val)))
+            else:
+                setattr(row, key, val)
+        for k, v in audit_fields.items():
+            setattr(row, k, v)
+        await row.save()
+        if has_product_ids:
+            products = await _sync_line_products(
+                tenant_id,
+                int(row.production_line_id),
+                raw_product_ids or [],
+                current_user.id,
+            )
         else:
-            setattr(row, key, val)
-    row.updated_by = current_user.id
-    await row.save()
-    return _capacity_response(row)
+            products_map = await _load_line_products_map(
+                tenant_id, [int(row.production_line_id)]
+            )
+            products = products_map.get(int(row.production_line_id), [])
+    return _capacity_response(row, products)
 
 
 @router.get(

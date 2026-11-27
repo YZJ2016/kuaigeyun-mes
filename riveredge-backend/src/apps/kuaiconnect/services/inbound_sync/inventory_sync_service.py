@@ -1,6 +1,8 @@
 """即时库存从数据接口/数据集同步服务。"""
 from __future__ import annotations
 
+import copy
+from fractions import Fraction
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -26,6 +28,7 @@ from apps.kuaiconnect.services.inbound_sync.master_data_sync_common import (
     cell_optional_decimal,
     cell_str,
     fetch_sync_rows,
+    lookup_mapped_source_value,
     map_sync_rows,
     mark_binding_failure,
     mark_binding_partial_success,
@@ -54,6 +57,34 @@ INVENTORY_WRITE_CHUNK = 500
 # 金蝶即时库存：数量优先 avbqty，其次 qty；批号 lotnum。映射到空列（如 baseqty）时回退。
 INVENTORY_MAP_EMPTY_FALLBACKS = {
     "quantity": ["avbqty", "qty", "baseqty"],
+    "base_quantity": ["baseqty", "base_qty", "baseQty", "base_quantity"],
+    "aux_quantity": [
+        "avbqty2nd",
+        "qty2nd",
+        "auxqty",
+        "aux_qty",
+        "auxQty",
+        "secqty",
+        "sec_qty",
+        "auxiliaryqty",
+        "auxiliary_qty",
+    ],
+    "aux_unit": [
+        "unit2nd.number",
+        "unit2nd_number",
+        "unit2nd.name",
+        "unit2nd_name",
+        "secunit_number",
+        "secunit.number",
+        "secunit_name",
+        "secunit.name",
+        "auxunit_number",
+        "auxunit.number",
+        "auxunit_name",
+        "auxunit.name",
+        "aux_unit",
+        "auxUnit",
+    ],
     "batch_no": ["lotnum", "lot_number", "lot.number", "batch_no", "batch_number"],
     "location_code": [
         "location.number",
@@ -135,6 +166,175 @@ def _inventory_quantity(row: Dict[str, Any]) -> Optional[float]:
         if qty is not None:
             return float(qty)
     return None
+
+
+def _inventory_lookup_cell(row: Dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        found, value = lookup_mapped_source_value(row, key)
+        if found:
+            text = cell_str(value)
+            if text:
+                return text
+        text = cell_str(row.get(key))
+        if text:
+            return text
+    return ""
+
+
+def _inventory_auxiliary_unit(row: Dict[str, Any]) -> str:
+    """提取即时库存行辅助单位（兼容苍穹 unit2nd.* 与 secunit_* / aux_unit）。"""
+    return _inventory_lookup_cell(
+        row,
+        "aux_unit",
+        "auxUnit",
+        "secunit_number",
+        "secunit.number",
+        "secunit_name",
+        "secunit.name",
+        "unit2nd.number",
+        "unit2nd_number",
+        "unit2nd.name",
+        "unit2nd_name",
+        "auxunit_number",
+        "auxunit.number",
+        "auxunit_name",
+        "auxunit.name",
+    )
+
+
+def _inventory_auxiliary_quantity(row: Dict[str, Any]) -> Optional[float]:
+    """提取即时库存行辅助数量（兼容苍穹 avbqty2nd / qty2nd 与 auxqty / secqty）。"""
+    for key in (
+        "aux_quantity",
+        "avbqty2nd",
+        "qty2nd",
+        "auxqty",
+        "aux_qty",
+        "auxQty",
+        "secqty",
+        "sec_qty",
+        "auxiliaryqty",
+        "auxiliary_qty",
+    ):
+        found, raw = lookup_mapped_source_value(row, key)
+        if not found:
+            raw = row.get(key)
+        if raw in (None, ""):
+            continue
+        text = str(raw).strip()
+        if not text or text in {"-", "--"}:
+            continue
+        qty = cell_optional_decimal(raw)
+        if qty is not None:
+            return float(qty)
+    return None
+
+
+def _aux_base_ratio_n_d(
+    base_quantity: Decimal,
+    aux_quantity: Decimal,
+) -> Tuple[int, int]:
+    """由基本量 / 辅助量反推 1 辅助单位 = (numerator / denominator) 基本单位。"""
+    base_q = Decimal(str(base_quantity))
+    aux_q = Decimal(str(aux_quantity))
+    if base_q <= 0:
+        raise ValidationError("推算固定辅助单位换算比时，基本数量必须大于 0")
+    if aux_q <= 0:
+        raise ValidationError("推算固定辅助单位换算比时，辅助数量必须大于 0")
+    ratio = (Fraction(base_q) / Fraction(aux_q)).limit_denominator(1_000_000)
+    if ratio.numerator <= 0 or ratio.denominator <= 0:
+        raise ValidationError("推算固定辅助单位换算比失败：换算比须大于 0")
+    return int(ratio.numerator), int(ratio.denominator)
+
+
+async def ensure_material_fixed_aux_from_inventory_row(
+    material: Any,
+    *,
+    aux_unit: Optional[str],
+    base_quantity: Optional[Decimal],
+    aux_quantity: Optional[Decimal],
+    current_user: Optional[User] = None,
+) -> bool:
+    """
+    依据苍穹/金蝶即时库存行的双计量数值补齐或升级物料固定辅助单位。
+
+    - 已有同名固定辅助单位：跳过（返回 False）
+    - 已有同名浮动辅助单位：升级为固定换算并落库（返回 True）
+    - 缺失辅助单位：新增固定换算辅助单位并落库（返回 True）
+    """
+    if material is None:
+        return False
+    unit_name = str(aux_unit or "").strip()
+    if not unit_name:
+        return False
+    base_unit = str(getattr(material, "base_unit", None) or "").strip()
+    if base_unit and unit_name.casefold() == base_unit.casefold():
+        return False
+    if base_quantity is None or aux_quantity is None:
+        return False
+    base_q = Decimal(str(base_quantity))
+    aux_q = Decimal(str(aux_quantity))
+    if base_q <= 0 or aux_q <= 0:
+        return False
+
+    numerator, denominator = _aux_base_ratio_n_d(base_q, aux_q)
+
+    from apps.kuaizhizao.utils.material_unit_utils import _parse_material_units_cfg
+    from apps.master_data.constants.material_conversion_type import (
+        CONVERSION_TYPE_FIXED,
+        is_floating_aux_unit_row,
+    )
+
+    parsed = _parse_material_units_cfg(getattr(material, "units", None))
+    units_cfg: Dict[str, Any] = copy.deepcopy(parsed) if isinstance(parsed, dict) else {}
+    raw_rows = units_cfg.get("units")
+    unit_rows: List[Dict[str, Any]] = (
+        [row for row in raw_rows if isinstance(row, dict)]
+        if isinstance(raw_rows, list)
+        else []
+    )
+    scenarios = units_cfg.get("scenarios")
+    if not isinstance(scenarios, dict):
+        scenarios = {}
+    units_cfg["units"] = unit_rows
+    units_cfg["scenarios"] = scenarios
+
+    target_key = unit_name.casefold()
+    matched_row: Optional[Dict[str, Any]] = None
+    for row in unit_rows:
+        existing_name = str(row.get("unit") or "").strip()
+        if existing_name and existing_name.casefold() == target_key:
+            matched_row = row
+            break
+
+    if matched_row is not None:
+        if not is_floating_aux_unit_row(matched_row):
+            return False
+        matched_row["unit"] = unit_name
+        matched_row["numerator"] = numerator
+        matched_row["denominator"] = denominator
+        matched_row["conversionType"] = CONVERSION_TYPE_FIXED
+        matched_row.pop("conversion_type", None)
+    else:
+        unit_rows.append(
+            {
+                "unit": unit_name,
+                "numerator": numerator,
+                "denominator": denominator,
+                "conversionType": CONVERSION_TYPE_FIXED,
+            }
+        )
+
+    material.units = units_cfg
+    update_fields = ["units", "updated_at"]
+    if current_user is not None:
+        from apps.common.audit_actor import operator_name_from_user
+
+        material.updated_by = int(current_user.id)
+        material.updated_by_name = operator_name_from_user(current_user)
+        update_fields.extend(["updated_by", "updated_by_name"])
+    await material.save(update_fields=update_fields)
+    return True
 
 
 def _chunks(items: Sequence[Any], size: int) -> Iterable[Sequence[Any]]:
@@ -398,22 +598,30 @@ class InventorySyncService:
             )
 
             base_raw = _inventory_cell(row, "baseqty", "base_qty", "baseQty", "base_quantity")
-            aux_raw = _inventory_cell(
-                row,
-                "auxqty",
-                "aux_qty",
-                "auxQty",
-                "secqty",
-                "sec_qty",
-                "auxiliaryqty",
-                "auxiliary_qty",
-            )
+            aux_qty_val = _inventory_auxiliary_quantity(row)
+            aux_unit_val = _inventory_auxiliary_unit(row)
+            base_dec_opt = Decimal(str(base_raw)) if base_raw not in (None, "") else None
+            aux_dec_opt = Decimal(str(aux_qty_val)) if aux_qty_val is not None else None
             try:
+                if aux_unit_val and aux_dec_opt is not None and aux_dec_opt > 0:
+                    infer_base_dec = (
+                        base_dec_opt
+                        if base_dec_opt is not None and base_dec_opt > 0
+                        else Decimal(str(quantity))
+                    )
+                    if infer_base_dec > 0:
+                        await ensure_material_fixed_aux_from_inventory_row(
+                            material,
+                            aux_unit=aux_unit_val,
+                            base_quantity=infer_base_dec,
+                            aux_quantity=aux_dec_opt,
+                            current_user=current_user,
+                        )
                 synced = resolve_sync_ledger_quantities(
                     material,
                     primary_quantity=Decimal(str(quantity)),
-                    base_quantity_raw=Decimal(str(base_raw)) if base_raw not in (None, "") else None,
-                    aux_quantity_raw=Decimal(str(aux_raw)) if aux_raw not in (None, "") else None,
+                    base_quantity_raw=base_dec_opt,
+                    aux_quantity_raw=aux_dec_opt,
                 )
             except Exception as exc:
                 failed += 1
