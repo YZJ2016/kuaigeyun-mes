@@ -66,6 +66,9 @@ class Receipt(BaseModel):
         description="审核状态：草稿/SUBMITTED/待审核/已审核/驳回。确认收款前须已审核",
     )
     
+    post_on_approval = fields.BooleanField(
+        default=False, description="审核通过后自动过账（合并结算立收）"
+    )
     notes = fields.TextField(null=True, description="备注")
     attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

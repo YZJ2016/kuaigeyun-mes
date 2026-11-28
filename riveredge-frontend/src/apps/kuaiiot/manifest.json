@@ -2,13 +2,14 @@
   "code": "kuaiiot",
   "name": "星数采",
   "version": "1.0.0",
-  "is_pro": true,
-  "description": "数采运营工作台：链路、告警、产品与设备接入运维",
+  "description": "工业物联网设备数采与集成平台（星数采）",
   "icon": "api",
   "author": "StarTech",
   "entry_point": "../apps/kuaiiot/index.tsx",
   "route_path": "/apps/kuaiiot",
-  "sort_order": 360,
+  "sort_order": 320,
+  "is_pro": true,
+  "market_category": "pro",
   "menu_config": {
     "title": "app.kuaiiot.name",
     "icon": "api",
@@ -16,59 +17,76 @@
     "permission": "kuaiiot:entry:read",
     "children": [
       {
-        "title": "app.kuaiiot.menu.dashboard",
-        "path": "/apps/kuaiiot/dashboard",
+        "title": "app.kuaiiot.menu.group.monitorOps",
         "icon": "layout",
-        "permission": "kuaiiot:dashboard:read",
-        "sort_order": 1
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.kuaiiot.menu.dashboard",
+            "path": "/apps/kuaiiot/dashboard",
+            "sort_order": 1,
+            "permission": "kuaiiot:dashboard:read"
+          },
+          {
+            "title": "app.kuaiiot.menu.pipeline",
+            "path": "/apps/kuaiiot/pipeline",
+            "sort_order": 2,
+            "permission": "kuaiiot:pipeline:read"
+          },
+          {
+            "title": "app.kuaiiot.menu.alerts",
+            "path": "/apps/kuaiiot/alerts",
+            "sort_order": 3,
+            "permission": "kuaiiot:alert:read"
+          }
+        ]
       },
       {
-        "title": "app.kuaiiot.menu.connections",
-        "path": "/apps/kuaiiot/connections",
-        "icon": "link",
-        "permission": "kuaiiot:connection:read",
-        "sort_order": 2
-      },
-      {
-        "title": "app.kuaiiot.menu.devices",
-        "path": "/apps/kuaiiot/devices",
+        "title": "app.kuaiiot.menu.group.modelAccess",
         "icon": "hardDrive",
-        "permission": "kuaiiot:device:read",
-        "sort_order": 3
-      },
-      {
-        "title": "app.kuaiiot.menu.tags",
-        "path": "/apps/kuaiiot/tags",
-        "icon": "tags",
-        "permission": "kuaiiot:tag:read",
-        "sort_order": 4
-      },
-      {
-        "title": "app.kuaiiot.menu.alerts",
-        "path": "/apps/kuaiiot/alerts",
-        "icon": "alertTriangle",
-        "permission": "kuaiiot:alert:read",
-        "sort_order": 5
-      },
-      {
-        "title": "app.kuaiiot.menu.edgeConfigs",
-        "path": "/apps/kuaiiot/edge-configs",
-        "icon": "server",
-        "permission": "kuaiiot:edge-config:read",
-        "sort_order": 6
-      },
-      {
-        "title": "app.kuaiiot.menu.pipeline",
-        "path": "/apps/kuaiiot/pipeline",
-        "icon": "gitBranch",
-        "permission": "kuaiiot:pipeline:read",
-        "sort_order": 7
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaiiot.menu.products",
+            "path": "/apps/kuaiiot/products",
+            "sort_order": 1,
+            "permission": "kuaiiot:product:read"
+          },
+          {
+            "title": "app.kuaiiot.menu.devices",
+            "path": "/apps/kuaiiot/devices",
+            "sort_order": 2,
+            "permission": "kuaiiot:device:read"
+          },
+          {
+            "title": "app.kuaiiot.menu.tags",
+            "path": "/apps/kuaiiot/tags",
+            "sort_order": 3,
+            "permission": "kuaiiot:tag:read"
+          },
+          {
+            "title": "app.kuaiiot.menu.connections",
+            "path": "/apps/kuaiiot/connections",
+            "sort_order": 4,
+            "permission": "kuaiiot:connection:read"
+          },
+          {
+            "title": "app.kuaiiot.menu.edgeConfigs",
+            "path": "/apps/kuaiiot/edge-configs",
+            "sort_order": 5,
+            "permission": "kuaiiot:edge-config:read"
+          }
+        ]
       }
     ]
   },
   "permissions": [
     "kuaiiot:entry:read",
     "kuaiiot:dashboard:read",
+    "kuaiiot:product:read",
+    "kuaiiot:product:create",
+    "kuaiiot:product:update",
+    "kuaiiot:product:delete",
     "kuaiiot:connection:read",
     "kuaiiot:connection:create",
     "kuaiiot:connection:update",
@@ -77,6 +95,10 @@
     "kuaiiot:device:create",
     "kuaiiot:device:update",
     "kuaiiot:device:delete",
+    "kuaiiot:device-group:read",
+    "kuaiiot:device-group:create",
+    "kuaiiot:device-group:update",
+    "kuaiiot:device-group:delete",
     "kuaiiot:tag:read",
     "kuaiiot:tag:create",
     "kuaiiot:tag:update",
@@ -104,6 +126,5 @@
   "dependencies": {
     "riveredge-backend": ">=1.0.0",
     "riveredge-frontend": ">=1.0.0"
-  },
-  "market_category": "pro"
+  }
 }

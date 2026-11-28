@@ -124,7 +124,7 @@ class PayablePrepaymentApplyService:
             status="Confirmed",
             unsettled_amount__gt=0,
             deleted_at__isnull=True,
-        ).order_by("id").all()
+        ).order_by("id").select_for_update()
         if not payments:
             logger.warning(
                 "apply_prepayment_to_payable no confirmed unsettled prepayment "

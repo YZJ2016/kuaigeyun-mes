@@ -169,6 +169,31 @@ class InventoryCostService:
             return Decimal("0")
         return self.resolve_material_base_unit_cost(material)
 
+    async def resolve_costing_warehouse_ids(self, tenant_id: int) -> Optional[List[int]]:
+        """
+        参与库存金额核算的仓库 ID。
+
+        无赠品仓等「只计数量」仓时返回 None（调用方可按全仓数量计价，免二次按仓汇总）。
+        存在只计数量仓时返回其余仓库 ID 列表（含未启用但可能仍有库存的仓）。
+        """
+        from apps.master_data.constants.warehouse_type import QUANTITY_ONLY_WAREHOUSE_TYPES
+        from apps.master_data.models.warehouse import Warehouse
+
+        qty_only = list(QUANTITY_ONLY_WAREHOUSE_TYPES)
+        has_qty_only = await Warehouse.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            warehouse_type__in=qty_only,
+        ).exists()
+        if not has_qty_only:
+            return None
+
+        rows = await Warehouse.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).exclude(warehouse_type__in=qty_only).values_list("id", flat=True)
+        return [int(wid) for wid in rows]
+
     async def get_material_unit_cost_or_zero(self, tenant_id: int, material_id: int) -> Decimal:
         """库存计价内部使用：无单价时按 0 处理。"""
         cost = await self.get_material_unit_cost(tenant_id, material_id)
@@ -356,15 +381,13 @@ class InventoryCostService:
         tenant_id: int,
         outbound_items: List[Any],
     ) -> None:
-        """其他出库确认：按移动平均写入明细 unit_price（均价不变）。"""
-        for line in outbound_items:
-            qty = self._decimal(line.outbound_quantity)
-            if qty <= 0:
-                continue
-            unit_cost = await self.resolve_outbound_unit_cost(tenant_id, int(line.material_id))
-            line.unit_price = unit_cost
-            line.total_amount = (qty * unit_cost).quantize(Decimal("0.01"))
-            await line.save(update_fields=["unit_price", "total_amount", "updated_at"])
+        """其他出库确认：不回写单据单价/金额。
+
+        其他出库单价为选填，禁止按移动平均/采购价自动灌入明细；
+        用户已填的 unit_price / total_amount 原样保留。
+        """
+        _ = (tenant_id, outbound_items)
+        return
 
     async def compute_work_order_unit_cost(self, tenant_id: int, work_order_id: int) -> Decimal:
         """基于最新工单成本核算或领料实际成本估算单位成本。"""

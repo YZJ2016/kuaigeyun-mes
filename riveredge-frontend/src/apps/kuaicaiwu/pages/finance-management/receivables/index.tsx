@@ -24,8 +24,20 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
+import { postSubmitReview } from '../../../../../services/uniAudit';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { isPendingReviewStatus } from '../../../../kuaizhizao/constants/documentStatus';
+import { createListAuditPhaseColumn } from '../../../../kuaizhizao/pages/sales-management/shared/listAuditPhaseColumn';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -108,7 +120,7 @@ const ReceivableList: React.FC = () => {
     const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
     const [pullSubmitting, setPullSubmitting] = useState(false);
     const [pullPreviewData, setPullPreviewData] = useState<ReceivablePullPreview | null>(null);
-    const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+    const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
     const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
     const pullFromSalesOrderCloseRef = useRef<(() => void) | null>(null);
     const pullFromSalesOrderOpenRef = useRef<(() => void) | null>(null);
@@ -129,13 +141,15 @@ const ReceivableList: React.FC = () => {
     const pullFromSalesDeliveryAction = getKuaicaiwuDocumentAction('receivable.pull_from_sales_delivery');
 
     const receivableAuditEnabled = useAuditRequired('receivable', false);
+    const receivableAuditColumn = useMemo(
+        () => createListAuditPhaseColumn<Receivable>({ t, auditEnabled: receivableAuditEnabled }),
+        [t, receivableAuditEnabled],
+    );
     const receivablePerms = useResourcePermissions(RECEIVABLE_RESOURCE);
     const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
     const salesInvoicePerms = useResourcePermissions(SALES_INVOICE_RESOURCE);
-    const receivableAuditBatchHandlers = useMemo(
-        () => createUniAuditBatchHandlers('receivable'),
-        [],
-    );
+    const commitAfterSaveRef = useRef(false);
+    const editFormRef = useRef<ProFormInstance>(null);
     const selectedRecordsForBatch = useMemo(
         () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
         [tableRows, selectedRowKeys],
@@ -143,10 +157,183 @@ const ReceivableList: React.FC = () => {
     const [mergeModalOpen, setMergeModalOpen] = useState(false);
     const [mergeMode, setMergeMode] = useState<MergeFinanceMode>('merge_receipt');
     const [mergeSources, setMergeSources] = useState<MergeFinanceSourceRow[]>([]);
+    const {
+        runAction: runReceivableAuditBatch,
+        auditModal: receivableAuditModal,
+    } = useAuditBatchRunner<Receivable>({
+        permGates: receivablePerms,
+        handlers: {
+            approve: (id) => receivableService.approveReceivable(id),
+            revoke: (id) => receivableService.revokeReceivable(id),
+            withdraw: (id) => receivableService.withdrawReceivable(id),
+        },
+        onBatchComplete: () => {
+            setSelectedRowKeys([]);
+            actionRef.current?.reload();
+        },
+        auditEntity: {
+            entityType: 'receivable',
+            entityName: t(`${P}.entityName`),
+        },
+    });
     const handleReceivableAuditBatchSuccess = () => {
         setSelectedRowKeys([]);
-    actionRef.current?.reload();
+        actionRef.current?.reload();
     };
+    const {
+        runAfterPersist: runReceivableSaveAndAudit,
+        initiatorModal: receivableSaveAndAuditInitiatorModal,
+    } = useDocumentFormCommitAndSubmitReview({
+        entityType: 'receivable',
+        entityLabel: t(`${P}.entityName`),
+        commit: (id) => receivableService.commitReceivable(id),
+        submitReview: (id, payload) => postSubmitReview('receivable', id, payload),
+        onSuccess: () => {
+            actionRef.current?.reload();
+        },
+    });
+
+    const receivableToolbarAuditMenus = useMemo(() => {
+        const reviewOf = (row: Receivable) => String(row.review_status || '').trim();
+        const allowed = (row: Receivable, key: string) => pickCapability(row, key)?.allowed === true;
+        const run = (
+            records: Receivable[],
+            capabilityKey: string,
+            permAllowed: boolean,
+            onRun: (id: number) => Promise<unknown>,
+            notAllowedMessage?: string,
+        ) =>
+            runCapabilityBatchLoop({
+                keys: records.map((row) => Number(row.id)),
+                records,
+                capabilityKey,
+                permAllowed,
+                notAllowedMessage,
+                onRun,
+                onSuccess: handleReceivableAuditBatchSuccess,
+                message: messageApi,
+                t,
+            });
+        const submitRows = selectedRecordsForBatch.filter((row) => allowed(row, 'submit'));
+        const committedRows = selectedRecordsForBatch.filter(
+            (row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+        );
+        const pendingRows = selectedRecordsForBatch.filter((row) => {
+            const review = reviewOf(row);
+            return review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit');
+        });
+        const reviewRows = selectedRecordsForBatch.filter((row) => allowed(row, 'submit_review'));
+        const approveRows = selectedRecordsForBatch.filter(
+            (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+        );
+        const revokeRows = selectedRecordsForBatch.filter((row) => allowed(row, 'revoke_approval'));
+        const canSubmit = receivablePerms.canAction?.('submit') ?? false;
+        const canApprove = receivablePerms.canAction?.('approve') ?? false;
+        const canRevoke = receivablePerms.canAction?.('revoke') ?? false;
+        const hasSelection = selectedRecordsForBatch.length > 0;
+        const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
+        const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+            [
+                {
+                    key: 'submit',
+                    label: t('common.submit'),
+                    disabled: submitDisabled,
+                    onClick: () => run(submitRows, 'submit', canSubmit, (id) => receivableService.commitReceivable(id)),
+                },
+                {
+                    key: 'withdraw-submit',
+                    label: t(`${P}.toolbar.withdrawSubmit`),
+                    disabled: hasSelection && committedRows.length === 0,
+                    onClick: () =>
+                        run(committedRows, 'withdraw_submit', canSubmit, (id) => receivableService.withdrawReceivable(id)),
+                },
+                {
+                    key: 'submit-review',
+                    label: t(`${P}.toolbar.submitReview`),
+                    disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+                    onClick: () =>
+                        run(
+                            reviewRows,
+                            'submit_review',
+                            canSubmit,
+                            (id) => receivableService.submitReceivableForReview(id),
+                            t(`${P}.toolbar.submitReviewNotAllowed`),
+                        ),
+                },
+            ],
+            {
+                t,
+                message: messageApi,
+                disabled: submitDisabled,
+                commitRecords: submitRows,
+                permAllowed: canSubmit,
+                commit: (id) => receivableService.commitReceivable(id),
+                submitReview: (id) => receivableService.submitReceivableForReview(id),
+                onSuccess: handleReceivableAuditBatchSuccess,
+            },
+        );
+        const auditItems: UniBatchMenuItem[] = [
+            {
+                key: 'approve',
+                label: t('components.uniAction.audit'),
+                disabled: hasSelection && !(canApprove && approveRows.length > 0),
+                onClick: () =>
+                    void runReceivableAuditBatch(
+                        'approve',
+                        approveRows.map((row) => Number(row.id)),
+                        approveRows,
+                        receivableAuditEnabled,
+                    ),
+            },
+            {
+                key: 'withdraw-review',
+                label: t(`${P}.toolbar.withdrawReview`),
+                disabled: hasSelection && pendingRows.length === 0,
+                onClick: () =>
+                    run(pendingRows, 'withdraw_submit', canSubmit, (id) => receivableService.withdrawReceivable(id)),
+            },
+            {
+                key: 'revoke',
+                label: t(`${P}.toolbar.revoke`),
+                disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+                onClick: () =>
+                    run(revokeRows, 'revoke_approval', canRevoke, (id) => receivableService.revokeReceivable(id)),
+            },
+        ];
+        return { submitItems, auditItems };
+    }, [messageApi, receivablePerms, receivableAuditEnabled, runReceivableAuditBatch, selectedRecordsForBatch, t]);
+
+    useSubmitShortcut(() => {
+        commitAfterSaveRef.current = false;
+        if (createModalVisible) createFormRef.current?.submit?.();
+        else editFormRef.current?.submit?.();
+    }, createModalVisible || Boolean(editingRecord));
+
+    const renderReceivableSubmitter = (
+        props: { submit?: () => void },
+        dom: React.ReactNode,
+    ) => [
+        ...(Array.isArray(dom) ? [dom[0]] : []),
+        <Button
+            key="save"
+            type="primary"
+            onClick={() => {
+                commitAfterSaveRef.current = false;
+                props.submit?.();
+            }}
+        >
+            {t('common.save')}
+        </Button>,
+        <Button
+            key="commit"
+            onClick={() => {
+                commitAfterSaveRef.current = true;
+                props.submit?.();
+            }}
+        >
+            {t('components.layoutTemplates.documentFormPage.saveAndAudit')}
+        </Button>,
+    ];
 
     useEffect(() => {
     actionRef.current?.reload();
@@ -281,14 +468,35 @@ const ReceivableList: React.FC = () => {
             notes: values.notes,
             attachments: normalizeDocumentAttachments(values.attachments),
         };
-        const created = await receivableService.createReceivable(data);
-        messageApi.success(t('common.createSuccess'));
-        setCreateModalVisible(false);
-    actionRef.current?.reload();
-        if (created?.id) {
-            navigate(`/apps/kuaicaiwu/finance-management/receivables/${created.id}`);
+        const commit = commitAfterSaveRef.current;
+        commitAfterSaveRef.current = false;
+        try {
+            const created = await receivableService.createReceivable(data);
+            if (commit && created?.id) {
+                setCreateModalVisible(false);
+                actionRef.current?.reload();
+                let result;
+                try {
+                    result = await runReceivableSaveAndAudit(created.id);
+                } catch {
+                    return false;
+                }
+                if (result?.completed !== false) {
+                    navigate(`/apps/kuaicaiwu/finance-management/receivables/${created.id}`);
+                }
+            } else {
+                messageApi.success(t('common.createSuccess'));
+                setCreateModalVisible(false);
+                actionRef.current?.reload();
+                if (created?.id) {
+                    navigate(`/apps/kuaicaiwu/finance-management/receivables/${created.id}`);
+                }
+            }
+            return true;
+        } catch (error: any) {
+            messageApi.error(error?.message || t('common.operationFailed'));
+            return false;
         }
-        return true;
     };
 
     const openEdit = (record: Receivable) => {
@@ -309,6 +517,8 @@ const ReceivableList: React.FC = () => {
         if (!editingRecord) return false;
         const today = formatDateTime(dayjs(), 'YYYY-MM-DD');
         try {
+            const commit = commitAfterSaveRef.current;
+            commitAfterSaveRef.current = false;
             await receivableService.updateReceivable(editingRecord.id, {
                 customer_id: values.customer_id,
                 customer_name: customerOptions.find((o) => o.value === values.customer_id)?.label || editingRecord.customer_name,
@@ -318,9 +528,19 @@ const ReceivableList: React.FC = () => {
                 notes: values.notes,
                 attachments: normalizeDocumentAttachments(values.attachments),
             });
-            messageApi.success(t('common.updateSuccess'));
-            setEditingRecord(null);
-            actionRef.current?.reload();
+            if (commit) {
+                setEditingRecord(null);
+                actionRef.current?.reload();
+                try {
+                    await runReceivableSaveAndAudit(editingRecord.id);
+                } catch {
+                    return false;
+                }
+            } else {
+                messageApi.success(t('common.updateSuccess'));
+                setEditingRecord(null);
+                actionRef.current?.reload();
+            }
             return true;
         } catch (error: any) {
             messageApi.error(error?.message || t('common.updateFailed'));
@@ -330,7 +550,7 @@ const ReceivableList: React.FC = () => {
 
     const resetPullPreview = () => {
         setPullPreviewOpen(false);
-        setPullPreviewSourceId(null);
+        setPullPreviewSourceIds([]);
         setPullPreviewData(null);
         setPullPreviewKind(null);
         pullForm.resetFields();
@@ -338,7 +558,7 @@ const ReceivableList: React.FC = () => {
 
     const openPullPreview = async (
         kind: PullPreviewKind,
-        sourceId: number,
+        sourceIds: number[],
         options?: { closeSourceModal?: () => void; reopenSourceModal?: () => void },
     ) => {
         options?.closeSourceModal?.();
@@ -346,13 +566,15 @@ const ReceivableList: React.FC = () => {
         setPullPreviewOpen(false);
         setPullPreviewLoading(true);
         setPullPreviewData(null);
-        setPullPreviewSourceId(sourceId);
+        setPullPreviewSourceIds(sourceIds);
         const hideLoading = messageApi.loading(t(`${P}.pullPreviewLoading`), 0);
         try {
             const data =
                 kind === 'sales_order'
-                    ? await receivableService.previewPullFromSalesOrder(sourceId)
-                    : await receivableService.previewPullFromSalesDelivery(sourceId);
+                    ? await receivableService.previewPullFromSalesOrder(sourceIds[0])
+                    : sourceIds.length === 1
+                      ? await receivableService.previewPullFromSalesDelivery(sourceIds[0])
+                      : await receivableService.previewPullFromSalesDeliveries(sourceIds);
             setPullPreviewData(data);
             setPullPreviewOpen(true);
         } catch (e: any) {
@@ -412,7 +634,7 @@ const ReceivableList: React.FC = () => {
                 messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesOrderAction.sourceLabel }));
                 return;
             }
-            await openPullPreview('sales_order', selectedIds[0], {
+            await openPullPreview('sales_order', [selectedIds[0]], {
                 closeSourceModal: () => pullFromSalesOrderCloseRef.current?.(),
                 reopenSourceModal: () => pullFromSalesOrderOpenRef.current?.(),
             });
@@ -426,7 +648,7 @@ const ReceivableList: React.FC = () => {
 
     const pullFromSalesDeliveryQuery = useUniPullQuery<ReceivablePullCandidate>({
         rowKey: 'id',
-        selectionType: 'radio',
+        selectionType: 'checkbox',
         scopeOptions: pullQueryScopeOptions,
         defaultScope: 'pullable',
         isRowDisabled: (record) => !isPullReceivableSelectable(record),
@@ -448,20 +670,35 @@ const ReceivableList: React.FC = () => {
             }
         },
         onConfirm: async (keys, rows) => {
-            const selected = rows.find((x) => String(x.id) === String(keys[0]));
-            if (!selected?.id) {
+            const selectedIds = rows
+                .filter((x) => keys.some((k) => String(k) === String(x.id)))
+                .map((x) => Number(x.id))
+                .filter((id) => Number.isFinite(id) && id > 0);
+            if (!selectedIds.length) {
                 messageApi.warning(t(`${P}.selectSource`, { label: pullFromSalesDeliveryAction.sourceLabel }));
                 return;
             }
-            pullFromSalesDeliveryCloseRef.current?.();
-            await openPullPreview('sales_delivery', selected.id);
+            const customerIds = new Set(
+                rows
+                    .filter((x) => selectedIds.includes(Number(x.id)))
+                    .map((x) => Number(x.customer_id ?? 0))
+                    .filter((id) => id > 0),
+            );
+            if (customerIds.size > 1) {
+                messageApi.warning(t(`${P}.pull.sameCustomerRequired`));
+                return;
+            }
+            await openPullPreview('sales_delivery', selectedIds, {
+                closeSourceModal: () => pullFromSalesDeliveryCloseRef.current?.(),
+                reopenSourceModal: () => pullFromSalesDeliveryOpenRef.current?.(),
+            });
         },
     });
     pullFromSalesDeliveryCloseRef.current = pullFromSalesDeliveryQuery.closeModal;
     pullFromSalesDeliveryOpenRef.current = pullFromSalesDeliveryQuery.openModal;
 
     const handlePullCreateSubmit = async (values: any) => {
-        if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
+        if (!pullPreviewData || !pullPreviewSourceIds.length || !pullPreviewKind) {
             messageApi.warning(t(`${P}.pullPreviewIncomplete`));
             return false;
         }
@@ -472,7 +709,14 @@ const ReceivableList: React.FC = () => {
             );
             return false;
         }
-        const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+        const maxPush =
+            Number(
+                pullPreviewData.max_push_total ??
+                    (pullPreviewData.items || []).reduce(
+                        (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+                        0,
+                    ),
+            ) || 0;
         const totalAmount = Number(values.total_amount) || 0;
         if (totalAmount <= 0) {
             messageApi.warning(t(`${P}.amountRequired`));
@@ -491,10 +735,14 @@ const ReceivableList: React.FC = () => {
         try {
             await receivableService.createReceivable({
                 source_type: pullPreviewKind,
-                source_id: pullPreviewSourceId,
+                source_id: pullPreviewSourceIds[0],
                 source_code: pullPreviewData.source_code || '',
                 pull_source_type: pullPreviewKind,
-                pull_source_id: pullPreviewSourceId,
+                pull_source_id: pullPreviewSourceIds[0],
+                pull_source_ids:
+                    pullPreviewKind === 'sales_delivery' && pullPreviewSourceIds.length > 1
+                        ? pullPreviewSourceIds
+                        : undefined,
                 customer_id: Number(pullPreviewData.customer_id || 0),
                 customer_name: pullPreviewData.customer_name || '',
                 total_amount: totalAmount,
@@ -526,12 +774,25 @@ const ReceivableList: React.FC = () => {
         }
     };
 
-    const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+    const pullPreviewMaxPush = Number(
+        pullPreviewData?.max_push_total ??
+            (pullPreviewData?.items || []).reduce(
+                (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+                0,
+            ),
+    );
     const pullPreviewTargetLabel = pullFromSalesOrderAction.targetLabel;
 
     const pullFormInitialValues = useMemo(() => {
         if (!pullPreviewData || !pullPreviewKind) return undefined;
-        const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+        const maxPush =
+            Number(
+                pullPreviewData.max_push_total ??
+                    (pullPreviewData.items || []).reduce(
+                        (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+                        0,
+                    ),
+            ) || 0;
         const sourceLabel =
             pullPreviewKind === 'sales_order'
                 ? pullFromSalesOrderAction.sourceLabel
@@ -878,6 +1139,7 @@ const ReceivableList: React.FC = () => {
             render: (_, record) => record.notes || '—',
         },
         ...financeDocCreatedUpdatedColumns<Receivable>(t),
+        ...(receivableAuditColumn ? [receivableAuditColumn] : []),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
             key: 'lifecycle',
@@ -1078,17 +1340,21 @@ const ReceivableList: React.FC = () => {
                 onDelete={handleBatchDelete}
                 deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
                 deleteConfirmDescription={(count) => t(`${P}.deleteConfirm`, { count })}
-                toolBarActionsAfterDelete={[
-                    <UniAuditBatchMenuButton
-                        key="receivable-batch-audit"
+                toolBarActions={[
+                    <UniBatchMenuButton
+                        key="receivable-submit"
                         selectedRowKeys={selectedRowKeys}
-                        selectedRecords={selectedRecordsForBatch}
-                        auditEnabled={receivableAuditEnabled}
-                        permGates={receivablePerms}
-                        handlers={receivableAuditBatchHandlers}
-                        onSuccess={handleReceivableAuditBatchSuccess}
-                        toolBarButtonSize="medium"
+                        menuItems={receivableToolbarAuditMenus.submitItems}
+                        buttonText={t('common.submit')}
                     />,
+                    <UniBatchMenuButton
+                        key="receivable-audit"
+                        selectedRowKeys={selectedRowKeys}
+                        menuItems={receivableToolbarAuditMenus.auditItems}
+                        buttonText={t('components.uniAction.audit')}
+                    />,
+                ]}
+                toolBarActionsAfterDelete={[
                     <Button
                         key="merge-receipt"
                         size="medium"
@@ -1298,7 +1564,7 @@ const ReceivableList: React.FC = () => {
             >
                 {pullPreviewData ? (
                             <ProForm
-                                key={`pull-receivable-${pullPreviewKind}-${pullPreviewSourceId}`}
+                                key={`pull-receivable-${pullPreviewKind}-${pullPreviewSourceIds.join("-")}`}
                                 form={pullForm}
                                 initialValues={pullFormInitialValues}
                                 submitter={false}
@@ -1346,6 +1612,7 @@ const ReceivableList: React.FC = () => {
                 onOpenChange={setCreateModalVisible}
                 onFinish={handleCreate}
                 formRef={createFormRef}
+                submitter={{ render: renderReceivableSubmitter }}
                 width={MODAL_CONFIG.STANDARD_WIDTH}
                 {...financeFormGridProps}
             >
@@ -1407,6 +1674,8 @@ const ReceivableList: React.FC = () => {
                         : undefined
                 }
                 onFinish={handleUpdate}
+                formRef={editFormRef}
+                submitter={{ render: renderReceivableSubmitter }}
                 width={MODAL_CONFIG.STANDARD_WIDTH}
                 {...financeFormGridProps}
             >
@@ -1441,6 +1710,8 @@ const ReceivableList: React.FC = () => {
                 <DocumentAttachmentsField category="receivable_attachments" />
             </ModalForm>
 
+            {receivableAuditModal}
+            {receivableSaveAndAuditInitiatorModal}
             <MergeFinanceDocsModal
                 open={mergeModalOpen}
                 mode={mergeMode}

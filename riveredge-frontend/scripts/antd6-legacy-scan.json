@@ -1,6 +1,6 @@
 {
   "antd": "^6.4.4",
-  "scanned_files": 2941,
+  "scanned_files": 2952,
   "pattern_types": 3,
   "total_hits": 9,
   "by_severity": {
@@ -37,8 +37,8 @@
           "snippet": "addonAfter={auxEnabled ? auxUnit : undefined}"
         },
         {
-          "file": "src/apps/kuaizhizao/components/InspectionSamplingSpecFields.tsx",
-          "line": 135,
+          "file": "src/apps/kuaizhizao/components/PaymentMethodWithMixFormItems.tsx",
+          "line": 253,
           "snippet": "addonAfter=\"%\""
         }
       ]
@@ -83,11 +83,11 @@
       "approx_hits": 2
     },
     {
-      "file": "src/apps/kuaizhizao/components/PaymentMethodWithMixFormItems.tsx",
+      "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
       "approx_hits": 2
     },
     {
-      "file": "src/components/quantity-with-unit/DocumentLineDualQuantity.tsx",
+      "file": "src/apps/kuaizhizao/components/PaymentMethodWithMixFormItems.tsx",
       "approx_hits": 2
     },
     {

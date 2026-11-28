@@ -15,7 +15,14 @@ import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  UniCapabilityBatchButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG, MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -110,6 +117,13 @@ import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { isPendingReviewStatus } from '../../../../kuaizhizao/constants/documentStatus';
+import { createListAuditPhaseColumn } from '../../../../kuaizhizao/pages/sales-management/shared/listAuditPhaseColumn';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
+import { postSubmitReview } from '../../../../../services/uniAudit';
+import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   buildFinanceVoucherLinkHandlers,
@@ -121,11 +135,25 @@ import { PAYMENT_REFUND_RESOURCE } from '../../../services/finance/payment-refun
 type PullPayableCandidate = PaymentPullCandidate;
 
 const P = 'app.kuaicaiwu.payment';
+const PAYMENT_ENTITY = 'payment';
 const PAYMENT_RESOURCE = 'kuaicaiwu:payment';
+
+function paymentReviewRaw(record: PaymentVoucher): string {
+  return String(record.review_status || '').trim();
+}
+
+function paymentReviewEditable(record: PaymentVoucher): boolean {
+  const raw = paymentReviewRaw(record);
+  return raw === '' || raw === '草稿' || raw === 'draft' || raw === '驳回' || raw === 'rejected' || raw === '已驳回';
+}
+
+function paymentReviewApproved(record: PaymentVoucher): boolean {
+  return record.audit?.phase === 'approved';
+}
 
 /** 列表功能区确认/撤回：合成 capabilities（对齐出入库 UniCapabilityBatchButton） */
 function withPaymentExecutionCapabilities(row: PaymentVoucher): PaymentVoucher {
-  const confirmAllowed = row.status === 'Draft';
+  const confirmAllowed = row.status === 'Draft' && paymentReviewApproved(row);
   const unconfirmAllowed = row.status === 'Confirmed' && canCorrectFinanceVoucher(row);
   return {
     ...row,
@@ -195,9 +223,51 @@ const PaymentsPage: React.FC = () => {
     formRef: createPaymentFormRef,
   });
   const editOffsetLines = usePaymentVoucherFormPrepaymentOffsetLines({ formRef: editPaymentFormRef });
-  const [createWriteoffLoading, setCreateWriteoffLoading] = useState(false);
-  const [editWriteoffLoading, setEditWriteoffLoading] = useState(false);
   const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
+  const paymentAuditEnabled = useAuditRequired(PAYMENT_ENTITY, false);
+  const paymentAuditColumn = useMemo(
+    () =>
+      createListAuditPhaseColumn<PaymentVoucher>({
+        t,
+        auditEnabled: paymentAuditEnabled,
+      }),
+    [t, paymentAuditEnabled],
+  );
+  const commitAfterSaveRef = useRef(false);
+  const [createCommitLoading, setCreateCommitLoading] = useState(false);
+  const [editCommitLoading, setEditCommitLoading] = useState(false);
+  const handlePaymentAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, []);
+  const {
+    runAction: runPaymentAuditBatch,
+    auditModal: paymentAuditModal,
+  } = useAuditBatchRunner<PaymentVoucher>({
+    permGates: paymentPerms,
+    handlers: {
+      approve: (id) => paymentService.approvePayment(id),
+      revoke: (id) => paymentService.revokePayment(id),
+      withdraw: (id) => paymentService.withdrawPayment(id),
+    },
+    onBatchComplete: handlePaymentAuditBatchSuccess,
+    auditEntity: {
+      entityType: PAYMENT_ENTITY,
+      entityName: t(`${P}.entityName`),
+    },
+  });
+  const {
+    runAfterPersist: runPaymentSaveAndAudit,
+    initiatorModal: paymentSaveAndAuditInitiatorModal,
+  } = useDocumentFormCommitAndSubmitReview({
+    entityType: PAYMENT_ENTITY,
+    entityLabel: t(`${P}.entityName`),
+    commit: (id) => paymentService.commitPayment(id),
+    submitReview: (id, payload) => postSubmitReview(PAYMENT_ENTITY, id, payload),
+    onSuccess: () => {
+      actionRef.current?.reload();
+    },
+  });
   const paymentRefundPerms = useResourcePermissions(PAYMENT_REFUND_RESOURCE);
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
@@ -296,7 +366,7 @@ const PaymentsPage: React.FC = () => {
     };
   };
 
-  const handleCreate = async (values: any, opts?: { confirmAfter?: boolean }) => {
+  const handleCreate = async (values: any) => {
     values = {
       ...(values as Record<string, unknown>),
       pull_lines: resolveFormListFieldForSubmit(
@@ -373,41 +443,44 @@ const PaymentsPage: React.FC = () => {
       } catch (linkError) {
         messageApi.warning(getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')));
       }
-      if (opts?.confirmAfter) {
-        await paymentService.confirmPayment(created.id);
-        messageApi.success(t(`${P}.writeoffConfirmSuccess`));
+      if (commitAfterSaveRef.current) {
+        setCreateModalVisible(false);
+        actionRef.current?.reload();
+        try {
+          await runPaymentSaveAndAudit(created.id);
+        } catch {
+          return false;
+        }
       } else {
         messageApi.success(t(`${P}.createSuccess`));
+        setCreateModalVisible(false);
+        actionRef.current?.reload();
       }
-      setCreateModalVisible(false);
-      actionRef.current?.reload();
     } catch (error) {
-      messageApi.error(
-        getApiErrorMessage(
-          error,
-          opts?.confirmAfter ? t(`${P}.writeoffConfirmFailed`) : t('common.createFailed'),
-        ),
-      );
+      messageApi.error(getApiErrorMessage(error, t('common.createFailed')));
       return false;
+    } finally {
+      commitAfterSaveRef.current = false;
     }
     return true;
   };
 
-  const submitCreateAndConfirm = async () => {
+  const submitCreateAndAudit = async () => {
     const inst = createPaymentFormRef.current;
     if (!inst) return;
-    setCreateWriteoffLoading(true);
+    setCreateCommitLoading(true);
     try {
+      commitAfterSaveRef.current = true;
       const values = await inst.validateFields();
       const merged = {
         ...(inst.getFieldsValue(true) as Record<string, unknown>),
         ...values,
       };
-      await handleCreate(merged, { confirmAfter: true });
+      await handleCreate(merged);
     } catch {
-      // validateFields 已提示
+      commitAfterSaveRef.current = false;
     } finally {
-      setCreateWriteoffLoading(false);
+      setCreateCommitLoading(false);
     }
   };
 
@@ -880,7 +953,7 @@ const PaymentsPage: React.FC = () => {
     }
   };
 
-  const handleUpdate = async (values: any, opts?: { confirmAfter?: boolean }) => {
+  const handleUpdate = async (values: any) => {
     if (!editingRecord) return false;
     values = {
       ...(values as Record<string, unknown>),
@@ -954,42 +1027,46 @@ const PaymentsPage: React.FC = () => {
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      if (opts?.confirmAfter) {
-        await paymentService.confirmPayment(editingRecord.id);
-        messageApi.success(t(`${P}.writeoffConfirmSuccess`));
+      if (commitAfterSaveRef.current) {
+        setEditingRecord(null);
+        actionRef.current?.reload();
+        refreshOpenDetail();
+        try {
+          await runPaymentSaveAndAudit(editingRecord.id);
+        } catch {
+          return false;
+        }
       } else {
         messageApi.success(t('common.updateSuccess'));
+        setEditingRecord(null);
+        actionRef.current?.reload();
+        refreshOpenDetail();
       }
-      setEditingRecord(null);
-      actionRef.current?.reload();
-      refreshOpenDetail();
       return true;
     } catch (e: any) {
-      messageApi.error(
-        getApiErrorMessage(
-          e,
-          opts?.confirmAfter ? t(`${P}.writeoffConfirmFailed`) : t('common.updateFailed'),
-        ),
-      );
+      messageApi.error(getApiErrorMessage(e, t('common.updateFailed')));
       return false;
+    } finally {
+      commitAfterSaveRef.current = false;
     }
   };
 
-  const submitEditAndConfirm = async () => {
+  const submitEditAndAudit = async () => {
     const inst = editPaymentFormRef.current;
     if (!inst || !editingRecord) return;
-    setEditWriteoffLoading(true);
+    setEditCommitLoading(true);
     try {
+      commitAfterSaveRef.current = true;
       const values = await inst.validateFields();
       const merged = {
         ...(inst.getFieldsValue(true) as Record<string, unknown>),
         ...values,
       };
-      await handleUpdate(merged, { confirmAfter: true });
+      await handleUpdate(merged);
     } catch {
-      // validateFields 已提示
+      commitAfterSaveRef.current = false;
     } finally {
-      setEditWriteoffLoading(false);
+      setEditCommitLoading(false);
     }
   };
 
@@ -1079,6 +1156,135 @@ const PaymentsPage: React.FC = () => {
     });
     setSelectedRowKeys([]);
   };
+
+  const paymentToolbarAuditMenus = useMemo(() => {
+    const selected = selectedPaymentsForBatch;
+    const reviewOf = (row: PaymentVoucher) => paymentReviewRaw(row);
+    const allowed = (row: PaymentVoucher, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      records: PaymentVoucher[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys: records.map((row) => Number(row.id)),
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: () => {
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        },
+        message: messageApi,
+        t,
+      });
+    const canSubmit = Boolean(paymentPerms.canAction?.('submit'));
+    const submitRows = selected.filter((row) => allowed(row, 'submit'));
+    const submitDisabled = selected.length > 0 && !(canSubmit && submitRows.length > 0);
+    const reloadAfterSubmit = () => {
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    };
+    const submitItems: UniBatchMenuItem[] = [
+      {
+        key: 'submit',
+        label: t('common.submit'),
+        disabled: submitDisabled,
+        onClick: () => run(submitRows, 'submit', canSubmit, (id) => paymentService.commitPayment(id)),
+      },
+      {
+        key: 'withdraw-submit',
+        label: t(`${P}.toolbar.withdrawSubmit`),
+        disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+        onClick: () =>
+          run(
+            selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+            'withdraw_submit',
+            canSubmit,
+            (id) => paymentService.withdrawPayment(id),
+          ),
+      },
+      {
+        key: 'submit-review',
+        label: t(`${P}.toolbar.submitReview`),
+        disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+        onClick: () =>
+          run(
+            selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+            'submit_review',
+            canSubmit,
+            (id) => paymentService.submitPaymentForReview(id),
+            t(`${P}.toolbar.submitReviewNotAllowed`),
+          ),
+      },
+    ];
+    const documentCommitAndSubmitReview = {
+      disabled: submitDisabled,
+      commitRecords: submitRows,
+      permAllowed: canSubmit,
+      commit: (id: number) => paymentService.commitPayment(id),
+      submitReview: (id: number) => paymentService.submitPaymentForReview(id),
+      onSuccess: reloadAfterSubmit,
+    };
+    const approveRows = selected.filter(
+      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('components.uniAction.audit'),
+        disabled: !selected.some(
+          (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+        ),
+        onClick: () =>
+          void runPaymentAuditBatch(
+            'approve',
+            approveRows.map((row) => Number(row.id)),
+            approveRows,
+            paymentAuditEnabled,
+          ),
+      },
+      {
+        key: 'withdraw-review',
+        label: t(`${P}.toolbar.withdrawReview`),
+        disabled: !selected.some(
+          (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'withdraw_submit'),
+        ),
+        onClick: () =>
+          run(
+            selected.filter(
+              (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'withdraw_submit'),
+            ),
+            'withdraw_submit',
+            Boolean(paymentPerms.canAction?.('submit')),
+            (id) => paymentService.withdrawPayment(id),
+          ),
+      },
+      {
+        key: 'revoke',
+        label: t(`${P}.toolbar.revoke`),
+        disabled: !selected.some((row) => allowed(row, 'revoke_approval')),
+        onClick: () =>
+          run(
+            selected.filter((row) => allowed(row, 'revoke_approval')),
+            'revoke_approval',
+            Boolean(paymentPerms.canAction?.('revoke')),
+            (id) => paymentService.revokePayment(id),
+          ),
+      },
+    ];
+    return { submitItems, auditItems, documentCommitAndSubmitReview };
+  }, [selectedPaymentsForBatch, t, messageApi, paymentPerms, paymentAuditEnabled, runPaymentAuditBatch]);
+
+  useSubmitShortcut(() => {
+    commitAfterSaveRef.current = false;
+    if (createModalVisible) createPaymentFormRef.current?.submit?.();
+    else if (editingRecord) editPaymentFormRef.current?.submit?.();
+  }, createModalVisible || Boolean(editingRecord));
 
   const batchMenuItems = useMemo(() => [
     {
@@ -1309,6 +1515,7 @@ const PaymentsPage: React.FC = () => {
       valueEnum: buildVoucherStatusEnum(t),
     },
     ...financeDocCreatedUpdatedColumns<PaymentVoucher>(t),
+    ...(paymentAuditColumn ? [paymentAuditColumn] : []),
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
       key: 'lifecycle',
@@ -1401,7 +1608,7 @@ const PaymentsPage: React.FC = () => {
         return acts;
       },
     },
-  ], [t, supplierOptions, paymentPerms, paymentRefundPerms, navigate, openDetail, executeConfirm, executeRepairSettle, executeCancelVoucher, paymentSettlementTypeOptions]);
+  ], [t, supplierOptions, paymentPerms, paymentRefundPerms, navigate, openDetail, executeConfirm, executeRepairSettle, executeCancelVoucher, paymentSettlementTypeOptions, paymentAuditColumn]);
 
 
 
@@ -1429,6 +1636,21 @@ const PaymentsPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t(`${P}.deleteConfirm`, { count })}
+        toolBarActions={[
+          <UniBatchMenuButton
+            key="payment-submit"
+            selectedRowKeys={selectedRowKeys}
+            buttonText={t('common.submit')}
+            menuItems={paymentToolbarAuditMenus.submitItems}
+            documentCommitAndSubmitReview={paymentToolbarAuditMenus.documentCommitAndSubmitReview}
+          />,
+          <UniBatchMenuButton
+            key="payment-audit"
+            selectedRowKeys={selectedRowKeys}
+            buttonText={t('components.uniAction.audit')}
+            menuItems={paymentToolbarAuditMenus.auditItems}
+          />,
+        ]}
         toolBarActionsAfterBatch={[
           <UniCapabilityBatchButton
             key="payment-confirm"
@@ -1791,14 +2013,22 @@ const PaymentsPage: React.FC = () => {
         }}
         submitter={{
           render: (_props, doms) => [
+            ...(Array.isArray(doms) ? [doms[0]] : []),
             <Button
-              key="writeoff-confirm"
-              loading={createWriteoffLoading}
-              onClick={() => void submitCreateAndConfirm()}
+              key="save-draft"
+              onClick={() => createPaymentFormRef.current?.submit()}
             >
-              {t(`${P}.writeoffAndConfirm`)}
+              {t('components.layoutTemplates.documentFormPage.saveDraft')}
+              {SUBMIT_SHORTCUT_HINT}
             </Button>,
-            ...doms,
+            <Button
+              key="save-audit"
+              type="primary"
+              loading={createCommitLoading}
+              onClick={() => void submitCreateAndAudit()}
+            >
+              {t('components.layoutTemplates.documentFormPage.saveAndAudit')}
+            </Button>,
           ],
         }}
       >
@@ -1875,16 +2105,24 @@ const PaymentsPage: React.FC = () => {
         }}
         submitter={{
           render: (_props, doms) =>
-            editingRecord?.status === 'Draft'
+            editingRecord?.status === 'Draft' && paymentReviewEditable(editingRecord)
               ? [
+                  ...(Array.isArray(doms) ? [doms[0]] : []),
                   <Button
-                    key="writeoff-confirm"
-                    loading={editWriteoffLoading}
-                    onClick={() => void submitEditAndConfirm()}
+                    key="save-draft"
+                    onClick={() => editPaymentFormRef.current?.submit()}
                   >
-                    {t(`${P}.writeoffAndConfirm`)}
+                    {t('components.layoutTemplates.documentFormPage.saveDraft')}
+                    {SUBMIT_SHORTCUT_HINT}
                   </Button>,
-                  ...doms,
+                  <Button
+                    key="save-audit"
+                    type="primary"
+                    loading={editCommitLoading}
+                    onClick={() => void submitEditAndAudit()}
+                  >
+                    {t('components.layoutTemplates.documentFormPage.saveAndAudit')}
+                  </Button>,
                 ]
               : doms,
         }}
@@ -1986,7 +2224,10 @@ const PaymentsPage: React.FC = () => {
                 },
                 {
                   key: 'confirm',
-                  visible: detailRecord.status === 'Draft' && Boolean(paymentPerms.canAction?.('audit')),
+                  visible:
+                    detailRecord.status === 'Draft' &&
+                    paymentReviewApproved(detailRecord) &&
+                    Boolean(paymentPerms.canAction?.('audit')),
                   render: (
                     <ActionConfirmPopconfirm
                       title={t(`${P}.confirmTitle`)}
@@ -2083,6 +2324,8 @@ const PaymentsPage: React.FC = () => {
         }
       />
       {PrintModal}
+      {paymentAuditModal}
+      {paymentSaveAndAuditInitiatorModal}
       <VoucherRemediationSettleModal
         open={remediationVoucher != null}
         side="payment"

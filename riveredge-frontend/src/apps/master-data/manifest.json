@@ -5,6 +5,8 @@
   "description": "企业主数据唯一真源与基础资料协同平台",
   "icon": "database",
   "author": "StarTech",
+  "market_category": "base",
+  "is_pro": false,
   "entry_point": "../apps/master-data/index.tsx",
   "route_path": "/apps/master-data",
   "sort_order": 150,
@@ -170,23 +172,40 @@
             "sort_order": 4
           },
           {
+            "title": "app.master-data.menu.process.drawings",
+            "path": "/apps/master-data/process/drawings",
+            "permission": "master-data:process:drawing:read",
+            "sort_order": 5
+          },
+          {
+            "title": "app.master-data.menu.process.drawing-where-used",
+            "path": "/apps/master-data/process/drawing-where-used",
+            "permission": "master-data:process:drawing-where-used:read",
+            "sort_order": 6
+          },
+          {
+            "title": "app.master-data.menu.process.drawing-distributions",
+            "path": "/apps/master-data/process/drawing-distributions",
+            "permission": "master-data:process:drawing-distribution:read",
+            "sort_order": 7
+          },
+          {
+            "title": "app.master-data.menu.process.drawing-loans",
+            "path": "/apps/master-data/process/drawing-loans",
+            "permission": "master-data:process:drawing-loan:read",
+            "sort_order": 8
+          },
+          {
             "title": "app.master-data.menu.process.engineering-bom",
             "path": "/apps/master-data/process/engineering-bom",
             "permission": "master-data:process:engineering-bom:read",
-            "sort_order": 5
+            "sort_order": 9
           },
           {
             "title": "app.master-data.menu.process.sop",
             "path": "/apps/master-data/process/sop",
             "permission": "master-data:process:sop:read",
-            "sort_order": 6
-          },
-          {
-            "title": "app.master-data.menu.process.drawings",
-            "icon": "fileImage",
-            "path": "/apps/master-data/process/drawings",
-            "permission": "master-data:process:drawing:read",
-            "sort_order": 7
+            "sort_order": 10
           }
         ]
       },

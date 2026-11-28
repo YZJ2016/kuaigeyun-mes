@@ -71,6 +71,9 @@ class Payment(BaseModel):
         description="审核状态：草稿/SUBMITTED/待审核/已审核/驳回。确认付款前须已审核",
     )
     
+    post_on_approval = fields.BooleanField(
+        default=False, description="审核通过后自动过账（合并结算立付）"
+    )
     notes = fields.TextField(null=True, description="备注")
     require_payment_voucher = fields.BooleanField(
         default=False, description="是否必须上传付款凭证（来自付款申请要求）"

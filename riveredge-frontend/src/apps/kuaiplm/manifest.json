@@ -3,15 +3,16 @@
   "name": "星研发",
   "version": "1.0.0",
   "description": "研发项目 NPI 阶段门与设计变更知识协同平台",
-  "icon": "experiment",
+  "icon": "layers",
   "author": "StarTech",
+  "market_category": "base",
+  "is_pro": false,
   "entry_point": "../apps/kuaiplm/index.tsx",
   "route_path": "/apps/kuaiplm",
-  "is_pro": false,
   "sort_order": 138,
   "menu_config": {
     "title": "app.kuaiplm.name",
-    "icon": "experiment",
+    "icon": "layers",
     "path": "/apps/kuaiplm",
     "permission": "kuaiplm:entry:read",
     "children": [
@@ -109,7 +110,7 @@
             "title": "app.kuaiplm.menu.trial-flows",
             "path": "/apps/kuaiplm/trial-flows",
             "permission": "kuaiplm:trial-flow:read",
-            "sort_order": 10
+            "sort_order": 9
           },
           {
             "title": "app.kuaiplm.menu.phase2.requirements",
@@ -168,40 +169,43 @@
         "sort_order": 4,
         "children": [
           {
-            "title": "app.kuaiplm.menu.change-management",
-            "path": "/apps/kuaiplm/change-management",
-            "permission": "kuaiplm:change:read",
-            "sort_order": 1
-          },
-          {
             "title": "app.master-data.menu.process.drawings",
             "path": "/apps/master-data/process/drawings",
             "permission": "master-data:process:drawing:read",
-            "sort_order": 2
+            "sort_order": 1
           },
           {
             "title": "app.master-data.menu.process.drawing-where-used",
             "path": "/apps/master-data/process/drawing-where-used",
             "permission": "master-data:process:drawing-where-used:read",
-            "sort_order": 3
+            "sort_order": 2
           },
           {
             "title": "app.master-data.menu.process.drawing-distributions",
             "path": "/apps/master-data/process/drawing-distributions",
             "permission": "master-data:process:drawing-distribution:read",
-            "sort_order": 4
+            "sort_order": 3
           },
           {
             "title": "app.master-data.menu.process.drawing-loans",
             "path": "/apps/master-data/process/drawing-loans",
             "permission": "master-data:process:drawing-loan:read",
-            "sort_order": 5
+            "sort_order": 4
           },
           {
             "title": "app.master-data.menu.process.engineering-bom",
             "path": "/apps/master-data/process/engineering-bom",
             "permission": "master-data:process:engineering-bom:read",
-            "sort_order": 6
+            "sort_order": 5
+          },
+          {
+            "title": "app.kuaiplm.menu.change-management",
+            "path": "/apps/kuaiplm/change-management",
+            "permission": "kuaiplm:change:read",
+            "sort_order": 6,
+            "meta": {
+              "node": "bom_change"
+            }
           }
         ]
       },
@@ -258,6 +262,11 @@
           }
         ]
       }
+    ]
+  },
+  "module_references": {
+    "__all_modules__": [
+      "*"
     ]
   },
   "permissions": [
@@ -487,16 +496,6 @@
       "config_section": "plm_project"
     },
     {
-      "node_key": "lab_request",
-      "entity_type": "lab_request",
-      "resource": "kuaiplm:lab-request",
-      "name": "实验委托审核",
-      "template": "simple",
-      "config_category": "plm",
-      "business_type": "",
-      "config_section": "plm_project"
-    },
-    {
       "node_key": "engineering_change",
       "entity_type": "engineering_change",
       "resource": "kuaiplm:ecn",
@@ -571,6 +570,66 @@
       "config_category": "plm",
       "business_type": "",
       "config_section": "plm_doc"
+    },
+    {
+      "node_key": "prototype_build_sheet",
+      "entity_type": "prototype_build_sheet",
+      "resource": "kuaiplm:prototype-build-sheet",
+      "name": "样机制作书审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_rd",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "研发实验委托审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "rd",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_general",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "通用实验委托审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "general",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_project_material",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "材料试验委托审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "project_material",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_project_product",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "整机例试委托审核",
+      "template": "lab_request_dual_mgr",
+      "config_category": "plm",
+      "business_type": "project_product",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_outsource",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "委外试验申请审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "outsource",
+      "config_section": "plm_project"
     }
   ]
 }

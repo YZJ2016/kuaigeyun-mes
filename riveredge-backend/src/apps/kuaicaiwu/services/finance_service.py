@@ -259,7 +259,9 @@ class PayableService(AppBaseService[Payable]):
                 )
         raise ValidationError("应付单编码已存在，请关闭弹窗后重新新建") from last_error
 
-    async def get_payable_by_id(self, tenant_id: int, payable_id: int) -> PayableResponse:
+    async def get_payable_by_id(
+        self, tenant_id: int, payable_id: int, *, viewer_id: Optional[int] = None
+    ) -> PayableResponse:
         """根据ID获取应付单"""
         payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
         if not payable:
@@ -277,18 +279,18 @@ class PayableService(AppBaseService[Payable]):
         resp = PayableResponse.model_validate(payable)
         from core.services.approval.audit_record_enricher import enrich_record
 
-        return await enrich_record(tenant_id, "payable", resp)
+        return await enrich_record(tenant_id, "payable", resp, viewer_id=viewer_id)
 
     async def list_payables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[PayableResponse], int]:
         """获取应付单列表"""
         from apps.kuaicaiwu.services.finance_list_core import (
             apply_finance_aging_list_filters,
+            apply_finance_ar_ap_collection_status_filter,
             apply_finance_ar_ap_list_filters,
         )
 
         query = Payable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if filters.get('status'):
-            query = query.filter(status=filters['status'])
+        query = apply_finance_ar_ap_collection_status_filter(query, filters.get("status"))
         if filters.get('supplier_id'):
             query = query.filter(supplier_id=filters['supplier_id'])
         if filters.get('pending_settlement'):
@@ -336,7 +338,14 @@ class PayableService(AppBaseService[Payable]):
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [PayableResponse.model_validate(payable) for payable in payables]
-        return await enrich_items(tenant_id, "payable", rows), total
+        viewer_id = filters.get("viewer_id")
+        return await enrich_items(tenant_id, "payable", rows, viewer_id=viewer_id), total
+
+    @staticmethod
+    def _assert_payable_review_editable(payable: Any) -> None:
+        raw = str(getattr(payable, "review_status", None) or "").strip()
+        if raw not in {"", "草稿", "draft", "驳回", "rejected", "已驳回"}:
+            raise BusinessLogicError("仅草稿或已驳回的应付单可修改或删除")
 
     async def update_payable(self, tenant_id: int, payable_id: int, payable_data: PayableUpdate, updated_by: int) -> PayableResponse:
         """更新应付单（无付款、无退款时可改）"""
@@ -346,6 +355,7 @@ class PayableService(AppBaseService[Payable]):
             payable = await self.get_payable_by_id(tenant_id, payable_id)
             if is_purchase_return_offset_payable(getattr(payable, "source_type", None)):
                 raise BusinessLogicError("采购退货冲减应付不可修改")
+            self._assert_payable_review_editable(payable)
             if self._money(payable.paid_amount) > Decimal("0.00"):
                 raise BusinessLogicError("已有付款记录的应付单不能修改")
             if self._money(getattr(payable, "refunded_amount", 0) or 0) > Decimal("0.00"):
@@ -515,6 +525,7 @@ class PayableService(AppBaseService[Payable]):
         return result if result is not None else await self.get_payable_by_id(tenant_id, payable_id)
 
     async def submit_payable(self, tenant_id: int, payable_id: int, submitted_by: int) -> PayableResponse:
+        """内部一次性：草稿直接进入审核。页面提交请走 commit_payable。"""
         from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
         await submit_finance_review(
@@ -527,25 +538,90 @@ class PayableService(AppBaseService[Payable]):
         )
         return await self.get_payable_by_id(tenant_id, payable_id)
 
+    async def commit_payable(self, tenant_id: int, payable_id: int, submitted_by: int) -> PayableResponse:
+        from apps.kuaicaiwu.constants.finance_source_types import is_purchase_return_offset_payable
+        from apps.kuaicaiwu.services.finance_audit_workflow import _updated_audit_kwargs
+
+        payable = await self.get_payable_by_id(tenant_id, payable_id)
+        if is_purchase_return_offset_payable(getattr(payable, "source_type", None)):
+            raise BusinessLogicError("采购退货冲减应付不走提交")
+        raw = str(payable.review_status or "").strip()
+        if raw == "SUBMITTED":
+            return payable
+        if raw not in {"", "草稿", "draft", "驳回", "rejected", "已驳回"}:
+            raise BusinessLogicError("仅草稿或已驳回可提交")
+        await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
+            review_status="SUBMITTED",
+            **(await _updated_audit_kwargs(submitted_by)),
+        )
+        return await self.get_payable_by_id(tenant_id, payable_id)
+
+    async def submit_payable_for_review(
+        self,
+        tenant_id: int,
+        payable_id: int,
+        submitted_by: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
+    ) -> PayableResponse:
+        from apps.kuaicaiwu.constants.finance_source_types import is_purchase_return_offset_payable
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        payable = await self.get_payable_by_id(tenant_id, payable_id)
+        if is_purchase_return_offset_payable(getattr(payable, "source_type", None)):
+            raise BusinessLogicError("采购退货冲减应付不走提交审核")
+        if str(payable.review_status or "").strip() != "SUBMITTED":
+            raise BusinessLogicError("请先提交应付单，再提交审核")
+        await submit_finance_review(
+            model=Payable,
+            tenant_id=tenant_id,
+            doc_id=payable_id,
+            updated_by=submitted_by,
+            doc_label="应付单",
+            node_key="payable",
+            allow_committed=True,
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
+        )
+        return await self.get_payable_by_id(tenant_id, payable_id)
+
     async def withdraw_payable(self, tenant_id: int, payable_id: int, withdrawn_by: int) -> PayableResponse:
-        from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
+        from apps.kuaicaiwu.services.finance_audit_workflow import (
+            _PENDING_REVIEW,
+            _norm_review,
+            _updated_audit_kwargs,
+        )
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-        async with in_transaction():
-            await ApprovalInstanceService.cancel_approval(
-                tenant_id=tenant_id,
-                entity_type="payable",
-                entity_id=payable_id,
-                operator_id=withdrawn_by,
-            )
-            await withdraw_finance_review(
-                model=Payable,
-                tenant_id=tenant_id,
-                doc_id=payable_id,
-                updated_by=withdrawn_by,
-                doc_label="应付单",
+        payable = await self.get_payable_by_id(tenant_id, payable_id)
+        raw = str(payable.review_status or "").strip()
+        if raw == "SUBMITTED":
+            await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
+                review_status="草稿",
+                **(await _updated_audit_kwargs(withdrawn_by)),
             )
             return await self.get_payable_by_id(tenant_id, payable_id)
+        if _norm_review(raw) in _PENDING_REVIEW:
+            async with in_transaction():
+                cancelled = await ApprovalInstanceService.cancel_approval(
+                    tenant_id=tenant_id,
+                    entity_type="payable",
+                    entity_id=payable_id,
+                    operator_id=withdrawn_by,
+                )
+                if cancelled is False:
+                    raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+                await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
+                    review_status="SUBMITTED",
+                    reviewer_id=None,
+                    reviewer_name=None,
+                    review_time=None,
+                    review_remarks=None,
+                    **(await _updated_audit_kwargs(withdrawn_by)),
+                )
+            return await self.get_payable_by_id(tenant_id, payable_id)
+        raise BusinessLogicError("仅已提交或待审核可撤回")
 
     async def revoke_payable(self, tenant_id: int, payable_id: int, revoked_by: int) -> PayableResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import revoke_finance_review
@@ -615,12 +691,13 @@ class PayableService(AppBaseService[Payable]):
         }
 
     async def delete_payable(self, tenant_id: int, payable_id: int) -> None:
-        """删除应付单（无付款、无退款时可删，含已审核）"""
+        """删除应付单（无付款、无退款且仅草稿或已驳回状态时可删）"""
         from apps.kuaicaiwu.constants.finance_source_types import is_purchase_return_offset_payable
 
         payable = await self.get_payable_by_id(tenant_id, payable_id)
         if is_purchase_return_offset_payable(getattr(payable, "source_type", None)):
             raise BusinessLogicError("采购退货冲减应付不可删除")
+        self._assert_payable_review_editable(payable)
         if self._money(payable.paid_amount) > Decimal("0.00"):
             raise BusinessLogicError("已有付款记录的应付单不能删除")
         if self._money(getattr(payable, "refunded_amount", 0) or 0) > Decimal("0.00"):
@@ -1086,22 +1163,25 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [PurchaseInvoiceResponse.model_validate(invoice) for invoice in invoices]
-        return await enrich_items(tenant_id, "purchase_invoice", rows), total
+        viewer_id = filters.get("viewer_id")
+        return await enrich_items(
+            tenant_id, "purchase_invoice", rows, viewer_id=viewer_id
+        ), total
 
-    async def approve_invoice(self, tenant_id: int, invoice_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> PurchaseInvoiceResponse:
-        """审核采购发票（有流程时先关审批任务，再写回单据）。"""
+    async def approve_invoice(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+        approved_by: int,
+        rejection_reason: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
+    ) -> PurchaseInvoiceResponse:
+        """审核采购发票（有流程时先关审批任务，再写回单据；is_auto_approve 跳过人工审批门禁）。"""
         from apps.kuaicaiwu.services.finance_audit_workflow import (
             assert_finance_pending_approval_flow,
         )
         from core.services.approval.uni_audit_service import UniAuditService
-
-        await assert_finance_pending_approval_flow(
-            tenant_id=tenant_id,
-            doc_id=invoice_id,
-            node_key="purchase_invoice",
-            doc_label="采购发票",
-            verb="驳回" if rejection_reason else "审核",
-        )
 
         async def _do_approve() -> PurchaseInvoiceResponse:
             async with in_transaction():
@@ -1113,7 +1193,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                     raise BusinessLogicError(f"发票审核状态不是待审核，当前: {invoice.review_status!r}")
                 approver_name = await self.get_user_name(approved_by)
                 review_status = "驳回" if rejection_reason else "已审核"
-                status = "已驳回" if rejection_reason else "已审核"
+                status = "已驳回" if rejection_reason else "已开票"
 
                 await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
                     reviewer_id=approved_by,
@@ -1136,6 +1216,31 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
 
                 return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
 
+        async def _after_approve(resp: PurchaseInvoiceResponse) -> PurchaseInvoiceResponse:
+            if rejection_reason:
+                return resp
+            from apps.kuaicaiwu.services.purchase_invoice_payable_auto import (
+                ensure_payable_after_purchase_invoice_approved,
+            )
+
+            await ensure_payable_after_purchase_invoice_approved(
+                tenant_id=tenant_id,
+                invoice_id=invoice_id,
+                user_id=approved_by,
+            )
+            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+
+        if is_auto_approve:
+            return await _after_approve(await _do_approve())
+
+        await assert_finance_pending_approval_flow(
+            tenant_id=tenant_id,
+            doc_id=invoice_id,
+            node_key="purchase_invoice",
+            doc_label="采购发票",
+            verb="驳回" if rejection_reason else "审核",
+        )
+
         if rejection_reason:
             result = await UniAuditService.reject_with_flow_fallback(
                 tenant_id=tenant_id,
@@ -1153,20 +1258,11 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 approver_id=approved_by,
                 flow_approve=_do_approve,
             )
-        if not rejection_reason:
-            from apps.kuaicaiwu.services.purchase_invoice_payable_auto import (
-                ensure_payable_after_purchase_invoice_approved,
-            )
-
-            await ensure_payable_after_purchase_invoice_approved(
-                tenant_id=tenant_id,
-                invoice_id=invoice_id,
-                user_id=approved_by,
-            )
-            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
-        return result if result is not None else await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        out = result if result is not None else await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        return await _after_approve(out)
 
     async def submit_invoice(self, tenant_id: int, invoice_id: int, submitted_by: int) -> PurchaseInvoiceResponse:
+        """内部一次性：草稿直接进入审核。页面提交请走 commit_invoice。"""
         from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
         await submit_finance_review(
@@ -1179,25 +1275,98 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         )
         return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
 
+    async def commit_invoice(self, tenant_id: int, invoice_id: int, submitted_by: int) -> PurchaseInvoiceResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import _updated_audit_kwargs
+
+        invoice = await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        status_text = str(invoice.status or "").strip()
+        if status_text in ("已作废", "已红冲"):
+            raise BusinessLogicError("已作废或已红冲的发票不可提交")
+        if status_text in ("已审核", "已开票"):
+            raise BusinessLogicError("已审核发票不可再提交")
+        raw = str(invoice.review_status or "").strip()
+        if raw == "SUBMITTED":
+            return invoice
+        if raw not in {"", "草稿", "draft", "驳回", "rejected", "已驳回"}:
+            raise BusinessLogicError("仅草稿或已驳回的采购发票可提交")
+        await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
+            review_status="SUBMITTED",
+            status="未审核",
+            **(await _updated_audit_kwargs(submitted_by)),
+        )
+        return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+
+    async def submit_invoice_for_review(
+        self,
+        tenant_id: int,
+        invoice_id: int,
+        submitted_by: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
+    ) -> PurchaseInvoiceResponse:
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        invoice = await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        status_text = str(invoice.status or "").strip()
+        if status_text in ("已作废", "已红冲"):
+            raise BusinessLogicError("已作废或已红冲的发票不可提交审核")
+        if str(invoice.review_status or "").strip() != "SUBMITTED":
+            raise BusinessLogicError("请先提交采购发票，再提交审核")
+        await submit_finance_review(
+            model=PurchaseInvoice,
+            tenant_id=tenant_id,
+            doc_id=invoice_id,
+            updated_by=submitted_by,
+            doc_label="采购发票",
+            node_key="purchase_invoice",
+            allow_committed=True,
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
+        )
+        return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+
     async def withdraw_invoice(self, tenant_id: int, invoice_id: int, withdrawn_by: int) -> PurchaseInvoiceResponse:
-        from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
+        from apps.kuaicaiwu.services.finance_audit_workflow import (
+            _PENDING_REVIEW,
+            _norm_review,
+            _updated_audit_kwargs,
+        )
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-        async with in_transaction():
-            await ApprovalInstanceService.cancel_approval(
-                tenant_id=tenant_id,
-                entity_type="purchase_invoice",
-                entity_id=invoice_id,
-                operator_id=withdrawn_by,
-            )
-            await withdraw_finance_review(
-                model=PurchaseInvoice,
-                tenant_id=tenant_id,
-                doc_id=invoice_id,
-                updated_by=withdrawn_by,
-                doc_label="采购发票",
+        invoice = await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        status_text = str(invoice.status or "").strip()
+        if status_text in ("已作废", "已红冲"):
+            raise BusinessLogicError("已作废或已红冲的发票不可撤回")
+        raw = str(invoice.review_status or "").strip()
+        if raw == "SUBMITTED":
+            await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
+                review_status="草稿",
+                status="未审核",
+                **(await _updated_audit_kwargs(withdrawn_by)),
             )
             return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        if _norm_review(raw) in _PENDING_REVIEW:
+            async with in_transaction():
+                cancelled = await ApprovalInstanceService.cancel_approval(
+                    tenant_id=tenant_id,
+                    entity_type="purchase_invoice",
+                    entity_id=invoice_id,
+                    operator_id=withdrawn_by,
+                )
+                if cancelled is False:
+                    raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+                await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(
+                    review_status="SUBMITTED",
+                    status="未审核",
+                    reviewer_id=None,
+                    reviewer_name=None,
+                    review_time=None,
+                    review_remarks=None,
+                    **(await _updated_audit_kwargs(withdrawn_by)),
+                )
+            return await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
+        raise BusinessLogicError("仅已提交或待审核可撤回")
 
     async def revoke_invoice(self, tenant_id: int, invoice_id: int, revoked_by: int) -> PurchaseInvoiceResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import revoke_finance_review
@@ -1355,7 +1524,9 @@ class ReceivableService(AppBaseService[Receivable]):
                 )
         raise ValidationError("应收单编码已存在，请关闭弹窗后重新新建") from last_error
 
-    async def get_receivable_by_id(self, tenant_id: int, receivable_id: int) -> ReceivableResponse:
+    async def get_receivable_by_id(
+        self, tenant_id: int, receivable_id: int, *, viewer_id: Optional[int] = None
+    ) -> ReceivableResponse:
         """根据ID获取应收单"""
         receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
         if not receivable:
@@ -1363,18 +1534,18 @@ class ReceivableService(AppBaseService[Receivable]):
         resp = ReceivableResponse.model_validate(receivable)
         from core.services.approval.audit_record_enricher import enrich_record
 
-        return await enrich_record(tenant_id, "receivable", resp)
+        return await enrich_record(tenant_id, "receivable", resp, viewer_id=viewer_id)
 
     async def list_receivables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[ReceivableResponse], int]:
         """获取应收单列表"""
         from apps.kuaicaiwu.services.finance_list_core import (
             apply_finance_aging_list_filters,
+            apply_finance_ar_ap_collection_status_filter,
             apply_finance_ar_ap_list_filters,
         )
 
         query = Receivable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if filters.get('status'):
-            query = query.filter(status=filters['status'])
+        query = apply_finance_ar_ap_collection_status_filter(query, filters.get("status"))
         if filters.get('customer_id'):
             query = query.filter(customer_id=filters['customer_id'])
         if filters.get('pending_settlement'):
@@ -1412,7 +1583,8 @@ class ReceivableService(AppBaseService[Receivable]):
         from core.services.approval.audit_record_enricher import enrich_items
 
         rows = [ReceivableResponse.model_validate(receivable) for receivable in receivables]
-        return await enrich_items(tenant_id, "receivable", rows), total
+        viewer_id = filters.get("viewer_id")
+        return await enrich_items(tenant_id, "receivable", rows, viewer_id=viewer_id), total
 
     async def record_receipt(self, tenant_id: int, receivable_id: int, receipt_data: ReceiptRecordCreate, recorded_by: int) -> ReceivableResponse:
         """登记收款：创建收款单并核销至当前应收单。
@@ -1550,6 +1722,7 @@ class ReceivableService(AppBaseService[Receivable]):
         return result if result is not None else await self.get_receivable_by_id(tenant_id, receivable_id)
 
     async def submit_receivable(self, tenant_id: int, receivable_id: int, submitted_by: int) -> ReceivableResponse:
+        """内部一次性：草稿直接进入审核。页面提交请走 commit_receivable。"""
         from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
 
         await submit_finance_review(
@@ -1562,25 +1735,90 @@ class ReceivableService(AppBaseService[Receivable]):
         )
         return await self.get_receivable_by_id(tenant_id, receivable_id)
 
+    async def commit_receivable(self, tenant_id: int, receivable_id: int, submitted_by: int) -> ReceivableResponse:
+        from apps.kuaicaiwu.constants.finance_source_types import is_sales_return_offset_receivable
+        from apps.kuaicaiwu.services.finance_audit_workflow import _updated_audit_kwargs
+
+        receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
+        if is_sales_return_offset_receivable(getattr(receivable, "source_type", None)):
+            raise BusinessLogicError("销售退货冲减应收不走提交")
+        raw = str(receivable.review_status or "").strip()
+        if raw == "SUBMITTED":
+            return receivable
+        if raw not in {"", "草稿", "draft", "驳回", "rejected", "已驳回"}:
+            raise BusinessLogicError("仅草稿或已驳回可提交")
+        await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
+            review_status="SUBMITTED",
+            **(await _updated_audit_kwargs(submitted_by)),
+        )
+        return await self.get_receivable_by_id(tenant_id, receivable_id)
+
+    async def submit_receivable_for_review(
+        self,
+        tenant_id: int,
+        receivable_id: int,
+        submitted_by: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
+    ) -> ReceivableResponse:
+        from apps.kuaicaiwu.constants.finance_source_types import is_sales_return_offset_receivable
+        from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
+
+        receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
+        if is_sales_return_offset_receivable(getattr(receivable, "source_type", None)):
+            raise BusinessLogicError("销售退货冲减应收不走提交审核")
+        if str(receivable.review_status or "").strip() != "SUBMITTED":
+            raise BusinessLogicError("请先提交应收单，再提交审核")
+        await submit_finance_review(
+            model=Receivable,
+            tenant_id=tenant_id,
+            doc_id=receivable_id,
+            updated_by=submitted_by,
+            doc_label="应收单",
+            node_key="receivable",
+            allow_committed=True,
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
+        )
+        return await self.get_receivable_by_id(tenant_id, receivable_id)
+
     async def withdraw_receivable(self, tenant_id: int, receivable_id: int, withdrawn_by: int) -> ReceivableResponse:
-        from apps.kuaicaiwu.services.finance_audit_workflow import withdraw_finance_review
+        from apps.kuaicaiwu.services.finance_audit_workflow import (
+            _PENDING_REVIEW,
+            _norm_review,
+            _updated_audit_kwargs,
+        )
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
-        async with in_transaction():
-            await ApprovalInstanceService.cancel_approval(
-                tenant_id=tenant_id,
-                entity_type="receivable",
-                entity_id=receivable_id,
-                operator_id=withdrawn_by,
-            )
-            await withdraw_finance_review(
-                model=Receivable,
-                tenant_id=tenant_id,
-                doc_id=receivable_id,
-                updated_by=withdrawn_by,
-                doc_label="应收单",
+        receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
+        raw = str(receivable.review_status or "").strip()
+        if raw == "SUBMITTED":
+            await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
+                review_status="草稿",
+                **(await _updated_audit_kwargs(withdrawn_by)),
             )
             return await self.get_receivable_by_id(tenant_id, receivable_id)
+        if _norm_review(raw) in _PENDING_REVIEW:
+            async with in_transaction():
+                cancelled = await ApprovalInstanceService.cancel_approval(
+                    tenant_id=tenant_id,
+                    entity_type="receivable",
+                    entity_id=receivable_id,
+                    operator_id=withdrawn_by,
+                )
+                if cancelled is False:
+                    raise BusinessLogicError("撤回失败：无法取消审批流程，请重试")
+                await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(
+                    review_status="SUBMITTED",
+                    reviewer_id=None,
+                    reviewer_name=None,
+                    review_time=None,
+                    review_remarks=None,
+                    **(await _updated_audit_kwargs(withdrawn_by)),
+                )
+            return await self.get_receivable_by_id(tenant_id, receivable_id)
+        raise BusinessLogicError("仅已提交或待审核可撤回")
 
     async def revoke_receivable(self, tenant_id: int, receivable_id: int, revoked_by: int) -> ReceivableResponse:
         from apps.kuaicaiwu.services.finance_audit_workflow import revoke_finance_review
@@ -1649,13 +1887,20 @@ class ReceivableService(AppBaseService[Receivable]):
             "remaining_amount": float(totals.get("remaining_amount_sum") or 0),
         }
 
+    @staticmethod
+    def _assert_receivable_review_editable(receivable: Any) -> None:
+        raw = str(getattr(receivable, "review_status", None) or "").strip()
+        if raw not in {"", "草稿", "draft", "驳回", "rejected", "已驳回"}:
+            raise BusinessLogicError("仅草稿或已驳回的应收单可修改或删除")
+
     async def delete_receivable(self, tenant_id: int, receivable_id: int) -> None:
-        """删除应收单（无收款、无退款时可删，含已审核）"""
+        """删除应收单（无收款、无退款且仅草稿或已驳回状态时可删）"""
         from apps.kuaicaiwu.constants.finance_source_types import is_sales_return_offset_receivable
 
         receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
         if is_sales_return_offset_receivable(getattr(receivable, "source_type", None)):
             raise BusinessLogicError("销售退货冲减应收不可删除")
+        self._assert_receivable_review_editable(receivable)
         if self._money(receivable.received_amount) > Decimal("0.00"):
             raise BusinessLogicError("已有收款记录的应收单不能删除")
         if self._money(getattr(receivable, "refunded_amount", 0) or 0) > Decimal("0.00"):
@@ -1676,6 +1921,7 @@ class ReceivableService(AppBaseService[Receivable]):
             receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
             if is_sales_return_offset_receivable(getattr(receivable, "source_type", None)):
                 raise BusinessLogicError("销售退货冲减应收不可修改")
+            self._assert_receivable_review_editable(receivable)
             if self._money(receivable.received_amount) > Decimal("0.00"):
                 raise BusinessLogicError("已有收款记录的应收单不能修改")
             if self._money(getattr(receivable, "refunded_amount", 0) or 0) > Decimal("0.00"):

@@ -19,6 +19,7 @@ from apps.kuaicaiwu.schemas.finance import (
 from apps.kuaicaiwu.services.finance_service import PayableService
 from apps.kuaicaiwu.services.merge_settlement_service import MergeSettlementService
 from apps.kuaicaiwu.services.payable_pull_service import PayablePullService
+from apps.kuaizhizao.api.pull_query_params import PullQueryDateFrom, PullQueryDateTo
 from apps.kuaicaiwu.utils.settlement_db_guard import (
     SETTLEMENTS_TABLE_MISSING_HINT,
     is_settlements_table_missing,
@@ -107,7 +108,9 @@ async def create_payable(
             create_payload["source_code"] = str(pull_preview.get("source_code") or create_payload.get("source_code") or "")
 
         payable_data = PayableCreate.model_validate(create_payload)
-        payable = await payable_service.create_payable(tenant_id, payable_data, current_user.id)
+        payable = await payable_service.create_payable(
+            tenant_id, payable_data, current_user.id, submit_review=False
+        )
 
         if pull_preview and pull_source_type and pull_source_ids:
             code_by_receipt: dict[int, str] = {}
@@ -168,6 +171,7 @@ async def list_payables(
     ),
     overdue_only: bool = Query(False, description="仅返回已逾期且未结清的单据"),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     payables, total = await payable_service.list_payables(
@@ -193,6 +197,7 @@ async def list_payables(
         sort_order=sort_order,
         aging_bucket=aging_bucket,
         overdue_only=overdue_only,
+        viewer_id=current_user.id,
     )
     enriched = await payable_pull_service.enrich_push_capabilities(tenant_id, payables)
     items = [PayableResponse.model_validate(row) for row in enriched]
@@ -228,6 +233,8 @@ async def list_payable_purchase_order_pull_candidates(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None),
+    date_from: PullQueryDateFrom = None,
+    date_to: PullQueryDateTo = None,
     _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -236,6 +243,8 @@ async def list_payable_purchase_order_pull_candidates(
         skip=skip,
         limit=limit,
         keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -247,6 +256,8 @@ async def list_payable_purchase_receipt_pull_candidates(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None),
+    date_from: PullQueryDateFrom = None,
+    date_to: PullQueryDateTo = None,
     _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
     tenant_id: int = Depends(get_current_tenant),
 ) -> Dict[str, Any]:
@@ -255,6 +266,8 @@ async def list_payable_purchase_receipt_pull_candidates(
         skip=skip,
         limit=limit,
         keyword=keyword,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -363,10 +376,11 @@ async def merge_create_purchase_invoice(
 async def get_payable(
     id: int,
     _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        payable = await payable_service.get_payable_by_id(tenant_id, id)
+        payable = await payable_service.get_payable_by_id(tenant_id, id, viewer_id=current_user.id)
         enriched = await payable_pull_service.enrich_push_purchase_invoice_capabilities(
             tenant_id,
             [payable],

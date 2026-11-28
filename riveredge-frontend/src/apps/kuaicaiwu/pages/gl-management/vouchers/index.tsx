@@ -52,9 +52,17 @@ import {
 } from '../../../../kuaizhizao/utils/documentAttachments';
 import { resolveGlSourceDocTypeLabel } from '../../../utils/glAccountingEventDisplay';
 import GenerateFromEventsModal from './GenerateFromEventsModal';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import {
+  CustomFieldsDetailSection,
+  CustomFieldsFormSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import ReorganizeVouchersModal from './ReorganizeVouchersModal';
 
 const NS = 'app.kuaicaiwu.gl.vouchers';
+const VOUCHER_CUSTOM_FIELD_TABLE = 'apps_kuaicaiwu_vouchers';
+const VOUCHER_CUSTOM_FIELD_HOST = 'kuaicaiwu:gl';
 
 const asList = <T,>(res: unknown): T[] => {
   if (Array.isArray(res)) return res as T[];
@@ -103,6 +111,19 @@ const GlVouchersPage: React.FC = () => {
   const [reorganizeModalOpen, setReorganizeModalOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailVoucher, setDetailVoucher] = useState<GlVoucher | null>(null);
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({
+    tableName: VOUCHER_CUSTOM_FIELD_TABLE,
+    hostResource: VOUCHER_CUSTOM_FIELD_HOST,
+    loadWhenOpen: true,
+    open: modalOpen || detailOpen,
+  });
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<{ label: string; value: number }[]>([]);
@@ -252,6 +273,7 @@ const GlVouchersPage: React.FC = () => {
         const detail = (await glService.getVoucher(record.id)) as GlVoucher;
         setDetailVoucher(detail);
         setDetailOpen(true);
+        void loadFieldValues(record.id);
       } catch (error) {
         messageApi.error(getApiErrorMessage(error, t('common.loadFailed', { defaultValue: '加载失败' })));
       }
@@ -322,6 +344,8 @@ const GlVouchersPage: React.FC = () => {
       }));
       setLines(detailLines.length >= 2 ? detailLines : [...detailLines, emptyLine(), emptyLine()].slice(0, Math.max(2, detailLines.length)));
       setModalOpen(true);
+      const fieldFormValues = await loadFieldValues(detail.id);
+      formRef.current?.setFieldsValue(fieldFormValues);
     } catch (error) {
       messageApi.error(getApiErrorMessage(error, t('common.loadFailed', { defaultValue: '加载失败' })));
     }
@@ -659,16 +683,24 @@ const GlVouchersPage: React.FC = () => {
         cash_flow_item_id: l.cash_flow_item_id || undefined,
       })),
     };
+    const { customData } = extractFormValues(values, formRef.current);
     try {
+      let savedId: number;
       if (editing?.id) {
+        savedId = editing.id;
         await glService.updateVoucher(editing.id, payload);
         messageApi.success(t('common.updateSuccess', { defaultValue: '更新成功' }));
       } else {
-        await glService.createVoucher(payload);
+        const created = (await glService.createVoucher(payload)) as GlVoucher;
+        savedId = Number(created?.id);
         messageApi.success(t('common.createSuccess', { defaultValue: '创建成功' }));
+      }
+      if (Number.isFinite(savedId) && savedId > 0) {
+        await saveCustomFieldValues(savedId, customData);
       }
       setModalOpen(false);
       setEditing(null);
+      resetFieldValues();
       reload();
     } catch (error) {
       messageApi.error(getApiErrorMessage(error, t('common.saveFailed', { defaultValue: '保存失败' })));
@@ -1188,6 +1220,12 @@ const GlVouchersPage: React.FC = () => {
                 },
               ]}
             />
+            {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+              <CustomFieldsDetailSection
+                customFields={customFields}
+                customFieldValues={customFieldValues}
+              />
+            ) : null}
           </Space>
         ) : null}
       </Modal>
@@ -1202,6 +1240,7 @@ const GlVouchersPage: React.FC = () => {
         onClose={() => {
           setModalOpen(false);
           setEditing(null);
+          resetFieldValues();
         }}
         isEdit={Boolean(editing)}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
@@ -1245,6 +1284,10 @@ const GlVouchersPage: React.FC = () => {
         <DocumentAttachmentsField
           category="gl_voucher_attachments"
           label={t(`${NS}.field.attachments`, { defaultValue: '原始凭证' })}
+        />
+        <CustomFieldsFormSection
+          customFields={customFields}
+          customFieldValues={customFieldValues}
         />
         <div style={{ marginBottom: 8, marginTop: 8 }}>
           <Space style={{ width: '100%', justifyContent: 'space-between' }}>

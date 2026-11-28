@@ -19,6 +19,7 @@ from tortoise import timezone as tortoise_timezone
 from apps.common.audit_actor import apply_update_audit
 from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.constants.finance_source_types import (
+    PAYABLE_SOURCE_OUTSOURCE_ORDER_RECEIPT,
     PAYABLE_SOURCE_OUTSOURCE_RECEIPT,
     PAYABLE_SOURCE_PARTNER_STATEMENT,
     PAYABLE_SOURCE_PURCHASE_RECEIPT,
@@ -573,6 +574,55 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             ln["tax_amount"] = float(tax)
             ln["amount_including_tax"] = float(incl)
 
+    async def _attach_sales_delivery_amount_parts(
+        self, tenant_id: int, lines: List[Dict[str, Any]]
+    ) -> None:
+        """销售出库行补齐未税/税额/价税合计与可展开明细键（历史快照无字段时）。"""
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.services.finance_settlement_source_query import (
+            _sales_delivery_amount_parts,
+        )
+
+        delivery_ids: List[int] = []
+        for ln in lines:
+            if ln.get("amount_including_tax") is not None and ln.get("amount_excluding_tax") is not None:
+                if not ln.get("inbound_detail_doc_type") and str(ln.get("doc_type") or "") == "销售出库":
+                    did = ln.get("doc_id")
+                    if did:
+                        ln["inbound_detail_doc_type"] = "sales_delivery"
+                        ln["inbound_detail_doc_id"] = int(did)
+                continue
+            did = None
+            if ln.get("inbound_detail_doc_type") == "sales_delivery":
+                did = ln.get("inbound_detail_doc_id")
+            elif str(ln.get("doc_type") or "").strip() == "销售出库":
+                did = ln.get("doc_id")
+            if did:
+                delivery_ids.append(int(did))
+        if not delivery_ids:
+            return
+        rows = await SalesDelivery.filter(
+            tenant_id=tenant_id, id__in=list(set(delivery_ids)), deleted_at__isnull=True
+        ).all()
+        by_id = {int(d.id): d for d in rows}
+        for ln in lines:
+            if ln.get("amount_including_tax") is not None and ln.get("amount_excluding_tax") is not None:
+                continue
+            did = None
+            if ln.get("inbound_detail_doc_type") == "sales_delivery":
+                did = ln.get("inbound_detail_doc_id")
+            elif str(ln.get("doc_type") or "").strip() == "销售出库":
+                did = ln.get("doc_id")
+            if not did or int(did) not in by_id:
+                continue
+            delivery = by_id[int(did)]
+            parts = await _sales_delivery_amount_parts(tenant_id, delivery)
+            ln["inbound_detail_doc_type"] = "sales_delivery"
+            ln["inbound_detail_doc_id"] = int(did)
+            ln["amount_excluding_tax"] = parts["amount_excluding_tax"]
+            ln["tax_amount"] = parts["tax_amount"]
+            ln["amount_including_tax"] = parts["amount_including_tax"]
+
     async def _calc_opening_balance(
         self,
         tenant_id: int,
@@ -719,6 +769,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         for ln in lines:
             ln.pop("sort_date", None)
         await self._attach_purchase_receipt_amount_parts(tenant_id, lines)
+        await self._attach_sales_delivery_amount_parts(tenant_id, lines)
         for ln in lines:
             _rewrite_line_stored_amount_basis(ln, amount_basis)
         return lines
@@ -873,7 +924,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             tenant_id, partner_type, working
         )
         _, _, _, with_bal = self._apply_running_balance(opening_balance, ordered)
-        return with_bal
+        await self._attach_purchase_receipt_amount_parts(tenant_id, with_bal)
+        await self._attach_sales_delivery_amount_parts(tenant_id, with_bal)
+        return await self.enrich_lines_invoice_dates(tenant_id, with_bal)
 
     def _apply_running_balance(
         self, opening_balance: Decimal, lines: List[Dict[str, Any]]
@@ -1371,7 +1424,13 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         return await self.confirm_business_statement(tenant_id, statement_id, submitted_by)
 
     async def submit_statement_for_review(
-        self, tenant_id: int, statement_id: int, submitted_by: int
+        self,
+        tenant_id: int,
+        statement_id: int,
+        submitted_by: int,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
     ) -> PartnerStatement:
         """提交审核：草稿/异议态在送审前内部落业务确认（与保存对账金额等效，无需单独确认按钮）。"""
         from apps.kuaicaiwu.services.finance_audit_workflow import submit_finance_review
@@ -1394,6 +1453,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             updated_by=submitted_by,
             doc_label="往来对账单",
             node_key="partner_statement",
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
         )
         return await self.get_statement(tenant_id, statement_id)
 
@@ -1727,6 +1788,65 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 return True
         return False
 
+    async def _outsource_order_receipt_has_approved_invoice(
+        self, tenant_id: int, batch_id: int
+    ) -> bool:
+        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        async def _invoice_approved(inv_id: int) -> bool:
+            inv = await PurchaseInvoice.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inv_id),
+                deleted_at__isnull=True,
+            )
+            if not inv:
+                return False
+            rs = str(inv.review_status or "").strip()
+            return rs in ("已审核", "approved")
+
+        rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="outsource_order_receipt",
+            source_id=int(batch_id),
+            target_type="purchase_invoice",
+        ).all()
+        for rel in rels:
+            tid = int(getattr(rel, "target_id", 0) or 0)
+            if tid > 0 and await _invoice_approved(tid):
+                return True
+        return False
+
+    async def _outsource_material_receipt_has_approved_invoice(
+        self, tenant_id: int, receipt_id: int
+    ) -> bool:
+        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        async def _invoice_approved(inv_id: int) -> bool:
+            inv = await PurchaseInvoice.get_or_none(
+                tenant_id=tenant_id,
+                id=int(inv_id),
+                deleted_at__isnull=True,
+            )
+            if not inv:
+                return False
+            rs = str(inv.review_status or "").strip()
+            return rs in ("已审核", "approved")
+
+        for source_type in ("outsource_material_receipt", "outsource_receipt"):
+            rels = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type=source_type,
+                source_id=int(receipt_id),
+                target_type="purchase_invoice",
+            ).all()
+            for rel in rels:
+                tid = int(getattr(rel, "target_id", 0) or 0)
+                if tid > 0 and await _invoice_approved(tid):
+                    return True
+        return False
+
     async def try_complete_ledger_after_purchase_invoice_approved(
         self,
         tenant_id: int,
@@ -1758,7 +1878,19 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             for r in rels
             if getattr(r, "source_id", None) is not None and int(r.source_id) > 0
         }
-        if not receipt_ids:
+        outsource_batch_ids: set[int] = set()
+        oo_rels = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="outsource_order_receipt",
+            target_type="purchase_invoice",
+            target_id=int(invoice_id),
+        ).all()
+        for rel in oo_rels:
+            sid = int(getattr(rel, "source_id", 0) or 0)
+            if sid > 0:
+                outsource_batch_ids.add(sid)
+
+        if not receipt_ids and not outsource_batch_ids:
             return
 
         statements = await PartnerStatement.filter(
@@ -1777,12 +1909,18 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 continue
             details = dict(stmt.transaction_details or {})
             lines = list(details.get("lines") or [])
-            if not any(
+            matches = any(
                 str(ln.get("doc_type") or "").strip() == "采购入库"
                 and int(ln.get("doc_id") or 0) in receipt_ids
                 for ln in lines
                 if isinstance(ln, dict)
-            ):
+            ) or any(
+                str(ln.get("doc_type") or "").strip() == "工序委外收货"
+                and int(ln.get("doc_id") or 0) in outsource_batch_ids
+                for ln in lines
+                if isinstance(ln, dict)
+            )
+            if not matches:
                 continue
             try:
                 await self.post_ledger(tenant_id, int(stmt.id), operator_id)
@@ -2004,7 +2142,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             if (doc_type, source_id) in stmt_covered:
                 continue
 
-            if obj.partner_type == "Supplier":
+            if obj.partner_type in ("Supplier", "Outsource"):
                 if doc_type == "采购入库":
                     if mode == "by_invoice":
                         receipt_id = int(
@@ -2038,6 +2176,56 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                         tenant_id=tenant_id, id=source_id, deleted_at__isnull=True
                     )
                     if not ret:
+                        continue
+                    eligible.append(ln)
+                elif doc_type == "工序委外收货":
+                    batch_id = int(
+                        ln.get("inbound_detail_doc_id")
+                        or ln.get("settlement_source_id")
+                        or source_id
+                    )
+                    if mode == "by_invoice":
+                        if not await self._outsource_order_receipt_has_approved_invoice(
+                            tenant_id, batch_id
+                        ):
+                            skipped_by_invoice += 1
+                            continue
+                    posted = await _posted_payable_source_ids(
+                        tenant_id, PAYABLE_SOURCE_OUTSOURCE_ORDER_RECEIPT, [batch_id]
+                    )
+                    if batch_id in posted:
+                        continue
+                    from apps.kuaizhizao.models.outsource_order_receipt import OutsourceOrderReceipt
+
+                    batch = await OutsourceOrderReceipt.get_or_none(
+                        tenant_id=tenant_id, id=batch_id, deleted_at__isnull=True
+                    )
+                    if not batch or batch.ledger_posted:
+                        continue
+                    eligible.append(ln)
+                elif doc_type == "委外收货":
+                    receipt_id = int(
+                        ln.get("inbound_detail_doc_id")
+                        or ln.get("settlement_source_id")
+                        or source_id
+                    )
+                    if mode == "by_invoice":
+                        if not await self._outsource_material_receipt_has_approved_invoice(
+                            tenant_id, receipt_id
+                        ):
+                            skipped_by_invoice += 1
+                            continue
+                    posted = await _posted_payable_source_ids(
+                        tenant_id, PAYABLE_SOURCE_OUTSOURCE_RECEIPT, [receipt_id]
+                    )
+                    if receipt_id in posted:
+                        continue
+                    from apps.kuaizhizao.models.outsource_work_order import OutsourceMaterialReceipt
+
+                    receipt = await OutsourceMaterialReceipt.get_or_none(
+                        tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+                    )
+                    if not receipt:
                         continue
                     eligible.append(ln)
             elif obj.partner_type == "Customer":
@@ -2083,14 +2271,14 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         biz_date = obj.end_date
         due = await resolve_partner_due_date(
             tenant_id,
-            "supplier" if obj.partner_type == "Supplier" else "customer",
+            "supplier" if obj.partner_type in ("Supplier", "Outsource") else "customer",
             int(obj.partner_id),
             biz_date,
         )
         ledger_notes = f"对账单 {stmt_code} 审核立账"
 
         async with in_transaction():
-            if obj.partner_type == "Supplier":
+            if obj.partner_type in ("Supplier", "Outsource"):
                 if voucher_amount <= 0:
                     raise BusinessLogicError("本期对账净额不需生成应付单")
                 await payable_svc.create_payable(
@@ -2189,6 +2377,13 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         if obj.status not in ("Sent", "Confirmed"):
             raise BusinessLogicError("仅已确认或已发送的对账单可记录异议")
         obj.status = "Disputed"
+        obj.review_status = "草稿"
+        obj.reviewer_id = None
+        obj.reviewer_name = None
+        obj.review_time = None
+        obj.review_remarks = None
+        obj.confirmed_at = None
+        obj.confirmed_by = None
         obj.dispute_reason = reason.strip()
         obj.disputed_at = tortoise_timezone.now()
         if user_id is not None:
@@ -2448,6 +2643,9 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         obj = await self.get_statement(tenant_id, statement_id)
         if obj.status != "Draft":
             raise BusinessLogicError("仅草稿状态的对账单可删除")
+        rs = str(obj.review_status or "").strip()
+        if rs and rs not in ("草稿", "draft", "驳回", "已驳回", "rejected"):
+            raise BusinessLogicError("仅未提交或已驳回的对账单可删除")
         obj.deleted_at = tortoise_timezone.now()
         await obj.save()
 
@@ -2692,7 +2890,6 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             _q_money(obj.opening_balance),
             list(details.get("lines") or []),
         )
-        lines = await self.enrich_lines_invoice_dates(obj.tenant_id, lines)
         return {
             "statement_code": obj.statement_code,
             "company_name": obj.company_name or "本公司",
@@ -2858,6 +3055,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
   <p>对账单号：{ctx['statement_code']}</p>
   <p>往来单位：{ctx['partner_name']}</p>
   <p>对账期间：{ctx['start_date']} 至 {ctx['end_date']}</p>
+  {basis_label}
   {contact}
 </div>
 <div class="summary">
@@ -2868,7 +3066,8 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
 </div>
 <table>
   <thead><tr>
-    <th>日期</th><th>单据类型</th><th>单号</th><th>摘要</th>
+    <th>日期</th><th>单据类型</th><th>单号</th><th>摘要</th><th>开票日期</th>
+    <th>不含税金额</th><th>税额</th><th>价税合计</th><th>单据金额</th>
     <th>借方</th><th>贷方</th><th>{ctx['balance_label']}</th>
   </tr></thead>
   <tbody>{rows_html}</tbody>

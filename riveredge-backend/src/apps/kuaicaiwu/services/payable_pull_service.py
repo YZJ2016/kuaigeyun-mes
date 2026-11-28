@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -21,6 +22,7 @@ from apps.kuaicaiwu.services.purchase_settlement import (
 )
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.document_relation import DocumentRelation
+from apps.kuaizhizao.utils.pull_query_date_filter import apply_pull_query_document_date_filter
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 
 
@@ -405,6 +407,8 @@ class PayablePullService(AppBaseService[Payable]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 
@@ -412,6 +416,13 @@ class PayablePullService(AppBaseService[Payable]):
             tenant_id=tenant_id,
             status__in=list(self._PO_ELIGIBLE_STATUSES),
             deleted_at__isnull=True,
+        )
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="order_date",
+            kind="date",
+            date_from=date_from,
+            date_to=date_to,
         )
         kw = str(keyword or "").strip()
         if kw:
@@ -471,6 +482,8 @@ class PayablePullService(AppBaseService[Payable]):
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 
@@ -478,6 +491,13 @@ class PayablePullService(AppBaseService[Payable]):
             tenant_id=tenant_id,
             status__in=list(self._PR_ELIGIBLE_STATUSES),
             deleted_at__isnull=True,
+        )
+        query = apply_pull_query_document_date_filter(
+            query,
+            field="receipt_time",
+            kind="datetime",
+            date_from=date_from,
+            date_to=date_to,
         )
         kw = str(keyword or "").strip()
         if kw:

@@ -44,6 +44,96 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'finance-doc-submit-approver-selection-r01',
+    date: '2026-11-28',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.finance-doc-submit-approver-selection-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-doc-submit-approver-selection-r01.description',
+  },
+  {
+    id: 'merge-receipt-payment-auto-post-r01',
+    date: '2026-11-28',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.merge-receipt-payment-auto-post-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.merge-receipt-payment-auto-post-r01.description',
+  },
+  {
+    id: 'receivable-pull-preview-prepaid-fix-r01',
+    date: '2026-11-28',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.receivable-pull-preview-prepaid-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.receivable-pull-preview-prepaid-fix-r01.description',
+  },
+  {
+    id: 'purchase-invoice-diff-recommit-fix-r01',
+    date: '2026-11-28',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-diff-recommit-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-diff-recommit-fix-r01.description',
+  },
+  {
+    id: 'merged-sales-invoice-occupancy-r01',
+    date: '2026-11-28',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.merged-sales-invoice-occupancy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.merged-sales-invoice-occupancy-r01.description',
+  },
+  {
+    id: 'payable-prepayment-auto-apply-r01',
+    date: '2026-11-28',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payable-prepayment-auto-apply-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payable-prepayment-auto-apply-r01.description',
+  },
+  {
+    id: 'finance-gl-opening-period-l1-fixes-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.finance-gl-opening-period-l1-fixes-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-gl-opening-period-l1-fixes-r01.description',
+  },
+  {
+    id: 'cross-module-p0-blocker-fixes-r01',
+    date: '2026-11-27',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.cross-module-p0-blocker-fixes-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cross-module-p0-blocker-fixes-r01.description',
+  },
+  {
+    id: 'kuaiconnect-base-and-connections-r01',
+    date: '2026-11-27',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiconnect-base-and-connections-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiconnect-base-and-connections-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-three-stage-audit-cost-rules-r01',
+    date: '2026-11-27',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-three-stage-audit-cost-rules-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-three-stage-audit-cost-rules-r01.description',
+  },
+  {
     id: 'kuaicaiwu-other-expense-application-r01',
     date: '2026-11-27',
     type: 'feature',

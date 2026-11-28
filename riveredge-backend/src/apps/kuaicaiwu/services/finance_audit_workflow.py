@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 from apps.common.audit_actor import operator_name_from_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
@@ -119,6 +119,9 @@ async def submit_finance_review(
     updated_by: int,
     doc_label: str,
     node_key: str,
+    allow_committed: bool = False,
+    selected_approver_user_ids: Optional[List[int]] = None,
+    selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
 ) -> None:
     from core.services.approval.approval_instance_service import ApprovalInstanceService
     from infra.services.business_config_service import BusinessConfigService
@@ -132,6 +135,9 @@ async def submit_finance_review(
 
     review_status = _norm_review(getattr(doc, "review_status", None))
     audit_required = await BusinessConfigService().check_audit_required(tenant_id, node_key)
+
+    if review_status == "SUBMITTED" and not allow_committed:
+        raise BusinessLogicError(f"{doc_label}已提交，请再提交审核")
 
     # 自动模式下误入待审：再次提交即自动通过
     if review_status in _PENDING_REVIEW and not audit_required:
@@ -148,7 +154,11 @@ async def submit_finance_review(
         raise BusinessLogicError(f"{doc_label}已提交待审核，无需重复提交")
     if review_status in _APPROVED_REVIEW:
         raise BusinessLogicError(f"{doc_label}已审核通过，无法提交")
-    if review_status not in _SUBMITTABLE_REVIEW and review_status != "":
+    if (
+        review_status != "SUBMITTED"
+        and review_status not in _SUBMITTABLE_REVIEW
+        and review_status != ""
+    ):
         raise BusinessLogicError(f"{doc_label}当前审核状态不可提交")
 
     if not audit_required:
@@ -166,9 +176,12 @@ async def submit_finance_review(
     partner = (
         getattr(doc, "supplier_name", None)
         or getattr(doc, "customer_name", None)
+        or getattr(doc, "partner_name", None)
         or ""
     )
     amount = getattr(doc, "total_amount", None)
+    if amount is None:
+        amount = getattr(doc, "closing_balance", None)
     content = f"{doc_label} {doc_code}"
     if partner:
         content = f"{content}, 往来单位: {partner}"
@@ -184,6 +197,8 @@ async def submit_finance_review(
         entity_uuid=str(doc.uuid),
         title=f"{doc_label}审核: {doc_code}",
         content=content,
+        selected_approver_user_ids=selected_approver_user_ids,
+        selected_approver_by_node=selected_approver_by_node,
     )
     if not instance:
         raise BusinessLogicError(

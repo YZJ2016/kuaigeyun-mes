@@ -45,7 +45,18 @@ export interface PaymentVoucher {
   advance_payee_name?: string | null;
   status: string;
   review_status?: string;
-  audit?: { phase?: string; allowed_actions?: string[] };
+  audit?: {
+    allowed_actions?: string[];
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+    viewer_actions?: {
+      has_my_pending_task?: boolean;
+      approve?: boolean;
+      my_acted?: boolean;
+      block_reason?: string | null;
+    } | null;
+  } | null;
   settlement_type?: string;
   refunded_amount?: number;
   refund_execution_status?: string;
@@ -72,13 +83,7 @@ export interface PaymentVoucher {
     statement_period: string;
     status: string;
   }>;
-  capabilities?: {
-    pull_payment_refund?: { allowed?: boolean; reason?: string };
-    repair_bank_flow?: { allowed?: boolean; reason?: string };
-    print?: { allowed?: boolean; reason?: string };
-    confirm?: { allowed?: boolean; reason?: string };
-    unconfirm?: { allowed?: boolean; reason?: string };
-  };
+  capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
   pull_lines?: Array<{
     line_no: number;
     source_type: string;

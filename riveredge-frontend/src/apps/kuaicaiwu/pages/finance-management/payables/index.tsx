@@ -24,8 +24,20 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
+import { postSubmitReview } from '../../../../../services/uniAudit';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
+import { isPendingReviewStatus } from '../../../../kuaizhizao/constants/documentStatus';
+import { createListAuditPhaseColumn } from '../../../../kuaizhizao/pages/sales-management/shared/listAuditPhaseColumn';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -155,13 +167,15 @@ const PayableList: React.FC = () => {
     const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('payable.pull_from_purchase_receipt');
 
     const payableAuditEnabled = useAuditRequired('payable', false);
+    const payableAuditColumn = useMemo(
+        () => createListAuditPhaseColumn<Payable>({ t, auditEnabled: payableAuditEnabled }),
+        [t, payableAuditEnabled],
+    );
     const payablePerms = useResourcePermissions(PAYABLE_RESOURCE);
     const paymentPerms = useResourcePermissions(PAYMENT_RESOURCE);
     const purchaseInvoicePerms = useResourcePermissions(PURCHASE_INVOICE_RESOURCE);
-    const payableAuditBatchHandlers = useMemo(
-        () => createUniAuditBatchHandlers('payable'),
-        [],
-    );
+    const commitAfterSaveRef = useRef(false);
+    const editFormRef = useRef<ProFormInstance>(null);
     const selectedRecordsForBatch = useMemo(
         () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
         [tableRows, selectedRowKeys],
@@ -169,10 +183,183 @@ const PayableList: React.FC = () => {
     const [mergeModalOpen, setMergeModalOpen] = useState(false);
     const [mergeMode, setMergeMode] = useState<MergeFinanceMode>('merge_payment');
     const [mergeSources, setMergeSources] = useState<MergeFinanceSourceRow[]>([]);
+    const {
+        runAction: runPayableAuditBatch,
+        auditModal: payableAuditModal,
+    } = useAuditBatchRunner<Payable>({
+        permGates: payablePerms,
+        handlers: {
+            approve: (id) => payableService.approvePayable(id),
+            revoke: (id) => payableService.revokePayable(id),
+            withdraw: (id) => payableService.withdrawPayable(id),
+        },
+        onBatchComplete: () => {
+            setSelectedRowKeys([]);
+            actionRef.current?.reload();
+        },
+        auditEntity: {
+            entityType: 'payable',
+            entityName: t(`${P}.entityName`),
+        },
+    });
     const handlePayableAuditBatchSuccess = () => {
         setSelectedRowKeys([]);
     actionRef.current?.reload();
     };
+    const {
+        runAfterPersist: runPayableSaveAndAudit,
+        initiatorModal: payableSaveAndAuditInitiatorModal,
+    } = useDocumentFormCommitAndSubmitReview({
+        entityType: 'payable',
+        entityLabel: t(`${P}.entityName`),
+        commit: (id) => payableService.commitPayable(id),
+        submitReview: (id, payload) => postSubmitReview('payable', id, payload),
+        onSuccess: () => {
+            actionRef.current?.reload();
+        },
+    });
+
+    const payableToolbarAuditMenus = useMemo(() => {
+        const reviewOf = (row: Payable) => String(row.review_status || '').trim();
+        const allowed = (row: Payable, key: string) => pickCapability(row, key)?.allowed === true;
+        const run = (
+            records: Payable[],
+            capabilityKey: string,
+            permAllowed: boolean,
+            onRun: (id: number) => Promise<unknown>,
+            notAllowedMessage?: string,
+        ) =>
+            runCapabilityBatchLoop({
+                keys: records.map((row) => Number(row.id)),
+                records,
+                capabilityKey,
+                permAllowed,
+                notAllowedMessage,
+                onRun,
+                onSuccess: handlePayableAuditBatchSuccess,
+                message: messageApi,
+                t,
+            });
+        const submitRows = selectedRecordsForBatch.filter((row) => allowed(row, 'submit'));
+        const committedRows = selectedRecordsForBatch.filter(
+            (row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit'),
+        );
+        const pendingRows = selectedRecordsForBatch.filter((row) => {
+            const review = reviewOf(row);
+            return review !== 'SUBMITTED' && isPendingReviewStatus(review) && allowed(row, 'withdraw_submit');
+        });
+        const reviewRows = selectedRecordsForBatch.filter((row) => allowed(row, 'submit_review'));
+        const approveRows = selectedRecordsForBatch.filter(
+            (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+        );
+        const revokeRows = selectedRecordsForBatch.filter((row) => allowed(row, 'revoke_approval'));
+        const canSubmit = payablePerms.canAction?.('submit') ?? false;
+        const canApprove = payablePerms.canAction?.('approve') ?? false;
+        const canRevoke = payablePerms.canAction?.('revoke') ?? false;
+        const hasSelection = selectedRecordsForBatch.length > 0;
+        const submitDisabled = hasSelection && !(canSubmit && submitRows.length > 0);
+        const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+            [
+                {
+                    key: 'submit',
+                    label: t('common.submit'),
+                    disabled: submitDisabled,
+                    onClick: () => run(submitRows, 'submit', canSubmit, (id) => payableService.commitPayable(id)),
+                },
+                {
+                    key: 'withdraw-submit',
+                    label: t(`${P}.toolbar.withdrawSubmit`),
+                    disabled: hasSelection && committedRows.length === 0,
+                    onClick: () =>
+                        run(committedRows, 'withdraw_submit', canSubmit, (id) => payableService.withdrawPayable(id)),
+                },
+                {
+                    key: 'submit-review',
+                    label: t(`${P}.toolbar.submitReview`),
+                    disabled: hasSelection && !(canSubmit && reviewRows.length > 0),
+                    onClick: () =>
+                        run(
+                            reviewRows,
+                            'submit_review',
+                            canSubmit,
+                            (id) => payableService.submitPayableForReview(id),
+                            t(`${P}.toolbar.submitReviewNotAllowed`),
+                        ),
+                },
+            ],
+            {
+                t,
+                message: messageApi,
+                disabled: submitDisabled,
+                commitRecords: submitRows,
+                permAllowed: canSubmit,
+                commit: (id) => payableService.commitPayable(id),
+                submitReview: (id) => payableService.submitPayableForReview(id),
+                onSuccess: handlePayableAuditBatchSuccess,
+            },
+        );
+        const auditItems: UniBatchMenuItem[] = [
+            {
+                key: 'approve',
+                label: t('components.uniAction.audit'),
+                disabled: hasSelection && !(canApprove && approveRows.length > 0),
+                onClick: () =>
+                    void runPayableAuditBatch(
+                        'approve',
+                        approveRows.map((row) => Number(row.id)),
+                        approveRows,
+                        payableAuditEnabled,
+                    ),
+            },
+            {
+                key: 'withdraw-review',
+                label: t(`${P}.toolbar.withdrawReview`),
+                disabled: hasSelection && pendingRows.length === 0,
+                onClick: () =>
+                    run(pendingRows, 'withdraw_submit', canSubmit, (id) => payableService.withdrawPayable(id)),
+            },
+            {
+                key: 'revoke',
+                label: t(`${P}.toolbar.revoke`),
+                disabled: hasSelection && !(canRevoke && revokeRows.length > 0),
+                onClick: () =>
+                    run(revokeRows, 'revoke_approval', canRevoke, (id) => payableService.revokePayable(id)),
+            },
+        ];
+        return { submitItems, auditItems };
+    }, [messageApi, payablePerms, payableAuditEnabled, runPayableAuditBatch, selectedRecordsForBatch, t]);
+
+    useSubmitShortcut(() => {
+        commitAfterSaveRef.current = false;
+        if (createModalVisible) createFormRef.current?.submit?.();
+        else editFormRef.current?.submit?.();
+    }, createModalVisible || Boolean(editingRecord));
+
+    const renderPayableSubmitter = (
+        props: { submit?: () => void },
+        dom: React.ReactNode,
+    ) => [
+        ...(Array.isArray(dom) ? [dom[0]] : []),
+        <Button
+            key="save"
+            type="primary"
+            onClick={() => {
+                commitAfterSaveRef.current = false;
+                props.submit?.();
+            }}
+        >
+            {t('common.save')}
+        </Button>,
+        <Button
+            key="commit"
+            onClick={() => {
+                commitAfterSaveRef.current = true;
+                props.submit?.();
+            }}
+        >
+            {t('components.layoutTemplates.documentFormPage.saveAndAudit')}
+        </Button>,
+    ];
 
     useEffect(() => {
     actionRef.current?.reload();
@@ -307,14 +494,37 @@ const PayableList: React.FC = () => {
             notes: values.notes,
             attachments: normalizeDocumentAttachments(values.attachments),
         };
-        const created = await payableService.createPayable(data);
-        messageApi.success(t('common.createSuccess'));
-        setCreateModalVisible(false);
-    actionRef.current?.reload();
-        if (created?.id) {
-            navigate(`/apps/kuaicaiwu/finance-management/payables/${created.id}`);
+        const commit = commitAfterSaveRef.current;
+        commitAfterSaveRef.current = false;
+        try {
+            const created = await payableService.createPayable(data);
+            if (commit && created?.id) {
+                setCreateSeed(undefined);
+                setCreateModalVisible(false);
+                actionRef.current?.reload();
+                let result;
+                try {
+                    result = await runPayableSaveAndAudit(created.id);
+                } catch {
+                    return false;
+                }
+                if (result?.completed !== false) {
+                    navigate(`/apps/kuaicaiwu/finance-management/payables/${created.id}`);
+                }
+            } else {
+                messageApi.success(t('common.createSuccess'));
+                setCreateSeed(undefined);
+                setCreateModalVisible(false);
+                actionRef.current?.reload();
+                if (created?.id) {
+                    navigate(`/apps/kuaicaiwu/finance-management/payables/${created.id}`);
+                }
+            }
+            return true;
+        } catch (error: any) {
+            messageApi.error(error?.message || t('common.operationFailed'));
+            return false;
         }
-        return true;
     };
 
     const openEdit = (record: Payable) => {
@@ -335,6 +545,8 @@ const PayableList: React.FC = () => {
         if (!editingRecord) return false;
         const today = formatDateTime(dayjs(), 'YYYY-MM-DD');
         try {
+            const commit = commitAfterSaveRef.current;
+            commitAfterSaveRef.current = false;
             await payableService.updatePayable(editingRecord.id, {
                 supplier_id: values.supplier_id,
                 supplier_name:
@@ -346,9 +558,19 @@ const PayableList: React.FC = () => {
                 notes: values.notes,
                 attachments: normalizeDocumentAttachments(values.attachments),
             });
-            messageApi.success(t('common.updateSuccess'));
-            setEditingRecord(null);
-            actionRef.current?.reload();
+            if (commit) {
+                setEditingRecord(null);
+                actionRef.current?.reload();
+                try {
+                    await runPayableSaveAndAudit(editingRecord.id);
+                } catch {
+                    return false;
+                }
+            } else {
+                messageApi.success(t('common.updateSuccess'));
+                setEditingRecord(null);
+                actionRef.current?.reload();
+            }
             return true;
         } catch (error: any) {
             messageApi.error(error?.message || t('common.updateFailed'));
@@ -1041,6 +1263,7 @@ const PayableList: React.FC = () => {
             render: (_, record) => record.notes || '—',
         },
         ...financeDocCreatedUpdatedColumns<Payable>(t),
+        ...(payableAuditColumn ? [payableAuditColumn] : []),
         {
             title: t('app.kuaicaiwu.common.lifecycle'),
             key: 'lifecycle',
@@ -1267,17 +1490,21 @@ const PayableList: React.FC = () => {
                 onDelete={handleBatchDelete}
                 deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
                 deleteConfirmDescription={(count) => t(`${P}.deleteConfirm`, { count })}
-                toolBarActionsAfterDelete={[
-                    <UniAuditBatchMenuButton
-                        key="payable-batch-audit"
+                toolBarActions={[
+                    <UniBatchMenuButton
+                        key="payable-submit"
                         selectedRowKeys={selectedRowKeys}
-                        selectedRecords={selectedRecordsForBatch}
-                        auditEnabled={payableAuditEnabled}
-                        permGates={payablePerms}
-                        handlers={payableAuditBatchHandlers}
-                        onSuccess={handlePayableAuditBatchSuccess}
-                        toolBarButtonSize="medium"
+                        menuItems={payableToolbarAuditMenus.submitItems}
+                        buttonText={t('common.submit')}
                     />,
+                    <UniBatchMenuButton
+                        key="payable-audit"
+                        selectedRowKeys={selectedRowKeys}
+                        menuItems={payableToolbarAuditMenus.auditItems}
+                        buttonText={t('components.uniAction.audit')}
+                    />,
+                ]}
+                toolBarActionsAfterDelete={[
                     <Button
                         key="merge-payment"
                         size="medium"
@@ -1714,6 +1941,7 @@ const PayableList: React.FC = () => {
                 initialValues={createSeed}
                 onFinish={handleCreate}
                 formRef={createFormRef}
+                submitter={{ render: renderPayableSubmitter }}
                 width={MODAL_CONFIG.STANDARD_WIDTH}
                 {...financeFormGridProps}
             >
@@ -1775,6 +2003,8 @@ const PayableList: React.FC = () => {
                         : undefined
                 }
                 onFinish={handleUpdate}
+                formRef={editFormRef}
+                submitter={{ render: renderPayableSubmitter }}
                 width={MODAL_CONFIG.STANDARD_WIDTH}
                 {...financeFormGridProps}
             >
@@ -1809,6 +2039,8 @@ const PayableList: React.FC = () => {
                 <DocumentAttachmentsField category="payable_attachments" />
             </ModalForm>
 
+            {payableAuditModal}
+            {payableSaveAndAuditInitiatorModal}
             <MergeFinanceDocsModal
                 open={mergeModalOpen}
                 mode={mergeMode}

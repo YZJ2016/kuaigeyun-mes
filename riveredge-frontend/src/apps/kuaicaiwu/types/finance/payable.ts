@@ -31,10 +31,19 @@ export interface Payable {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
-  capabilities?: {
-    push_payment?: { allowed?: boolean; reason?: string };
-    push_purchase_invoice?: { allowed?: boolean; reason?: string };
-  };
+  capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
+  audit?: {
+    allowed_actions?: string[];
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+    viewer_actions?: {
+      has_my_pending_task?: boolean;
+      approve?: boolean;
+      my_acted?: boolean;
+      block_reason?: string | null;
+    } | null;
+  } | null;
 }
 
 export interface PayableListParams {

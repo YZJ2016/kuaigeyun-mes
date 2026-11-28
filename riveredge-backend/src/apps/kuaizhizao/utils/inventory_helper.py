@@ -233,16 +233,32 @@ async def compute_tenant_inventory_dashboard_metrics(tenant_id: int) -> Dict[str
     total_sku = len(qty_by_material)
     batch_count = await count_on_hand_batches(tenant_id)
 
+    # 库存金额排除赠品仓等「只计数量」仓库
+    cost_svc = InventoryCostService()
+    costing_wh_ids = await cost_svc.resolve_costing_warehouse_ids(tenant_id)
+    if costing_wh_ids is None:
+        costing_qty_by_material = qty_by_material
+    else:
+        costing_qty_by_material: Dict[int, Decimal] = {}
+        for mid in qty_by_material:
+            info = await get_material_inventory_info(
+                tenant_id=tenant_id,
+                material_id=mid,
+                warehouse_ids=costing_wh_ids,
+            )
+            q = _decimal_or_zero(info.get("on_hand") or info.get("total_quantity"))
+            if q > 0:
+                costing_qty_by_material[mid] = q
+
     total_value = Decimal("0")
-    if qty_by_material:
+    if costing_qty_by_material:
         materials = await Material.filter(
             tenant_id=tenant_id,
-            id__in=list(qty_by_material.keys()),
+            id__in=list(costing_qty_by_material.keys()),
             deleted_at__isnull=True,
         ).only("id", "defaults", "source_config", "base_unit", "units")
         mid_material = {m.id: m for m in materials}
-        cost_svc = InventoryCostService()
-        for mid, qty in qty_by_material.items():
+        for mid, qty in costing_qty_by_material.items():
             material = mid_material.get(mid)
             unit_cost = (
                 cost_svc.resolve_material_base_unit_cost(material)

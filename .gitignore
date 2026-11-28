@@ -144,6 +144,8 @@ riveredge-backend/scripts/*
 !riveredge-backend/scripts/scan_timezone_contract.py
 !riveredge-backend/scripts/scan_document_action_bypass.py
 !riveredge-backend/scripts/scan_route_manifest_alignment.py
+!riveredge-backend/scripts/scan_manifest_frontend_parity.py
+!riveredge-backend/scripts/sync_frontend_manifests_from_backend.py
 !riveredge-backend/scripts/scan_finance_host_orm_imports.py
 !riveredge-backend/scripts/scan_finance_management_orm_registry.py
 !riveredge-backend/scripts/scan_tracked_gitignore_drift.py

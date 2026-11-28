@@ -144,6 +144,8 @@ class MergeSettlementService:
                 "bank_account_id": data.bank_account_id,
                 "settlement_type": data.settlement_type or "normal",
                 "status": "Draft",
+                "review_status": "草稿",
+                "post_on_approval": True,
                 "notes": merge_notes,
                 "attachments": data.attachments,
             }
@@ -182,11 +184,28 @@ class MergeSettlementService:
                     FinanceVoucherPostingService,
                 )
 
-                await FinanceVoucherPostingService().post_receipt(
-                    tenant_id,
-                    int(receipt.id),
-                    operator=current_user,
+                from apps.kuaicaiwu.services.receipt_audit_service import (
+                    ReceiptAuditService,
                 )
+
+                await ReceiptAuditService().submit_receipt(
+                    tenant_id, int(receipt.id), current_user.id
+                )
+                receipt = await Receipt.get_or_none(
+                    tenant_id=tenant_id, id=int(receipt.id)
+                )
+                if receipt and str(receipt.review_status or "").strip() in (
+                    "approved",
+                    "已审核",
+                    "审核通过",
+                    "已通过",
+                    "通过",
+                ):
+                    await FinanceVoucherPostingService().post_receipt(
+                        tenant_id,
+                        int(receipt.id),
+                        operator=current_user,
+                    )
 
         return {
             "voucher_type": "receipt",
@@ -271,6 +290,8 @@ class MergeSettlementService:
                 "bank_account_id": data.bank_account_id,
                 "settlement_type": data.settlement_type or "normal",
                 "status": "Draft",
+                "review_status": "草稿",
+                "post_on_approval": True,
                 "notes": merge_notes,
                 "attachments": data.attachments,
             }
@@ -308,12 +329,28 @@ class MergeSettlementService:
                 from apps.kuaicaiwu.services.finance_voucher_posting_service import (
                     FinanceVoucherPostingService,
                 )
-
-                await FinanceVoucherPostingService().post_payment(
-                    tenant_id,
-                    int(payment.id),
-                    operator=current_user,
+                from apps.kuaicaiwu.services.payment_audit_service import (
+                    PaymentAuditService,
                 )
+
+                await PaymentAuditService().submit_payment(
+                    tenant_id, int(payment.id), current_user.id
+                )
+                payment = await Payment.get_or_none(
+                    tenant_id=tenant_id, id=int(payment.id)
+                )
+                if payment and str(payment.review_status or "").strip() in (
+                    "approved",
+                    "已审核",
+                    "审核通过",
+                    "已通过",
+                    "通过",
+                ):
+                    await FinanceVoucherPostingService().post_payment(
+                        tenant_id,
+                        int(payment.id),
+                        operator=current_user,
+                    )
 
         return {
             "voucher_type": "payment",
@@ -400,6 +437,13 @@ class MergeSettlementService:
             invoice = await Invoice.create(**create_payload)
 
             settled_pairs: List[Dict[str, Any]] = []
+            from apps.kuaicaiwu.services.sales_delivery_finance_pull_lines import (
+                resolve_sales_delivery_id_from_receivable,
+            )
+            from apps.kuaicaiwu.services.sales_delivery_line_finance_occupancy_service import (
+                record_sales_delivery_invoice_occupancy,
+            )
+
             for (sid, amount), preview in zip(lines, previews):
                 await self.sales_invoice.create_pull_relation(
                     tenant_id=tenant_id,
@@ -411,6 +455,22 @@ class MergeSettlementService:
                     created_by=current_user.id,
                     allocated_amount=amount,
                 )
+                receivable_row = await Receivable.get_or_none(
+                    tenant_id=tenant_id, id=int(sid), deleted_at__isnull=True
+                )
+                if receivable_row:
+                    delivery_id = resolve_sales_delivery_id_from_receivable(
+                        str(getattr(receivable_row, "source_type", "") or ""),
+                        getattr(receivable_row, "source_id", None),
+                    )
+                    if delivery_id:
+                        await record_sales_delivery_invoice_occupancy(
+                            tenant_id,
+                            sales_delivery_id=int(delivery_id),
+                            invoice_id=int(invoice.id),
+                            amount=Decimal(str(amount)),
+                            created_by=current_user.id,
+                        )
                 receivable_update: dict = {
                     "invoice_issued": True,
                     "updated_by": current_user.id,
@@ -520,6 +580,10 @@ class MergeSettlementService:
             await PurchaseInvoice.filter(tenant_id=tenant_id, id=invoice_id).update(**update_fields)
 
             settled_pairs: List[Dict[str, Any]] = []
+            from apps.kuaicaiwu.services.purchase_receipt_line_finance_occupancy_service import (
+                record_purchase_receipt_invoice_from_payable,
+            )
+
             for (sid, amount), preview in zip(lines, previews):
                 await self.purchase_invoice_pull.create_pull_relation(
                     tenant_id=tenant_id,
@@ -530,6 +594,14 @@ class MergeSettlementService:
                     invoice_code=str(invoice.invoice_code),
                     created_by=current_user.id,
                     allocated_amount=amount,
+                )
+                await record_purchase_receipt_invoice_from_payable(
+                    tenant_id,
+                    int(sid),
+                    invoice_id,
+                    amount,
+                    created_by=current_user.id,
+                    allow_append=True,
                 )
                 payable_update: dict = {
                     "invoice_received": True,

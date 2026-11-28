@@ -235,6 +235,7 @@ TABLE_REFERENCE_RESOURCE: Dict[str, str] = {
     "apps_kuaizhizao_inventory_transfers": "kuaizhizao:warehouse-management-inventory-transfer",
     "apps_kuaizhizao_assembly_orders": "kuaizhizao:warehouse-management-assembly-orders",
     "apps_kuaizhizao_disassembly_orders": "kuaizhizao:warehouse-management-disassembly-orders",
+    "apps_kuaicaiwu_vouchers": "kuaicaiwu:gl",
 }
 
 

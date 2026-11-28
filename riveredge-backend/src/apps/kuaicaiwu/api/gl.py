@@ -245,11 +245,20 @@ async def list_accounts(
     account_type: Optional[str] = None,
     tenant_id: int = Depends(get_current_tenant), current_user: Any = Depends(get_current_user),
 ):
-    await coa_service.repair_orphan_non_leaf_flags(tenant_id)
     rows = await coa_service.list_accounts(
         tenant_id, is_active=is_active, account_type=account_type
     )
     return [coa_service.to_dict(r) for r in rows]
+
+
+@router.post("/accounts/repair-leaf-flags")
+async def repair_account_leaf_flags(
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:gl:execute")),
+    tenant_id: int = Depends(get_current_tenant), current_user: Any = Depends(get_current_user),
+):
+    """显式修复「无下级却仍为非末级」的历史脏数据；日常脏数据由删除链路 sync_parent_leaf_flag 保证。"""
+    fixed = await coa_service.repair_orphan_non_leaf_flags(tenant_id)
+    return {"fixed": fixed}
 
 
 @router.post("/accounts", status_code=status.HTTP_201_CREATED)
@@ -324,7 +333,6 @@ async def get_opening_balances(
     month: int = Query(..., ge=1, le=12),
     tenant_id: int = Depends(get_current_tenant), current_user: Any = Depends(get_current_user),
 ):
-    await coa_service.repair_orphan_non_leaf_flags(tenant_id)
     return await balance_service.account_balance_sheet(tenant_id, year, month)
 
 

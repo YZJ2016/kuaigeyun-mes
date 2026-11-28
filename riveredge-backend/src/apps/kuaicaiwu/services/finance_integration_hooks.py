@@ -690,6 +690,18 @@ async def ensure_prepayment_receipt_for_sales_order(
                 operator_id=operator_id,
                 notes=f"销售订单 {order_code} 自动生成预收收款单",
             )
+            from apps.common.app_orm import finance_orm_ready
+
+            if finance_orm_ready():
+                from apps.kuaicaiwu.services.receivable_pull_service import (
+                    ReceivablePullService,
+                )
+
+                await ReceivablePullService().auto_apply_after_prepayment_confirmed(
+                    tenant_id,
+                    receipt_id=int(receipt.id),
+                    operator_id=operator_id,
+                )
         return receipt.id
     except Exception as e:
         logger.error(

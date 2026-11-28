@@ -19,6 +19,7 @@ export type ReceivablePullCandidate = {
   code: string;
   order_code?: string;
   delivery_code?: string;
+  customer_id?: number | null;
   customer_name?: string;
   source_status?: string;
   source_date?: string;
@@ -67,6 +68,12 @@ export const receivableService = {
       method: 'GET',
     }),
 
+  previewPullFromSalesDeliveries: async (deliveryIds: number[]) =>
+    apiRequest<ReceivablePullPreview>(`${RECEIVABLE_API}/from-sales-deliveries/pull-preview`, {
+      method: 'GET',
+      params: { delivery_ids: deliveryIds.join(',') },
+    }),
+
   getReceivable: (id: number) => {
     return apiRequest<Receivable>(`${RECEIVABLE_API}/${id}`, {
       method: 'GET',
@@ -104,6 +111,23 @@ export const receivableService = {
       method: 'POST',
       data,
     }),
+
+  commitReceivable: (id: number) =>
+    apiRequest<Receivable>(`/core/uni-audit/receivable/${id}/submit`, { method: 'POST' }),
+
+  submitReceivableForReview: (id: number) =>
+    apiRequest<Receivable>(`/core/uni-audit/receivable/${id}/submit_review`, {
+      method: 'POST',
+    }),
+
+  withdrawReceivable: (id: number) =>
+    apiRequest<Receivable>(`/core/uni-audit/receivable/${id}/withdraw`, { method: 'POST' }),
+
+  approveReceivable: (id: number) =>
+    apiRequest<Receivable>(`/core/uni-audit/receivable/${id}/approve`, { method: 'POST' }),
+
+  revokeReceivable: (id: number) =>
+    apiRequest<Receivable>(`/core/uni-audit/receivable/${id}/revoke`, { method: 'POST' }),
 };
 
 export type MergeFinanceAllocationLine = {

@@ -11,7 +11,10 @@ from apps.kuaicaiwu.services.document_action_policy.other_expense import (
     is_other_expense_approved_status,
     is_other_expense_cancelled_status,
 )
-from apps.kuaizhizao.services.document_action_policy.types import ActionCapability
+from apps.kuaizhizao.services.document_action_policy.types import (
+    ActionCapability,
+    CAPABILITY_REASON_MESSAGES,
+)
 
 _EDITABLE_REVIEW = frozenset({"", "草稿", "draft", "驳回", "rejected", "已驳回"})
 _PENDING_REVIEW = frozenset({
@@ -100,4 +103,6 @@ def assert_other_expense_application_capability(
     cap = caps.get(action)
     if not cap or not cap.allowed:
         reason = cap.reason if cap else "other_expense_application.action.not_allowed"
-        raise BusinessLogicError(reason)
+        raise BusinessLogicError(
+            CAPABILITY_REASON_MESSAGES.get(reason, reason)
+        )

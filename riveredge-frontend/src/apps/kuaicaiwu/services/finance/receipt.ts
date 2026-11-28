@@ -40,7 +40,18 @@ export interface ReceiptVoucher {
   counterparty_bank_account?: string;
   status: string;
   review_status?: string;
-  audit?: { phase?: string; allowed_actions?: string[] };
+  audit?: {
+    allowed_actions?: string[];
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+    viewer_actions?: {
+      has_my_pending_task?: boolean;
+      approve?: boolean;
+      my_acted?: boolean;
+      block_reason?: string | null;
+    } | null;
+  } | null;
   source_voucher_id?: number;
   source_voucher_code?: string;
   source_vouchers?: { id: number; code: string }[];
@@ -64,10 +75,7 @@ export interface ReceiptVoucher {
     statement_period: string;
     status: string;
   }>;
-  capabilities?: {
-    pull_receipt_refund?: { allowed?: boolean; reason?: string };
-    repair_bank_flow?: { allowed?: boolean; reason?: string };
-  };
+  capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
   pull_lines?: Array<{
     line_no: number;
     source_type: string;

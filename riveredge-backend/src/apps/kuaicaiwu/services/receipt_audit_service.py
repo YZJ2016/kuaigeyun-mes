@@ -58,14 +58,26 @@ class ReceiptAuditService:
         return self._payload(receipt)
 
     async def submit_receipt_for_review(
-        self, tenant_id: int, receipt_id: int, user_id: int
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        user_id: int,
+        *,
+        selected_approver_user_ids: list[int] | None = None,
+        selected_approver_by_node: dict[str, list[int]] | None = None,
     ) -> dict[str, Any]:
         receipt = await self._get(tenant_id, receipt_id)
         self._assert_not_refund(receipt)
         self._assert_draft_voucher(receipt)
         if str(receipt.review_status or "").strip() != "SUBMITTED":
             raise BusinessLogicError("请先提交收款单，再提交审核")
-        await self._enter_review(tenant_id, receipt, user_id)
+        await self._enter_review(
+            tenant_id,
+            receipt,
+            user_id,
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
+        )
         return self._payload(await self._get(tenant_id, receipt_id))
 
     async def submit_receipt(self, tenant_id: int, receipt_id: int, user_id: int) -> dict[str, Any]:
@@ -138,6 +150,17 @@ class ReceiptAuditService:
             await Receipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                 review_status=review_status
             )
+            if review_status == "已审核" and getattr(
+                current, "post_on_approval", False
+            ):
+                from apps.kuaicaiwu.services.finance_voucher_posting_service import (
+                    FinanceVoucherPostingService,
+                )
+
+                await FinanceVoucherPostingService().post_receipt(
+                    tenant_id, receipt_id, operator_id=user_id
+                )
+                current = await self._get(tenant_id, receipt_id)
             current.review_status = review_status
             return self._payload(current)
 
@@ -179,7 +202,15 @@ class ReceiptAuditService:
         receipt.review_status = "草稿"
         return self._payload(receipt)
 
-    async def _enter_review(self, tenant_id: int, receipt: Receipt, user_id: int) -> None:
+    async def _enter_review(
+        self,
+        tenant_id: int,
+        receipt: Receipt,
+        user_id: int,
+        *,
+        selected_approver_user_ids: list[int] | None = None,
+        selected_approver_by_node: dict[str, list[int]] | None = None,
+    ) -> None:
         from core.services.approval.approval_instance_service import ApprovalInstanceService
         from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
         from infra.services.business_config_service import BusinessConfigService
@@ -203,6 +234,8 @@ class ReceiptAuditService:
             entity_uuid=str(receipt.uuid),
             title=f"收款单审核: {receipt.receipt_code}",
             content=content,
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
         )
         if not instance:
             raise BusinessLogicError(

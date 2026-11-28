@@ -410,4 +410,5 @@ async def finalize_detail_purchase_invoice_after_approve(
         updated_by=user_id,
         doc_label="应付单",
         node_key="payable",
+        allow_committed=True,
     )

@@ -5,9 +5,11 @@
   "description": "管理会计总账核算与经营分析协同平台",
   "icon": "wallet",
   "author": "StarTech",
+  "market_category": "base",
+  "is_pro": false,
   "entry_point": "../apps/kuaicaiwu/index.tsx",
   "route_path": "/apps/kuaicaiwu",
-  "sort_order": 50,
+  "sort_order": 140,
   "menu_config": {
     "title": "app.kuaicaiwu.name",
     "icon": "wallet",
@@ -217,49 +219,49 @@
             "title": "app.kuaicaiwu.menu.finance-management.settlement",
             "path": "/apps/kuaicaiwu/finance-management/settlement",
             "permission": "kuaicaiwu:settlement:read",
-            "sort_order": 2
+            "sort_order": 10
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.partner-statements",
             "path": "/apps/kuaicaiwu/finance-management/partner-statements",
             "permission": "kuaicaiwu:partner-statement:read",
-            "sort_order": 3
+            "sort_order": 11
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.price-settlement",
             "path": "/apps/kuaicaiwu/finance-management/price-settlement",
             "permission": "kuaicaiwu:price-settlement:read",
-            "sort_order": 4
+            "sort_order": 12
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.prepayments",
             "path": "/apps/kuaicaiwu/finance-management/prepayments",
             "permission": "kuaicaiwu:prepayment:read",
-            "sort_order": 5
+            "sort_order": 13
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.document-reconciliation",
             "path": "/apps/kuaicaiwu/finance-management/document-reconciliation",
             "permission": "kuaicaiwu:document-reconciliation:read",
-            "sort_order": 6
+            "sort_order": 14
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.bank-accounts",
             "path": "/apps/kuaicaiwu/finance-management/bank-accounts",
             "permission": "kuaicaiwu:bank-account:read",
-            "sort_order": 7
+            "sort_order": 15
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.finance-misc-categories",
             "path": "/apps/kuaicaiwu/finance-management/finance-misc-categories",
             "permission": "kuaicaiwu:finance-misc-category:read",
-            "sort_order": 8
+            "sort_order": 16
           },
           {
             "title": "app.kuaicaiwu.menu.finance-management.fund-transfers",
             "path": "/apps/kuaicaiwu/finance-management/fund-transfers",
             "permission": "kuaicaiwu:fund-transfer:read",
-            "sort_order": 9
+            "sort_order": 17
           }
         ]
       },
@@ -402,6 +404,63 @@
       }
     ]
   },
+  "reference_resources": {
+    "bank-account": {
+      "permission_prefix": "kuaicaiwu:bank-account",
+      "display_fields": [
+        "id",
+        "code",
+        "name",
+        "label",
+        "account_code",
+        "account_name",
+        "account_type",
+        "bank_name",
+        "account_number",
+        "currency"
+      ],
+      "data_scope_key": null,
+      "sensitive": false
+    },
+    "payable": {
+      "permission_prefix": "kuaicaiwu:payable",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaicaiwu:payable",
+      "sensitive": false
+    }
+  },
+  "module_references": {
+    "__all_modules__": [
+      "*"
+    ],
+    "other-income": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "system:department",
+      "system:user"
+    ],
+    "other-expense": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "system:department",
+      "system:user"
+    ],
+    "other-expense-application": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "system:department",
+      "system:user"
+    ]
+  },
   "permissions": [
     "kuaicaiwu:entry:read",
     "kuaicaiwu:bank-account:read",
@@ -416,6 +475,18 @@
     "kuaicaiwu:bank-account:audit",
     "kuaicaiwu:bank-account:reject",
     "kuaicaiwu:bank-account:print",
+    "kuaicaiwu:fund-transfer:read",
+    "kuaicaiwu:fund-transfer:create",
+    "kuaicaiwu:fund-transfer:delete",
+    "kuaicaiwu:fund-transfer:update",
+    "kuaicaiwu:fund-transfer:import",
+    "kuaicaiwu:fund-transfer:export",
+    "kuaicaiwu:fund-transfer:submit",
+    "kuaicaiwu:fund-transfer:revoke",
+    "kuaicaiwu:fund-transfer:approve",
+    "kuaicaiwu:fund-transfer:audit",
+    "kuaicaiwu:fund-transfer:reject",
+    "kuaicaiwu:fund-transfer:print",
     "kuaicaiwu:notes-receivable:read",
     "kuaicaiwu:notes-receivable:create",
     "kuaicaiwu:notes-receivable:delete",
@@ -529,6 +600,18 @@
     "kuaicaiwu:payment:audit",
     "kuaicaiwu:payment:reject",
     "kuaicaiwu:payment:print",
+    "kuaicaiwu:payment-refund:read",
+    "kuaicaiwu:payment-refund:create",
+    "kuaicaiwu:payment-refund:delete",
+    "kuaicaiwu:payment-refund:update",
+    "kuaicaiwu:payment-refund:import",
+    "kuaicaiwu:payment-refund:export",
+    "kuaicaiwu:payment-refund:submit",
+    "kuaicaiwu:payment-refund:revoke",
+    "kuaicaiwu:payment-refund:approve",
+    "kuaicaiwu:payment-refund:audit",
+    "kuaicaiwu:payment-refund:reject",
+    "kuaicaiwu:payment-refund:print",
     "kuaicaiwu:prepayment:read",
     "kuaicaiwu:prepayment:create",
     "kuaicaiwu:prepayment:delete",
@@ -565,6 +648,18 @@
     "kuaicaiwu:receipt:audit",
     "kuaicaiwu:receipt:reject",
     "kuaicaiwu:receipt:print",
+    "kuaicaiwu:receipt-refund:read",
+    "kuaicaiwu:receipt-refund:create",
+    "kuaicaiwu:receipt-refund:delete",
+    "kuaicaiwu:receipt-refund:update",
+    "kuaicaiwu:receipt-refund:import",
+    "kuaicaiwu:receipt-refund:export",
+    "kuaicaiwu:receipt-refund:submit",
+    "kuaicaiwu:receipt-refund:revoke",
+    "kuaicaiwu:receipt-refund:approve",
+    "kuaicaiwu:receipt-refund:audit",
+    "kuaicaiwu:receipt-refund:reject",
+    "kuaicaiwu:receipt-refund:print",
     "kuaicaiwu:receivable:read",
     "kuaicaiwu:receivable:create",
     "kuaicaiwu:receivable:delete",
@@ -601,6 +696,9 @@
     "kuaicaiwu:settlement:audit",
     "kuaicaiwu:settlement:reject",
     "kuaicaiwu:settlement:print",
+    "kuaicaiwu:tax:read",
+    "kuaicaiwu:tax:update",
+    "kuaicaiwu:tax:export",
     "kuaicaiwu:standard-cost:read",
     "kuaicaiwu:standard-cost:create",
     "kuaicaiwu:standard-cost:delete",
@@ -641,17 +739,6 @@
     "kuaicaiwu:other-income:revoke",
     "kuaicaiwu:other-income:export",
     "kuaicaiwu:other-income:print",
-    "kuaicaiwu:other-expense:read",
-    "kuaicaiwu:other-expense:create",
-    "kuaicaiwu:other-expense:update",
-    "kuaicaiwu:other-expense:delete",
-    "kuaicaiwu:other-expense:submit",
-    "kuaicaiwu:other-expense:approve",
-    "kuaicaiwu:other-expense:reject",
-    "kuaicaiwu:other-expense:audit",
-    "kuaicaiwu:other-expense:revoke",
-    "kuaicaiwu:other-expense:export",
-    "kuaicaiwu:other-expense:print",
     "kuaicaiwu:other-expense-application:read",
     "kuaicaiwu:other-expense-application:create",
     "kuaicaiwu:other-expense-application:update",
@@ -663,7 +750,137 @@
     "kuaicaiwu:other-expense-application:revoke",
     "kuaicaiwu:other-expense-application:export",
     "kuaicaiwu:other-expense-application:print",
-    "kuaicaiwu:other-expense-application:push"
+    "kuaicaiwu:other-expense-application:push",
+    "kuaicaiwu:other-expense:read",
+    "kuaicaiwu:other-expense:create",
+    "kuaicaiwu:other-expense:update",
+    "kuaicaiwu:other-expense:delete",
+    "kuaicaiwu:other-expense:submit",
+    "kuaicaiwu:other-expense:approve",
+    "kuaicaiwu:other-expense:reject",
+    "kuaicaiwu:other-expense:audit",
+    "kuaicaiwu:other-expense:revoke",
+    "kuaicaiwu:other-expense:export",
+    "kuaicaiwu:other-expense:print"
+  ],
+  "audit": [
+    {
+      "node_key": "receivable",
+      "entity_type": "receivable",
+      "resource": "kuaicaiwu:receivable",
+      "name": "应收单审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "receipt",
+      "entity_type": "receipt",
+      "resource": "kuaicaiwu:receipt",
+      "name": "收款单审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "receipt_refund",
+      "entity_type": "receipt_refund",
+      "resource": "kuaicaiwu:receipt-refund",
+      "name": "收款退款审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "sales_invoice",
+      "entity_type": "sales_invoice",
+      "resource": "kuaicaiwu:sales-invoice",
+      "name": "销售发票审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_invoice"
+    },
+    {
+      "node_key": "payable",
+      "entity_type": "payable",
+      "resource": "kuaicaiwu:payable",
+      "name": "应付单审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "purchase_invoice",
+      "entity_type": "purchase_invoice",
+      "resource": "kuaicaiwu:purchase-invoice",
+      "name": "进项发票审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_invoice"
+    },
+    {
+      "node_key": "other_income",
+      "entity_type": "other_income",
+      "resource": "kuaicaiwu:other-income",
+      "name": "其他费用收入审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_misc"
+    },
+    {
+      "node_key": "other_expense",
+      "entity_type": "other_expense",
+      "resource": "kuaicaiwu:other-expense",
+      "name": "其他费用支出审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_misc"
+    },
+    {
+      "node_key": "other_expense_application",
+      "entity_type": "other_expense_application",
+      "resource": "kuaicaiwu:other-expense-application",
+      "name": "其他费用支出申请审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_misc"
+    },
+    {
+      "node_key": "notes_receivable",
+      "entity_type": "notes_receivable",
+      "resource": "kuaicaiwu:notes-receivable",
+      "name": "应收票据审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "notes_payable",
+      "entity_type": "notes_payable",
+      "resource": "kuaicaiwu:notes-payable",
+      "name": "应付票据审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "fund_transfer",
+      "entity_type": "fund_transfer",
+      "resource": "kuaicaiwu:fund-transfer",
+      "name": "资金调拨审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    },
+    {
+      "node_key": "partner_statement",
+      "entity_type": "partner_statement",
+      "resource": "kuaicaiwu:partner-statement",
+      "name": "往来对账单审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_ar_ap"
+    }
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

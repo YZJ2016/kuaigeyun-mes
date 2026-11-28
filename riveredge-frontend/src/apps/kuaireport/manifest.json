@@ -50,6 +50,17 @@
     "kuaireport:data-source:delete",
     "kuaireport:report:execute",
     "kuaireport:report:display",
-    "kuaireport:dashboard:display"
-  ]
+    "kuaireport:report:publish",
+    "kuaireport:report:export",
+    "kuaireport:report:design",
+    "kuaireport:dashboard:display",
+    "kuaireport:dashboard:design",
+    "kuaireport:share:manage",
+    "kuaireport:distribution:display",
+    "kuaireport:distribution:manage"
+  ],
+  "dependencies": {
+    "riveredge-backend": ">=1.0.0",
+    "riveredge-frontend": ">=1.0.0"
+  }
 }

@@ -362,6 +362,9 @@ class ReceivableCreate(ReceivableBase):
         description="加载源单类型 sales_order|sales_delivery（与 source_type 手工创建区分）",
     )
     pull_source_id: Optional[int] = Field(None, description="加载源单ID")
+    pull_source_ids: Optional[List[int]] = Field(
+        None, description="加载源单ID列表（同客户多出库单合并应收）"
+    )
 
 
 class ReceivableUpdate(BaseSchema):

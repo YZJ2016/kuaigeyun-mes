@@ -14,6 +14,7 @@ async def test_post_payment_keeps_draft_when_bank_balance_insufficient(monkeypat
     payment = SimpleNamespace(
         id=36,
         status="Draft",
+        review_status="approved",
         payment_method="银行转账",
         bank_account_id=1,
         settlement_type="normal",
@@ -38,7 +39,11 @@ async def test_post_payment_keeps_draft_when_bank_balance_insufficient(monkeypat
     monkeypatch.setattr(
         module,
         "PaymentPullService",
-        lambda: SimpleNamespace(settle_draft_payment_if_linked=settle),
+        lambda: SimpleNamespace(
+            settle_draft_payment_if_linked=settle,
+            prepare_linked_draft_before_confirm=AsyncMock(return_value=payment),
+            assert_normal_payment_has_settlement_source=AsyncMock(),
+        ),
     )
 
     with pytest.raises(module.ValidationError, match="余额不足"):

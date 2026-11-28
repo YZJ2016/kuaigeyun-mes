@@ -7,6 +7,10 @@ from typing import List, Optional, Tuple
 
 from tortoise.expressions import Q
 
+from apps.kuaicaiwu.services.finance_refund_utils import (
+    REFUND_STATUS_FULL,
+    REFUND_STATUS_PARTIAL,
+)
 from apps.master_data.services.master_data_list_core import (
     apply_master_crud_created_date_range,
     apply_master_crud_updated_date_range,
@@ -18,6 +22,10 @@ FINANCE_AGING_BUCKETS = frozenset({"within_30", "31_60", "61_90", "over_90"})
 # 财务审核驳回同义值（写路径多为「驳回」，筛选/展示常出现「已驳回」）
 FINANCE_REVIEW_REJECTED_ALIASES = ("驳回", "已驳回", "rejected", "审核驳回")
 
+# AR/AP 收款/付款状态分段：「未付/未收」须排除已发生现金退款的单据
+FINANCE_UNPAID_COLLECTION_STATUS_LABELS = frozenset({"未付款", "未收款"})
+FINANCE_CASH_REFUND_EXECUTION_STATUSES = (REFUND_STATUS_PARTIAL, REFUND_STATUS_FULL)
+
 
 def apply_finance_review_status_filter(query, review_status: Optional[str]):
     """按审核状态筛选；驳回同义值一并命中。"""
@@ -27,6 +35,23 @@ def apply_finance_review_status_filter(query, review_status: Optional[str]):
     if rs in FINANCE_REVIEW_REJECTED_ALIASES:
         return query.filter(review_status__in=list(FINANCE_REVIEW_REJECTED_ALIASES))
     return query.filter(review_status=rs)
+
+
+def apply_finance_ar_ap_collection_status_filter(query, status: Optional[str]):
+    """
+    按 AR/AP 收付款状态字段筛选。
+
+    「未付款」「未收款」分段排除部分/全部现金退款执行态，避免退款后仍落在未结清分段。
+    """
+    s = (status or "").strip()
+    if not s:
+        return query
+    query = query.filter(status=s)
+    if s in FINANCE_UNPAID_COLLECTION_STATUS_LABELS:
+        query = query.exclude(
+            refund_execution_status__in=list(FINANCE_CASH_REFUND_EXECUTION_STATUSES)
+        )
+    return query
 
 
 def apply_finance_aging_list_filters(

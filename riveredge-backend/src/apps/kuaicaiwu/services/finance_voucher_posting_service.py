@@ -3,7 +3,7 @@
 
 主流 ERP 统一规则：草稿不产生资金流水与往来核销；确认（过账）后一次性执行。
 
-过账顺序：账户校验 → 余额预检 → 资金流水 → 往来核销 → 状态确认。
+过账顺序：来源草稿按应付或应收剩余对齐 → 账户校验 → 余额预检 → 资金流水 → 往来核销 → 状态确认。
 任一步失败则回滚本单已写流水，并保持/恢复为草稿，避免「列表仍显示草稿、库内已确认」。
 """
 
@@ -111,20 +111,14 @@ class FinanceVoucherPostingService:
             raise NotFoundError(f"收款单不存在: {receipt_id}")
         if receipt.status not in ("Draft", "Confirmed"):
             raise ValidationError("只有草稿或待补流水的收款单可以过账")
+        if receipt.status == "Draft":
+            raw_review = str(getattr(receipt, "review_status", "") or "").strip()
+            if raw_review not in {"approved", "已审核", "审核通过", "已通过", "通过"}:
+                raise ValidationError("收款单尚未审核通过，不能确认收款")
 
         op_id = operator_id or (operator.id if operator else None)
         if op_id is None:
             raise ValidationError("缺少操作人")
-
-        bank_svc = BankAccountService()
-        await bank_svc.validate_voucher_account(
-            tenant_id,
-            payment_method=receipt.payment_method,
-            bank_account_id=receipt.bank_account_id,
-        )
-        await self._assert_bank_funds_for_voucher(
-            bank_svc, tenant_id, voucher_type="receipt", row=receipt
-        )
 
         was_draft = receipt.status == "Draft"
         receipt_pull_svc = ReceiptPullService()
@@ -135,6 +129,15 @@ class FinanceVoucherPostingService:
             await receipt_pull_svc.assert_normal_receipt_has_settlement_source(
                 tenant_id, receipt_id, receipt=receipt
             )
+        bank_svc = BankAccountService()
+        await bank_svc.validate_voucher_account(
+            tenant_id,
+            payment_method=receipt.payment_method,
+            bank_account_id=receipt.bank_account_id,
+        )
+        await self._assert_bank_funds_for_voucher(
+            bank_svc, tenant_id, voucher_type="receipt", row=receipt
+        )
         try:
             if receipt.bank_account_id:
                 await bank_svc.sync_from_confirmed_voucher(
@@ -162,11 +165,28 @@ class FinanceVoucherPostingService:
                     receipt_id=receipt_id,
                     operator_id=op_id,
                 )
-            return await self._finalize_receipt_confirmed(
+            receipt = await self._finalize_receipt_confirmed(
                 tenant_id=tenant_id,
                 receipt_id=receipt_id,
                 operator=operator,
             )
+            if (
+                was_draft
+                and str(getattr(receipt, "settlement_type", "") or "") == "prepayment"
+            ):
+                from apps.kuaicaiwu.services.receivable_pull_service import (
+                    ReceivablePullService,
+                )
+
+                await ReceivablePullService().auto_apply_after_prepayment_confirmed(
+                    tenant_id,
+                    receipt_id=int(receipt_id),
+                    operator_id=op_id,
+                )
+                receipt = await Receipt.get_or_none(
+                    tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+                ) or receipt
+            return receipt
         except Exception:
             if was_draft:
                 await bank_svc.reverse_from_voucher(
@@ -195,11 +215,29 @@ class FinanceVoucherPostingService:
             raise NotFoundError(f"付款单不存在: {payment_id}")
         if payment.status not in ("Draft", "Confirmed"):
             raise ValidationError("只有草稿或待补流水的付款单可以过账")
+        if payment.status == "Draft":
+            raw_review = str(getattr(payment, "review_status", "") or "").strip()
+            if raw_review not in {"approved", "已审核", "审核通过", "已通过", "通过"}:
+                is_refund = str(getattr(payment, "settlement_type", "") or "") == "refund"
+                raise ValidationError(
+                    "付款退款尚未审核通过，不能确认退款"
+                    if is_refund
+                    else "付款单尚未审核通过，不能确认付款"
+                )
 
         op_id = operator_id or (operator.id if operator else None)
         if op_id is None:
             raise ValidationError("缺少操作人")
 
+        was_draft = payment.status == "Draft"
+        pull_svc = PaymentPullService()
+        if was_draft:
+            payment = await pull_svc.prepare_linked_draft_before_confirm(
+                tenant_id, payment_id
+            )
+            await pull_svc.assert_normal_payment_has_settlement_source(
+                tenant_id, payment_id, payment=payment
+            )
         bank_svc = BankAccountService()
         await bank_svc.validate_voucher_account(
             tenant_id,
@@ -230,15 +268,6 @@ class FinanceVoucherPostingService:
                 bank_svc, tenant_id, voucher_type="payment", row=payment
             )
 
-        was_draft = payment.status == "Draft"
-        pull_svc = PaymentPullService()
-        if was_draft:
-            payment = await pull_svc.prepare_linked_draft_before_confirm(
-                tenant_id, payment_id
-            )
-            await pull_svc.assert_normal_payment_has_settlement_source(
-                tenant_id, payment_id, payment=payment
-            )
         try:
             if payment.bank_account_id and not is_prepay_offset:
                 await bank_svc.sync_from_confirmed_voucher(
@@ -281,30 +310,25 @@ class FinanceVoucherPostingService:
                 payment_id=payment_id,
                 operator=operator,
             )
+            from apps.kuaicaiwu.services.payment_advance_service import PaymentAdvanceService
+
+            await PaymentAdvanceService().record_on_payment_confirmed(tenant_id, payment)
             if (
                 was_draft
                 and str(getattr(payment, "settlement_type", "") or "") == "prepayment"
             ):
-                try:
-                    from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
-                        PayablePrepaymentApplyService,
-                    )
+                from apps.kuaicaiwu.services.payable_prepayment_apply_service import (
+                    PayablePrepaymentApplyService,
+                )
 
-                    await PayablePrepaymentApplyService().auto_apply_after_prepayment_confirmed(
-                        tenant_id,
-                        payment_id=int(payment_id),
-                        operator_id=op_id,
-                    )
-                    payment = await Payment.get_or_none(
-                        tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True
-                    ) or payment
-                except Exception:
-                    logger.exception(
-                        "预付付款单确认后自动冲应付失败 payment_id=%s", payment_id
-                    )
-            from apps.kuaicaiwu.services.payment_advance_service import PaymentAdvanceService
-
-            await PaymentAdvanceService().record_on_payment_confirmed(tenant_id, payment)
+                await PayablePrepaymentApplyService().auto_apply_after_prepayment_confirmed(
+                    tenant_id,
+                    payment_id=int(payment_id),
+                    operator_id=op_id,
+                )
+                payment = await Payment.get_or_none(
+                    tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True
+                ) or payment
             return payment
         except Exception:
             if was_draft:

@@ -12,9 +12,18 @@ import { ProForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, P
 import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useDocumentFormCommitAndSubmitReview } from '../../../../../hooks/useDocumentFormCommitAndSubmitReview';
+import { postSubmitReview } from '../../../../../services/uniAudit';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import {
+  UniBatchMenuButton,
+  pickCapability,
+  runCapabilityBatchLoop,
+  useAuditBatchRunner,
+  withDocumentSubmitCombinedItem,
+  type UniBatchMenuItem,
+} from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import {
   DetailDrawerActions,
@@ -98,6 +107,10 @@ import {
 } from '../../../utils/financeListCore';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { isPendingReviewStatus } from '../../../../kuaizhizao/constants/documentStatus';
+import { createListAuditPhaseColumn } from '../../../../kuaizhizao/pages/sales-management/shared/listAuditPhaseColumn';
+import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -114,6 +127,10 @@ type PullReceivableCandidate = ReceiptPullCandidate;
 
 const R = 'app.kuaicaiwu.receipt';
 const RECEIPT_RESOURCE = 'kuaicaiwu:receipt';
+
+function receiptReviewApproved(record: ReceiptVoucher): boolean {
+  return record.audit?.phase === 'approved';
+}
 
 const ReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -146,6 +163,44 @@ const ReceiptsPage: React.FC = () => {
   const location = useLocation();
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('receipt.pull_from_receivable');
   const receiptPerms = useResourcePermissions(RECEIPT_RESOURCE);
+  const receiptAuditEnabled = useAuditRequired('receipt', false);
+  const receiptAuditColumn = useMemo(
+    () => createListAuditPhaseColumn<ReceiptVoucher>({ t, auditEnabled: receiptAuditEnabled }),
+    [t, receiptAuditEnabled],
+  );
+  const commitAfterSaveRef = useRef(false);
+  const handleReceiptAuditBatchSuccess = useCallback(() => {
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, []);
+  const {
+    runAction: runReceiptAuditBatch,
+    auditModal: receiptAuditModal,
+  } = useAuditBatchRunner<ReceiptVoucher>({
+    permGates: receiptPerms,
+    handlers: {
+      approve: (id) => receiptService.approveReceipt(id),
+      revoke: (id) => receiptService.revokeReceipt(id),
+      withdraw: (id) => receiptService.withdrawReceipt(id),
+    },
+    onBatchComplete: handleReceiptAuditBatchSuccess,
+    auditEntity: {
+      entityType: 'receipt',
+      entityName: t(`${R}.entityName`),
+    },
+  });
+  const {
+    runAfterPersist: runReceiptSaveAndAudit,
+    initiatorModal: receiptSaveAndAuditInitiatorModal,
+  } = useDocumentFormCommitAndSubmitReview({
+    entityType: 'receipt',
+    entityLabel: t(`${R}.entityName`),
+    commit: (id) => receiptService.commitReceipt(id),
+    submitReview: (id, payload) => postSubmitReview('receipt', id, payload),
+    onSuccess: () => {
+      actionRef.current?.reload();
+    },
+  });
   const receiptRefundPerms = useResourcePermissions(RECEIPT_REFUND_RESOURCE);
   const { openFinanceVoucherDetail } = useFinanceVoucherDetail();
   const voucherLinkHandlers = useMemo(
@@ -163,6 +218,11 @@ const ReceiptsPage: React.FC = () => {
   const editReceiptFormRef = useRef<ProFormInstance>();
   const createLinePull = useReceiptVoucherFormLinePull({ formRef: createReceiptFormRef });
   const editLinePull = useReceiptVoucherFormLinePull({ formRef: editReceiptFormRef });
+  useSubmitShortcut(() => {
+    commitAfterSaveRef.current = false;
+    if (createModalVisible) createReceiptFormRef.current?.submit();
+    else editReceiptFormRef.current?.submit();
+  }, createModalVisible || Boolean(editingRecord));
 
   useEffect(() => {
     const load = async () => {
@@ -322,9 +382,19 @@ const ReceiptsPage: React.FC = () => {
           getApiErrorMessage(linkError, t('app.kuaicaiwu.notes.linkFailed')),
         );
       }
-      messageApi.success(t(`${R}.createSuccess`));
-      setCreateModalVisible(false);
-      actionRef.current?.reload();
+      if (commitAfterSaveRef.current) {
+        setCreateModalVisible(false);
+        actionRef.current?.reload();
+        try {
+          await runReceiptSaveAndAudit(created.id);
+        } catch {
+          return false;
+        }
+      } else {
+        messageApi.success(t(`${R}.createSuccess`));
+        setCreateModalVisible(false);
+        actionRef.current?.reload();
+      }
     } catch (error) {
       messageApi.error(getApiErrorMessage(error, t('common.createFailed')));
       return false;
@@ -649,10 +719,21 @@ const ReceiptsPage: React.FC = () => {
         notes: formValues.notes,
         attachments: normalizeDocumentAttachments(formValues.attachments),
       });
-      messageApi.success(t('common.updateSuccess'));
-      setEditingRecord(null);
-      actionRef.current?.reload();
-      refreshOpenDetail();
+      if (commitAfterSaveRef.current) {
+        setEditingRecord(null);
+        actionRef.current?.reload();
+        refreshOpenDetail();
+        try {
+          await runReceiptSaveAndAudit(editingRecord.id);
+        } catch {
+          return false;
+        }
+      } else {
+        messageApi.success(t('common.updateSuccess'));
+        setEditingRecord(null);
+        actionRef.current?.reload();
+        refreshOpenDetail();
+      }
       return true;
     } catch (e: any) {
       messageApi.error(e?.message || t('common.updateFailed'));
@@ -805,6 +886,133 @@ const ReceiptsPage: React.FC = () => {
     });
     setSelectedRowKeys([]);
   };
+
+  const receiptToolbarAuditMenus = useMemo(() => {
+    const selected = tableRowsRef.current.filter((row) => selectedRowKeys.includes(row.id));
+    const reviewOf = (row: ReceiptVoucher) => String(row.review_status || '').trim();
+    const allowed = (row: ReceiptVoucher, key: string) => pickCapability(row, key)?.allowed === true;
+    const run = (
+      records: ReceiptVoucher[],
+      capabilityKey: string,
+      permAllowed: boolean,
+      onRun: (id: number) => Promise<unknown>,
+      notAllowedMessage?: string,
+    ) =>
+      runCapabilityBatchLoop({
+        keys: records.map((row) => Number(row.id)),
+        records,
+        capabilityKey,
+        permAllowed,
+        notAllowedMessage,
+        onRun,
+        onSuccess: () => {
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        },
+        message: messageApi,
+        t,
+      });
+    const submitRows = selected.filter((row) => allowed(row, 'submit'));
+    const canSubmit = Boolean(receiptPerms.canAction?.('submit'));
+    const submitDisabled = !selected.some((row) => allowed(row, 'submit'));
+    const submitItems: UniBatchMenuItem[] = withDocumentSubmitCombinedItem(
+      [
+        {
+          key: 'submit',
+          label: t('common.submit'),
+          disabled: submitDisabled,
+          onClick: () =>
+            run(submitRows, 'submit', canSubmit, (id) => receiptService.commitReceipt(id)),
+        },
+        {
+          key: 'withdraw-submit',
+          label: t(`${R}.toolbar.withdrawSubmit`),
+          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+          onClick: () =>
+            run(
+              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'withdraw_submit')),
+              'withdraw_submit',
+              canSubmit,
+              (id) => receiptService.withdrawReceipt(id),
+            ),
+        },
+        {
+          key: 'submit-review',
+          label: t(`${R}.toolbar.submitReview`),
+          disabled: !selected.some((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+          onClick: () =>
+            run(
+              selected.filter((row) => reviewOf(row) === 'SUBMITTED' && allowed(row, 'submit_review')),
+              'submit_review',
+              canSubmit,
+              (id) => receiptService.submitReceiptForReview(id),
+              t(`${R}.toolbar.submitReviewNotAllowed`),
+            ),
+        },
+      ],
+      {
+        t,
+        message: messageApi,
+        disabled: submitDisabled,
+        commitRecords: submitRows,
+        permAllowed: canSubmit,
+        commit: (id) => receiptService.commitReceipt(id),
+        submitReview: (id) => receiptService.submitReceiptForReview(id),
+        onSuccess: () => {
+          setSelectedRowKeys([]);
+          actionRef.current?.reload();
+        },
+      },
+    );
+    const approveRows = selected.filter(
+      (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+    );
+    const auditItems: UniBatchMenuItem[] = [
+      {
+        key: 'approve',
+        label: t('components.uniAction.audit'),
+        disabled: !selected.some(
+          (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'approve'),
+        ),
+        onClick: () =>
+          void runReceiptAuditBatch(
+            'approve',
+            approveRows.map((row) => Number(row.id)),
+            approveRows,
+            receiptAuditEnabled,
+          ),
+      },
+      {
+        key: 'withdraw-review',
+        label: t(`${R}.toolbar.withdrawReview`),
+        disabled: !selected.some(
+          (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'withdraw_submit'),
+        ),
+        onClick: () =>
+          run(
+            selected.filter(
+              (row) => reviewOf(row) !== 'SUBMITTED' && isPendingReviewStatus(reviewOf(row)) && allowed(row, 'withdraw_submit'),
+            ),
+            'withdraw_submit',
+            Boolean(receiptPerms.canAction?.('submit')),
+            (id) => receiptService.withdrawReceipt(id),
+          ),
+      },
+      {
+        key: 'revoke',
+        label: t(`${R}.toolbar.revoke`),
+        disabled: !selected.some((row) => allowed(row, 'revoke_approval')),
+        onClick: () =>
+          run(
+            selected.filter((row) => allowed(row, 'revoke_approval')),
+            'revoke_approval',
+            Boolean(receiptPerms.canAction?.('revoke')),
+            (id) => receiptService.revokeReceipt(id),
+          ),
+      },
+    ];
+    return { submitItems, auditItems };
+  }, [selectedRowKeys, t, messageApi, receiptPerms, receiptAuditEnabled, runReceiptAuditBatch]);
 
   const batchMenuItems = useMemo(() => [
     {
@@ -990,6 +1198,7 @@ const ReceiptsPage: React.FC = () => {
       valueEnum: buildVoucherStatusEnum(t),
     },
     ...financeDocCreatedUpdatedColumns<ReceiptVoucher>(t),
+    ...(receiptAuditColumn ? [receiptAuditColumn] : []),
     {
       title: t('app.kuaicaiwu.common.lifecycle'),
       key: 'lifecycle',
@@ -1019,7 +1228,7 @@ const ReceiptsPage: React.FC = () => {
         const acts: React.ReactNode[] = [
           <Button key="det" {...rowActionKind('read')} onClick={() => openDetail(record)} />,
         ];
-        if (record.status === 'Draft' && receiptPerms.canAction?.('audit')) {
+        if (record.status === 'Draft' && receiptReviewApproved(record) && receiptPerms.canAction?.('audit')) {
           acts.push(
             <ActionConfirmPopconfirm title={t(`${R}.confirmTitle`)} description={t(`${R}.confirmContent`, { code: record.receipt_code })} onConfirm={() => executeConfirm(record)}>
               <Button key="cf" {...rowActionKind('audit')} onClick={(e) => e.stopPropagation()} />
@@ -1126,7 +1335,7 @@ const ReceiptsPage: React.FC = () => {
         return acts;
       },
     },
-  ], [t, customerOptions, receiptPerms, receiptRefundPerms, navigate, openDetail, handleConfirm, executeRepairSettle, handleCancel, handleDelete, receiptSettlementTypeOptions]);
+  ], [t, customerOptions, receiptPerms, receiptRefundPerms, navigate, openDetail, handleConfirm, executeRepairSettle, handleCancel, handleDelete, receiptSettlementTypeOptions, receiptAuditColumn]);
 
 
   return (
@@ -1151,6 +1360,20 @@ const ReceiptsPage: React.FC = () => {
         showDeleteButton
         deleteButtonText={t('common.batchDelete')}
         onDelete={handleBatchDelete}
+        toolBarActions={[
+          <UniBatchMenuButton
+            key="receipt-submit"
+            selectedRowKeys={selectedRowKeys}
+            buttonText={t('common.submit')}
+            menuItems={receiptToolbarAuditMenus.submitItems}
+          />,
+          <UniBatchMenuButton
+            key="receipt-audit"
+            selectedRowKeys={selectedRowKeys}
+            buttonText={t('components.uniAction.audit')}
+            menuItems={receiptToolbarAuditMenus.auditItems}
+          />,
+        ]}
         deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
         deleteConfirmDescription={(count) => t(`${R}.deleteConfirm`, { count })}
         toolBarActionsAfterDelete={[
@@ -1307,6 +1530,16 @@ const ReceiptsPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
         formRef={createReceiptFormRef}
+        extraFooter={
+          <Button
+            onClick={() => {
+              commitAfterSaveRef.current = true;
+              createReceiptFormRef.current?.submit();
+            }}
+          >
+            {t('components.layoutTemplates.documentFormPage.saveAndAudit')}
+          </Button>
+        }
         afterOpenChange={(open) => {
           if (!open) {
             createReceiptFormRef.current?.resetFields();
@@ -1338,7 +1571,8 @@ const ReceiptsPage: React.FC = () => {
         />
         {createLinePull.renderPullModals()}
       </FormModalTemplate>
-
+      {receiptAuditModal}
+      {receiptSaveAndAuditInitiatorModal}
       <FormModalTemplate
         key={editingRecord ? `edit-receipt-${editingRecord.id}` : 'edit-receipt'}
         title={t(`${R}.editTitle`)}
@@ -1378,6 +1612,18 @@ const ReceiptsPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
         formRef={editReceiptFormRef}
+        extraFooter={
+          editingRecord?.status === 'Draft' ? (
+            <Button
+              onClick={() => {
+                commitAfterSaveRef.current = true;
+                editReceiptFormRef.current?.submit();
+              }}
+            >
+              {t('components.layoutTemplates.documentFormPage.saveAndAudit')}
+            </Button>
+          ) : null
+        }
         onValuesChange={(changedValues, allValues) => {
           handleReceiptVoucherFormValuesChange(
             editReceiptFormRef,
@@ -1460,7 +1706,10 @@ const ReceiptsPage: React.FC = () => {
                 },
                 {
                   key: 'confirm',
-                  visible: detailRecord.status === 'Draft' && Boolean(receiptPerms.canAction?.('audit')),
+                  visible:
+                    detailRecord.status === 'Draft'
+                    && receiptReviewApproved(detailRecord)
+                    && Boolean(receiptPerms.canAction?.('audit')),
                   render: (
                     <Button {...rowActionKind('audit')} onClick={() => void handleConfirm(detailRecord)}>
                       {t('common.confirm')}

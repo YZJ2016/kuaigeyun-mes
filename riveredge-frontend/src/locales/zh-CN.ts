@@ -2632,6 +2632,46 @@ export default {
   'components.syncFromSource.stepIncrementalEmpty': '水位内无变更',
   'components.syncFromSource.stepSourceEmptyContinue':
     '源端未返回分组行（拉取 0 条），本步完成；后续物料同步会按物料行补齐本地分组',
+  'pages.dashboard.updateLog.entries.finance-doc-submit-approver-selection-r01.title':
+    '财务单据送审支持发起人选择审批人',
+  'pages.dashboard.updateLog.entries.finance-doc-submit-approver-selection-r01.description':
+    '应收、应付、收款、付款及退款等财务单据提交审核时，若审批流程配置了发起人选择审批人节点，可在送审前指定各节点审批人；应收、应付、收款列表页新增「保存并审核」入口，与付款单体验一致。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.merge-receipt-payment-auto-post-r01.title':
+    '合并收款付款审批通过后自动过账',
+  'pages.dashboard.updateLog.entries.merge-receipt-payment-auto-post-r01.description':
+    '多条应收/应付合并生成的收款单、付款单在审批通过后自动完成过账；此前启用单据审核的账套执行合并结算会因过账被审核门禁拦截而整体失败。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.receivable-pull-preview-prepaid-fix-r01.title':
+    '应收拉单预览预收冲减口径修正',
+  'pages.dashboard.updateLog.entries.receivable-pull-preview-prepaid-fix-r01.description':
+    '修复应收拉单预览把未生效的草稿、作废预收单计入预收冲减，导致可拉取金额偏低、执行拉单时提示无可核销预收。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-diff-recommit-fix-r01.title':
+    '采购发票价差应付单重提交修复',
+  'pages.dashboard.updateLog.entries.purchase-invoice-diff-recommit-fix-r01.description':
+    '修复采购发票价差调整生成的应付单重新提交时无法进入审核的问题。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.merged-sales-invoice-occupancy-r01.title':
+    '合并销项发票占用回写修正',
+  'pages.dashboard.updateLog.entries.merged-sales-invoice-occupancy-r01.description':
+    '修复合并生成的销售发票未回写销售出库行开票占用，避免同一出库行被重复开票。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.payable-prepayment-auto-apply-r01.title':
+    '应付转预付默认自动核销',
+  'pages.dashboard.updateLog.entries.payable-prepayment-auto-apply-r01.description':
+    '应付转预付与应收侧口径统一，默认开启自动核销，可在操作时按需关闭。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.finance-gl-opening-period-l1-fixes-r01.title':
+    '轻财务总账期初、记账与科目维护修复',
+  'pages.dashboard.updateLog.entries.finance-gl-opening-period-l1-fixes-r01.description':
+    '修复非末级科目期初残留（支持诊断与一键清零）与期初金额改为 0 保存失效；记账前自动顺延逐月结转并防止跨月卡死；已有发生额科目可关闭辅助核算且结转损益不再强制辅助；删除子科目自动回写父级末级标记并支持孤儿科目自愈；进项税认证与红冲兼容「已开票」状态。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.cross-module-p0-blocker-fixes-r01.title':
+    '设备、人事、研发与 AI 助手多项阻断修复',
+  'pages.dashboard.updateLog.entries.cross-module-p0-blocker-fixes-r01.description':
+    '修复设备标签列表 422 报错并恢复设备离线状态实时推送；入职介绍人字段全链路补全、最低工资标准支持生效区间；研发项目建议书日期提交修复并升级客户选择器；新租户 FAQ 种子统一入口、AI 运营总览异步加载、物料健康检查入口恢复；产线自制件（RelayLineProduct）维护贯通。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-base-and-connections-r01.title':
+    '快连接转为基础应用并补齐连接与同步能力',
+  'pages.dashboard.updateLog.entries.kuaiconnect-base-and-connections-r01.description':
+    '快连接统一为免费基础应用；新增资产其他出库独立推送路由、苍穹即时库存自动回写物料固定辅助单位、入站同步结果语义与结算；接通单据推送对账、库存拉取阻塞检查与出库可用量预检；应用连接敏感字段回填自动脱敏。需重启后端并更新 Web 端。',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-three-stage-audit-cost-rules-r01.title':
+    '财务单据三段式审核与预收预付、成本核算规则升级',
+  'pages.dashboard.updateLog.entries.kuaicaiwu-three-stage-audit-cost-rules-r01.description':
+    '应收/应付/收款/付款单据支持提交、提交审核、审核/撤销/驳回三段式流程，付款过账须审核通过；销售预收可按 FIFO 自动冲应收并支持多个销售出库合并拉取应收；未收付金额排除已退款部分；赠品仓不参与加权成本、其他出库不回写单价；月结定价公式与伙伴对账单明细增强。需重启后端并更新 Web 端。',
   'pages.dashboard.updateLog.entries.kuaicaiwu-other-expense-application-r01.title':
     '新增其他费用支出申请及收支单据三段式审核',
   'pages.dashboard.updateLog.entries.kuaicaiwu-other-expense-application-r01.description':
@@ -26945,7 +26985,6 @@ export default {
     '该预付款单未关联采购订单，只能抵扣未关联采购订单的应付',
   'app.kuaicaiwu.payment.pullLines.offsetPrepaymentEmptyPullable':
     '当前供应商下没有可抵扣的预付款单。须为已确认、结算类型为预付款且待核销大于 0。已关联采购订单的预付款仍只抵扣同一订单的应付；未关联采购订单的应付可用同供应商预付余额抵扣。',
-  'app.kuaicaiwu.payment.writeoffAndConfirm': '核销',
   'app.kuaicaiwu.payment.confirmAction': '确认付款',
   'app.kuaicaiwu.payment.confirmRequiresApproved': '请先提交审核并通过后，再确认付款',
   'app.kuaicaiwu.payment.toolbar.withdrawSubmit': '撤销提交',
@@ -26954,8 +26993,6 @@ export default {
   'app.kuaicaiwu.payment.toolbar.withdrawReview': '撤回审核',
   'app.kuaicaiwu.payment.toolbar.revoke': '反审核',
   'app.kuaicaiwu.payment.toolbar.submitted': '付款单已提交',
-  'app.kuaicaiwu.payment.writeoffConfirmSuccess': '已保存并完成核销确认',
-  'app.kuaicaiwu.payment.writeoffConfirmFailed': '核销确认失败',
   'app.kuaicaiwu.payment.pullLines.singleApplicationOnly': '付款申请须单独加载，请先删除已有明细',
   'app.kuaicaiwu.payment.pullLines.prepaymentNoPayable': '预付款类型请从采购订单或付款申请取单',
   'app.kuaicaiwu.payment.pullLines.noNewLines': '没有可合并的新明细',

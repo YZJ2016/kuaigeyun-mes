@@ -128,6 +128,21 @@ export const payableService = {
       method: 'POST',
       data,
     }),
+
+  commitPayable: (id: number) =>
+    apiRequest<Payable>(`/core/uni-audit/payable/${id}/submit`, { method: 'POST' }),
+
+  submitPayableForReview: (id: number) =>
+    apiRequest<Payable>(`/core/uni-audit/payable/${id}/submit_review`, { method: 'POST' }),
+
+  withdrawPayable: (id: number) =>
+    apiRequest<Payable>(`/core/uni-audit/payable/${id}/withdraw`, { method: 'POST' }),
+
+  approvePayable: (id: number) =>
+    apiRequest<Payable>(`/core/uni-audit/payable/${id}/approve`, { method: 'POST' }),
+
+  revokePayable: (id: number) =>
+    apiRequest<Payable>(`/core/uni-audit/payable/${id}/revoke`, { method: 'POST' }),
 };
 
 export type MergeFinanceAllocationLine = {

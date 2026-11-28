@@ -785,7 +785,7 @@ async def _dispatch_quality_patrol(
     _unsupported("quality_patrol", action)
 
 
-async def _dispatch_receivable(
+async def _dispatch_outsource_inspection(
     action: str,
     *,
     tenant_id: int,
@@ -793,14 +793,49 @@ async def _dispatch_receivable(
     user_id: int,
     reason: Optional[str],
 ) -> Any:
+    from apps.kuaizhizao.services.outsource_inspection_service import OutsourceInspectionService
+
+    svc = OutsourceInspectionService()
+    if action == "approve":
+        return await svc.approve(tenant_id, entity_id, user_id, approve=True)
+    if action == "reject":
+        return await svc.approve(
+            tenant_id, entity_id, user_id, approve=False, remarks=reason or "审批驳回"
+        )
+    if action == "revoke":
+        return await svc.revoke_approval(tenant_id, entity_id, user_id)
+    if action in ("submit", "withdraw"):
+        _unsupported("outsource_inspection", action)
+    _unsupported("outsource_inspection", action)
+
+
+async def _dispatch_receivable(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
+) -> Any:
     from apps.common.app_orm import require_finance_orm
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import ReceivableService
 
     svc = ReceivableService()
     if action == "submit":
-        return await svc.submit_receivable(tenant_id, entity_id, user_id)
+        return await svc.commit_receivable(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_receivable_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_receivable(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -821,15 +856,26 @@ async def _dispatch_payable(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import PayableService
 
     svc = PayableService()
     if action == "submit":
-        return await svc.submit_payable(tenant_id, entity_id, user_id)
+        return await svc.commit_payable(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_payable_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_payable(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -850,15 +896,26 @@ async def _dispatch_purchase_invoice(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
 
     require_finance_orm()
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
     from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
 
     svc = PurchaseInvoiceService()
     if action == "submit":
-        return await svc.submit_invoice(tenant_id, entity_id, user_id)
+        return await svc.commit_invoice(tenant_id, entity_id, user_id)
+    if action == "submit_review":
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_invoice_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_invoice(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -879,16 +936,25 @@ async def _dispatch_receipt(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
     from apps.kuaicaiwu.services.receipt_audit_service import ReceiptAuditService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     svc = ReceiptAuditService()
     if action == "submit":
         return await svc.commit_receipt(tenant_id, entity_id, user_id)
     if action == "submit_review":
-        return await svc.submit_receipt_for_review(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_receipt_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_receipt(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -909,18 +975,27 @@ async def _dispatch_receipt_refund(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
     from apps.kuaicaiwu.services.receipt_refund_audit_service import (
         ReceiptRefundAuditService,
     )
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     svc = ReceiptRefundAuditService()
     if action == "submit":
         return await svc.commit_receipt_refund(tenant_id, entity_id, user_id)
     if action == "submit_review":
-        return await svc.submit_receipt_refund_for_review(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_receipt_refund_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_receipt_refund(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -941,16 +1016,25 @@ async def _dispatch_payment(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
     from apps.kuaicaiwu.services.payment_audit_service import PaymentAuditService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     svc = PaymentAuditService()
     if action == "submit":
         return await svc.commit_payment(tenant_id, entity_id, user_id)
     if action == "submit_review":
-        return await svc.submit_payment_for_review(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_payment_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_payment(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -971,18 +1055,27 @@ async def _dispatch_payment_refund(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
     from apps.kuaicaiwu.services.payment_refund_audit_service import (
         PaymentRefundAuditService,
     )
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     svc = PaymentRefundAuditService()
     if action == "submit":
         return await svc.commit_payment_refund(tenant_id, entity_id, user_id)
     if action == "submit_review":
-        return await svc.submit_payment_refund_for_review(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_payment_refund_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_payment_refund(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -1003,18 +1096,27 @@ async def _dispatch_sales_invoice(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
     from apps.kuaicaiwu.services.sales_invoice_audit_service import (
         SalesInvoiceAuditService,
     )
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     svc = SalesInvoiceAuditService()
     if action == "submit":
         return await svc.commit_sales_invoice(tenant_id, entity_id, user_id)
     if action == "submit_review":
-        return await svc.submit_sales_invoice_for_review(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_sales_invoice_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_sales_invoice(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -1794,16 +1896,25 @@ async def _dispatch_partner_statement(
     entity_id: int,
     user_id: int,
     reason: Optional[str],
+    payload: Optional[Dict[str, Any]] = None,
 ) -> Any:
     from apps.common.app_orm import require_finance_orm
     from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
+    from core.services.approval.audit_submit_selection import parse_submit_approver_selection
 
     require_finance_orm()
     svc = PartnerStatementService()
     if action == "submit":
         return await svc.commit_statement(tenant_id, entity_id, user_id)
     if action == "submit_review":
-        return await svc.submit_statement_for_review(tenant_id, entity_id, user_id)
+        user_ids, by_node = parse_submit_approver_selection(payload)
+        return await svc.submit_statement_for_review(
+            tenant_id,
+            entity_id,
+            user_id,
+            selected_approver_user_ids=user_ids,
+            selected_approver_by_node=by_node,
+        )
     if action == "withdraw":
         return await svc.withdraw_statement(tenant_id, entity_id, user_id)
     if action == "approve":
@@ -2056,6 +2167,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "finished_goods_inspection": _dispatch_finished_goods_inspection,
     "oqc_inspection": _dispatch_oqc_inspection,
     "quality_patrol": _dispatch_quality_patrol,
+    "outsource_inspection": _dispatch_outsource_inspection,
     "receivable": _dispatch_receivable,
     "receipt": _dispatch_receipt,
     "receipt_refund": _dispatch_receipt_refund,

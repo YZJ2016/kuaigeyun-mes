@@ -27,6 +27,7 @@ from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from tortoise.transactions import in_transaction
 
 router = APIRouter(prefix="/receivables", tags=["App - Kuaicaiwu - Finance"])
 
@@ -70,21 +71,27 @@ async def create_receivable(
         pull_plan: Optional[Dict[str, Any]] = None
         pull_source_type = str(data.pull_source_type or "").strip()
         pull_source_id = data.pull_source_id
-        if pull_source_type and pull_source_id:
+        pull_source_ids: list[int] = []
+        if data.pull_source_ids:
+            pull_source_ids = [int(x) for x in data.pull_source_ids if x]
+        elif pull_source_id:
+            pull_source_ids = [int(pull_source_id)]
+        if pull_source_type and pull_source_ids:
             if pull_source_type not in _PULL_SOURCE_TYPES:
                 raise BusinessLogicError(f"不支持的加载源单类型: {pull_source_type}")
             # 前端填的是「净应收」（已扣预收）；开立时还原全额并自动核销预收
             pull_plan = await receivable_pull_service.plan_pull_receivable_amounts(
                 tenant_id=tenant_id,
                 source_type=pull_source_type,
-                source_id=int(pull_source_id),
+                source_id=int(pull_source_ids[0]),
                 net_amount=Decimal(str(data.total_amount)),
+                pull_source_ids=pull_source_ids,
             )
             pull_preview = pull_plan["preview"]
 
         create_payload = data.model_dump(
             exclude_unset=True,
-            exclude={"pull_source_type", "pull_source_id"},
+            exclude={"pull_source_type", "pull_source_id", "pull_source_ids"},
         )
         if pull_preview and pull_plan:
             create_payload["customer_id"] = int(pull_preview.get("customer_id") or create_payload.get("customer_id"))
@@ -92,7 +99,7 @@ async def create_receivable(
                 pull_preview.get("customer_name") or create_payload.get("customer_name") or ""
             )
             create_payload["source_type"] = pull_source_type
-            create_payload["source_id"] = int(pull_source_id)
+            create_payload["source_id"] = int(pull_source_ids[0])
             create_payload["source_code"] = str(pull_preview.get("source_code") or create_payload.get("source_code") or "")
             ar_total = Decimal(str(pull_plan["ar_total"]))
             create_payload["total_amount"] = ar_total
@@ -100,30 +107,38 @@ async def create_receivable(
             create_payload["remaining_amount"] = ar_total
 
         receivable_data = ReceivableCreate.model_validate(create_payload)
-        receivable = await receivable_service.create_receivable(tenant_id, receivable_data, current_user.id)
-
-        if pull_preview and pull_source_type and pull_source_id:
-            await receivable_pull_service.create_pull_relation(
-                tenant_id=tenant_id,
-                source_type=pull_source_type,
-                source_id=int(pull_source_id),
-                source_code=str(pull_preview.get("source_code") or receivable.source_code or ""),
-                receivable_id=int(receivable.id),
-                receivable_code=str(receivable.receivable_code),
-                created_by=current_user.id,
+        async with in_transaction():
+            receivable = await receivable_service.create_receivable(
+                tenant_id, receivable_data, current_user.id, submit_review=False,
             )
-            prepaid_apply = Decimal(str((pull_plan or {}).get("prepaid_apply") or 0))
-            if prepaid_apply > 0:
-                await receivable_pull_service.apply_prepayment_to_receivable(
-                    tenant_id,
-                    receivable_id=int(receivable.id),
-                    sales_order_id=(pull_plan or {}).get("sales_order_id"),
-                    amount=prepaid_apply,
-                    operator_id=current_user.id,
-                )
-                receivable = await receivable_service.get_receivable_by_id(
-                    tenant_id, int(receivable.id)
-                )
+
+            if pull_preview and pull_source_type and pull_source_ids:
+                code_by_source: dict[int, str] = {}
+                for item in pull_preview.get("items") or []:
+                    iid = int(item.get("item_id") or 0)
+                    if iid > 0:
+                        code_by_source[iid] = str(item.get("source_code") or iid)
+                for sid in pull_source_ids:
+                    await receivable_pull_service.create_pull_relation(
+                        tenant_id=tenant_id,
+                        source_type=pull_source_type,
+                        source_id=int(sid),
+                        source_code=code_by_source.get(int(sid), str(pull_preview.get("source_code") or "")),
+                        receivable_id=int(receivable.id),
+                        receivable_code=str(receivable.receivable_code),
+                        created_by=current_user.id,
+                    )
+                so_id = (pull_plan or {}).get("sales_order_id")
+                if so_id:
+                    await receivable_pull_service.auto_apply_after_receivable_created(
+                        tenant_id,
+                        receivable_id=int(receivable.id),
+                        sales_order_id=int(so_id),
+                        operator_id=current_user.id,
+                    )
+                    receivable = await receivable_service.get_receivable_by_id(
+                        tenant_id, int(receivable.id)
+                    )
         return ReceivableResponse.model_validate(receivable)
     except ValidationError as e:
         raise _http_exception_with_trace(422, str(e), "/receivables", tenant_id)
@@ -158,6 +173,7 @@ async def list_receivables(
     ),
     overdue_only: bool = Query(False, description="仅返回已逾期且未结清的单据"),
     _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
     receivables, total = await receivable_service.list_receivables(
@@ -183,6 +199,7 @@ async def list_receivables(
         sort_order=sort_order,
         aging_bucket=aging_bucket,
         overdue_only=overdue_only,
+        viewer_id=current_user.id,
     )
     enriched = await receivable_pull_service.enrich_push_receipt_capabilities(tenant_id, receivables)
     enriched = await receivable_pull_service.enrich_push_sales_invoice_capabilities(
@@ -281,6 +298,45 @@ async def preview_pull_receivable_from_sales_delivery(
     )
 
 
+
+
+@router.get(
+    "/from-sales-deliveries/pull-preview",
+    summary="Preview merge pull receivable from sales deliveries",
+)
+async def preview_pull_receivable_from_sales_deliveries(
+    delivery_ids: str = Query(..., description="销售出库单ID，逗号分隔"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    parsed: list[int] = []
+    for part in str(delivery_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422,
+                f"无效的出库单ID: {part}",
+                "/receivables/from-sales-deliveries/pull-preview",
+                tenant_id,
+            ) from exc
+    try:
+        return await receivable_pull_service.preview_pull_from_sales_deliveries(
+            tenant_id=tenant_id,
+            delivery_ids=parsed,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422,
+            str(exc),
+            "/receivables/from-sales-deliveries/pull-preview",
+            tenant_id,
+        ) from exc
+
+
 @router.post(
     "/merge-receipt",
     response_model=MergeFinanceVoucherResponse,
@@ -325,10 +381,11 @@ async def merge_create_sales_invoice(
 async def get_receivable(
     id: int,
     _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        receivable = await receivable_service.get_receivable_by_id(tenant_id, id)
+        receivable = await receivable_service.get_receivable_by_id(tenant_id, id, viewer_id=current_user.id)
         enriched = await receivable_pull_service.enrich_push_sales_invoice_capabilities(
             tenant_id,
             [receivable],

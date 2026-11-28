@@ -34,10 +34,19 @@ export interface Receivable {
   updated_at: string;
   created_by_name?: string;
   updated_by_name?: string;
-  capabilities?: {
-    push_receipt?: { allowed?: boolean; reason?: string };
-    push_sales_invoice?: { allowed?: boolean; reason?: string };
-  };
+  capabilities?: Record<string, { allowed: boolean; reason?: string | null } | undefined>;
+  audit?: {
+    allowed_actions?: string[];
+    phase?: string;
+    enabled?: boolean;
+    mode?: string;
+    viewer_actions?: {
+      has_my_pending_task?: boolean;
+      approve?: boolean;
+      my_acted?: boolean;
+      block_reason?: string | null;
+    } | null;
+  } | null;
 }
 
 export interface ReceivableListParams {
@@ -83,6 +92,7 @@ export interface ReceivableCreateData {
     notes?: string;
     pull_source_type?: 'sales_order' | 'sales_delivery';
     pull_source_id?: number;
+    pull_source_ids?: number[];
 }
 
 export interface ReceiptRecordCreate {

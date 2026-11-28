@@ -526,17 +526,22 @@ class PriceSettlementService(AppBaseService):
             if not item:
                 raise NotFoundError(f"销售订单行不存在: {line.source_line_id}")
             qty = Decimal(str(item.order_quantity or 0))
-            from apps.kuaicaiwu.services.purchase_settlement import (
-                normalize_po_tax_rate_to_percent,
-            )
-            from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+            from apps.kuaizhizao.utils.sales_price_amount import stored_sales_line_amount
 
-            tax_pct = normalize_po_tax_rate_to_percent(item.tax_rate)
-            _, _, incl = calc_document_line_amounts(
-                qty, after_price, tax_pct, "tax_exclusive"
+            order = await SalesOrder.get_or_none(
+                tenant_id=tenant_id, id=item.sales_order_id, deleted_at__isnull=True
             )
             item.unit_price = after_price
-            item.total_amount = self._q(incl)
+            item.total_amount = self._q(
+                stored_sales_line_amount(
+                    qty,
+                    after_price,
+                    item.tax_rate or 0,
+                    getattr(order, "price_type", None) if order else None,
+                    is_gift=bool(getattr(item, "is_gift", False)),
+                )
+            )
             item.price_settlement_status = PriceSettlementStatus.SETTLED.value
             item.price_settled_at = settled_at
             item.price_settled_by = operator_id
@@ -559,15 +564,38 @@ class PriceSettlementService(AppBaseService):
         if not item:
             raise NotFoundError(f"采购订单行不存在: {line.source_line_id}")
         qty = Decimal(str(item.ordered_quantity or 0))
-        total_price = self._q(qty * after_price)
-        item.unit_price = after_price
-        item.total_price = total_price
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            normalize_po_tax_rate_to_percent,
+        )
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.utils.purchase_order_line_amounts import (
+            load_price_amount_places,
+            split_purchase_entered_line,
+        )
+
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=item.order_id, deleted_at__isnull=True
+        )
+        price_places, amount_places = await load_price_amount_places(tenant_id)
+        tax_pct = normalize_po_tax_rate_to_percent(item.tax_rate)
+        unit, excl, _tax, _incl = split_purchase_entered_line(
+            qty,
+            after_price,
+            tax_pct,
+            getattr(order, "price_type", None) if order else None,
+            price_places=price_places,
+            amount_places=amount_places,
+        )
+        item.unit_price = unit
+        item.display_unit_price = unit
+        item.total_price = excl
         item.price_settlement_status = PriceSettlementStatus.SETTLED.value
         item.price_settled_at = settled_at
         item.price_settled_by = operator_id
         await item.save(
             update_fields=[
                 "unit_price",
+                "display_unit_price",
                 "total_price",
                 "price_settlement_status",
                 "price_settled_at",

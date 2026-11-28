@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Sequence
 
 from tortoise.queryset import Q
 
@@ -14,6 +16,8 @@ from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaicaiwu.services.finance_service import derive_invoice_amount_status
 from apps.kuaizhizao.models.document_relation import DocumentRelation
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 class ReceivablePullService(AppBaseService[Receivable]):
@@ -38,6 +42,46 @@ class ReceivablePullService(AppBaseService[Receivable]):
 
     _SO_LEGACY_SOURCE_TYPES = frozenset({"sales_order", "销售订单"})
     _SD_LEGACY_SOURCE_TYPES = frozenset({"sales_delivery", "销售出库"})
+
+    def _normalize_source_ids(self, source_ids: Sequence[int]) -> List[int]:
+        seen: set[int] = set()
+        ordered: List[int] = []
+        for raw in source_ids:
+            sid = int(raw)
+            if sid <= 0 or sid in seen:
+                continue
+            seen.add(sid)
+            ordered.append(sid)
+        if not ordered:
+            raise BusinessLogicError("请至少选择一张源单")
+        return ordered
+
+    async def _load_source_document_totals(
+        self,
+        tenant_id: int,
+        source_type: str,
+        source_ids: List[int],
+    ) -> Dict[int, Decimal]:
+        result: Dict[int, Decimal] = {sid: Decimal("0") for sid in source_ids}
+        if not source_ids:
+            return result
+        if source_type == "sales_order":
+            from apps.kuaizhizao.models.sales_order import SalesOrder
+
+            rows = await SalesOrder.filter(
+                tenant_id=tenant_id, id__in=source_ids, deleted_at__isnull=True
+            ).only("id", "total_amount")
+            for row in rows:
+                result[int(row.id)] = Decimal(str(row.total_amount or 0))
+        elif source_type == "sales_delivery":
+            from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+            rows = await SalesDelivery.filter(
+                tenant_id=tenant_id, id__in=source_ids, deleted_at__isnull=True
+            ).only("id", "total_amount")
+            for row in rows:
+                result[int(row.id)] = Decimal(str(row.total_amount or 0))
+        return result
 
     def _derive_pull_capability(
         self,
@@ -81,24 +125,52 @@ class ReceivablePullService(AppBaseService[Receivable]):
             source_id__in=source_ids,
             target_type="receivable",
         ).all()
-        relation_by_receivable: Dict[int, int] = {
-            int(r.target_id): int(r.source_id) for r in relations if r.target_id and r.source_id
-        }
-        receivable_ids = list(relation_by_receivable.keys())
+        receivable_ids = sorted(
+            {int(r.target_id) for r in relations if r.target_id}
+        )
         linked_receivable_ids: set[int] = set()
 
         if receivable_ids:
+            all_rels = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type=source_type,
+                target_type="receivable",
+                target_id__in=receivable_ids,
+            ).order_by("id").all()
+            sources_by_ar: Dict[int, List[int]] = defaultdict(list)
+            for rel in all_rels:
+                if rel.target_id and rel.source_id:
+                    sources_by_ar[int(rel.target_id)].append(int(rel.source_id))
+            sibling_ids = sorted({sid for sids in sources_by_ar.values() for sid in sids})
+            doc_totals = await self._load_source_document_totals(
+                tenant_id, source_type, sibling_ids
+            )
+            allocated: Dict[int, Decimal] = {sid: Decimal("0") for sid in sibling_ids}
             receivables = await Receivable.filter(
                 tenant_id=tenant_id,
                 id__in=receivable_ids,
                 deleted_at__isnull=True,
-            )
+            ).order_by("id")
             for rec in receivables:
                 rid = int(rec.id)
                 linked_receivable_ids.add(rid)
-                sid = relation_by_receivable.get(rid)
-                if sid is not None:
-                    result[sid] = result.get(sid, Decimal("0")) + Decimal(str(rec.total_amount or 0))
+                amount = Decimal(str(rec.total_amount or 0))
+                sids = sources_by_ar.get(rid, [])
+                if not sids:
+                    continue
+                rem = amount
+                for sid in sids:
+                    if rem <= 0:
+                        break
+                    room = max(Decimal("0"), doc_totals.get(sid, Decimal("0")) - allocated[sid])
+                    take = min(rem, room)
+                    if take > 0:
+                        allocated[sid] += take
+                        rem -= take
+                if rem > 0:
+                    allocated[sids[-1]] = allocated.get(sids[-1], Decimal("0")) + rem
+            for sid in source_ids:
+                result[sid] = result.get(sid, Decimal("0")) + allocated.get(sid, Decimal("0"))
 
         legacy_types = list(self._legacy_source_types(source_type))
         if legacy_types:
@@ -154,6 +226,8 @@ class ReceivablePullService(AppBaseService[Receivable]):
             tenant_id=tenant_id,
             id__in=receipt_ids,
             settlement_type="prepayment",
+            status="Confirmed",
+            unsettled_amount__gt=0,
             deleted_at__isnull=True,
         ).all()
         total = Decimal("0")
@@ -174,7 +248,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
         qty = float(quantity)
         pushed_f = float(pushed)
         prepaid_f = float(max(Decimal("0"), prepaid_offset))
-        max_push = float(max(Decimal("0"), quantity - pushed - max(Decimal("0"), prepaid_offset)))
+        max_push = float(max(Decimal("0"), quantity - pushed))
         return {
             "item_id": int(source_id),
             "source_code": source_code,
@@ -339,13 +413,94 @@ class ReceivablePullService(AppBaseService[Receivable]):
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
             "tip": (
-                "可应收=单据金额−已应收−销售订单未核销预收；创建时将自动核销预收。"
+                "可应收=单据金额−已应收−未核销预收；创建时将自动核销预收。"
                 "删除未审核应收单后，可应收金额自动回退。"
             ),
             "customer_id": delivery.customer_id,
             "customer_name": delivery.customer_name,
             "sales_order_id": getattr(delivery, "sales_order_id", None),
             "sales_order_code": getattr(delivery, "sales_order_code", None),
+            "max_push_total": pushable,
+        }
+
+    async def preview_pull_from_sales_deliveries(
+        self,
+        tenant_id: int,
+        delivery_ids: Sequence[int],
+    ) -> Dict[str, Any]:
+        ids = self._normalize_source_ids(delivery_ids)
+        if len(ids) == 1:
+            return await self.preview_pull_from_sales_delivery(tenant_id, ids[0])
+
+        merged_items: List[Dict[str, Any]] = []
+        blocking_reasons: List[str] = []
+        customer_id: Optional[int] = None
+        customer_name: Optional[str] = None
+        codes: List[str] = []
+        prepaid_by_so: Dict[int, Decimal] = {}
+        primary_so_id: Optional[int] = None
+        primary_so_code: Optional[str] = None
+
+        for did in ids:
+            fragment = await self.preview_pull_from_sales_delivery(tenant_id, did)
+            frag_customer = int(fragment.get("customer_id") or 0)
+            if customer_id is None:
+                customer_id = frag_customer
+                customer_name = str(fragment.get("customer_name") or "")
+            elif frag_customer != int(customer_id or 0):
+                raise BusinessLogicError("多笔一起加载须为同一客户")
+
+            codes.append(str(fragment.get("source_code") or did))
+            if fragment.get("has_blocking_issues"):
+                reason = str(fragment.get("blocking_reason") or "")
+                if reason:
+                    blocking_reasons.append(reason)
+            merged_items.extend(fragment.get("items") or [])
+            so_id_raw = fragment.get("sales_order_id")
+            if so_id_raw:
+                so_id = int(so_id_raw)
+                if primary_so_id is None:
+                    primary_so_id = so_id
+                    primary_so_code = fragment.get("sales_order_code")
+                if so_id not in prepaid_by_so:
+                    prepaid_offset = Decimal("0")
+                    for item in fragment.get("items") or []:
+                        prepaid_offset = max(
+                            prepaid_offset,
+                            Decimal(str(item.get("prepaid_offset") or 0)),
+                        )
+                    prepaid_by_so[so_id] = prepaid_offset
+
+        max_push_total = sum(
+            Decimal(str(item.get("max_push_quantity") or 0)) for item in merged_items
+        )
+        prepaid_total = sum(prepaid_by_so.values(), Decimal("0"))
+        allowed = not blocking_reasons and max_push_total > 0
+        joined_codes = "、".join(codes)
+        return {
+            "target_type": "receivable",
+            "source_type": "sales_delivery",
+            "source_id": ids[0],
+            "source_ids": ids,
+            "source_code": joined_codes,
+            "summary": (
+                f"将从 {len(ids)} 张销售出库单创建应收单（可应收合计 ¥{float(max_push_total):,.2f}）"
+                if allowed
+                else "所选出库单当前不可一起加载应收单"
+            ),
+            "items": merged_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": blocking_reasons[0] if blocking_reasons else None,
+            "tip": (
+                "可应收=各出库单金额−已应收合计−未核销预收；创建时将自动核销预收。"
+                "删除未审核应收单后，可应收金额自动回退。"
+            ),
+            "customer_id": customer_id,
+            "customer_name": customer_name,
+            "sales_order_id": primary_so_id,
+            "sales_order_code": primary_so_code,
+            "max_push_total": float(max_push_total),
+            "prepaid_offset_total": float(prepaid_total),
         }
 
     async def list_sales_order_pull_candidates(
@@ -464,6 +619,7 @@ class ReceivablePullService(AppBaseService[Receivable]):
                     "id": did,
                     "code": label,
                     "delivery_code": code,
+                    "customer_id": int(delivery.customer_id or 0) or None,
                     "customer_name": delivery.customer_name,
                     "source_status": delivery.status,
                     "source_date": str(
@@ -487,11 +643,17 @@ class ReceivablePullService(AppBaseService[Receivable]):
         source_type: str,
         source_id: int,
         total_amount: Decimal,
+        pull_source_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         if source_type == "sales_order":
             preview = await self.preview_pull_from_sales_order(tenant_id, source_id)
         elif source_type == "sales_delivery":
-            preview = await self.preview_pull_from_sales_delivery(tenant_id, source_id)
+            ids = self._normalize_source_ids(pull_source_ids or [source_id])
+            preview = (
+                await self.preview_pull_from_sales_deliveries(tenant_id, ids)
+                if len(ids) > 1
+                else await self.preview_pull_from_sales_delivery(tenant_id, ids[0])
+            )
         else:
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
@@ -500,7 +662,11 @@ class ReceivablePullService(AppBaseService[Receivable]):
         items = preview.get("items") or []
         if not items:
             raise BusinessLogicError("无可应收金额")
-        max_push = Decimal(str(items[0].get("max_push_quantity") or 0))
+        max_push = Decimal(str(preview.get("max_push_total") or 0))
+        if max_push <= 0:
+            max_push = sum(
+                Decimal(str(item.get("max_push_quantity") or 0)) for item in items
+            )
         if total_amount > max_push:
             raise BusinessLogicError(f"应收金额 {total_amount} 超过可应收金额 {max_push}")
         return preview
@@ -513,35 +679,49 @@ class ReceivablePullService(AppBaseService[Receivable]):
         source_id: int,
         net_amount: Decimal,
         preview: Optional[Dict[str, Any]] = None,
+        recognition_gross: bool = False,
+        pull_source_ids: Optional[Sequence[int]] = None,
     ) -> Dict[str, Any]:
         """
-        将前端填写的「净应收」还原为应收单开立金额，并计算应自动核销的预收。
+        计算应收开立金额与应自动核销的预收。
 
-        - 一次拉满净额时：应收开立金额 = 净额 + 未核销预收（单据全额），随后核销预收，待收=净额
-        - 部分拉单时：暂不冲预收，留给后续满额拉单
+        - recognition_gross=True（出库/入库自动立账）：net_amount=本次立账全额，预收冲 min(全额, 未核销预收)
+        - recognition_gross=False（手工拉单）：net_amount=期望待收净额，开立=净额+预收冲销
         """
         preview = preview or await self.assert_pull_create_allowed(
             tenant_id=tenant_id,
             source_type=source_type,
             source_id=source_id,
             total_amount=net_amount,
+            pull_source_ids=pull_source_ids,
         )
         items = preview.get("items") or []
         if not items:
             raise BusinessLogicError("无可应收金额")
-        row = items[0]
-        gross = Decimal(str(row.get("quantity") or 0))
-        pushed = Decimal(str(row.get("pushed_quantity") or 0))
-        prepaid_avail = Decimal(str(row.get("prepaid_offset") or 0))
-        max_net = Decimal(str(row.get("max_push_quantity") or 0))
         net = Decimal(str(net_amount)).quantize(Decimal("0.01"))
-        remaining_gross = max(Decimal("0"), (gross - pushed).quantize(Decimal("0.01")))
+        remaining_gross = Decimal(str(preview.get("max_push_total") or 0)).quantize(
+            Decimal("0.01")
+        )
+        if remaining_gross <= 0:
+            remaining_gross = sum(
+                Decimal(str(item.get("max_push_quantity") or 0)) for item in items
+            ).quantize(Decimal("0.01"))
+        prepaid_avail = Decimal(str(preview.get("prepaid_offset_total") or 0))
+        if prepaid_avail <= 0 and len(items) == 1:
+            prepaid_avail = Decimal(str(items[0].get("prepaid_offset") or 0))
         prepaid_apply = Decimal("0.00")
-        if prepaid_avail > 0 and net >= max_net and max_net > 0:
-            prepaid_apply = min(prepaid_avail, max(Decimal("0"), remaining_gross - net)).quantize(
-                Decimal("0.01")
-            )
-        ar_total = (net + prepaid_apply).quantize(Decimal("0.01"))
+        if recognition_gross:
+            gross_this = net
+            if gross_this > remaining_gross and remaining_gross > 0:
+                gross_this = remaining_gross
+            prepaid_apply = min(prepaid_avail, gross_this).quantize(Decimal("0.01"))
+            ar_total = gross_this.quantize(Decimal("0.01"))
+        else:
+            prepaid_apply = min(
+                prepaid_avail,
+                max(Decimal("0"), remaining_gross - net),
+            ).quantize(Decimal("0.01"))
+            ar_total = (net + prepaid_apply).quantize(Decimal("0.01"))
         so_id = preview.get("sales_order_id")
         return {
             "preview": preview,
@@ -582,31 +762,267 @@ class ReceivablePullService(AppBaseService[Receivable]):
             tenant_id=tenant_id,
             id__in=receipt_ids,
             settlement_type="prepayment",
+            status="Confirmed",
             unsettled_amount__gt=0,
             deleted_at__isnull=True,
-        ).order_by("id").all()
+        ).order_by("id").select_for_update()
+        if not receipts and apply_total > 0:
+            from infra.exceptions.exceptions import BusinessLogicError
+
+            raise BusinessLogicError(
+                f"预收冲应收未找到可核销预收收款单（销售订单 {sales_order_id}）"
+            )
         remaining = apply_total
         applied = Decimal("0.00")
         prep_svc = PrepaymentService()
-        for receipt in receipts:
-            if remaining <= 0:
-                break
-            unsettled = Decimal(str(receipt.unsettled_amount or 0))
-            if unsettled <= 0:
-                continue
-            chunk = min(remaining, unsettled).quantize(Decimal("0.01"))
-            if chunk <= 0:
-                continue
-            await prep_svc.apply_receipt_to_receivable(
-                tenant_id,
-                receipt_id=int(receipt.id),
-                receivable_id=int(receivable_id),
-                amount=chunk,
-                operator_id=operator_id,
-            )
-            applied += chunk
-            remaining -= chunk
+        from infra.domain.tenant_context import get_current_tenant_id, set_current_tenant_id
+
+        prev_tenant = get_current_tenant_id()
+        set_current_tenant_id(int(tenant_id))
+        try:
+            for receipt in receipts:
+                if remaining <= 0:
+                    break
+                receivable = await Receivable.get_or_none(
+                    tenant_id=tenant_id, id=int(receivable_id), deleted_at__isnull=True
+                )
+                if not receivable:
+                    break
+                rec_remaining = Decimal(str(receivable.remaining_amount or 0)).quantize(
+                    Decimal("0.01")
+                )
+                if rec_remaining <= 0:
+                    break
+                fresh_receipt = await Receipt.get_or_none(
+                    tenant_id=tenant_id, id=int(receipt.id), deleted_at__isnull=True
+                )
+                if not fresh_receipt:
+                    continue
+                unsettled = Decimal(str(fresh_receipt.unsettled_amount or 0)).quantize(
+                    Decimal("0.01")
+                )
+                if unsettled <= 0:
+                    continue
+                chunk = min(remaining, unsettled, rec_remaining).quantize(Decimal("0.01"))
+                if chunk <= 0:
+                    continue
+                await prep_svc.apply_receipt_to_receivable(
+                    tenant_id,
+                    receipt_id=int(fresh_receipt.id),
+                    receivable_id=int(receivable_id),
+                    amount=chunk,
+                    operator_id=operator_id,
+                )
+                applied += chunk
+                remaining -= chunk
+        finally:
+            set_current_tenant_id(prev_tenant)
         return applied.quantize(Decimal("0.01"))
+
+    async def list_open_receivable_ids_for_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+    ) -> List[int]:
+        """同销售订单下仍有待收余额的应收单（出库立账 + 订单直拉），FIFO 按 id。"""
+        receivable_ids: set[int] = set()
+
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+
+        delivery_ids = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id=int(sales_order_id),
+            deleted_at__isnull=True,
+        ).values_list("id", flat=True)
+        if delivery_ids:
+            rows = await Receivable.filter(
+                Q(tenant_id=tenant_id)
+                & Q(source_id__in=list(delivery_ids))
+                & Q(
+                    source_type__in=(
+                        "sales_delivery",
+                        "销售出库",
+                        "SalesDelivery",
+                    )
+                )
+                & Q(remaining_amount__gt=0)
+                & Q(deleted_at__isnull=True)
+            ).order_by("id").all()
+            for row in rows:
+                receivable_ids.add(int(row.id))
+
+        rel_rows = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            source_id=int(sales_order_id),
+            target_type="receivable",
+        ).all()
+        rel_ids = [int(r.target_id) for r in rel_rows if r.target_id]
+        if rel_ids:
+            rows = await Receivable.filter(
+                tenant_id=tenant_id,
+                id__in=rel_ids,
+                remaining_amount__gt=0,
+                deleted_at__isnull=True,
+            ).all()
+            for row in rows:
+                receivable_ids.add(int(row.id))
+
+        return sorted(receivable_ids)
+
+    async def auto_apply_after_receivable_created(
+        self,
+        tenant_id: int,
+        *,
+        receivable_id: int,
+        sales_order_id: Optional[int],
+        operator_id: int,
+    ) -> Decimal:
+        """应收开立后按组织参数自动冲减同销售订单未核销预收。"""
+        from apps.common.app_orm import finance_orm_ready
+
+        if not finance_orm_ready():
+            logger.warning(
+                "auto_apply_after_receivable_created skip: finance_orm not ready "
+                "tenant_id=%s receivable_id=%s",
+                tenant_id,
+                receivable_id,
+            )
+            return Decimal("0.00")
+        if not sales_order_id:
+            return Decimal("0.00")
+
+        from infra.services.business_config_service import BusinessConfigService
+
+        enabled = await BusinessConfigService().get_finance_auto_apply_customer_prepayment_to_receivable(
+            tenant_id
+        )
+        if not enabled:
+            return Decimal("0.00")
+
+        receivable = await Receivable.get_or_none(
+            tenant_id=tenant_id, id=int(receivable_id), deleted_at__isnull=True
+        )
+        if not receivable:
+            raise BusinessLogicError(f"应收单不存在: {receivable_id}")
+        remaining = Decimal(str(receivable.remaining_amount or 0)).quantize(Decimal("0.01"))
+        if remaining <= 0:
+            return Decimal("0.00")
+
+        prepaid_avail = await self._sum_unused_prepayment_for_sales_order(
+            tenant_id, int(sales_order_id)
+        )
+        apply_amount = min(remaining, prepaid_avail)
+        if apply_amount <= 0:
+            return Decimal("0.00")
+
+        applied = await self.apply_prepayment_to_receivable(
+            tenant_id,
+            receivable_id=int(receivable_id),
+            sales_order_id=int(sales_order_id),
+            amount=apply_amount,
+            operator_id=operator_id,
+        )
+        if applied <= 0:
+            raise BusinessLogicError(
+                f"预收自动冲应收未写入核销：应收单 {receivable_id} 应对冲 {apply_amount}，"
+                f"实际核销 0（销售订单 {sales_order_id}）"
+            )
+        return applied
+
+    async def auto_apply_after_prepayment_confirmed(
+        self,
+        tenant_id: int,
+        *,
+        receipt_id: int,
+        operator_id: int,
+    ) -> Decimal:
+        """预收收款单确认后：若同销售订单已有未结清应收，按 FIFO 冲减。"""
+        from apps.common.app_orm import finance_orm_ready
+        from apps.kuaicaiwu.models.receipt import Receipt
+
+        if not finance_orm_ready():
+            return Decimal("0.00")
+
+        from infra.services.business_config_service import BusinessConfigService
+
+        enabled = await BusinessConfigService().get_finance_auto_apply_customer_prepayment_to_receivable(
+            tenant_id
+        )
+        if not enabled:
+            return Decimal("0.00")
+
+        receipt = await Receipt.get_or_none(
+            tenant_id=tenant_id, id=int(receipt_id), deleted_at__isnull=True
+        )
+        if not receipt:
+            return Decimal("0.00")
+        if str(getattr(receipt, "settlement_type", "") or "") != "prepayment":
+            return Decimal("0.00")
+        if str(getattr(receipt, "status", "") or "") != "Confirmed":
+            return Decimal("0.00")
+        unsettled = Decimal(str(receipt.unsettled_amount or 0)).quantize(Decimal("0.01"))
+        if unsettled <= 0:
+            return Decimal("0.00")
+
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="sales_order",
+            target_type="receipt",
+            target_id=int(receipt_id),
+        ).all()
+        so_ids = sorted({int(r.source_id) for r in relations if r.source_id})
+        if not so_ids:
+            return Decimal("0.00")
+
+        total_applied = Decimal("0.00")
+        for so_id in so_ids:
+            receivable_ids = await self.list_open_receivable_ids_for_sales_order(tenant_id, so_id)
+            for receivable_id in receivable_ids:
+                fresh = await Receipt.get_or_none(
+                    tenant_id=tenant_id, id=int(receipt_id), deleted_at__isnull=True
+                )
+                rcpt_unsettled = Decimal(str(fresh.unsettled_amount if fresh else 0)).quantize(
+                    Decimal("0.01")
+                )
+                if rcpt_unsettled <= 0:
+                    break
+                receivable = await Receivable.get_or_none(
+                    tenant_id=tenant_id, id=int(receivable_id), deleted_at__isnull=True
+                )
+                if not receivable:
+                    continue
+                rem = Decimal(str(receivable.remaining_amount or 0)).quantize(Decimal("0.01"))
+                if rem <= 0:
+                    continue
+                chunk = min(rcpt_unsettled, rem)
+                applied = await self.apply_prepayment_to_receivable(
+                    tenant_id,
+                    receivable_id=int(receivable_id),
+                    sales_order_id=int(so_id),
+                    amount=chunk,
+                    operator_id=operator_id,
+                )
+                total_applied += applied
+
+        had_open_receivable = False
+        for so_id in so_ids:
+            if await self.list_open_receivable_ids_for_sales_order(tenant_id, so_id):
+                had_open_receivable = True
+                break
+        if had_open_receivable and total_applied <= 0:
+            fresh_rcpt = await Receipt.get_or_none(
+                tenant_id=tenant_id, id=int(receipt_id), deleted_at__isnull=True
+            )
+            rcpt_left = Decimal(str(fresh_rcpt.unsettled_amount if fresh_rcpt else 0)).quantize(
+                Decimal("0.01")
+            )
+            if rcpt_left > 0:
+                raise BusinessLogicError(
+                    f"预收确认后自动冲应收未写入核销：收款单 {receipt_id} 待核销 {rcpt_left}，"
+                    "同销售订单仍有未结清应收"
+                )
+        return total_applied.quantize(Decimal("0.01"))
 
     async def create_pull_relation(
         self,

@@ -1451,7 +1451,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "invoice_settlement_mode": "summary",
         "auto_generate_receivable_from_sales_invoice": False,
         "auto_generate_payable_from_purchase_invoice": False,
-        "auto_apply_supplier_prepayment_to_payable": False,
+        "auto_apply_supplier_prepayment_to_payable": True,
         "auto_apply_customer_prepayment_to_receivable": True,
         "credit_limit_enabled": False,
         "allow_negative_balance": False,
@@ -1959,7 +1959,7 @@ class BusinessConfigService:
         return bool(
             config["parameters"]
             .get("finance", {})
-            .get("auto_apply_supplier_prepayment_to_payable", False)
+            .get("auto_apply_supplier_prepayment_to_payable", True)
         )
 
     async def get_finance_auto_apply_customer_prepayment_to_receivable(self, tenant_id: int) -> bool:
